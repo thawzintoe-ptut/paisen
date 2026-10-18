@@ -23,12 +23,12 @@ jobs:
     name: Build and test (Android)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       # pre-push can be skipped with --no-verify, so the source rules are re-checked here.
       # Unqualified task names run in every module that has the task.
       - run: ./gradlew verifySourceRules
@@ -55,12 +55,12 @@ jobs:
     if: inputs.skip-ios != true
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       # The slow one. Kept off the pre-push hook on purpose so committing stays cheap.
       - run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64
       # commonTest runs on the JVM everywhere else. Without this the iOS target can stop
