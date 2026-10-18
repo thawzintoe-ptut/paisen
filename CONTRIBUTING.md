@@ -87,21 +87,30 @@ contribution is licensed under GPL-3.0 too.
 
 ### Releases
 
-Releases are tagged on `main`. There are no release branches until one is needed.
+Releases are tags on `main`. Pushing a tag starts the **Release** workflow: it runs the same
+checks as a pull request, builds a signed APK and AAB with the version taken from the tag, and
+creates the GitHub release with the APK. There are no release branches until one is needed.
 
-1. Set the version in `androidApp/build.gradle.kts` (`versionName`, `versionCode`) and in Xcode
-   (`MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`).
-2. In `CHANGELOG.md`, rename `[Unreleased]` to the version and date, and add a new empty
-   `[Unreleased]` above it.
-3. Commit, push, and wait for CI to pass.
-4. Tag and push the tag:
+| Tag | Release | Notes come from | versionCode |
+|---|---|---|---|
+| `v0.2.0-rc.1` | pre-release (beta) | `## [Unreleased]` | 20001 |
+| `v0.2.0` | release (production) | `## [0.2.0]` | 20099 |
+
+versionCode = MAJOR × 1,000,000 + MINOR × 10,000 + PATCH × 100 + the rc number (99 for
+production). Don't edit `versionName` or `versionCode` in `androidApp/build.gradle.kts`.
+
+1. For a beta, check that `## [Unreleased]` in `CHANGELOG.md` says what changed. For production,
+   rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD` and add a new empty `[Unreleased]` above it.
+2. Commit, push, and wait for CI to pass.
+3. Tag and push the tag:
 
    ```bash
-   git tag -a v0.1.0 -m "v0.1.0"
-   git push origin v0.1.0
+   git tag -a v0.2.0-rc.1 -m "v0.2.0-rc.1"
+   git push origin v0.2.0-rc.1
    ```
 
-5. Create the GitHub release from the tag, with the changelog section as its notes.
+4. The APK is on the GitHub release. The AAB for Play is in the workflow run's artifacts (7 days).
+5. iOS keeps its own version: set `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in Xcode.
 
 **Hotfix for a version already in the store**, while `main` has work that is not ready: branch
 from the tag, fix, tag, and bring the fix back to `main`.
@@ -119,7 +128,7 @@ Delete `release/0.1` when that version is no longer supported.
 
 ### Branch protection
 
-`main` is protected by two rulesets. Their JSON files are in [`.github/rulesets`](.github/rulesets).
+`main` and the release tags are protected by three rulesets. Their JSON files are in [`.github/rulesets`](.github/rulesets).
 To set them up again, go to **Settings → Rules → Rulesets → New ruleset → Import a ruleset** and
 import each file.
 
@@ -127,3 +136,4 @@ import each file.
 |---|---|---|
 | `main: no rewrites` | no deletion, no force push, linear history | nobody |
 | `main: checks` | pull request (0 approvals, squash or rebase), both CI jobs green | repository admins, so the maintainer can push small fixes directly |
+| `release tags` | `v*` tags can't be created, moved or deleted | repository admins, so only the maintainer can start a release |

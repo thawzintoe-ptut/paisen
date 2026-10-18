@@ -1,7 +1,8 @@
 name: Signed build
 
-# US-3: a signed APK and AAB from main, kept as workflow artifacts for 7 days. Nothing is
-# published. versionCode is 1, so Play can never take one of these by mistake.
+# US-3: a signed APK and AAB, kept as workflow artifacts for 7 days. Nothing is published.
+# Run by hand it uses versionCode 1, which Play already holds, so Play refuses the upload.
+# release.yml calls it with the tag's version.
 on:
   workflow_dispatch:
     inputs:
@@ -9,6 +10,14 @@ on:
         description: 'versionName, for example 0.1.0-rc.1. Empty: the last tag plus "-dev".'
         required: false
         default: ''
+  workflow_call:
+    inputs:
+      version-name:
+        type: string
+        required: true
+      version-code:
+        type: string
+        required: true
 
 permissions: {}
 
@@ -19,7 +28,7 @@ concurrency:
 jobs:
   build:
     name: Signed APK and AAB
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -64,6 +73,7 @@ jobs:
       - name: Build
         env:
           VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ inputs.version-code || '1' }}
           PAISEN_UPLOAD_STORE_FILE: ${{ runner.temp }}/upload.jks
           PAISEN_UPLOAD_STORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
           PAISEN_UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
@@ -71,7 +81,7 @@ jobs:
         run: >-
           ./gradlew :androidApp:verifyNoTelemetryUpload :androidApp:verifyNoNetworkDependencies
           :androidApp:assembleRelease :androidApp:bundleRelease
-          -PpaisenVersionName="$VERSION_NAME" -PpaisenVersionCode=1
+          -PpaisenVersionName="$VERSION_NAME" -PpaisenVersionCode="$VERSION_CODE"
 
       # Signed with the right key, or nothing is kept.
       - name: Check the signing certificate

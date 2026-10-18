@@ -1,0 +1,91 @@
+name: Release
+
+# A tag vX.Y.Z or vX.Y.Z-rc.N becomes a signed release. The checks run first through ci.yml,
+# so a release never gets weaker checks than a pull request.
+on:
+  push:
+    tags: ['v*']
+
+permissions: {}
+
+concurrency:
+  group: release-tag-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    name: Version and notes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      name: ${{ steps.version.outputs.name }}
+      code: ${{ steps.version.outputs.code }}
+      kind: ${{ steps.version.outputs.kind }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0 # every tag and branch, for the version and branch checks
+      # A release comes from main, or from a release/* branch for a hotfix.
+      - name: The tag is on main or a release branch
+        run: |
+          git branch -r --contains "$GITHUB_SHA" | grep -qE '^ *origin/(main|release/.+)$' \
+            || { echo "::error::$GITHUB_REF_NAME is not on main or a release/* branch"; exit 1; }
+      - name: Version
+        id: version
+        run: scripts/release/version.sh "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+      - name: Release notes
+        env:
+          KIND: ${{ steps.version.outputs.kind }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: scripts/release/notes.sh "$KIND" "$VERSION_NAME" > notes.md
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: notes
+          path: notes.md
+          if-no-files-found: error
+
+  checks:
+    needs: meta
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: [meta, checks]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-signed.yml
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      version-code: ${{ needs.meta.outputs.code }}
+
+  github-release:
+    name: GitHub release
+    needs: [meta, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: PaiSeN-${{ needs.meta.outputs.name }}
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: notes
+      # A re-run replaces the APK on the release that already exists, never makes a second one.
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          NAME: ${{ needs.meta.outputs.name }}
+          KIND: ${{ needs.meta.outputs.kind }}
+        run: |
+          apk="PaiSeN-$NAME.apk"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" "$apk" --clobber --repo "$GITHUB_REPOSITORY"
+          elif [ "$KIND" = beta ]; then
+            gh release create "$TAG" "$apk" --repo "$GITHUB_REPOSITORY" --verify-tag --title "PaiSeN $NAME" --notes-file notes.md --prerelease
+          else
+            gh release create "$TAG" "$apk" --repo "$GITHUB_REPOSITORY" --verify-tag --title "PaiSeN $NAME" --notes-file notes.md
+          fi
