@@ -39,10 +39,17 @@ jobs:
           KIND: ${{ steps.version.outputs.kind }}
           VERSION_NAME: ${{ steps.version.outputs.name }}
         run: scripts/release/notes.sh "$KIND" "$VERSION_NAME" > notes.md
+      # Made here, in a job with no secrets, so the jobs that hold the Play key run no repo script.
+      - name: Play release notes
+        env:
+          URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+        run: scripts/release/play-notes.sh notes.md "$URL"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: notes
-          path: notes.md
+          path: |
+            notes.md
+            whatsnew/
           if-no-files-found: error
 
   checks:
@@ -138,19 +145,23 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      # A beta may only reach a testing track; production goes through play-production's approval.
+      - name: The track is a testing track
+        env:
+          TRACK: ${{ vars.PLAY_BETA_TRACK || 'internal' }}
+        run: |
+          case "$TRACK" in
+            internal|alpha|beta) ;;
+            *) echo "::error::PLAY_BETA_TRACK is '$TRACK'; it must be internal, alpha or beta"; exit 1 ;;
+          esac
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: PaiSeN-${{ needs.meta.outputs.name }}
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: notes
-      - name: Play release notes
-        env:
-          URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
-        run: scripts/release/play-notes.sh notes.md "$URL"
-      # PLAY_BETA_TRACK is internal, or alpha during the closed test. PLAY_STATUS stays draft
-      # until the app has been published once; Play refuses anything else for a draft app.
+      # PLAY_STATUS stays draft until the app has been published once; Play refuses anything
+      # else for a draft app.
       - uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
@@ -171,17 +182,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: PaiSeN-${{ needs.meta.outputs.name }}
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: notes
-      - name: Play release notes
-        env:
-          URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
-        run: scripts/release/play-notes.sh notes.md "$URL"
       - uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
