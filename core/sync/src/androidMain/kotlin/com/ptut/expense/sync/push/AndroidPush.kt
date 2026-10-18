@@ -17,7 +17,16 @@ import com.ptut.expense.platform.notify.notificationsAllowed
 import com.ptut.expense.sync.FirebaseConfig
 import com.ptut.expense.sync.auth.Account
 import com.ptut.expense.sync.auth.AuthRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.koin.core.context.GlobalContext
+
+/** Starts Firebase Messaging once an account is signed in, never for a phone that only keeps its own ledger. */
+fun startPushAfterSignIn(context: Context) {
+    val account = GlobalContext.getOrNull()?.getOrNull<AuthRepository>()?.account ?: return
+    CoroutineScope(SupervisorJob() + Dispatchers.Default).startWhenSignedIn(account) { startPush(context) }
+}
 
 /**
  * Starts Firebase Messaging in a build with a push Worker. Registering hands this phone's
@@ -25,7 +34,7 @@ import org.koin.core.context.GlobalContext
  * The options come from `firebase.properties`, so there is no Google Services plugin or JSON file.
  * A phone without Google Play services gets no token and polls as before.
  */
-fun startPush(context: Context) {
+private fun startPush(context: Context) {
     if (!FirebaseConfig.pushEnabled || FirebaseConfig.ANDROID_APP_ID.isEmpty() || FirebaseConfig.SENDER_ID.isEmpty()) return
     if (FirebaseApp.getApps(context).isEmpty()) {
         val options = FirebaseOptions.Builder()

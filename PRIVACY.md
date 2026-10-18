@@ -68,6 +68,23 @@ Cloudflare keeps error logs for a few days.
   other members' balances stay correct.
 - When you **sign out**, shared groups leave your phone. Your own spending stays.
 
+## Delete your account
+
+**In the app:** Settings → Shared groups account → Delete account. The app may ask you to sign
+in once more. It then:
+- removes you from every shared group, and frees your name in them
+- removes this phone's push registration
+- deletes your Firebase account, with its name, email address and user ID
+- removes the shared groups from this phone
+
+The expenses and payments you added stay in each group's history, so the other members'
+balances stay correct. Your own spending on the phone is not touched; uninstalling the app
+removes it.
+
+**Without the app:** email developer.ptut@gmail.com from the Google account you signed in with,
+with the subject "Delete my PaiSeN account". Your account and shared-group data are deleted
+within 30 days, and you get a reply when it is done.
+
 ## Children
 
 PaiSeN is not made for children under 13 and does not knowingly collect their data.

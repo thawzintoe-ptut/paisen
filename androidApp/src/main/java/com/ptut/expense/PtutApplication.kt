@@ -3,7 +3,7 @@ package com.ptut.expense
 import android.app.Application
 import com.ptut.expense.di.AppBuild
 import com.ptut.expense.di.initKoin
-import com.ptut.expense.sync.push.startPush
+import com.ptut.expense.sync.push.startPushAfterSignIn
 
 /**
  * Starts the graph once per process. An Activity would rebuild it on every recreation and leave
@@ -16,6 +16,6 @@ class PtutApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         initKoin(this, AppBuild(debug = BuildConfig.DEBUG))
-        startPush(this)
+        startPushAfterSignIn(this)
     }
 }
