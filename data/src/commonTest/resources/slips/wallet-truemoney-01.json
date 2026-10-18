@@ -1,0 +1,32 @@
+{
+  "id": "wallet-truemoney-01",
+  "kind": "wallet_topup",
+  "lines": [
+    "Payment Completed",
+    "15 Aug 26  1:06 AM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "TRUE MONEY COMPANY LIMITED",
+    "R1a00174590176e995",
+    "R2608150106374528846",
+    "Transaction ID:",
+    "016200000006TXN00006",
+    "Amount:",
+    "200.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-15T01:06",
+    "amount": "200.00",
+    "counterparty": "TRUE MONEY COMPANY LIMITED",
+    "reference": "016200000006TXN00006"
+  },
+  "transactionIdFormat": "numeric",
+  "uncertain": [
+    "reference"
+  ],
+  "notes": "Mixed-case hex reference. Confusable glyphs: 0/O, 1/l, a/e. Past midnight, so the Bangkok day matters."
+}

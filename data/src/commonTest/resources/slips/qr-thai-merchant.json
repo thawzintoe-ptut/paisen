@@ -1,0 +1,33 @@
+{
+  "id": "qr-thai-merchant",
+  "kind": "qr_merchant",
+  "lines": [
+    "Payment Completed",
+    "14 Aug 26  12:41 PM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "ถุงเงิน (คุณสมชาย)",
+    "QN33507WI0187725Y",
+    "MRSOMCHAIPRASERT",
+    "Transaction ID:",
+    "016200000003BPM00003",
+    "Amount:",
+    "50.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-14T12:41",
+    "amount": "50.00",
+    "counterparty": null,
+    "reference": "016200000003BPM00003"
+  },
+  "transactionIdFormat": "alphanumeric",
+  "uncertain": [
+    "counterparty",
+    "reference"
+  ],
+  "notes": "Thai merchant name. The reader ships no Thai model, so this line is the one it cannot read at all."
+}

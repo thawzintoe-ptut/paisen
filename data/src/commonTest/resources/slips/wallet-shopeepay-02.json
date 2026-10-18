@@ -1,0 +1,30 @@
+{
+  "id": "wallet-shopeepay-02",
+  "kind": "wallet_topup",
+  "lines": [
+    "Payment Completed",
+    "15 Aug 26  10:58 AM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "SHOPEEPAY",
+    "R2026081500211645043",
+    "R2026081500211645043",
+    "Transaction ID:",
+    "016200000009TXN00009",
+    "Amount:",
+    "178.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-15T10:58",
+    "amount": "178.00",
+    "counterparty": "SHOPEEPAY",
+    "reference": "016200000009TXN00009"
+  },
+  "transactionIdFormat": "numeric",
+  "uncertain": [],
+  "notes": "Same merchant as wallet-shopeepay-01. A rule learned once must match this without asking again."
+}

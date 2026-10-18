@@ -1,0 +1,30 @@
+{
+  "id": "wallet-shopeepay-03",
+  "kind": "wallet_topup",
+  "lines": [
+    "Payment Completed",
+    "16 Aug 26  9:55 AM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "SHOPEEPAY",
+    "R2026081600211684063",
+    "R2026081600211684063",
+    "Transaction ID:",
+    "016200000010TXN00010",
+    "Amount:",
+    "59.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-16T09:55",
+    "amount": "59.00",
+    "counterparty": "SHOPEEPAY",
+    "reference": "016200000010TXN00010"
+  },
+  "transactionIdFormat": "numeric",
+  "uncertain": [],
+  "notes": "Third ShopeePay top-up. Three of these prove the dedupe key is the reference, not the merchant and amount."
+}

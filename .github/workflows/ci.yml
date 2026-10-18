@@ -1,0 +1,72 @@
+name: CI
+
+# Trunk-based: every push to main must stay green, and every short-lived branch is
+# checked before it merges back.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Build and test (Android)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      # pre-push can be skipped with --no-verify, so the source rules are re-checked here.
+      # Unqualified task names run in every module that has the task.
+      - run: ./gradlew verifySourceRules
+      # A feature reads :data through its repositories, never its Room types.
+      - run: ./gradlew verifyFeatureImports
+      # NFR-5: no account number reaches the repo inside a slip transcript.
+      - run: ./gradlew verifyNoAccountNumbers
+      # A comma in a backtick test name compiles here and breaks the iOS target.
+      - run: ./gradlew verifyNativeNames
+      # #191: no banned HTTP client or telemetry SDK on a shipped classpath (Ktor is for sync/).
+      - run: ./gradlew :composeApp:verifyNoNetworkDependencies :androidApp:verifyNoNetworkDependencies
+      # #191: the merged manifest keeps no telemetry upload backend.
+      - run: ./gradlew :androidApp:verifyNoTelemetryUpload
+      # Bundled fonts reach Android only as merged assets; a missing one draws the system face.
+      - run: ./gradlew :androidApp:verifyBundledResources
+      # #22: a badly formatted file fails here. No git hook runs it, so commit and push stay fast.
+      - run: ./gradlew spotlessCheck
+      - run: ./gradlew testAndroidHostTest
+      - run: ./gradlew :androidApp:assembleDebug
+
+  ios:
+    name: Link and test (iOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      # The slow one. Kept off the pre-push hook on purpose so committing stays cheap.
+      - run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64
+      # #191 on iOS: only NSURLSession (Ktor's Darwin engine, for sync/) may be linked; no raw sockets.
+      - run: ./gradlew :composeApp:verifyNoNetworkSymbols
+      # commonTest runs on the JVM everywhere else. Without this the iOS target can stop
+      # compiling and nothing says so — which is how it stayed broken.
+      - run: ./gradlew iosSimulatorArm64Test
+      # Xcode copies GoogleService-Info.plist into the app, and the real one is gitignored. A build
+      # only needs the file to exist, so CI writes an empty one and no Firebase value reaches GitHub.
+      - run: test -f iosApp/iosApp/GoogleService-Info.plist || plutil -create xml1 iosApp/iosApp/GoogleService-Info.plist
+      # Swift calls Kotlin by name, and moving a file to another module can change the name.
+      # Linking the framework never compiles Swift; this does. ARCHS=arm64: the Gradle embed
+      # task builds no x86_64 simulator slice.
+      - run: >-
+          xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug
+          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath build/dd ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build

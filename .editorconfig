@@ -1,0 +1,25 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+indent_style = space
+indent_size = 4
+# Matches kotlin.code.style=official in gradle.properties.
+ktlint_code_style = intellij_idea
+ij_kotlin_imports_layout = *,java.**,javax.**,kotlin.**,^
+# For the IDE. ktlint ignores it while max-line-length is off, and 202 lines it cannot wrap are over it.
+max_line_length = 120
+ktlint_standard_max-line-length = disabled
+# With no line length these join a wrapped signature onto one line, however long that gets.
+ktlint_standard_function-signature = disabled
+ktlint_standard_class-signature = disabled
+# ktlint cannot fix these on its own, and #22 does not hand-edit code to satisfy them.
+ktlint_standard_kdoc = disabled
+ktlint_standard_property-naming = disabled
+ktlint_standard_filename = disabled
+ktlint_standard_function-naming = disabled

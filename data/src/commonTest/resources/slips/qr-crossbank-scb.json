@@ -1,0 +1,32 @@
+{
+  "id": "qr-crossbank-scb",
+  "kind": "qr_merchant",
+  "lines": [
+    "Payment Completed",
+    "14 Aug 26  7:20 PM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "SCB มณี SHOP (ซินซิน หมาล่าทั่ง)",
+    "R01400000833536",
+    "SCB",
+    "Transaction ID:",
+    "016200000004BPM00004",
+    "Amount:",
+    "263.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-14T19:20",
+    "amount": "263.00",
+    "counterparty": "SCB มณี SHOP (ซินซิน หมาล่าทั่ง)",
+    "reference": "016200000004BPM00004"
+  },
+  "transactionIdFormat": "alphanumeric",
+  "uncertain": [
+    "counterparty"
+  ],
+  "notes": "Mixed Thai and English in one merchant line, and the destination bank is not KBank."
+}

@@ -1,0 +1,32 @@
+{
+  "id": "qr-lawson-satang",
+  "kind": "qr_merchant",
+  "lines": [
+    "Payment Completed",
+    "16 Aug 26  10:55 AM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "LAWSON108_P3793 THE LIVIN",
+    "SAHA LAWSON CO.,LTD.",
+    "R20260816074534",
+    "Transaction ID:",
+    "016200000012BQR00012",
+    "Amount:",
+    "28.25 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-16T10:55",
+    "amount": "28.25",
+    "counterparty": "LAWSON108_P3793 THE LIVIN",
+    "reference": "016200000012BQR00012"
+  },
+  "transactionIdFormat": "alphanumeric",
+  "uncertain": [
+    "amount"
+  ],
+  "notes": "The only amount with real satang. FR-9: this must land as 2825, never 28.25 through a float."
+}

@@ -1,0 +1,32 @@
+{
+  "id": "qr-kfh-chou",
+  "kind": "qr_merchant",
+  "lines": [
+    "Payment Completed",
+    "19 Aug 26  9:11 AM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "เคเอฟเอช ชูว์",
+    "KFH CHOU CO.,LTD.",
+    "R20260819061891",
+    "Transaction ID:",
+    "016200000016AQR00016",
+    "Amount:",
+    "69.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-19T09:11",
+    "amount": "69.00",
+    "counterparty": "KFH CHOU CO.,LTD.",
+    "reference": "016200000016AQR00016"
+  },
+  "transactionIdFormat": "alphanumeric",
+  "uncertain": [
+    "counterparty"
+  ],
+  "notes": "Thai trade name above the English company name. The English line is the one worth reading."
+}

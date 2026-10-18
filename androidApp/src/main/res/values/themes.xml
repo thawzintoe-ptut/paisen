@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose owns the real theme. This only styles the window before first frame,
+         so it must not fight PtutTheme's surface colour. -->
+    <style name="Theme.PtutExpense" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

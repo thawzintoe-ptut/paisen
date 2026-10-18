@@ -1,0 +1,30 @@
+{
+  "id": "transfer-kbank-person",
+  "kind": "transfer_out",
+  "lines": [
+    "Transfer Completed",
+    "19 Aug 26  12:45 PM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "MR. SOMCHAI PRASERTKUL",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "Transaction ID:",
+    "016200000018ATF00018",
+    "Amount:",
+    "25.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-19T12:45",
+    "amount": "25.00",
+    "counterparty": "MR. SOMCHAI PRASERTKUL",
+    "reference": "016200000018ATF00018"
+  },
+  "transactionIdFormat": "alphanumeric",
+  "uncertain": [],
+  "notes": "KBank to KBank. The recipient block repeats the sender's shape, so position is the only thing telling them apart."
+}

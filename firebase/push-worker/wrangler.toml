@@ -1,0 +1,21 @@
+name = "paisen-push"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+# The app calls https://paisen-push.<account>.workers.dev; per-version preview URLs stay off.
+workers_dev = true
+preview_urls = false
+
+[vars]
+FIREBASE_PROJECT_ID = "paisen-expense"
+
+# FIREBASE_SERVICE_ACCOUNT is a secret: `npx wrangler secret put FIREBASE_SERVICE_ACCOUNT`.
+
+# 30 notices a minute per account: a phone back online sends one per change it uploads, far fewer than this.
+[[ratelimits]]
+name = "PUSH_LIMITER"
+namespace_id = "1001"
+simple = { limit = 30, period = 60 }
+
+[observability]
+enabled = true

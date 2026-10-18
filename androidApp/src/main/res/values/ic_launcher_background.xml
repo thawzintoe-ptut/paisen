@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The mark's ink square (p23, #173). One flat colour, so it is a colour, not a drawable. -->
+    <color name="ic_launcher_background">#FF0B0B0C</color>
+</resources>

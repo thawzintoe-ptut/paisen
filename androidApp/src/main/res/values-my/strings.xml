@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Assistant has no Burmese, so only the labels are translated; the synonyms stay English. -->
+<resources>
+    <string name="shortcut_add_short">အသုံးစရိတ်ထည့်</string>
+    <string name="shortcut_add_long">အသုံးစရိတ်အသစ် ထည့်ရန်</string>
+    <string name="shortcut_scan_short">စလစ် စကင်ဖတ်</string>
+    <string name="shortcut_scan_long">စလစ်အသစ်များ စကင်ဖတ်ရန်</string>
+    <string name="shortcut_disabled">PaiSeN ကို အရင်ဖွင့်ပါ</string>
+</resources>

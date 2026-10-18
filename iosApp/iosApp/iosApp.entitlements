@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- #187: App Store rule 4.8 asks for Sign in with Apple beside Google. -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+	<!-- #190: invite links open the app. PAISEN_LINK_DOMAIN is a build setting; see firebase/README.md. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:$(PAISEN_LINK_DOMAIN)</string>
+	</array>
+	<!-- Shared-group pushes. The Push Notifications capability needs a paid Apple Developer team;
+	     until the owner has one, no iPhone registers a token and this key changes nothing. -->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      #212: Quick add's mic, asked on its first tap. Debug only while Quick add is (ADR 0002); it
+      moves to the main manifest with Quick add. The queries entry lets Android 11+ see the
+      phone's speech service at all.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
+    <application>
+        <!--
+          #213: Gemini's actions, debug builds only until Google's Early Access Program says yes.
+          KSP generates the service and expense_functions.xml from BaseExpenseFunctionService.
+        -->
+        <service
+            android:name="com.ptut.expense.appfunctions.ExpenseFunctionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE"
+            tools:targetApi="36">
+            <property
+                android:name="android.app.appfunctions.schema"
+                android:value="app_functions_schema.xsd" />
+            <property
+                android:name="android.app.appfunctions.v2"
+                android:value="expense_functions.xml" />
+            <intent-filter>
+                <action android:name="android.app.appfunctions.AppFunctionService" />
+            </intent-filter>
+        </service>
+    </application>
+
+</manifest>

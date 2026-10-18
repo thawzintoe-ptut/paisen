@@ -1,0 +1,52 @@
+#!/bin/sh
+# Trunk-based development only works if the trunk is always releasable. This is the gate
+# that makes that true, so it runs the real build and the real tests.
+#
+# It deliberately does NOT link the iOS framework: that takes minutes, and CI covers it.
+# Skip in an emergency with --no-verify, then fix trunk immediately.
+set -e
+
+echo "pre-push: compiling and testing before trunk is touched..."
+
+# Runs first because these read sources and resolved metadata, not build output: they fail
+# in a second or two, long before anything is compiled.
+# Unqualified, so each runs in every module that has it.
+if ! ./gradlew --quiet verifySourceRules verifyNoAccountNumbers verifyNativeNames verifyFeatureImports \
+    :composeApp:verifyNoNetworkDependencies; then
+  echo "" >&2
+  echo "pre-push: BLOCKED — a source rule failed, so this would break trunk." >&2
+  echo "          Fix the lines listed above, or push with --no-verify only if you" >&2
+  echo "          are fixing trunk." >&2
+  exit 1
+fi
+
+# #191: only shared groups use the network. No library may upload on its own (the merged
+# manifest keeps no telemetry backend), and no classpath carries a banned HTTP client.
+if ! ./gradlew --quiet :androidApp:verifyNoTelemetryUpload \
+    :androidApp:verifyNoNetworkDependencies; then
+  echo "" >&2
+  echo "pre-push: BLOCKED — something other than shared groups can reach the network." >&2
+  echo "          Settings promises your own spending stays on this phone. Fix it, or push" >&2
+  echo "          with --no-verify only if you are fixing trunk." >&2
+  exit 1
+fi
+
+# Bundled fonts reach Android only as merged assets, and Android draws the system face, silently,
+# when one is missing. It costs an asset merge, not an APK.
+if ! ./gradlew --quiet :androidApp:verifyBundledResources; then
+  echo "" >&2
+  echo "pre-push: BLOCKED — a bundled font or file is missing from the Android app." >&2
+  echo "          Android would draw the system face without saying so. Fix it, or push" >&2
+  echo "          with --no-verify only if you are fixing trunk." >&2
+  exit 1
+fi
+
+if ! ./gradlew --quiet testAndroidHostTest; then
+  echo "" >&2
+  echo "pre-push: BLOCKED — tests failed, so this would break trunk." >&2
+  echo "          Fix them, or push with --no-verify only if you are fixing trunk." >&2
+  exit 1
+fi
+
+echo "pre-push: green."
+exit 0

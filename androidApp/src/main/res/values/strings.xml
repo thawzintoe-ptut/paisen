@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- #206: the icon's shortcuts. The short label sits under the icon; the long one fills the menu. -->
+    <string name="shortcut_add_short">Add expense</string>
+    <string name="shortcut_add_long">Add an expense</string>
+    <string name="shortcut_scan_short">Scan slips</string>
+    <string name="shortcut_scan_long">Scan for new slips</string>
+    <string name="shortcut_disabled">Open PaiSeN to use this</string>
+
+    <!-- What Assistant matches to each shortcut (App Actions inline inventory). -->
+    <string-array name="add_expense_synonyms">
+        <item>add expense</item>
+        <item>new expense</item>
+        <item>add spending</item>
+    </string-array>
+    <string-array name="scan_slips_synonyms">
+        <item>scan slips</item>
+        <item>import slips</item>
+    </string-array>
+</resources>

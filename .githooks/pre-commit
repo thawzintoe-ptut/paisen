@@ -1,0 +1,45 @@
+#!/bin/sh
+# Fast guards only. Anything slow belongs in pre-push, or nobody will commit small and often.
+set -e
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+fail() { echo "pre-commit: $1" >&2; exit 1; }
+
+# local.properties holds an absolute SDK path and is machine-specific.
+echo "$staged" | grep -qx 'local.properties' && fail "local.properties must never be committed"
+
+# Slips carry real account numbers and merchant names.
+echo "$staged" | grep -qE '^data/src/commonTest/resources/slips/.*\.(jpg|jpeg|png|webp)$' \
+  && fail "raw slip images must never be committed — commit the recorded OCR JSON instead"
+
+# NFR-5: an account number is discarded while a slip is read, so a transcript fixture must not
+# become the one place it survives. This fires at capture rather than at review, because a redaction
+# done later has already been pushed.
+for file in $(echo "$staged" | grep -E '^(composeApp|data|core/[a-z]+|feature/[a-z]+)/src/[a-zA-Z]+Test/'); do
+  [ -f "$file" ] || continue
+  # -o then a digit test: a fully masked placeholder carries nothing and must stay allowed.
+  grep -oE '[0-9xX*]{3}-[0-9xX*]-[0-9xX*]{4,6}-[0-9xX*]' "$file" | grep -q '[0-9]' \
+    && fail "$file carries a Thai account number shape — redact it before committing (NFR-5)"
+  grep -qE '[0-9]{4}[ -][0-9]{4}[ -][0-9]{4}[ -][0-9]{4}' "$file" \
+    && fail "$file carries a card-number shape — redact it before committing (NFR-5)"
+  # -w so this means a standalone run. The digits inside an alphanumeric reference are not one,
+  # and the Gradle task uses \b for the same reason — the two must agree or one of them lies.
+  grep -qwE '[0-9]{10,}' "$file" \
+    && fail "$file carries a 10-digit run — phone, national ID or account. Redact it (NFR-5)"
+done
+
+# Keystores and credentials.
+echo "$staged" | grep -qE '\.(jks|keystore|p12|pem|mobileprovision)$' \
+  && fail "signing material must never be committed"
+
+# Large files, with the wrapper jar exempted because Gradle requires it in-tree.
+for file in $staged; do
+  [ "$file" = "gradle/wrapper/gradle-wrapper.jar" ] && continue
+  [ -f "$file" ] || continue
+  size=$(wc -c < "$file" | tr -d ' ')
+  [ "$size" -gt 1048576 ] && fail "$file is ${size} bytes — over the 1 MB limit"
+done
+
+exit 0

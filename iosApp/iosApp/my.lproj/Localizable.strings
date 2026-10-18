@@ -1,0 +1,26 @@
+/* #206: the App Intents' words in Burmese, for Shortcuts and Spotlight. Siri has no Burmese. */
+"Add expense" = "အသုံးစရိတ် ထည့်ရန်";
+"Opens the Add sheet with the amount filled in. Nothing is saved until you tap Save." = "ငွေပမာဏ ဖြည့်ပြီး ထည့်ရန် စာမျက်နှာကို ဖွင့်ပေးသည်။ သိမ်းရန် မနှိပ်မချင်း ဘာမျှ မသိမ်းပါ။";
+"Amount" = "ငွေပမာဏ";
+"Category" = "အမျိုးအစား";
+"Note" = "မှတ်ချက်";
+"How much?" = "ဘယ်လောက်လဲ";
+"Add ${amount} for ${category}" = "${category} အတွက် ${amount} ထည့်ရန်";
+
+"Add shared expense" = "အဖွဲ့ အသုံးစရိတ် ထည့်ရန်";
+"Opens the group's Add expense with the amount filled in. Nothing is saved until you tap Save." = "ငွေပမာဏ ဖြည့်ပြီး အဖွဲ့၏ အသုံးစရိတ် ထည့်ရန် စာမျက်နှာကို ဖွင့်ပေးသည်။ သိမ်းရန် မနှိပ်မချင်း ဘာမျှ မသိမ်းပါ။";
+"Group" = "အဖွဲ့";
+"Which group?" = "ဘယ်အဖွဲ့လဲ";
+"Description" = "ဖော်ပြချက်";
+"Add ${amount} to ${group}" = "${group} ထဲသို့ ${amount} ထည့်ရန်";
+
+"How much did I spend" = "ဘယ်လောက် သုံးခဲ့လဲ";
+"Says what you spent today, this week or this month. Nothing changes." = "ဒီနေ့၊ ဒီအပတ် သို့မဟုတ် ဒီလ သုံးခဲ့သမျှကို ပြောပြသည်။ ဘာမျှ မပြောင်းလဲပါ။";
+"Period" = "ကာလ";
+"How much did I spend ${period}" = "${period} ဘယ်လောက် သုံးခဲ့လဲ";
+"today" = "ဒီနေ့";
+"this week" = "ဒီအပတ်";
+"this month" = "ဒီလ";
+"You spent %@ today." = "ဒီနေ့ %@ သုံးခဲ့ပါတယ်။";
+"You spent %@ this week." = "ဒီအပတ် %@ သုံးခဲ့ပါတယ်။";
+"You spent %@ this month." = "ဒီလ %@ သုံးခဲ့ပါတယ်။";

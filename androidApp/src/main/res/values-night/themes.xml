@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The night twin of the light window theme. Without it the window behind Compose stayed
+         light while PtutTheme drew Midnight, and first run — the one screen that paints no
+         surface of its own — showed a near-white headline on it. -->
+    <style name="Theme.PtutExpense" parent="android:Theme.Material.NoActionBar" />
+</resources>

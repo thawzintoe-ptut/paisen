@@ -1,0 +1,26 @@
+/* #206: the App Intents' words in Thai. Keys are the English in AgentIntents.swift. */
+"Add expense" = "เพิ่มรายจ่าย";
+"Opens the Add sheet with the amount filled in. Nothing is saved until you tap Save." = "เปิดหน้าเพิ่มรายจ่ายพร้อมจำนวนเงิน ไม่มีอะไรถูกบันทึกจนกว่าคุณจะกดบันทึก";
+"Amount" = "จำนวนเงิน";
+"Category" = "หมวดหมู่";
+"Note" = "หมายเหตุ";
+"How much?" = "เท่าไหร่";
+"Add ${amount} for ${category}" = "เพิ่ม ${amount} ในหมวด ${category}";
+
+"Add shared expense" = "เพิ่มค่าใช้จ่ายกลุ่ม";
+"Opens the group's Add expense with the amount filled in. Nothing is saved until you tap Save." = "เปิดหน้าเพิ่มค่าใช้จ่ายของกลุ่มพร้อมจำนวนเงิน ไม่มีอะไรถูกบันทึกจนกว่าคุณจะกดบันทึก";
+"Group" = "กลุ่ม";
+"Which group?" = "กลุ่มไหน";
+"Description" = "รายละเอียด";
+"Add ${amount} to ${group}" = "เพิ่ม ${amount} ในกลุ่ม ${group}";
+
+"How much did I spend" = "ใช้เงินไปเท่าไหร่";
+"Says what you spent today, this week or this month. Nothing changes." = "บอกยอดที่ใช้ไปวันนี้ สัปดาห์นี้ หรือเดือนนี้ ไม่มีอะไรเปลี่ยนแปลง";
+"Period" = "ช่วงเวลา";
+"How much did I spend ${period}" = "${period} ใช้เงินไปเท่าไหร่";
+"today" = "วันนี้";
+"this week" = "สัปดาห์นี้";
+"this month" = "เดือนนี้";
+"You spent %@ today." = "วันนี้คุณใช้ไป %@";
+"You spent %@ this week." = "สัปดาห์นี้คุณใช้ไป %@";
+"You spent %@ this month." = "เดือนนี้คุณใช้ไป %@";

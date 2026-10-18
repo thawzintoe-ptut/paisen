@@ -1,0 +1,30 @@
+{
+  "id": "transfer-promptpay-natid",
+  "kind": "transfer_out",
+  "lines": [
+    "Transfer Completed",
+    "19 Aug 26  12:28 PM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "PRAYUT S",
+    "PromptPay ID",
+    "x-xxxx-xxxxx-xx-x",
+    "Transaction ID:",
+    "016200000017BPP00017",
+    "Amount:",
+    "50.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-19T12:28",
+    "amount": "50.00",
+    "counterparty": "PRAYUT S",
+    "reference": "016200000017BPP00017"
+  },
+  "transactionIdFormat": "alphanumeric",
+  "uncertain": [],
+  "notes": "PromptPay ID in national-ID shape, not phone shape. Two different masks under one label."
+}

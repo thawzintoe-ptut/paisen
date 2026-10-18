@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  #206: long-press the app icon for Add expense and Scan slips. Both open the app; nothing is
+  saved until the sheet's own Save. MainActivity hands the intent to receiveAgentShortcut.
+
+  The capability is App Actions' OPEN_APP_FEATURE, with the two shortcuts as its inline inventory.
+  Google documents App Actions for Assistant; whether Gemini reads them is not confirmed.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:action="com.ptut.expense.action.OPEN_FEATURE"
+            android:targetClass="com.ptut.expense.MainActivity"
+            android:targetPackage="com.ptut.expense">
+            <parameter
+                android:name="feature"
+                android:key="feature" />
+        </intent>
+    </capability>
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_add"
+        android:shortcutDisabledMessage="@string/shortcut_disabled"
+        android:shortcutId="add_expense"
+        android:shortcutLongLabel="@string/shortcut_add_long"
+        android:shortcutShortLabel="@string/shortcut_add_short">
+        <intent
+            android:action="com.ptut.expense.action.ADD_EXPENSE"
+            android:targetClass="com.ptut.expense.MainActivity"
+            android:targetPackage="com.ptut.expense" />
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="@array/add_expense_synonyms" />
+        </capability-binding>
+    </shortcut>
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_scan"
+        android:shortcutDisabledMessage="@string/shortcut_disabled"
+        android:shortcutId="scan_slips"
+        android:shortcutLongLabel="@string/shortcut_scan_long"
+        android:shortcutShortLabel="@string/shortcut_scan_short">
+        <intent
+            android:action="com.ptut.expense.action.SCAN_SLIPS"
+            android:targetClass="com.ptut.expense.MainActivity"
+            android:targetPackage="com.ptut.expense" />
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding
+                android:key="feature"
+                android:value="@array/scan_slips_synonyms" />
+        </capability-binding>
+    </shortcut>
+</shortcuts>

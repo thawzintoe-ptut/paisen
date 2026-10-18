@@ -1,0 +1,32 @@
+{
+  "id": "bill-aloha-coffee",
+  "kind": "bill_payment",
+  "lines": [
+    "Payment Completed",
+    "14 Aug 26  9:10 AM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "Aloha Coffee",
+    "R00600103119446",
+    "R2024052000004909000",
+    "Transaction ID:",
+    "016200000001BPM00001",
+    "Amount:",
+    "49.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-14T09:10",
+    "amount": "49.00",
+    "counterparty": "Aloha Coffee",
+    "reference": "016200000001BPM00001"
+  },
+  "transactionIdFormat": "alphanumeric",
+  "uncertain": [
+    "reference"
+  ],
+  "notes": "Biller payment. Two reference lines, the first is the customer number with the biller."
+}

@@ -1,0 +1,7 @@
+/* #206: Siri's Thai phrases. Each must name ${applicationName}. */
+"Add expense in ${applicationName}" = "เพิ่มรายจ่ายใน ${applicationName}";
+"Add an expense in ${applicationName}" = "จดรายจ่ายใน ${applicationName}";
+"New expense in ${applicationName}" = "รายจ่ายใหม่ใน ${applicationName}";
+"How much did I spend in ${applicationName}" = "ใช้เงินไปเท่าไหร่ใน ${applicationName}";
+"How much did I spend ${period} in ${applicationName}" = "${period} ใช้เงินไปเท่าไหร่ใน ${applicationName}";
+"Add shared expense in ${applicationName}" = "เพิ่มค่าใช้จ่ายกลุ่มใน ${applicationName}";

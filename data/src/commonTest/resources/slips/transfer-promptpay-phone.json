@@ -1,0 +1,32 @@
+{
+  "id": "transfer-promptpay-phone",
+  "kind": "transfer_out",
+  "lines": [
+    "Transfer Completed",
+    "16 Aug 26  8:51 PM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "MS ANONG WATTANA",
+    "PromptPay ID",
+    "xxx-xxx-xxxx",
+    "Transaction ID:",
+    "016200000014APP00014",
+    "Amount:",
+    "1,387.50 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-16T20:51",
+    "amount": "1,387.50",
+    "counterparty": "MS ANONG WATTANA",
+    "reference": "016200000014APP00014"
+  },
+  "transactionIdFormat": "alphanumeric",
+  "uncertain": [
+    "amount"
+  ],
+  "notes": "A person, not a merchant. Thousands separator in the amount, and the PromptPay ID is phone-shaped."
+}

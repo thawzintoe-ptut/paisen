@@ -1,0 +1,207 @@
+rules_version = '2';
+
+// #188: shared groups. Your own spending never reaches this database; only groups, their member
+// names and the shared expense log do. The log is append-only: entries are created, never changed.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function groupPath(gid) { return /databases/$(database)/documents/groups/$(gid); }
+    function groupData(gid) { return get(groupPath(gid)).data; }
+    function memberPath(gid, mid) { return /databases/$(database)/documents/groups/$(gid)/members/$(mid); }
+    function isMember(gid) { return signedIn() && exists(groupPath(gid)) && request.auth.uid in groupData(gid).memberUids; }
+    function isCreator(gid) { return signedIn() && exists(groupPath(gid)) && groupData(gid).creatorUid == request.auth.uid; }
+    // A group the creator deleted for everyone takes nothing new.
+    function live(gid) { return groupData(gid).get('deleted', false) != true; }
+    function joinPath(gid) { return /databases/$(database)/documents/groups/$(gid)/joins/$(request.auth.uid); }
+    // Join rights last only while the code someone came in with is still the group's live code.
+    function joined(gid) { return signedIn() && exists(joinPath(gid)) && validInvite(gid, get(joinPath(gid)).data.code); }
+    function joinedAfter(gid) { return signedIn() && existsAfter(joinPath(gid)) && validInvite(gid, getAfter(joinPath(gid)).data.code); }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function onlyChanged(keys) { return changed().hasOnly(keys); }
+    function invitePath(code) { return /databases/$(database)/documents/invites/$(code); }
+    // The group names its one live code, so an old invite left active can never let anyone in.
+    function validInvite(gid, code) {
+      return exists(invitePath(code)) && get(invitePath(code)).data.groupId == gid && get(invitePath(code)).data.active == true
+        && groupData(gid).inviteCode == code && groupData(gid).inviteActive == true;
+    }
+    // Names every phone can show, and a push title FCM takes.
+    function groupName(value) { return value is string && value.size() > 0 && value.size() <= 100; }
+    function memberName(value) { return value is string && value.size() > 0 && value.size() <= 60; }
+
+    match /groups/{gid} {
+      function groupTypeOk() { return request.resource.data.type in ['Trip', 'Flat', 'Couple', 'Other']; }
+      function uidsBefore() { return resource.data.memberUids; }
+      function uidsAfter() { return request.resource.data.memberUids; }
+      function liveNow() { return resource.data.get('deleted', false) != true; }
+      // The code [uid] joined with is not the live one, so once out it cannot add itself back.
+      function cannotRejoin(uid) {
+        let join = /databases/$(database)/documents/groups/$(gid)/joins/$(uid);
+        return request.resource.data.inviteActive != true || !exists(join)
+          || get(join).data.code != request.resource.data.inviteCode;
+      }
+
+      allow get: if isMember(gid) || joined(gid);
+      // A member finds their own groups again after signing in: a query on memberUids holding their uid.
+      allow list: if signedIn() && request.auth.uid in resource.data.memberUids;
+      allow create: if signedIn()
+        && request.resource.data.creatorUid == request.auth.uid
+        && request.resource.data.memberUids == [request.auth.uid]
+        && groupName(request.resource.data.name) && groupTypeOk();
+      allow update: if
+        // Any member edits the name, icon or the Simplify debts switch, while the group is live.
+        (isMember(gid) && live(gid) && onlyChanged(['name', 'icon', 'type', 'simplifyDebts'])
+            && (!changed().hasAny(['name']) || groupName(request.resource.data.name))
+            && (!changed().hasAny(['type']) || groupTypeOk()))
+        // Only the creator changes or switches off the invite (#190), or deletes the group for everyone.
+        || (isCreator(gid) && onlyChanged(['inviteCode', 'inviteActive', 'deleted']))
+        // Someone who joined with a live code adds themselves, and removes nobody, while the group is live.
+        || (joinedAfter(gid) && liveNow() && onlyChanged(['memberUids'])
+            && uidsAfter().hasAll(uidsBefore()) && uidsAfter().removeAll(uidsBefore()) == [request.auth.uid])
+        // A member leaves, when they delete their account (#187), and adds nobody.
+        || (isMember(gid) && onlyChanged(['memberUids'])
+            && uidsBefore().hasAll(uidsAfter()) && uidsBefore().removeAll(uidsAfter()) == [request.auth.uid])
+        // The creator takes one other account out, with the name it claimed: it can no longer read or write here.
+        || (isCreator(gid) && onlyChanged(['memberUids'])
+            && uidsBefore().hasAll(uidsAfter()) && uidsBefore().removeAll(uidsAfter()).size() == 1
+            && request.auth.uid in uidsAfter() && cannotRejoin(uidsBefore().removeAll(uidsAfter())[0]));
+      allow delete: if false;
+
+      match /members/{mid} {
+        // #199: a PromptPay ID only ever belongs to the account that claimed the name. Nobody plants
+        // one on a name someone else will claim, and letting a claim go clears it.
+        function noPromptPay() { return !('promptPay' in request.resource.data) || request.resource.data.promptPay == null; }
+        function ownPromptPay() { return noPromptPay() || request.resource.data.claimedByUid == request.auth.uid; }
+        // A phone number, a national or tax ID, or an e-wallet ID, digits only, as the app saves it.
+        function validPromptPay() {
+          return noPromptPay() || (request.resource.data.promptPay is string
+            && request.resource.data.promptPay.matches('^(0[0-9]{9}|[0-9]{13}|[0-9]{15})$'));
+        }
+        allow read: if isMember(gid) || joined(gid);
+        // A member adds a name; the creator adds their own, already claimed, when sharing (#190);
+        // someone joining adds themselves ("I'm not on the list").
+        allow create: if ownPromptPay() && validPromptPay() && live(gid) && memberName(request.resource.data.name) && (
+          (isMember(gid) && request.resource.data.claimedByUid == null)
+          || (isCreator(gid) && request.resource.data.claimedByUid == request.auth.uid)
+          || (joinedAfter(gid) && request.resource.data.claimedByUid in [null, request.auth.uid]));
+        allow update: if
+          (isMember(gid) && live(gid) && onlyChanged(['name']) && memberName(request.resource.data.name))
+          // Only the creator removes a member, by archiving the name (#190), or puts one back. A claimed
+          // name goes only with its account, below.
+          || (isCreator(gid) && onlyChanged(['archived'])
+              && (request.resource.data.archived != true || resource.data.claimedByUid == null))
+          // Removing a claimed name lets its claim and PromptPay ID go, in the commit that takes its
+          // account out of the group: a removed name never keeps its access.
+          || (isCreator(gid) && onlyChanged(['archived', 'claimedByUid', 'promptPay']) && noPromptPay()
+              && request.resource.data.archived == true && request.resource.data.claimedByUid == null
+              && resource.data.claimedByUid != request.auth.uid
+              && !(resource.data.claimedByUid in getAfter(groupPath(gid)).data.memberUids))
+          // Claiming a name nobody holds, once joined.
+          || (joinedAfter(gid) && onlyChanged(['claimedByUid']) && resource.data.archived != true && noPromptPay()
+              && resource.data.claimedByUid == null && request.resource.data.claimedByUid == request.auth.uid)
+          // Your own PromptPay ID, on the name you claimed (#199).
+          || (isMember(gid) && resource.data.claimedByUid == request.auth.uid && onlyChanged(['promptPay']) && validPromptPay())
+          // Letting your own claim go (#187).
+          || (isMember(gid) && onlyChanged(['claimedByUid', 'promptPay']) && noPromptPay()
+              && resource.data.claimedByUid == request.auth.uid && request.resource.data.claimedByUid == null);
+        allow delete: if false;
+      }
+
+      // syncedAt must be the server's own stamp, so no phone can backdate an entry out of another
+      // member's pull or push one into the future, where every pull would fetch it again.
+      match /entries/{eid} {
+        function entry() { return request.resource.data; }
+        // An entry is signed by the name its writer claimed, never by someone else's. Only the entry a
+        // repeat adds itself carries no name.
+        function signedByWriter() {
+          let author = entry().get('authorMemberId', null);
+          return (author == null && entry().kind == 'version' && entry().get('cause', null) == 'repeat')
+            || (author != null && exists(memberPath(gid, author)) && get(memberPath(gid, author)).data.claimedByUid == request.auth.uid);
+        }
+        // Values every build can read, so no member can store one that stops the others' apps.
+        function validVersion() {
+          return entry().splitMode in ['Equally', 'Exact', 'Percent', 'Shares']
+            && entry().amountMinor is int && entry().amountSatang is int
+            && entry().shares is list && entry().shares.size() > 0 && entry().shares.size() <= 50
+            && (entry().get('rateUnscaled', null) == null
+              || (entry().rateUnscaled is int && entry().rateUnscaled > 0
+                && entry().rateScale is int && entry().rateScale >= 0 && entry().rateScale <= 9));
+        }
+        function validPayment() {
+          return entry().method in ['BankTransfer', 'Cash', 'PromptPay', 'OtherApp']
+            && entry().amountSatang is int && entry().amountSatang > 0
+            && entry().fromMemberId != entry().toMemberId;
+        }
+        allow read: if isMember(gid);
+        allow create: if isMember(gid) && live(gid) && entry().authorUid == request.auth.uid
+          && signedByWriter()
+          && entry().kind in ['version', 'payment', 'paymentRemoval']
+          && (entry().kind != 'version' || validVersion())
+          && (entry().kind != 'payment' || validPayment())
+          // #218: a removal names the payment it takes out or puts back.
+          && (entry().kind != 'paymentRemoval' || entry().paymentId is string)
+          && entry().syncedAt == request.time
+          // The writing phone's own clock, never more than a day ahead of the server's: a row dated
+          // in the future would sit above every later one. A day covers a phone set to the wrong zone.
+          && entry().createdAt is int
+          && entry().createdAt <= request.time.toMillis() + 86400000;
+        allow update, delete: if false;
+      }
+
+      // #182: any member sets up, changes or stops a repeat; none is ever deleted.
+      match /repeats/{rid} {
+        allow read: if isMember(gid);
+        allow create: if isMember(gid) && live(gid) && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.syncedAt == request.time;
+        // Whoever changes it signs the change, and the first creation time stays put.
+        allow update: if isMember(gid) && live(gid) && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.syncedAt == request.time;
+        allow delete: if false;
+      }
+
+      match /joins/{uid} {
+        allow get: if signedIn() && (uid == request.auth.uid || isMember(gid));
+        allow list: if isMember(gid);
+        allow create, update: if signedIn() && uid == request.auth.uid && validInvite(gid, request.resource.data.code);
+        allow delete: if false;
+      }
+    }
+
+    // One phone at a time: the account's newest sign-in, as auth_time seconds. Each phone reads it
+    // on sync and signs out when another phone's is newer. Removed when the account is deleted.
+    // Never later than this token's own sign-in, so no session can sign out every phone to come.
+    match /sessions/{uid} {
+      allow get, delete: if signedIn() && uid == request.auth.uid;
+      allow create, update: if signedIn() && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['signedInAt']) && request.resource.data.signedInAt is int
+        && request.resource.data.signedInAt <= request.auth.token.auth_time;
+      allow list: if false;
+    }
+
+    // Push: one document per phone, keyed by its Firebase installation ID. A phone keeps only its own account's
+    // documents; the Worker reads them all with the service account, which bypasses these rules.
+    match /devices/{token} {
+      function validDevice() {
+        return request.resource.data.uid == request.auth.uid
+          && request.resource.data.platform in ['android', 'ios']
+          && request.resource.data.language in ['en', 'my']
+          && request.resource.data.updatedAt is int;
+      }
+      allow get, list, delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if signedIn() && validDevice();
+      // Nobody takes over another account's phone, and with it that account's pushes.
+      allow update: if signedIn() && resource.data.uid == request.auth.uid && validDevice();
+    }
+
+    // One document per live code, so a code can be looked up without listing anything.
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if isCreator(request.resource.data.groupId) && request.resource.data.creatorUid == request.auth.uid;
+      // Only switching it off: the group it points at never changes.
+      allow update: if isCreator(resource.data.groupId) && onlyChanged(['active']);
+      allow delete: if false;
+    }
+  }
+}

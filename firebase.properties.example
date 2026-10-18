@@ -1,0 +1,20 @@
+# Copy to firebase.properties (gitignored) and fill in from your Firebase project.
+# Without firebase.properties the app builds and runs, and shared groups stay on this phone.
+# See firebase/README.md for where each value comes from.
+apiKey=
+projectId=
+# OAuth client IDs (Google Cloud console → APIs & Services → Credentials).
+googleWebClientId=
+googleIosClientId=
+# Firebase Hosting domain that serves invite links, e.g. your-project.web.app
+linkDomain=
+# Where Firestore keeps the data, shown in the privacy notice, e.g. Singapore
+region=
+# The push Worker's address (firebase/push-worker/README.md). Empty: no push notifications.
+pushUrl=
+# Firebase console → Project settings → Your apps → Android app: the App ID, and the project number.
+androidAppId=
+senderId=
+# true once the APNs key is in Firebase (firebase/README.md, iOS). Until then iPhones fall back to a
+# background refresh that iOS runs when it chooses, minutes or hours apart.
+iosPushReady=false

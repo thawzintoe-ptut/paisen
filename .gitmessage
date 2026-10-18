@@ -1,0 +1,10 @@
+# <type>: <summary in the present tense, no trailing period>
+#
+# type: feat | fix | chore | docs | test | refactor | build
+#
+# Keep the summary under 72 characters. Say what changed and why, not how.
+#
+# Trunk-based rules:
+#   - main is always releasable. If this commit breaks it, do not push it.
+#   - Small and often beats big and rare. A commit a day keeps rebases short.
+#   - Unfinished work goes behind a flag, not on a long-lived branch.

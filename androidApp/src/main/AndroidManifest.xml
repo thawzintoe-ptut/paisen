@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      #191: shared groups sync with the people in them, so the app holds INTERNET. Your own
+      spending, slips and reports never leave the phone; only the code under sync/ may call out
+      (verifySourceRules). ML Kit's telemetry backend is removed below, and
+      :androidApp:verifyNoTelemetryUpload fails if any upload backend survives the merge.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- #182: the reminder the day before a repeat adds itself. Asked on the first repeat saved. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      FR-2: the K PLUS folder is read through MediaStore, which needs the reader's say-so.
+      Android 13 split the old storage permission by media type and stopped granting it at all,
+      so this is genuinely two permissions and not one with a fallback. maxSdkVersion keeps the
+      old one off Play's radar on the versions that ignore it.
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!--
+      #199: "Open my bank app" lists the Thai bank apps installed. Android 11 and later show an
+      app only the packages it names here; nothing else on the phone becomes visible.
+    -->
+    <queries>
+        <package android:name="com.kasikorn.retail.mbanking.wap" />
+        <package android:name="com.scb.phone" />
+        <package android:name="ktbcs.netbank" />
+        <package android:name="com.bbl.mobilebanking" />
+        <package android:name="com.krungsri.kma" />
+        <package android:name="com.TMBTOUCH.PRODUCTION" />
+        <package android:name="com.mobilegsb" />
+    </queries>
+
+    <!--
+      "Your spending stays on this phone": no Google Drive backup and no phone-to-phone transfer.
+      allowBackup covers Android 8 to 11; on 12 and later only the extraction rules stop transfer.
+    -->
+    <application
+        android:name=".PtutApplication"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:label="PaiSeN"
+        android:icon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true"
+        android:theme="@style/Theme.PtutExpense">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.PtutExpense">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+              FR-1: one tap from K PLUS. singleTop above is what makes a share into an app that
+              is already open arrive at onNewIntent rather than stacking a second copy of it.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+
+            <!--
+              #190: an invite link opens the app. The host comes from firebase.properties'
+              linkDomain; assetlinks.json on that domain is what lets Android verify it.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="${paisenLinkDomain}"
+                    android:pathPrefix="/join/" />
+            </intent-filter>
+
+            <!-- #206: the icon's long-press shortcuts and their App Actions capability. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
+
+        <!--
+          Shared-group push: data-only messages, so the app chooses between a silent sync and a
+          notification. Started only in a build whose firebase.properties names a push Worker.
+        -->
+        <!-- FCM addresses this phone by its Firebase installation ID; the old token API is off. -->
+        <meta-data
+            android:name="firebase_messaging_installation_id_enabled"
+            android:value="true" />
+
+        <service
+            android:name="com.ptut.expense.sync.push.PaisenMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!--
+          ML Kit's bundled reader and Firebase Messaging drag in com.google.android.datatransport, whose CCT backend
+          uploads usage telemetry once a socket is allowed. Without a backend nothing is sent.
+        -->
+        <service
+            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+            android:exported="false">
+            <meta-data
+                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
+                tools:node="remove" />
+        </service>
+    </application>
+
+</manifest>

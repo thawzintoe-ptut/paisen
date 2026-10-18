@@ -1,0 +1,30 @@
+{
+  "id": "wallet-truemoney-02",
+  "kind": "wallet_topup",
+  "lines": [
+    "Payment Completed",
+    "16 Aug 26  4:18 PM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "TRUE MONEY COMPANY LIMITED",
+    "R1a009dd9df07fbb89f",
+    "R2608161618340947957",
+    "Transaction ID:",
+    "016200000013TXN00013",
+    "Amount:",
+    "200.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-16T16:18",
+    "amount": "200.00",
+    "counterparty": "TRUE MONEY COMPANY LIMITED",
+    "reference": "016200000013TXN00013"
+  },
+  "transactionIdFormat": "numeric",
+  "uncertain": [],
+  "notes": "Same merchant and same amount as wallet-truemoney-01, four hours apart. F3 must not call these duplicates."
+}

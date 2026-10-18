@@ -1,0 +1,47 @@
+.gradle/
+# Anchored: an unanchored `build/` also ignores a source package named build.
+/build/
+*/build/
+# Modules two levels down: :core:* and :feature:*.
+/core/*/build/
+/feature/*/build/
+local.properties
+.kotlin/
+
+.idea/
+*.iml
+.DS_Store
+
+# Xcode
+xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+
+# Slip fixtures may contain real account data — never commit raw images
+data/src/commonTest/resources/slips/*.jpg
+data/src/commonTest/resources/slips/*.png
+
+gradle/gradle-daemon-jvm.properties
+
+# TDD guard writes per-session state here. Contents are ignored rather than the directory,
+# because git will not descend into an excluded directory to re-include `instructions.md`,
+# which is committed config.
+.claude/tdd-guard/*
+!.claude/tdd-guard/data/
+.claude/tdd-guard/data/*
+!.claude/tdd-guard/data/instructions.md
+
+# Local planning notes, kept out of git
+/docs/workflow_sky_143.md
+
+# #188: the Firebase project's settings. Optional; see firebase/README.md.
+/firebase.properties
+# Firebase's own config files, kept as the source of firebase.properties. The app reads neither.
+/androidApp/google-services.json
+/iosApp/iosApp/GoogleService-Info.plist
+
+# Decisions, requirements and design notes stay on this machine and never reach GitHub.
+/docs/adr/
+/docs/superpowers/specs/
+/claudedocs/
+/firebase/rules-test-plan.md

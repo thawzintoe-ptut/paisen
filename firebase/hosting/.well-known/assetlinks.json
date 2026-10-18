@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.ptut.expense",
+      "sha256_cert_fingerprints": [
+        "D6:57:04:1C:15:1D:9E:8C:F4:4C:BF:31:D0:5B:CA:ED:4E:F2:60:B5:92:8E:AF:CC:05:55:40:85:74:BC:0C:80"
+      ]
+    }
+  }
+]

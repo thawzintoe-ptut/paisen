@@ -1,0 +1,30 @@
+{
+  "id": "qr-lawson-02",
+  "kind": "qr_merchant",
+  "lines": [
+    "Payment Completed",
+    "16 Aug 26  10:44 AM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "LAWSON108_P3793 THE LIVIN",
+    "SAHA LAWSON CO.,LTD.",
+    "R20260816070515",
+    "Transaction ID:",
+    "016200000011BQR00011",
+    "Amount:",
+    "151.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-16T10:44",
+    "amount": "151.00",
+    "counterparty": "LAWSON108_P3793 THE LIVIN",
+    "reference": "016200000011BQR00011"
+  },
+  "transactionIdFormat": "alphanumeric",
+  "uncertain": [],
+  "notes": "Repeat merchant, different day and amount."
+}

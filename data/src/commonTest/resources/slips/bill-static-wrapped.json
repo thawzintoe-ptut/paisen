@@ -1,0 +1,32 @@
+{
+  "id": "bill-static-wrapped",
+  "kind": "bill_payment",
+  "lines": [
+    "Payment Completed",
+    "14 Aug 26  7:58 PM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "NTT DATA Digital Payment",
+    "STATIC11010296",
+    "00",
+    "Transaction ID:",
+    "016200000005CPM00005",
+    "Amount:",
+    "50.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-14T19:58",
+    "amount": "50.00",
+    "counterparty": "NTT DATA Digital Payment",
+    "reference": "016200000005CPM00005"
+  },
+  "transactionIdFormat": "alphanumeric",
+  "uncertain": [
+    "reference"
+  ],
+  "notes": "The reference wraps onto a second line. A line-based parser reads the first part and silently drops the tail."
+}

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<!-- Shared-group pushes: a content-available push wakes the app to sync the group, with no banner. -->
+	<key>FirebaseMessagingInstallationIdEnabled</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+	<!-- The free stand-in for push until there is an APNs key: PushDelegate.swift, IosSharedRefresh.kt. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.ptut.expense.shared-refresh</string>
+	</array>
+	<!--
+	  FR-2: the K PLUS album is read through PHPhotoLibrary, which needs the reader's say-so.
+	  The sentence is what iOS shows in the permission dialog, so it says what is read and
+	  repeats NFR-1's promise at the one moment the reader is deciding whether to believe it.
+	-->
+	<!--
+	  #212: Quick add's mic. Speech is recognised on this iPhone only, so both sentences can
+	  promise that the words and the audio stay here.
+	-->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>PaiSeN listens when you tap the mic in Quick add, so you can say an expense instead of typing it. Nothing is recorded or uploaded.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>PaiSeN turns what you say in Quick add into an expense on this iPhone. Your words are not sent anywhere.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>PaiSeN reads the K PLUS album to turn payment slips into transactions. Slips are read on this iPhone and nothing is uploaded.</string>
+	<!--
+	  FR-1: one tap from K PLUS. Declaring the type is what puts this app in the share sheet's
+	  "Copy to" row for an image; iOS then delivers the file and calls onOpenURL. Alternate rank
+	  because this app views a slip, it is not the reader's picture viewer.
+	-->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Payment slip</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.image</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

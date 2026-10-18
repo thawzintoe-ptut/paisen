@@ -1,0 +1,33 @@
+{
+  "id": "qr-forth-wrapped",
+  "kind": "qr_merchant",
+  "lines": [
+    "Payment Completed",
+    "15 Aug 26  9:45 AM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "ร้านเวนดิ้งบายบุญเติม",
+    "FORTH SMART SERVICE PUBLIC",
+    "CO.,LTD.",
+    "R20260815061828",
+    "Transaction ID:",
+    "016200000008AQR00008",
+    "Amount:",
+    "35.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-15T09:45",
+    "amount": "35.00",
+    "counterparty": "FORTH SMART SERVICE PUBLIC CO.,LTD.",
+    "reference": "016200000008AQR00008"
+  },
+  "transactionIdFormat": "alphanumeric",
+  "uncertain": [
+    "counterparty"
+  ],
+  "notes": "Thai trade name, and the company name wraps onto a second line."
+}

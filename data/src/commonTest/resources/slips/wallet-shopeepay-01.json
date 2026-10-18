@@ -1,0 +1,32 @@
+{
+  "id": "wallet-shopeepay-01",
+  "kind": "wallet_topup",
+  "lines": [
+    "Payment Completed",
+    "14 Aug 26  11:22 AM",
+    "MR. SOMCHAI J",
+    "KBank",
+    "xxx-x-xxxxx-x",
+    "SHOPEEPAY",
+    "R2026081400211608587",
+    "R2026081400211608587",
+    "Transaction ID:",
+    "016200000002TXN00002",
+    "Amount:",
+    "306.00 Baht",
+    "Fee:",
+    "0.00 Baht",
+    "Scan for Verify Slip"
+  ],
+  "expected": {
+    "occurredAt": "2026-08-14T11:22",
+    "amount": "306.00",
+    "counterparty": "SHOPEEPAY",
+    "reference": "016200000002TXN00002"
+  },
+  "transactionIdFormat": "numeric",
+  "uncertain": [
+    "reference"
+  ],
+  "notes": "Both reference lines carry the same value. Transaction ID is all digits on the real slip."
+}

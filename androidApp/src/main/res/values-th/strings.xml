@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_add_short">เพิ่มรายจ่าย</string>
+    <string name="shortcut_add_long">เพิ่มรายจ่ายใหม่</string>
+    <string name="shortcut_scan_short">สแกนสลิป</string>
+    <string name="shortcut_scan_long">สแกนหาสลิปใหม่</string>
+    <string name="shortcut_disabled">เปิด PaiSeN ก่อนใช้</string>
+
+    <string-array name="add_expense_synonyms">
+        <item>เพิ่มรายจ่าย</item>
+        <item>จดรายจ่าย</item>
+    </string-array>
+    <string-array name="scan_slips_synonyms">
+        <item>สแกนสลิป</item>
+        <item>นำเข้าสลิป</item>
+    </string-array>
+</resources>
