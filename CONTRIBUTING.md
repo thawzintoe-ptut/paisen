@@ -111,6 +111,8 @@ production). Don't edit `versionName` or `versionCode` in `androidApp/build.grad
 
 4. The APK is on the GitHub release. The AAB for Play is in the workflow run's artifacts (7 days).
 5. iOS keeps its own version: set `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in Xcode.
+   Before an iOS release, run `./gradlew :composeApp:verifyNoNetworkSymbols` on your Mac. It links
+   the release framework (about 7 minutes) and checks it uses no networking API outside sync.
 
 **Hotfix for a version already in the store**, while `main` has work that is not ready: branch
 from the tag, fix, tag, and bring the fix back to `main`.

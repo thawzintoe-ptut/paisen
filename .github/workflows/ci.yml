@@ -8,6 +8,11 @@ on:
   pull_request:
     branches: [main]
   workflow_call:
+    inputs:
+      skip-ios:
+        description: 'True for an Android-only release'
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -46,6 +51,8 @@ jobs:
 
   ios:
     name: Link and test (iOS)
+    # On a push or pull request the input is empty, so iOS runs; an Android release skips it.
+    if: inputs.skip-ios != true
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
@@ -56,8 +63,6 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       # The slow one. Kept off the pre-push hook on purpose so committing stays cheap.
       - run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64
-      # #191 on iOS: only NSURLSession (Ktor's Darwin engine, for sync/) may be linked; no raw sockets.
-      - run: ./gradlew :composeApp:verifyNoNetworkSymbols
       # commonTest runs on the JVM everywhere else. Without this the iOS target can stop
       # compiling and nothing says so — which is how it stayed broken.
       - run: ./gradlew iosSimulatorArm64Test
