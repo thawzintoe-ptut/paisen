@@ -228,8 +228,8 @@ class PtutAppTest {
         // The sheet is gone, so the write finished: it closes on the save, not on the tap.
         onNodeWithContentDescription("Save").assertDoesNotExist()
 
-        onNode(hasScrollToNodeAction()).performScrollToNode(hasText("−฿485.00"))
-        onNodeWithText("−฿485.00").assertIsDisplayed()
+        onNode(hasScrollToNodeAction()).performScrollToNode(hasContentDescription("฿485, spent"))
+        onNodeWithContentDescription("฿485, spent").assertIsDisplayed()
         // Named by its category, so the line under it leaves the category out (#210).
         onNodeWithText("added by hand").assertIsDisplayed()
     }
@@ -315,7 +315,8 @@ class PtutAppTest {
 
         openSettings()
         onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Timezone"))
-        onNodeWithText("Timezone").performClick()
+        // Through the click action: Timezone is the last row, and the scroll leaves it under the pill (#155).
+        onNodeWithText("Timezone").performSemanticsAction(SemanticsActions.OnClick)
 
         onNodeWithText("The day you are in").assertIsDisplayed()
     }
