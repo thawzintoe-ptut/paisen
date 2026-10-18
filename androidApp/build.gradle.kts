@@ -24,6 +24,17 @@ val linkDomain: String = providers.fileContents(rootProject.layout.projectDirect
     .get()
     .ifBlank { "paisen.invalid" }
 
+// A release tag passes its version as -PpaisenVersionName and -PpaisenVersionCode. Without them,
+// every build keeps the values in defaultConfig.
+val tagVersionName = providers.gradleProperty("paisenVersionName")
+val tagVersionCode = providers.gradleProperty("paisenVersionCode").map(String::toInt)
+
+// The upload key comes from the `release` environment as variables, never on the command line.
+// Without PAISEN_UPLOAD_STORE_FILE a release build stays unsigned, as before.
+val uploadStoreFile = providers.environmentVariable("PAISEN_UPLOAD_STORE_FILE")
+fun uploadSecret(name: String): String =
+    providers.environmentVariable(name).orNull ?: error("$name is not set, but PAISEN_UPLOAD_STORE_FILE is")
+
 android {
     namespace = "com.ptut.expense"
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
@@ -32,10 +43,21 @@ android {
         applicationId = "com.ptut.expense"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = tagVersionCode.getOrElse(1)
+        versionName = tagVersionName.getOrElse("0.1.0")
         // #190: the invite links' host. Without firebase.properties it is a name that never resolves.
         manifestPlaceholders["paisenLinkDomain"] = linkDomain
+    }
+
+    signingConfigs {
+        if (uploadStoreFile.isPresent) {
+            create("upload") {
+                storeFile = file(uploadStoreFile.get())
+                storePassword = uploadSecret("PAISEN_UPLOAD_STORE_PASSWORD")
+                keyAlias = uploadSecret("PAISEN_UPLOAD_KEY_ALIAS")
+                keyPassword = uploadSecret("PAISEN_UPLOAD_KEY_PASSWORD")
+            }
+        }
     }
 
     buildFeatures {
@@ -52,6 +74,7 @@ android {
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("upload")
         }
     }
 

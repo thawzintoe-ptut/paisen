@@ -1,0 +1,108 @@
+name: Signed build
+
+# US-3: a signed APK and AAB from main, kept as workflow artifacts for 7 days. Nothing is
+# published. versionCode is 1, so Play can never take one of these by mistake.
+on:
+  workflow_dispatch:
+    inputs:
+      version-name:
+        description: 'versionName, for example 0.1.0-rc.1. Empty: the last tag plus "-dev".'
+        required: false
+        default: ''
+
+permissions: {}
+
+concurrency:
+  group: signed-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Signed APK and AAB
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0 # tags, for the default version name
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+        with:
+          cache-read-only: true
+
+      - name: Version name
+        id: version
+        env:
+          INPUT_NAME: ${{ inputs.version-name }}
+        run: |
+          name="$INPUT_NAME"
+          if [ -z "$name" ]; then
+            last=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo v0.0.0)
+            name="${last#v}-dev"
+          fi
+          if ! printf '%s' "$name" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::'$name' is not a version like 0.1.0 or 0.1.0-rc.1"
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      # The keystore lives in the runner's temp folder, never in the checkout.
+      - name: Upload key and Firebase settings
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+          FIREBASE_PROPERTIES: ${{ secrets.FIREBASE_PROPERTIES }}
+        run: |
+          printf '%s' "$UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+          printf '%s\n' "$FIREBASE_PROPERTIES" > firebase.properties
+
+      - name: Build
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          PAISEN_UPLOAD_STORE_FILE: ${{ runner.temp }}/upload.jks
+          PAISEN_UPLOAD_STORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          PAISEN_UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          PAISEN_UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+        run: >-
+          ./gradlew :androidApp:verifyNoTelemetryUpload :androidApp:verifyNoNetworkDependencies
+          :androidApp:assembleRelease :androidApp:bundleRelease
+          -PpaisenVersionName="$VERSION_NAME" -PpaisenVersionCode=1
+
+      # Signed with the right key, or nothing is kept.
+      - name: Check the signing certificate
+        env:
+          UPLOAD_CERT_SHA256: ${{ vars.UPLOAD_CERT_SHA256 }}
+        run: |
+          apk=$(find androidApp/build/outputs/apk/release -name '*.apk')
+          [ "$(printf '%s\n' "$apk" | wc -l)" -eq 1 ] || { echo "::error::expected one release APK, found: $apk"; exit 1; }
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          actual=$("$apksigner" verify --print-certs "$apk" | sed -n 's/.*SHA-256 digest: //p' | head -1)
+          expected=$(printf '%s' "$UPLOAD_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')
+          if [ -z "$actual" ] || [ "$actual" != "$expected" ]; then
+            echo "::error::APK certificate is '$actual', expected '$expected'"
+            exit 1
+          fi
+
+      - name: Name the files
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          mkdir -p out
+          cp "$(find androidApp/build/outputs/apk/release -name '*.apk')" "out/PaiSeN-$VERSION_NAME.apk"
+          cp "$(find androidApp/build/outputs/bundle/release -name '*.aab')" "out/PaiSeN-$VERSION_NAME.aab"
+
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: PaiSeN-${{ steps.version.outputs.name }}
+          path: out/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.jks" firebase.properties
