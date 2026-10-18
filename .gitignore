@@ -39,6 +39,20 @@ gradle/gradle-daemon-jvm.properties
 # Firebase's own config files, kept as the source of firebase.properties. The app reads neither.
 /androidApp/google-services.json
 /iosApp/iosApp/GoogleService-Info.plist
+# Keys and signing files, in any folder: Firebase configs, release keystores, Play and Firebase
+# service accounts, APNs keys and profiles, local env files.
+google-services*.json
+GoogleService-Info*.plist
+*.jks
+*.keystore
+keystore.properties
+*service-account*.json
+*.p8
+*.p12
+*.mobileprovision
+.env
+.env.*
+!.env.example
 
 # Decisions, requirements and design notes stay on this machine and never reach GitHub.
 /docs/adr/
