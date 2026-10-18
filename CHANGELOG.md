@@ -6,7 +6,7 @@ All notable changes to PaiSeN are listed here. The format follows
 
 ## [Unreleased]
 
-The first public version. When it ships, this section becomes `[0.1.0]` with the release date.
+The first public version.
 
 ### Added
 
@@ -31,5 +31,7 @@ The first public version. When it ships, this section becomes `[0.1.0]` with the
 - Android cloud backup, Android phone-to-phone transfer and iCloud backup are off for the app's
   data.
 - Firestore security rules with 64 tests run against the emulator.
+- Push notifications start only after you sign in to share a group. A phone that never
+  signs in sends nothing to Firebase.
 
 [Unreleased]: https://github.com/thawzintoe-ptut/PaiSen/commits/main
