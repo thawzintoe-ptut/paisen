@@ -155,6 +155,10 @@ This is a personal project, but bug reports and ideas are welcome in
 a pull request, so we can agree on the change first. Report security problems privately, as
 [SECURITY.md](SECURITY.md) describes.
 
+PaiSeN uses trunk-based development: short branches, pull requests into `main`, and releases
+tagged on `main`. [CONTRIBUTING.md](CONTRIBUTING.md) has the branch rules, the checks and the
+commit format.
+
 ## License
 
 Copyright © 2026 Thaw Zin Toe
