@@ -53,6 +53,8 @@ keystore.properties
 .env
 .env.*
 !.env.example
+# Android Studio's Generate Signed Bundle writes here. Release files come from CI, not git.
+/androidApp/release/
 
 # Decisions, requirements and design notes stay on this machine and never reach GitHub.
 /docs/adr/
