@@ -92,3 +92,103 @@ jobs:
           else
             gh release create "$TAG" "$apk" --repo "$GITHUB_REPOSITORY" --verify-tag --title "PaiSeN $NAME" --notes-file notes.md
           fi
+
+  # The switches below are repository variables: a job's `if` is read before it enters its
+  # environment, so environment variables are not visible there.
+  firebase:
+    name: Firebase App Distribution
+    needs: [meta, build]
+    if: needs.meta.outputs.kind == 'beta' && vars.FIREBASE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: PaiSeN-${{ needs.meta.outputs.name }}
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: notes
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+      # The app id comes from firebase.properties, so it is not a second secret to keep in step.
+      - name: Send the APK to the testers group
+        env:
+          FIREBASE_DISTRIBUTION_SA_JSON: ${{ secrets.FIREBASE_DISTRIBUTION_SA_JSON }}
+          FIREBASE_PROPERTIES: ${{ secrets.FIREBASE_PROPERTIES }}
+          NAME: ${{ needs.meta.outputs.name }}
+        run: |
+          app_id=$(printf '%s\n' "$FIREBASE_PROPERTIES" | sed -n 's/^androidAppId=//p' | tr -d '\r')
+          [ -n "$app_id" ] || { echo "::error::androidAppId is missing from FIREBASE_PROPERTIES"; exit 1; }
+          printf '%s' "$FIREBASE_DISTRIBUTION_SA_JSON" > "$RUNNER_TEMP/distribution.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/distribution.json" npx --yes firebase-tools@15.34.0 \
+            appdistribution:distribute "PaiSeN-$NAME.apk" --app "$app_id" --groups testers --release-notes-file notes.md
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/distribution.json"
+
+  play-beta:
+    name: Play testing track
+    needs: [meta, build]
+    if: needs.meta.outputs.kind == 'beta' && vars.PLAY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: PaiSeN-${{ needs.meta.outputs.name }}
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: notes
+      - name: Play release notes
+        env:
+          URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+        run: scripts/release/play-notes.sh notes.md "$URL"
+      # PLAY_BETA_TRACK is internal, or alpha during the closed test. PLAY_STATUS stays draft
+      # until the app has been published once; Play refuses anything else for a draft app.
+      - uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.ptut.expense
+          releaseFiles: PaiSeN-${{ needs.meta.outputs.name }}.aab
+          releaseName: ${{ needs.meta.outputs.name }}
+          track: ${{ vars.PLAY_BETA_TRACK || 'internal' }}
+          status: ${{ vars.PLAY_STATUS || 'draft' }}
+          whatsNewDirectory: whatsnew
+
+  play-production:
+    name: Play production (20%)
+    needs: [meta, build]
+    if: needs.meta.outputs.kind == 'production' && vars.PLAY_PRODUCTION_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    # The production environment's required reviewer is what makes this job wait for approval.
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: PaiSeN-${{ needs.meta.outputs.name }}
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: notes
+      - name: Play release notes
+        env:
+          URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+        run: scripts/release/play-notes.sh notes.md "$URL"
+      - uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.ptut.expense
+          releaseFiles: PaiSeN-${{ needs.meta.outputs.name }}.aab
+          releaseName: ${{ needs.meta.outputs.name }}
+          track: production
+          status: inProgress
+          userFraction: 0.2
+          whatsNewDirectory: whatsnew

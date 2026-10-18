@@ -1,0 +1,12 @@
+# Every workflow action is pinned, so a fix or security update only arrives through these PRs.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: build
+    groups:
+      actions:
+        patterns: ['*']

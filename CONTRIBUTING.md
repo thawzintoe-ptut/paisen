@@ -99,6 +99,17 @@ creates the GitHub release with the APK. There are no release branches until one
 versionCode = MAJOR × 1,000,000 + MINOR × 10,000 + PATCH × 100 + the rc number (99 for
 production). Don't edit `versionName` or `versionCode` in `androidApp/build.gradle.kts`.
 
+After the GitHub release, each target runs only when its repository variable is `true`
+(**Settings → Secrets and variables → Actions → Variables**):
+
+| Target | Tag | Variable | Needs |
+|---|---|---|---|
+| Firebase App Distribution, group `testers` | beta | `FIREBASE_ENABLED` | secret `FIREBASE_DISTRIBUTION_SA_JSON` in `release` |
+| Play track in `PLAY_BETA_TRACK` (`internal` or `alpha`) | beta | `PLAY_ENABLED` | secret `PLAY_SERVICE_ACCOUNT_JSON` in `release`; `PLAY_STATUS` is `draft` until the app is published |
+| Play production, 20% staged rollout | production | `PLAY_PRODUCTION_ENABLED` | environment `production` with you as required reviewer, and the same secret |
+
+Play gets the notes cut to 500 characters, with a link to the full notes on GitHub.
+
 1. For a beta, check that `## [Unreleased]` in `CHANGELOG.md` says what changed. For production,
    rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD` and add a new empty `[Unreleased]` above it.
 2. Commit, push, and wait for CI to pass.
