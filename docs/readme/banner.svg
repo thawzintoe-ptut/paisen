@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 418" width="1280" height="418" role="img" aria-labelledby="title desc">
+  <title id="title">PaiSeN</title>
+  <desc id="desc">Android, iOS, on-device. Your bank slips become your spending record. No typing, no account, nothing uploaded. A K PLUS slip for 642.50 baht to Foodland is filed under Groceries by your rule.</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+    .eyebrow { font-size: 15px; font-weight: 700; letter-spacing: 2.6px; fill: #24414F; }
+    .name { font-size: 94px; font-weight: 800; letter-spacing: -4px; fill: #0B0B0C; }
+    .tagline { font-size: 23px; fill: #24414F; }
+    .pill { font-size: 14.5px; font-weight: 700; letter-spacing: 1.2px; }
+    .label { font-size: 13.5px; font-weight: 700; letter-spacing: 1.8px; fill: #6B7178; }
+    .amount { font-size: 43px; font-weight: 800; letter-spacing: -1px; fill: #0B0B0C; }
+    .muted { fill: #6B7178; }
+    .strong { font-weight: 700; fill: #0B0B0C; }
+    .my { font-family: "Noto Sans Myanmar", "Myanmar Sangam MN", "Myanmar Text", Padauk, sans-serif; letter-spacing: 0; }
+  </style>
+
+  <rect width="1280" height="418" rx="36" fill="#A9DCF7"/>
+
+  <text class="eyebrow" x="72" y="104">ANDROID · iOS · ON-DEVICE</text>
+  <text class="name" x="68" y="196">PaiSeN</text>
+  <text class="tagline" x="72" y="248">Your bank slips become your spending record.</text>
+  <text class="tagline" x="72" y="282">No typing, no account, nothing uploaded.</text>
+
+  <rect x="72" y="320" width="196" height="46" rx="23" fill="#0B0B0C"/>
+  <text class="pill" x="170" y="348" text-anchor="middle" fill="#FFFFFF">READS K PLUS SLIPS</text>
+  <rect x="280.75" y="320.75" width="162.5" height="44.5" rx="22.25" fill="none" stroke="#7293A5" stroke-width="1.5"/>
+  <text class="pill" x="362" y="348" text-anchor="middle" fill="#0B0B0C">EN · <tspan class="my">မြန်မာ</tspan></text>
+
+  <rect x="760" y="60" width="420" height="132" rx="34" fill="#FFFFFF"/>
+  <text class="label" x="788" y="104">SLIP IN PHOTOS · 18:30</text>
+  <text class="amount" x="786" y="153">฿642.50</text>
+  <text class="muted" x="1152" y="152" text-anchor="end" font-size="17">to Foodland</text>
+
+  <g stroke="#0B0B0C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="970" y1="210" x2="970" y2="250"/>
+    <polyline points="958,238 970,250 982,238"/>
+  </g>
+
+  <rect x="760" y="268" width="420" height="91" rx="40" fill="#FFFFFF"/>
+  <circle cx="822" cy="313.5" r="24" fill="#A9DCF7"/>
+  <rect x="811.5" y="305.5" width="21" height="16" rx="4" fill="none" stroke="#0B0B0C" stroke-width="2"/>
+  <text class="strong" x="862" y="308" font-size="19.5">Groceries</text>
+  <text class="muted" x="862" y="332" font-size="15.5">filed by your rule</text>
+  <text class="strong" x="1152" y="321" text-anchor="end" font-size="21.5">−฿642.50</text>
+</svg>

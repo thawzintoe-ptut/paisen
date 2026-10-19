@@ -1,12 +1,9 @@
 <p align="center">
-  <img src="iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png" width="112" alt="PaiSeN app icon">
+  <img src="docs/readme/banner.svg" width="100%" alt="PaiSeN. Android, iOS, on-device. Your bank slips become your spending record. No typing, no account, nothing uploaded.">
 </p>
 
-<h1 align="center">PaiSeN</h1>
-
 <p align="center">
-  An expense tracker for Android and iOS that reads your bank slips on the phone<br>
-  and keeps your spending there.
+  <img src="iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png" width="88" alt="PaiSeN app icon">
 </p>
 
 <p align="center">
@@ -18,68 +15,70 @@
   <img src="https://img.shields.io/badge/iOS-16%2B-000000?logo=apple&logoColor=white" alt="iOS 16+">
 </p>
 
-<!--
-  Screenshots: put 4 or 5 real phone screenshots in docs/screenshots/ (Today, To check, Reports,
-  a shared group, Settings), light and dark, then replace this comment with a row like:
+<h3 align="center">
+  <a href="#features">Features</a> ·
+  <a href="#privacy">Privacy</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#build-it-yourself">Build</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</h3>
 
-  <p align="center">
-    <img src="docs/screenshots/today.png" width="200" alt="Today">
-    <img src="docs/screenshots/check-slip.png" width="200" alt="Check slip">
-    <img src="docs/screenshots/reports.png" width="200" alt="Reports">
-    <img src="docs/screenshots/shared.png" width="200" alt="A shared group">
-  </p>
--->
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/home.png" width="260" alt="Home: what you spent this month and your latest purchases"><br>Home</td>
+    <td align="center"><img src="docs/screenshots/reports.png" width="260" alt="Reports: spending by week, month, 3 months, 6 months or a year"><br>Reports</td>
+    <td align="center"><img src="docs/screenshots/quick-add.png" width="260" alt="Quick add: type an amount, pick a category and save"><br>Quick add</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/shared.png" width="260" alt="Shared: what you are owed and what you owe across groups"><br>Shared</td>
+    <td align="center"><img src="docs/screenshots/group.png" width="260" alt="A shared group: members, balances and expenses for a trip"><br>A shared group</td>
+    <td align="center"><img src="docs/screenshots/settings.png" width="260" alt="Settings: photo folders, background import and categories"><br>Settings</td>
+  </tr>
+</table>
 
 ## Why PaiSeN
 
 In Thailand, a QR payment or a transfer usually ends with a slip saved to your photos. PaiSeN reads
-those slips and turns them into a record of where your money went. You do not type anything,
-nothing is uploaded, and you need no account.
+those slips and turns them into a record of where your money went.
+
+<p align="center">
+  <img src="docs/readme/promises.svg" width="100%" alt="1. On the phone: slips are read by ML Kit and Apple Vision, and nothing is uploaded. 2. No account: your own spending needs no sign-in, ads or analytics. 3. Nothing lost: a slip it cannot read waits in To check with its picture.">
+</p>
 
 ## Features
 
-- **Slips become transactions.** PaiSeN reads K PLUS payment slips from your photos. It finds
-  the amount, the shop or person, the date and the transaction id. ML Kit (Android)
-  and Apple Vision (iOS) do the reading on the phone.
-- **It learns your shops.** Pick a category for a shop once, and the next slip from that shop
-  gets the same one. The record shows which rule filed it.
-- **Nothing is lost.** A slip it cannot read waits in *To check* with its picture, so you can fix
-  it by hand.
-- **Today, week and month.** See what you spent today, this week and this month, your top
-  categories, and how today compares with a usual day.
-- **Reports** for 3 months, 6 months and a year, by category and sub-category.
-- **Quick add.** Type or say an expense, like "coffee 60", in English, Thai or Burmese. Speech is
-  recognised on the phone. On iOS, Siri and the icon's shortcuts open a filled-in sheet.
-- **Shared groups (optional).** Split a bill with one person or a trip with a group. Members join
-  from a link or a QR code, see the same balances, and are told when something changes.
-  Settle up with a PromptPay QR that opens your bank app.
-- **Your data, your file.** Export the whole ledger to a file and import it on a new phone.
-- **English and Burmese**, with Burmese digits, in light and dark.
+<table>
+  <tr><td><b>Slips become transactions</b></td><td>Reads K PLUS slips from your photos — amount, shop or person, date and transaction id. ML Kit and Apple Vision read on the phone.</td></tr>
+  <tr><td><b>It learns your shops</b></td><td>Pick a category for a shop once; the next slip from that shop gets the same one.</td></tr>
+  <tr><td><b>To check</b></td><td>A slip it cannot read waits with its picture, so you can fix it by hand.</td></tr>
+  <tr><td><b>Today, week, month</b></td><td>What you spent, your top categories, and how today compares with a usual day.</td></tr>
+  <tr><td><b>Reports</b></td><td>3 months, 6 months or a year, by category and sub-category.</td></tr>
+  <tr><td><b>Quick add</b></td><td>Type or say “coffee 60” in English, Thai or Burmese.</td></tr>
+  <tr><td><b>Shared groups (optional)</b></td><td>Split a bill or a trip. Join by link or QR, settle up with a PromptPay QR.</td></tr>
+  <tr><td><b>Your file</b></td><td>Export the whole record and import it on a new phone.</td></tr>
+  <tr><td><b>English and မြန်မာ</b></td><td>Burmese digits included, in light and dark.</td></tr>
+</table>
 
 ## Privacy
 
-Your own spending, slips and reports never leave the phone. There are no ads, no analytics and no
-crash reporting, and the app turns off Android and iCloud backups of its data.
+> [!NOTE]
+> Your own spending, slips and reports never leave the phone. No ads, no analytics, no crash
+> reporting — and Android and iCloud backups of the app's data are turned off.
 
-Only shared groups use the network, and only after you sign in to share. The full list of what is
-sent, and where, is in [PRIVACY.md](PRIVACY.md).
+Only shared groups use the network, and only after you sign in to share. Everything that is sent,
+and where, is in [PRIVACY.md](PRIVACY.md).
 
-CI checks these promises on every push:
+#### CI checks these promises on every push
 
-- no analytics or crash-reporting SDK, and no HTTP client except the one shared groups use
-- network code only inside the sync module
-- no telemetry upload service in the merged Android manifest (ML Kit's uploader is removed)
-- no account number in the slip test data
-
-The slip reader on Android uses ML Kit's bundled model, so nothing is downloaded the first time
-you scan.
+- [x] No analytics or crash-reporting SDK, and no HTTP client except the one shared groups use
+- [x] Network code only inside the sync module
+- [x] No telemetry upload service in the merged Android manifest
+- [x] No account number in the slip test data
 
 ## Architecture
 
-PaiSeN is one Kotlin Multiplatform codebase. The UI is Compose Multiplatform on both platforms, and
-only the parts that must be native (photo library, text recognition, speech, sign-in, push) are
-written per platform. The module layout follows
-[android/architecture-samples](https://github.com/android/architecture-samples).
+One Kotlin Multiplatform codebase. The UI is Compose Multiplatform on both platforms; only what
+must be native is written per platform.
 
 ```mermaid
 graph TD
@@ -88,10 +87,17 @@ graph TD
   composeApp --> features["10 feature modules<br/>today · ledger · reports · record · add<br/>review · shared · settings · categories · onboarding"]
   features --> services["core:importer · core:sync · core:agent"]
   features --> ui["core:ui"]
-  services --> data
+  services --> data["data → core:platform · core:util · core:locale"]
   ui --> data
-  data --> base["core:platform · core:util · core:locale"]
+  classDef module fill:#A9DCF7,stroke:#0B0B0C,color:#0B0B0C
+  class androidApp,iosApp,composeApp,features,services,ui,data module
 ```
+
+<details>
+<summary><b>Stack</b></summary>
+<br>
+
+The module layout follows [android/architecture-samples](https://github.com/android/architecture-samples).
 
 - Feature modules never depend on each other. CI fails if a feature reaches past the repositories
   into Room.
@@ -111,15 +117,25 @@ graph TD
 | Security rules | Firestore rules tested against the emulator in [`firebase/rules-test`](firebase/rules-test) |
 | Quality | Spotless, custom Gradle checks, host tests on Android and the iOS simulator |
 
+</details>
+
 ## Build it yourself
 
-You need JDK 17, Android Studio, and on a Mac, Xcode for the iOS app.
+You need JDK 17 and Android Studio — and on a Mac, Xcode for the iOS app.
 
 ```bash
 git clone https://github.com/thawzintoe-ptut/PaiSen.git
 cd PaiSen
 git config core.hooksPath .githooks
 ```
+
+> [!TIP]
+> **Shared groups** stay off until you connect your own
+> [Firebase project](firebase/README.md) — everything else works without it.
+
+<details>
+<summary><b>Run it on Android or iOS, and run the tests</b></summary>
+<br>
 
 **Android**
 
@@ -144,36 +160,13 @@ Gradle for the Kotlin framework.
 ./gradlew iosSimulatorArm64Test
 ```
 
-**Shared groups** are off until you connect your own Firebase project. Without it, the app builds
-and runs, and everything else works. To turn them on, copy `firebase.properties.example` to
-`firebase.properties` and follow [firebase/README.md](firebase/README.md).
-
-## Contributing
-
-This is a personal project, but bug reports and ideas are welcome in
-[Issues](https://github.com/thawzintoe-ptut/PaiSen/issues). Please open an issue before you start
-a pull request, so we can agree on the change first. Report security problems privately, as
-[SECURITY.md](SECURITY.md) describes.
-
-PaiSeN uses trunk-based development: short branches, pull requests into `main`, and releases
-tagged on `main`. [CONTRIBUTING.md](CONTRIBUTING.md) has the branch rules, the checks and the
-commit format.
+</details>
 
 ## License
 
-Copyright © 2026 Thaw Zin Toe
+PaiSeN is free software under the [GNU General Public License v3.0](LICENSE). Copyright © 2026
+Thaw Zin Toe.
 
-PaiSeN is free software: you can redistribute it and change it under the terms of the
-[GNU General Public License v3.0](LICENSE). If you ship a changed version, you must share its
-source code under the same license.
-
-**Name and icon.** The license covers the code. It does not give you the right to use the name
-PaiSeN or its icon. If you publish your own build or a fork, give it a different name and icon so
-nobody confuses it with this app.
-
-**Third-party code and assets** keep their own licenses:
-
-- [Geist and Geist Mono](https://github.com/vercel/geist-font), SIL Open Font License 1.1
-- [Heroicons](https://github.com/tailwindlabs/heroicons), MIT
-- The Zawgyi detector in `core/agent` is ported from
-  [google/myanmar-tools](https://github.com/google/myanmar-tools), Apache License 2.0
+> [!IMPORTANT]
+> The license covers the code, not the name **PaiSeN** or its icon. If you publish your own build or a
+> fork, give it a different name and icon.
