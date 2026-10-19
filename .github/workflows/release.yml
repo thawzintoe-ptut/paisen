@@ -82,6 +82,21 @@ jobs:
     with:
       version-name: ${{ needs.meta.outputs.name }}
       version-code: ${{ needs.meta.outputs.code }}
+      signing: ad-hoc
+
+  # The free way onto an iPhone: an unsigned IPA on the GitHub release, which each tester signs with
+  # their own Apple ID in SideStore or AltStore. Off until IOS_SIDELOAD_ENABLED is true.
+  build-ios-sideload:
+    needs: [meta, checks]
+    if: vars.IOS_SIDELOAD_ENABLED == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-ios.yml
+    secrets: inherit
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      version-code: ${{ needs.meta.outputs.code }}
+      signing: none
 
   github-release:
     name: GitHub release
@@ -112,6 +127,24 @@ jobs:
           else
             gh release create "$TAG" "$apk" --repo "$GITHUB_REPOSITORY" --verify-tag --title "PaiSeN $NAME" --notes-file notes.md
           fi
+
+  # After github-release, so the APK is out even when the iPhone build fails.
+  github-release-ios:
+    name: GitHub release (iPhone IPA)
+    needs: [meta, github-release, build-ios-sideload]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: PaiSeN-ios-none-${{ needs.meta.outputs.name }}
+      - name: Add the IPA to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          NAME: ${{ needs.meta.outputs.name }}
+        run: gh release upload "$TAG" "PaiSeN-$NAME.ipa" --clobber --repo "$GITHUB_REPOSITORY"
 
   # The switches below are repository variables: a job's `if` is read before it enters its
   # environment, so environment variables are not visible there.
@@ -161,7 +194,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: PaiSeN-ios-${{ needs.meta.outputs.name }}
+          name: PaiSeN-ios-ad-hoc-${{ needs.meta.outputs.name }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: notes

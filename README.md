@@ -119,6 +119,25 @@ The module layout follows [android/architecture-samples](https://github.com/andr
 
 </details>
 
+## Install
+
+**Android.** Download `PaiSeN-<version>.apk` from [Releases](https://github.com/thawzintoe-ptut/paisen/releases)
+and open it on the phone.
+
+**iPhone, without the App Store.** Each release also has `PaiSeN-<version>.ipa`. It is not signed,
+so you sign it with your own Apple ID in [SideStore](https://sidestore.io) or
+[AltStore](https://altstore.io):
+
+1. Set up SideStore on the iPhone with its own guide. It needs a computer once.
+2. On the iPhone, download the `.ipa` from [Releases](https://github.com/thawzintoe-ptut/paisen/releases).
+3. In SideStore, open **My Apps**, tap **+** and pick the file.
+4. Open SideStore at least once a week and tap **Refresh All**. A free Apple ID signs an app for 7
+   days, and after that PaiSeN won't open until you refresh. Your data stays on the phone.
+
+A free Apple ID can't sign Sign in with Apple, push notifications or links that open an app. So in
+this build those three don't work, and an invite link opens in Safari. A free Apple ID can also
+keep only 3 sideloaded apps at a time.
+
 ## Build it yourself
 
 You need JDK 17 and Android Studio — and on a Mac, Xcode for the iOS app.

@@ -105,6 +105,7 @@ After the GitHub release, each target runs only when its repository variable is 
 | Target | Tag | Variable | Needs |
 |---|---|---|---|
 | Firebase App Distribution, group `testers` | beta | `FIREBASE_ENABLED` | secret `FIREBASE_DISTRIBUTION_SA_JSON` in `release` |
+| Unsigned iPhone IPA on the GitHub release, for SideStore or AltStore | beta and production | `IOS_SIDELOAD_ENABLED` | secret `GOOGLE_SERVICE_INFO_PLIST` in `release` |
 | Firebase App Distribution for iPhone, group `testers` | beta | `IOS_ENABLED` and `FIREBASE_ENABLED` | the paid Apple Developer Program, and in `release` the secrets `IOS_DIST_CERT_P12_BASE64`, `IOS_DIST_CERT_PASSWORD`, `IOS_ADHOC_PROFILE_BASE64` and `GOOGLE_SERVICE_INFO_PLIST` |
 | Play track in `PLAY_BETA_TRACK` (`internal` or `alpha`) | beta | `PLAY_ENABLED` | secret `PLAY_SERVICE_ACCOUNT_JSON` in `release`, from an account that may only release to testing tracks; `PLAY_STATUS` is `draft` until the app is published |
 | Play production, 20% staged rollout | production | `PLAY_PRODUCTION_ENABLED` | environment `production` with you as required reviewer, holding its own `PLAY_SERVICE_ACCOUNT_JSON` from a separate production account |
@@ -122,7 +123,8 @@ Play gets the notes cut to 500 characters, with a link to the full notes on GitH
    git push origin v0.2.0-rc.1
    ```
 
-4. The APK is on the GitHub release. The AAB for Play is in the workflow run's artifacts (7 days).
+4. The APK is on the GitHub release, and so is the unsigned IPA when `IOS_SIDELOAD_ENABLED` is on.
+   The AAB for Play is in the workflow run's artifacts (7 days).
 5. With `IOS_ENABLED`, a beta tag also builds an ad hoc IPA: `v0.2.0-rc.1` becomes version 0.2.0,
    build 20001. Only the iPhones in the ad hoc profile can install it. To add a tester's iPhone,
    register it in the Apple Developer portal, make the profile again, and replace

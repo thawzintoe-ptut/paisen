@@ -1,8 +1,10 @@
 name: iOS build
 
-# An ad hoc IPA for Firebase App Distribution, kept as a workflow artifact for 7 days. Ad hoc
-# signing needs the paid Apple Developer Program, and only the iPhones listed in the profile can
-# install the build. release.yml calls it for a beta tag when IOS_ENABLED is true.
+# An iPhone IPA, kept as a workflow artifact for 7 days, in one of two kinds:
+# - none: unsigned, for the GitHub release. Testers sign it with their own free Apple ID in
+#   SideStore or AltStore. release.yml builds it when IOS_SIDELOAD_ENABLED is true.
+# - ad-hoc: for Firebase App Distribution. Needs the paid Apple Developer Program, and only the
+#   iPhones in the profile can install it. release.yml builds it for a beta when IOS_ENABLED is true.
 on:
   workflow_dispatch:
     inputs:
@@ -12,6 +14,11 @@ on:
       version-code:
         description: 'Build number, for example 10001'
         required: true
+      signing:
+        description: 'none (sideload) or ad-hoc (paid Apple team)'
+        type: choice
+        options: [none, ad-hoc]
+        default: none
   workflow_call:
     inputs:
       version-name:
@@ -20,16 +27,20 @@ on:
       version-code:
         type: string
         required: true
+      signing:
+        type: string
+        required: true
 
 permissions: {}
 
+# The kind is in the group, so a beta that builds both doesn't cancel one with the other.
 concurrency:
-  group: ios-build-${{ github.ref }}
+  group: ios-build-${{ inputs.signing }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Signed IPA (ad hoc)
+    name: ${{ inputs.signing == 'none' && 'Unsigned IPA (sideload)' || 'Signed IPA (ad hoc)' }}
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-latest
     environment: release
@@ -51,7 +62,12 @@ jobs:
         env:
           NAME: ${{ inputs.version-name }}
           CODE: ${{ inputs.version-code }}
+          SIGNING: ${{ inputs.signing }}
         run: |
+          case "$SIGNING" in
+            none|ad-hoc) ;;
+            *) echo "::error::signing is '$SIGNING'; it must be none or ad-hoc"; exit 1 ;;
+          esac
           printf '%s' "$NAME" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' \
             || { echo "::error::'$NAME' is not a version like 0.1.0 or 0.1.0-rc.1"; exit 1; }
           printf '%s' "$CODE" | grep -Eq '^[1-9][0-9]*$' \
@@ -73,6 +89,7 @@ jobs:
       # The certificate and profile live in the runner's temp folder, never in the checkout.
       - name: Signing certificate and profile
         id: signing
+        if: inputs.signing == 'ad-hoc'
         env:
           IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
           IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
@@ -126,17 +143,34 @@ jobs:
         env:
           MARKETING: ${{ steps.version.outputs.marketing }}
           CODE: ${{ inputs.version-code }}
+          SIGNING: ${{ inputs.signing }}
           TEAM: ${{ steps.signing.outputs.team }}
           PROFILE: ${{ steps.signing.outputs.uuid }}
-        run: >-
-          xcodebuild archive -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Release
-          -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/PaiSeN.xcarchive"
-          MARKETING_VERSION="$MARKETING" CURRENT_PROJECT_VERSION="$CODE"
-          CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_IDENTITY="Apple Distribution"
-          PAISEN_PROVISIONING_PROFILE="$PROFILE"
-          OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/signing.keychain-db"
+        run: |
+          if [ "$SIGNING" = none ]; then
+            sign=(CODE_SIGNING_ALLOWED=NO)
+          else
+            sign=(CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_IDENTITY="Apple Distribution"
+              PAISEN_PROVISIONING_PROFILE="$PROFILE" OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/signing.keychain-db")
+          fi
+          xcodebuild archive -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/PaiSeN.xcarchive" \
+            MARKETING_VERSION="$MARKETING" CURRENT_PROJECT_VERSION="$CODE" "${sign[@]}"
+
+      # An IPA is the app inside a Payload folder, zipped. SideStore and AltStore sign it on the phone.
+      - name: Package the unsigned IPA
+        if: inputs.signing == 'none'
+        env:
+          NAME: ${{ inputs.version-name }}
+        run: |
+          app=$(find "$RUNNER_TEMP/PaiSeN.xcarchive/Products/Applications" -maxdepth 1 -name '*.app')
+          [ "$(printf '%s\n' "$app" | wc -l)" -eq 1 ] || { echo "::error::expected one app, found: $app"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/ipa/Payload" out
+          cp -R "$app" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/out/PaiSeN-$NAME.ipa" Payload)
 
       - name: Export the IPA
+        if: inputs.signing == 'ad-hoc'
         env:
           NAME: ${{ inputs.version-name }}
           TEAM: ${{ steps.signing.outputs.team }}
@@ -165,7 +199,7 @@ jobs:
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: PaiSeN-ios-${{ inputs.version-name }}
+          name: PaiSeN-ios-${{ inputs.signing }}-${{ inputs.version-name }}
           path: out/
           retention-days: 7
           if-no-files-found: error
