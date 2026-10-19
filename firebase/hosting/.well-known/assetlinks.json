@@ -5,7 +5,9 @@
       "namespace": "android_app",
       "package_name": "com.ptut.expense",
       "sha256_cert_fingerprints": [
-        "D6:57:04:1C:15:1D:9E:8C:F4:4C:BF:31:D0:5B:CA:ED:4E:F2:60:B5:92:8E:AF:CC:05:55:40:85:74:BC:0C:80"
+        "D6:57:04:1C:15:1D:9E:8C:F4:4C:BF:31:D0:5B:CA:ED:4E:F2:60:B5:92:8E:AF:CC:05:55:40:85:74:BC:0C:80",
+        "21:40:98:56:8D:5F:30:49:5F:95:20:AE:45:26:34:4B:36:2E:B0:1F:5A:27:FB:41:ED:BC:BE:C5:63:CE:4C:5B",
+        "A0:00:6B:25:62:80:64:47:0B:3F:E1:1E:85:01:BB:FB:CE:90:DE:54:6C:91:AA:3E:C4:04:14:CC:9B:9F:62:50"
       ]
     }
   }
