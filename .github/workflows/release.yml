@@ -70,6 +70,19 @@ jobs:
       version-name: ${{ needs.meta.outputs.name }}
       version-code: ${{ needs.meta.outputs.code }}
 
+  # Off until the Apple Developer Program is paid and the signing secrets are in `release`. Only
+  # the iPhones in the ad hoc profile can install it, so it goes to App Distribution, not GitHub.
+  build-ios:
+    needs: [meta, checks]
+    if: needs.meta.outputs.kind == 'beta' && vars.IOS_ENABLED == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-ios.yml
+    secrets: inherit
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      version-code: ${{ needs.meta.outputs.code }}
+
   github-release:
     name: GitHub release
     needs: [meta, build]
@@ -103,7 +116,7 @@ jobs:
   # The switches below are repository variables: a job's `if` is read before it enters its
   # environment, so environment variables are not visible there.
   firebase:
-    name: Firebase App Distribution
+    name: Firebase App Distribution (Android)
     needs: [meta, build]
     if: needs.meta.outputs.kind == 'beta' && vars.FIREBASE_ENABLED == 'true'
     runs-on: ubuntu-latest
@@ -132,6 +145,42 @@ jobs:
           printf '%s' "$FIREBASE_DISTRIBUTION_SA_JSON" > "$RUNNER_TEMP/distribution.json"
           GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/distribution.json" npx --yes firebase-tools@15.34.0 \
             appdistribution:distribute "PaiSeN-$NAME.apk" --app "$app_id" --groups testers --release-notes-file notes.md
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/distribution.json"
+
+  # Skipped whenever build-ios is, so IOS_ENABLED switches this one too.
+  firebase-ios:
+    name: Firebase App Distribution (iOS)
+    needs: [meta, build-ios]
+    if: vars.FIREBASE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: PaiSeN-ios-${{ needs.meta.outputs.name }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: notes
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      # The app id comes from the plist the build already uses, so it is not a second secret.
+      - name: Send the IPA to the testers group
+        env:
+          FIREBASE_DISTRIBUTION_SA_JSON: ${{ secrets.FIREBASE_DISTRIBUTION_SA_JSON }}
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+          NAME: ${{ needs.meta.outputs.name }}
+        run: |
+          app_id=$(printf '%s\n' "$GOOGLE_SERVICE_INFO_PLIST" | grep -A1 '<key>GOOGLE_APP_ID</key>' \
+            | sed -n 's/.*<string>\(.*\)<\/string>.*/\1/p')
+          [ -n "$app_id" ] || { echo "::error::GOOGLE_APP_ID is missing from GOOGLE_SERVICE_INFO_PLIST"; exit 1; }
+          printf '%s' "$FIREBASE_DISTRIBUTION_SA_JSON" > "$RUNNER_TEMP/distribution.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/distribution.json" npx --yes firebase-tools@15.34.0 \
+            appdistribution:distribute "PaiSeN-$NAME.ipa" --app "$app_id" --groups testers --release-notes-file notes.md
       - name: Remove the key
         if: always()
         run: rm -f "$RUNNER_TEMP/distribution.json"

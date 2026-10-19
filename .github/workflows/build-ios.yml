@@ -1,0 +1,178 @@
+name: iOS build
+
+# An ad hoc IPA for Firebase App Distribution, kept as a workflow artifact for 7 days. Ad hoc
+# signing needs the paid Apple Developer Program, and only the iPhones listed in the profile can
+# install the build. release.yml calls it for a beta tag when IOS_ENABLED is true.
+on:
+  workflow_dispatch:
+    inputs:
+      version-name:
+        description: 'Version, for example 0.1.0-rc.1'
+        required: true
+      version-code:
+        description: 'Build number, for example 10001'
+        required: true
+  workflow_call:
+    inputs:
+      version-name:
+        type: string
+        required: true
+      version-code:
+        type: string
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Signed IPA (ad hoc)
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-latest
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-read-only: true
+
+      # iOS takes a plain X.Y.Z, so 0.1.0-rc.2 ships as 0.1.0 with build number 10002.
+      - name: Version
+        id: version
+        env:
+          NAME: ${{ inputs.version-name }}
+          CODE: ${{ inputs.version-code }}
+        run: |
+          printf '%s' "$NAME" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' \
+            || { echo "::error::'$NAME' is not a version like 0.1.0 or 0.1.0-rc.1"; exit 1; }
+          printf '%s' "$CODE" | grep -Eq '^[1-9][0-9]*$' \
+            || { echo "::error::'$CODE' is not a build number"; exit 1; }
+          echo "marketing=${NAME%%-*}" >> "$GITHUB_OUTPUT"
+
+      # PushDelegate starts Firebase whenever the plist is in the app, so an empty one would crash
+      # on launch. CI's simulator build can use an empty one because nothing runs it.
+      - name: Firebase settings
+        env:
+          FIREBASE_PROPERTIES: ${{ secrets.FIREBASE_PROPERTIES }}
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+        run: |
+          printf '%s\n' "$FIREBASE_PROPERTIES" > firebase.properties
+          printf '%s\n' "$GOOGLE_SERVICE_INFO_PLIST" > iosApp/iosApp/GoogleService-Info.plist
+          plutil -extract GOOGLE_APP_ID raw iosApp/iosApp/GoogleService-Info.plist > /dev/null \
+            || { echo "::error::GOOGLE_SERVICE_INFO_PLIST has no GOOGLE_APP_ID"; exit 1; }
+
+      # The certificate and profile live in the runner's temp folder, never in the checkout.
+      - name: Signing certificate and profile
+        id: signing
+        env:
+          IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+          IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+          IOS_ADHOC_PROFILE_BASE64: ${{ secrets.IOS_ADHOC_PROFILE_BASE64 }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password=$(uuidgen)
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          printf '%s' "$IOS_DIST_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/distribution.p12"
+          security import "$RUNNER_TEMP/distribution.p12" -k "$keychain" -P "$IOS_DIST_CERT_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/distribution.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" login.keychain-db
+
+          profile="$RUNNER_TEMP/adhoc.mobileprovision"
+          printf '%s' "$IOS_ADHOC_PROFILE_BASE64" | base64 --decode > "$profile"
+          security cms -D -i "$profile" > "$RUNNER_TEMP/profile.plist"
+          uuid=$(plutil -extract UUID raw "$RUNNER_TEMP/profile.plist")
+          team=$(plutil -extract TeamIdentifier.0 raw "$RUNNER_TEMP/profile.plist")
+          app_id=$(plutil -extract Entitlements.application-identifier raw "$RUNNER_TEMP/profile.plist")
+          [ "$app_id" = "$team.com.ptut.expense" ] \
+            || { echo "::error::the profile is for $app_id, not $team.com.ptut.expense"; exit 1; }
+          # An App Store profile lists no devices, and no tester could install what it signs.
+          plutil -extract ProvisionedDevices raw "$RUNNER_TEMP/profile.plist" > /dev/null \
+            || { echo "::error::the profile lists no iPhones; make an ad hoc profile"; exit 1; }
+          # Xcode 16 reads the second folder, older Xcode the first.
+          for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$dir"
+            cp "$profile" "$dir/$uuid.mobileprovision"
+          done
+          echo "uuid=$uuid" >> "$GITHUB_OUTPUT"
+          echo "team=$team" >> "$GITHUB_OUTPUT"
+
+      # The release framework link ran out of a 4 GB heap on 18 Oct (run 39127154587). One Gradle
+      # JVM, with no separate Kotlin daemon beside it, has to fit the runner's 7 GB.
+      - name: Gradle memory
+        run: |
+          props="${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties"
+          mkdir -p "$(dirname "$props")"
+          printf '%s\n' 'org.gradle.jvmargs=-Xmx5g -Dfile.encoding=UTF-8' 'kotlin.compiler.execution.strategy=in-process' >> "$props"
+
+      # Its own step, so a link failure reads as one. Xcode's Gradle phase then finds it up to date.
+      - name: Link the release framework
+        run: ./gradlew :composeApp:linkReleaseFrameworkIosArm64
+
+      # The app target reads its profile from PAISEN_PROVISIONING_PROFILE. Passed as
+      # PROVISIONING_PROFILE_SPECIFIER it would reach Firebase's package bundles, which refuse one.
+      - name: Archive
+        env:
+          MARKETING: ${{ steps.version.outputs.marketing }}
+          CODE: ${{ inputs.version-code }}
+          TEAM: ${{ steps.signing.outputs.team }}
+          PROFILE: ${{ steps.signing.outputs.uuid }}
+        run: >-
+          xcodebuild archive -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Release
+          -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/PaiSeN.xcarchive"
+          MARKETING_VERSION="$MARKETING" CURRENT_PROJECT_VERSION="$CODE"
+          CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_IDENTITY="Apple Distribution"
+          PAISEN_PROVISIONING_PROFILE="$PROFILE"
+          OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/signing.keychain-db"
+
+      - name: Export the IPA
+        env:
+          NAME: ${{ inputs.version-name }}
+          TEAM: ${{ steps.signing.outputs.team }}
+          PROFILE: ${{ steps.signing.outputs.uuid }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>release-testing</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict><key>com.ptut.expense</key><string>$PROFILE</string></dict>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/PaiSeN.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export"
+          ipa=$(find "$RUNNER_TEMP/export" -name '*.ipa')
+          [ "$(printf '%s\n' "$ipa" | wc -l)" -eq 1 ] || { echo "::error::expected one IPA, found: $ipa"; exit 1; }
+          mkdir -p out
+          cp "$ipa" "out/PaiSeN-$NAME.ipa"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: PaiSeN-ios-${{ inputs.version-name }}
+          path: out/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Remove the keys
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2> /dev/null || true
+          rm -f "$RUNNER_TEMP/distribution.p12" "$RUNNER_TEMP/adhoc.mobileprovision" "$RUNNER_TEMP/profile.plist"
+          rm -f firebase.properties iosApp/iosApp/GoogleService-Info.plist
