@@ -25,6 +25,9 @@ The first public version.
   link or QR code, and get told about changes.
 - Export and import of the whole ledger as a file.
 - English and Burmese, in light and dark.
+- An iPhone build (`.ipa`) on each GitHub release, to install with SideStore or AltStore and your
+  own Apple ID. Sign in with Apple, push notifications and invite links that open the app don't
+  work in it.
 
 ### Security
 
