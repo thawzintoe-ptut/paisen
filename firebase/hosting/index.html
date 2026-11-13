@@ -1,8 +1,431 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PaiSen</title></head>
-<body style="font-family: -apple-system, system-ui, sans-serif; margin: 40px 24px; color: #0B0B0C;">
-<h1 style="font-weight: 400;">PaiSen</h1>
-<p>Expenses, kept on your phone. Shared costs, kept with the people in them.</p>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Test PaiSeN</title>
+<meta name="description" content="Try PaiSeN for 14 days. Your bank slips become your spending record, read on your phone. Join the test on Android or iPhone.">
+<meta property="og:title" content="Test PaiSeN for 14 days">
+<meta property="og:description" content="Bank slips become your spending record, read on your phone. Join the test on Android or iPhone.">
+<meta property="og:image" content="https://paisen-expense.web.app/assets/og.png">
+<meta property="og:url" content="https://paisen-expense.web.app/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/icon-192.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<script>document.documentElement.classList.add("js");</script>
+<style>
+  /* Static on purpose: no analytics, no third-party requests. Geist is the app's own font (OFL). */
+  @font-face { font-family: "Geist"; src: url(assets/fonts/geist-regular.ttf) format("truetype"); font-weight: 400; font-display: swap; }
+  @font-face { font-family: "Geist"; src: url(assets/fonts/geist-semibold.ttf) format("truetype"); font-weight: 600; font-display: swap; }
+  @font-face { font-family: "Geist Mono"; src: url(assets/fonts/geist-mono-regular.ttf) format("truetype"); font-weight: 400; font-display: swap; }
+
+  /* The app's Sky palette (core/ui Palette.kt). Ruby is money going out, nothing else. */
+  :root {
+    --sky: #A9DCF7; --sky-soft: #D8EFFB; --ink: #0B0B0C; --surface: #F4F6F8; --paper: #FFFFFF;
+    --slate: #63686F; --ruby: #9B1B33; --line: rgba(99, 104, 111, 0.2);
+    --field: var(--sky); --on-field: #0B0B0C; --on-ink: #FFFFFF;
+    --sans: "Geist", "Myanmar Sangam MN", "Noto Sans Myanmar", "Padauk", system-ui, -apple-system, sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --sky-soft: #1E3644; --ink: #F2F4F6; --surface: #0F1113; --paper: #1A1D20; --slate: #A9B0B7;
+      --ruby: #E3828F; --line: rgba(169, 176, 183, 0.22); --field: #24536D; --on-field: #F2F4F6; --on-ink: #0F1113;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body { margin: 0; background: var(--surface); color: var(--ink); font: 400 17px/1.55 var(--sans); }
+  html[lang="my"] body { line-height: 1.85; }
+  img { display: block; max-width: 100%; }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; border-radius: 6px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* Top bar */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; padding-bottom: 14px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 19px; letter-spacing: -0.01em; text-decoration: none; }
+  .brand img { width: 32px; height: 32px; border-radius: 9px; }
+  .lang { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); }
+  .lang button { font: inherit; font-size: 14px; line-height: 1; color: var(--slate); background: none; border: 0; border-radius: 999px; padding: 9px 13px; min-height: 36px; cursor: pointer; }
+  .lang button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+
+  /* Hero: the sky field the app's Home opens on, with a slip turning into a ledger row */
+  .hero { background: var(--field); color: var(--on-field); border-radius: 0 0 36px 36px; }
+  .hero .wrap { display: grid; gap: 36px; padding-top: 28px; padding-bottom: 44px; }
+  h1 { font-weight: 600; font-size: clamp(2.5rem, 9vw, 4.4rem); line-height: 1.02; letter-spacing: -0.035em; margin: 0 0 18px; max-width: 12ch; }
+  html[lang="my"] h1 { font-size: clamp(1.9rem, 6.5vw, 3.1rem); line-height: 1.45; letter-spacing: 0; max-width: 16ch; text-wrap: balance; }
+  .lead { margin: 0 0 24px; max-width: 34em; font-size: 18px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 10px; }
+  .fine { margin: 16px 0 0; font-size: 15px; opacity: 0.8; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 50px; padding: 0 24px; border-radius: 999px; font-weight: 600; font-size: 16px; text-decoration: none; border: 1.5px solid var(--ink); }
+  .btn.primary { background: var(--ink); color: var(--on-ink); }
+  .btn.ghost { background: transparent; color: var(--ink); }
+  .hero .btn.ghost { border-color: var(--on-field); color: var(--on-field); }
+  .btn.small { min-height: 44px; padding: 0 18px; font-size: 15px; margin-top: 12px; }
+
+  .demo { margin: 0; position: relative; max-width: 380px; width: 100%; justify-self: center; }
+  .slip { position: relative; background: #FFFFFF; color: #0B0B0C; padding: 20px 20px 26px; transform: rotate(-2.5deg); box-shadow: 0 18px 40px rgba(11, 11, 12, 0.18);
+    -webkit-mask: radial-gradient(circle at 8px 100%, transparent 6px, #000 6.5px) 0 0 / 16px 100% repeat-x;
+            mask: radial-gradient(circle at 8px 100%, transparent 6px, #000 6.5px) 0 0 / 16px 100% repeat-x; }
+  .slip .done { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; color: #1F7A55; }
+  .slip .amount { font: 400 2.3rem/1.1 var(--mono); letter-spacing: -0.02em; margin: 10px 0 14px; }
+  .slip dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font: 400 13px/1.4 var(--mono); }
+  .slip dt { color: #63686F; }
+  .slip dd { margin: 0; text-align: right; }
+  .thread { height: 34px; width: 2px; margin: 0 auto; background: repeating-linear-gradient(to bottom, var(--on-field) 0 5px, transparent 5px 10px); opacity: 0.45; }
+  .row { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 14px; background: var(--paper); color: var(--ink); border-radius: 22px; padding: 14px 18px 14px 14px; box-shadow: 0 10px 30px rgba(11, 11, 12, 0.14); }
+  .row .glyph { width: 48px; height: 48px; border-radius: 50%; background: var(--ink); color: var(--on-ink); display: grid; place-items: center; }
+  .row .name { font-weight: 600; font-size: 17px; line-height: 1.3; }
+  .row .sub { color: var(--slate); font-size: 14px; line-height: 1.4; }
+  .row .money { color: var(--ruby); font-weight: 600; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .demo figcaption { margin-top: 14px; font-size: 14px; opacity: 0.8; text-align: center; }
+
+  /* The amount rolls like the app's odometer (SkyRollingAmount), once, on load. */
+  .odo { display: inline-flex; align-items: flex-start; line-height: 1.15em; }
+  .odo > span { display: block; height: 1.15em; }
+  .reel { overflow: hidden; }
+  .reel > span { display: block; line-height: 1.15em; transition: transform 1.5s cubic-bezier(0.16, 0.84, 0.24, 1); transform: translateY(calc(var(--v) * -1.15em)); }
+  .reel:nth-child(3) > span { transition-delay: 0.12s; }
+  .js .odo:not(.run) .reel > span { transform: translateY(0); transition: none; }
+  @media (prefers-reduced-motion: reduce) { .reel > span { transition: none; } html { scroll-behavior: auto; } }
+
+  /* Sections */
+  section.block { padding-top: 56px; }
+  h2 { font-weight: 600; font-size: 1.85rem; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 18px; }
+  html[lang="my"] h2 { font-size: 1.5rem; line-height: 1.6; letter-spacing: 0; }
+  h3 { font-weight: 600; font-size: 1.15rem; line-height: 1.3; margin: 0 0 4px; }
+  html[lang="my"] h3 { line-height: 1.7; }
+  p { max-width: 38em; }
+
+  .tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); margin-bottom: 22px; }
+  .tabs button { font: inherit; font-weight: 600; font-size: 15px; color: var(--slate); background: none; border: 0; border-radius: 999px; padding: 0 20px; min-height: 44px; cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--ink); color: var(--on-ink); }
+
+  .steps { list-style: none; margin: 0; padding: 0; counter-reset: step; max-width: 640px; }
+  .steps > li { counter-increment: step; position: relative; padding: 0 0 26px 58px; }
+  .steps > li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 40px; height: 40px; border-radius: 50%; background: var(--sky); color: #0B0B0C; font-weight: 600; display: grid; place-items: center; }
+  .steps > li:not(:last-child)::after { content: ""; position: absolute; left: 19px; top: 46px; bottom: 6px; width: 2px; background: var(--line); }
+  .steps p { margin: 0; color: var(--slate); }
+  .note { color: var(--slate); font-size: 15px; margin: 0 0 22px; }
+  .panel > .note:last-child { margin: 4px 0 0; }
+
+  .strip { list-style: none; margin: 0 -16px; padding: 4px 16px 12px; display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: thin; }
+  .strip li { flex: 0 0 210px; scroll-snap-align: start; }
+  .strip img { width: 100%; height: auto; aspect-ratio: 9 / 20; object-fit: cover; border-radius: 26px; border: 1px solid var(--line); background: var(--paper); }
+  .strip h3 { margin-top: 12px; font-size: 1rem; }
+  .strip p { margin: 0; color: var(--slate); font-size: 14px; line-height: 1.45; }
+  html[lang="my"] .strip p { line-height: 1.8; }
+
+  .promises { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; max-width: 760px; }
+  .promises li { display: grid; grid-template-columns: 44px 1fr; gap: 14px; align-items: start; }
+  .promises .icon { width: 44px; height: 44px; border-radius: 50%; background: var(--sky-soft); display: grid; place-items: center; color: var(--ink); }
+  .promises p { margin: 0; color: var(--slate); }
+  .more { display: inline-block; margin-top: 20px; font-weight: 600; }
+
+  .asks { margin: 0; padding-left: 1.2em; max-width: 640px; }
+  .asks li { margin-bottom: 10px; }
+  .asks li::marker { color: var(--slate); }
+
+  footer { margin-top: 64px; padding: 28px 0 40px; border-top: 1px solid var(--line); color: var(--slate); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+  footer p { margin: 0; flex: 1 1 260px; }
+
+  @media (min-width: 900px) {
+    .hero .wrap { grid-template-columns: 1.15fr 0.85fr; align-items: center; padding-top: 48px; padding-bottom: 72px; }
+    .lead { font-size: 19px; }
+    section.block { padding-top: 80px; }
+    .promises { grid-template-columns: repeat(3, 1fr); max-width: none; }
+    .promises li { grid-template-columns: 1fr; }
+    .strip { margin: 0; padding-left: 0; padding-right: 0; }
+    .strip li { flex-basis: 220px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="wrap top">
+  <a class="brand" href="./"><img src="assets/icon-192.png" width="32" height="32" alt="">PaiSeN</a>
+  <div class="lang" role="group" aria-label="Language">
+    <button type="button" data-lang="en" aria-pressed="true">English</button>
+    <button type="button" data-lang="my" aria-pressed="false" lang="my">မြန်မာ</button>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <h1 data-t="heroTitle">Try PaiSeN for&nbsp;14&nbsp;days</h1>
+      <p class="lead" data-t="heroBody">PaiSeN reads the payment slips in your photos and keeps a record of what you spent. Slips are read on your phone, and nothing is uploaded. Before it goes on Google Play, I need 20 friends to test it.</p>
+      <div class="cta">
+        <a class="btn primary" href="#join" data-platform="android" data-t="ctaAndroid">Join on Android</a>
+        <a class="btn ghost" href="#join" data-platform="iphone" data-t="ctaIphone">Install on iPhone</a>
+      </div>
+      <p class="fine" data-t="heroFine">Free. Your own spending needs no account.</p>
+    </div>
+
+    <figure class="demo">
+      <div class="slip" aria-hidden="true">
+        <div class="done">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+          <span data-t="slipDone">Transfer complete</span>
+        </div>
+        <div class="amount">฿60.00</div>
+        <dl>
+          <dt data-t="slipTo">To</dt><dd>Mali coffee</dd>
+          <dt data-t="slipDate">Date</dt><dd>13 Nov 2026, 11:42</dd>
+          <dt data-t="slipRef">Ref</dt><dd>016318A04B27</dd>
+        </dl>
+      </div>
+      <div class="thread" aria-hidden="true"></div>
+      <div class="row">
+        <div class="glyph" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8 3.5c0 1 1 1.5 1 2.5M12 3.5c0 1 1 1.5 1 2.5"/></svg>
+        </div>
+        <div>
+          <div class="name">Mali coffee</div>
+          <div class="sub" data-t="rowSub">Food &amp; drink · read from a slip</div>
+        </div>
+        <div class="money">
+          <span class="sr">฿60</span>
+          <span class="odo" aria-hidden="true"><span>฿</span><span class="reel" style="--v:6"><span>0<br>1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>0</span></span><span class="reel" style="--v:10"><span>0<br>1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>0</span></span></span>
+        </div>
+      </div>
+      <figcaption data-t="demoCaption">A slip in your photos becomes a row in PaiSeN.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<main>
+<section class="wrap block" id="join" aria-labelledby="join-title">
+  <h2 id="join-title" data-t="joinTitle">How to join</h2>
+  <div class="tabs" role="tablist" aria-labelledby="join-title">
+    <button type="button" role="tab" id="tab-android" aria-controls="panel-android" aria-selected="true">Android</button>
+    <button type="button" role="tab" id="tab-iphone" aria-controls="panel-iphone" aria-selected="false" tabindex="-1">iPhone</button>
+  </div>
+
+  <div class="panel" role="tabpanel" id="panel-android" aria-labelledby="tab-android">
+    <ol class="steps">
+      <li>
+        <h3 data-t="a1t">Join the Google Group</h3>
+        <p data-t="a1b">Use the Google account that's signed in to Play Store on your phone.</p>
+        <a class="btn primary small" href="https://groups.google.com/g/paisen-testers" target="_blank" rel="noopener" data-t="a1c">Join paisen-testers</a>
+      </li>
+      <li>
+        <h3 data-t="a2t">Become a tester</h3>
+        <p data-t="a2b">Tap <b>Become a tester</b> on the page that opens. If it says the app isn't available, wait a few minutes after joining the group and open it again.</p>
+        <a class="btn primary small" href="https://play.google.com/apps/testing/com.ptut.expense" target="_blank" rel="noopener" data-t="a2c">Open the tester page</a>
+      </li>
+      <li>
+        <h3 data-t="a3t">Install from Google Play</h3>
+        <p data-t="a3b">Then keep PaiSeN installed for 14 days and open it now and then.</p>
+        <a class="btn primary small" href="https://play.google.com/store/apps/details?id=com.ptut.expense" target="_blank" rel="noopener" data-t="a3c">Open in Google Play</a>
+      </li>
+    </ol>
+    <p class="note" data-t="aNote">Use the same Google account for all three steps.</p>
+  </div>
+
+  <div class="panel" role="tabpanel" id="panel-iphone" aria-labelledby="tab-iphone" hidden>
+    <p class="note" data-t="iNote">There's no App Store test yet, so on iPhone you install PaiSeN with SideStore and your own Apple ID.</p>
+    <ol class="steps">
+      <li>
+        <h3 data-t="i1t">Set up SideStore</h3>
+        <p data-t="i1b">Follow SideStore's own guide. You need a computer once.</p>
+        <a class="btn primary small" href="https://sidestore.io" target="_blank" rel="noopener" data-t="i1c">Open SideStore's guide</a>
+      </li>
+      <li>
+        <h3 data-t="i2t">Download PaiSeN</h3>
+        <p data-t="i2b">On the iPhone, open the newest release and download <b>PaiSeN-&lt;version&gt;.ipa</b>.</p>
+        <a class="btn primary small" href="https://github.com/thawzintoe-ptut/paisen/releases" target="_blank" rel="noopener" data-t="i2c">Open releases on GitHub</a>
+      </li>
+      <li>
+        <h3 data-t="i3t">Add it in SideStore</h3>
+        <p data-t="i3b">Open <b>My Apps</b>, tap <b>+</b> and pick the file.</p>
+      </li>
+      <li>
+        <h3 data-t="i4t">Refresh once a week</h3>
+        <p data-t="i4b">Open SideStore and tap <b>Refresh All</b>. A free Apple ID signs an app for 7 days, and PaiSeN won't open after that until you refresh.</p>
+      </li>
+    </ol>
+    <p class="note" data-t="iLimits">On iPhone, Sign in with Apple and notifications don't work yet. For shared groups, sign in with Google.</p>
+  </div>
+</section>
+
+<section class="wrap block" aria-labelledby="screens-title">
+  <h2 id="screens-title" data-t="screensTitle">What you'll test</h2>
+  <ul class="strip">
+    <li><img src="assets/shots/home.jpg" width="540" height="1200" loading="lazy" decoding="async" alt="Today screen with this month's spending and recent purchases"><h3 data-t="s1t">Today</h3><p data-t="s1b">What you spent this month and your latest purchases.</p></li>
+    <li><img src="assets/shots/reports.jpg" width="540" height="1200" loading="lazy" decoding="async" alt="Reports screen with spending by category"><h3 data-t="s2t">Reports</h3><p data-t="s2b">Spending by week, month, 3 months, 6 months or a year.</p></li>
+    <li><img src="assets/shots/quick-add.jpg" width="540" height="1200" loading="lazy" decoding="async" alt="Quick add screen with an amount and categories"><h3 data-t="s3t">Quick add</h3><p data-t="s3b">Type or say “coffee 60” in English, Thai or Burmese.</p></li>
+    <li><img src="assets/shots/shared.jpg" width="540" height="1200" loading="lazy" decoding="async" alt="Shared screen with what you are owed and what you owe"><h3 data-t="s4t">Shared</h3><p data-t="s4b">What you're owed and what you owe, across groups.</p></li>
+    <li><img src="assets/shots/group.jpg" width="540" height="1200" loading="lazy" decoding="async" alt="A shared group for a trip with members and balances"><h3 data-t="s5t">A shared group</h3><p data-t="s5b">Split a trip or a bill, and settle up with a PromptPay QR.</p></li>
+    <li><img src="assets/shots/settings.jpg" width="540" height="1200" loading="lazy" decoding="async" alt="Settings screen with photo folders and categories"><h3 data-t="s6t">Settings</h3><p data-t="s6b">Photo folders, background import and your categories.</p></li>
+  </ul>
+</section>
+
+<section class="wrap block" aria-labelledby="privacy-title">
+  <h2 id="privacy-title" data-t="promTitle">What stays on your phone</h2>
+  <ul class="promises">
+    <li>
+      <span class="icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M9.5 12l2 2 3.5-4"/></svg></span>
+      <div><h3 data-t="p1t">Slips are read on the phone</h3><p data-t="p1b">ML Kit on Android and Apple Vision on iPhone read them. Nothing is uploaded.</p></div>
+    </li>
+    <li>
+      <span class="icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-3.4 3.6-5.5 7-5.5s6.2 2.1 7 5.5"/><path d="M4 4l16 16"/></svg></span>
+      <div><h3 data-t="p2t">No account, no ads, no analytics</h3><p data-t="p2b">Your own spending needs no sign-in.</p></div>
+    </li>
+    <li>
+      <span class="icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="9" r="3"/><circle cx="16.5" cy="9" r="3"/><path d="M3 19c.6-2.8 2.8-4.5 5.5-4.5S13.4 16.2 14 19M13 15.2c1-.5 2.2-.7 3.5-.7 2.7 0 4.9 1.7 5.5 4.5"/></svg></span>
+      <div><h3 data-t="p3t">Shared groups only when you share</h3><p data-t="p3b">Only a group you share is sent, and only after you sign in.</p></div>
+    </li>
+  </ul>
+  <a class="more" href="https://github.com/thawzintoe-ptut/paisen/blob/main/PRIVACY.md" target="_blank" rel="noopener" data-t="privacyLink">Read the privacy policy</a>
+</section>
+
+<section class="wrap block" aria-labelledby="ask-title">
+  <h2 id="ask-title" data-t="askTitle">What testing asks of you</h2>
+  <ul class="asks">
+    <li data-t="ask1">Keep PaiSeN installed for 14 days.</li>
+    <li data-t="ask2">Add a few expenses, or let it read your slips.</li>
+    <li data-t="ask3">When something breaks or confuses you, take a screenshot and send it to the friend who shared this page.</li>
+    <li data-t="ask4">Use GitHub? You can also <a href="https://github.com/thawzintoe-ptut/paisen/issues" target="_blank" rel="noopener">open an issue</a>.</li>
+  </ul>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p data-t="foot">PaiSeN is free software under GPL-3.0.</p>
+    <a href="https://github.com/thawzintoe-ptut/paisen" target="_blank" rel="noopener" data-t="footCode">Source code</a>
+    <a href="https://github.com/thawzintoe-ptut/paisen/blob/main/PRIVACY.md" target="_blank" rel="noopener" data-t="footPrivacy">Privacy</a>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // Burmese counts use Myanmar digits; amounts (฿) and dates keep 0–9, as the app does.
+  var MY = {
+    title: "PaiSeN စမ်းသုံးပါ",
+    heroTitle: "PaiSeN ကို ၁၄&nbsp;ရက် စမ်းသုံးပေးပါ",
+    heroBody: "PaiSeN က ဓာတ်ပုံထဲက ငွေလွှဲစလစ်တွေကို ဖတ်ပြီး သင် ဘာတွေ သုံးခဲ့လဲ မှတ်ပေးတယ်။ စလစ်တွေကို ဖုန်းထဲမှာပဲ ဖတ်တာမို့ ဘယ်ကိုမှ မပို့ပါဘူး။ Google Play ပေါ် မတင်ခင် စမ်းသုံးပေးမယ့် သူငယ်ချင်း ၂၀&nbsp;ယောက် လိုပါတယ်။",
+    ctaAndroid: "Android နဲ့ ဝင်မယ်",
+    ctaIphone: "iPhone မှာ ထည့်မယ်",
+    heroFine: "အခမဲ့ပါ။ ကိုယ်ပိုင် အသုံးစရိတ်အတွက် အကောင့် မလိုပါဘူး။",
+    slipDone: "ငွေလွှဲပြီးပါပြီ",
+    slipTo: "လက်ခံသူ",
+    slipDate: "ရက်စွဲ",
+    slipRef: "Ref",
+    rowSub: "အစားအသောက် · စလစ်ကနေ ဖတ်ထားတာ",
+    demoCaption: "ဓာတ်ပုံထဲက စလစ်တစ်ခုက PaiSeN ထဲမှာ စာရင်းတစ်ကြောင်း ဖြစ်လာမယ်။",
+    joinTitle: "ဘယ်လို ဝင်ရမလဲ",
+    a1t: "Google Group ထဲ ဝင်ပါ",
+    a1b: "ဖုန်းထဲက Play Store မှာ သုံးနေတဲ့ Google အကောင့်နဲ့ ဝင်ပါ။",
+    a1c: "paisen-testers ထဲ ဝင်မယ်",
+    a2t: "Tester အဖြစ် စာရင်းသွင်းပါ",
+    a2b: "ပွင့်လာတဲ့ စာမျက်နှာမှာ <b>Become a tester</b> ကို နှိပ်ပါ။ app မရသေးဘူးလို့ ပြရင် group ထဲ ဝင်ပြီး မိနစ်အနည်းငယ် စောင့်ပြီး ပြန်ဖွင့်ပါ။",
+    a2c: "Tester စာမျက်နှာ ဖွင့်မယ်",
+    a3t: "Google Play ကနေ ထည့်ပါ",
+    a3b: "ပြီးရင် ၁၄&nbsp;ရက်လုံး မဖျက်ဘဲ ထားပြီး ရံဖန်ရံခါ ဖွင့်သုံးပေးပါ။",
+    a3c: "Google Play မှာ ဖွင့်မယ်",
+    aNote: "အဆင့် ၃&nbsp;ဆင့်လုံးမှာ Google အကောင့် တစ်ခုတည်းကို သုံးပါ။",
+    iNote: "App Store မှာ စမ်းသုံးလို့ မရသေးလို့ iPhone မှာ SideStore နဲ့ ကိုယ့် Apple ID ကို သုံးပြီး ထည့်ရပါမယ်။",
+    i1t: "SideStore ထည့်ပါ",
+    i1b: "SideStore ရဲ့ လမ်းညွှန်အတိုင်း လုပ်ပါ။ ကွန်ပျူတာ တစ်ခါ လိုပါမယ်။",
+    i1c: "SideStore လမ်းညွှန် ဖွင့်မယ်",
+    i2t: "PaiSeN ကို ဒေါင်းလုဒ်လုပ်ပါ",
+    i2b: "iPhone ပေါ်မှာ အသစ်ဆုံး release ကို ဖွင့်ပြီး <b>PaiSeN-&lt;version&gt;.ipa</b> ကို ဒေါင်းလုဒ်လုပ်ပါ။",
+    i2c: "GitHub release တွေ ဖွင့်မယ်",
+    i3t: "SideStore ထဲ ထည့်ပါ",
+    i3b: "<b>My Apps</b> ကို ဖွင့်၊ <b>+</b> ကို နှိပ်ပြီး ဖိုင်ကို ရွေးပါ။",
+    i4t: "တစ်ပတ် တစ်ခါ Refresh လုပ်ပါ",
+    i4b: "SideStore ကို ဖွင့်ပြီး <b>Refresh All</b> ကို နှိပ်ပါ။ တစ်ပတ်တစ်ခါ refresh ပြန်လုပ်မယ်။",
+    iLimits: "iPhone မှာ Sign in with Apple နဲ့ notification တွေ မရသေးပါဘူး။ Shared group အတွက် Google နဲ့ ဝင်ပါ။",
+    screensTitle: "ဘာတွေ စမ်းရမလဲ",
+    s1t: "ဒီနေ့", s1b: "ဒီလ သုံးငွေနဲ့ နောက်ဆုံး ဝယ်ထားတာတွေ။",
+    s2t: "အစီရင်ခံစာ", s2b: "အပတ်၊ လ၊ ၃&nbsp;လ၊ ၆&nbsp;လ ဒါမှမဟုတ် တစ်နှစ်စာ သုံးငွေ။",
+    s3t: "အမြန်ထည့်", s3b: "“ကော်ဖီ 60” လို့ အင်္ဂလိပ်၊ ထိုင်း ဒါမှမဟုတ် မြန်မာလို ရိုက်လည်းရ၊ ပြောလည်းရတယ်။",
+    s4t: "မျှသုံး", s4b: "Shared group တွေထဲမှာ သင်က ရမယ့်ငွေနဲ့ ပေးရမယ့်ငွေ။",
+    s5t: "Shared group", s5b: "ခရီးစရိတ်၊ ထမင်းဖိုး ခွဲပြီး PromptPay QR နဲ့ ရှင်းလို့ရတယ်။",
+    s6t: "ဆက်တင်", s6b: "ဓာတ်ပုံ folder၊ နောက်ကွယ်က import နဲ့ ကိုယ့် အမျိုးအစားတွေ။",
+    promTitle: "ဖုန်းထဲမှာပဲ ရှိနေမယ့်အရာတွေ",
+    p1t: "စလစ်တွေကို ဖုန်းထဲမှာပဲ ဖတ်တယ်",
+    p1b: "Android မှာ ML Kit၊ iPhone မှာ Apple Vision က ဖတ်ပေးတယ်။ ဘယ်ကိုမှ မပို့ပါဘူး။",
+    p2t: "အကောင့်၊ ကြော်ငြာ၊ analytics မရှိဘူး",
+    p2b: "ကိုယ်ပိုင် အသုံးစရိတ်အတွက် sign in ဝင်စရာ မလိုပါဘူး။",
+    p3t: "Shared group ကို သင်ဝေမျှမှသာသုံးလို့ရမယ်",
+    p3b: "မျှသုံးတဲ့ group ကိုပဲ ပို့ပြီး sign in ဝင်ပြီးမှ ပို့တာပါ။",
+    privacyLink: "Privacy policy ဖတ်မယ်",
+    askTitle: "စမ်းသုံးသူတွေဆီက လိုချင်တာ",
+    ask1: "PaiSeN ကို ၁၄&nbsp;ရက် မဖျက်ဘဲ ထားပါ။",
+    ask2: "အသုံးစရိတ် နည်းနည်း ထည့်ကြည့်ပါ၊ ဒါမှမဟုတ် စလစ်တွေကို ဖတ်ခိုင်းကြည့်ပါ။",
+    ask3: "တစ်ခုခု မှားနေရင် ဒါမှမဟုတ် နားမလည်ရင် screenshot ရိုက်ပြီး ဒီ link ပို့ပေးတဲ့ သူငယ်ချင်းဆီ ပို့ပေးပါ။",
+    ask4: "GitHub သုံးရင် <a href=\"https://github.com/thawzintoe-ptut/paisen/issues\" target=\"_blank\" rel=\"noopener\">issue ဖွင့်ပေးလို့</a>လည်း ရပါတယ်။",
+    foot: "PaiSeN က GPL-3.0 အောက်က free software ပါ။",
+    footCode: "Source code",
+    footPrivacy: "Privacy"
+  };
+
+  var nodes = document.querySelectorAll("[data-t]");
+  var EN = { title: document.title };
+  nodes.forEach(function (el) { EN[el.dataset.t] = el.innerHTML; });
+  var TEXT = { en: EN, my: MY };
+  var KEY = "paisen-lang";
+
+  function chosen() {
+    var q = new URLSearchParams(location.search).get("lang");
+    if (q === "en" || q === "my") return q;
+    try { var saved = localStorage.getItem(KEY); if (saved === "en" || saved === "my") return saved; } catch (e) {}
+    return /^my\b/i.test(navigator.language || "") ? "my" : "en";
+  }
+
+  function show(lang) {
+    var t = TEXT[lang];
+    document.documentElement.lang = lang;
+    nodes.forEach(function (el) { if (t[el.dataset.t] != null) el.innerHTML = t[el.dataset.t]; });
+    document.title = t.title;
+    document.querySelectorAll("[data-lang]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.lang === lang)); });
+  }
+
+  document.querySelectorAll("[data-lang]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      show(b.dataset.lang);
+      try { localStorage.setItem(KEY, b.dataset.lang); } catch (e) {}
+    });
+  });
+
+  var tabs = { android: document.getElementById("tab-android"), iphone: document.getElementById("tab-iphone") };
+  function pick(platform) {
+    Object.keys(tabs).forEach(function (key) {
+      var on = key === platform;
+      tabs[key].setAttribute("aria-selected", String(on));
+      tabs[key].tabIndex = on ? 0 : -1;
+      document.getElementById(tabs[key].getAttribute("aria-controls")).hidden = !on;
+    });
+  }
+  Object.keys(tabs).forEach(function (key) {
+    tabs[key].addEventListener("click", function () { pick(key); });
+    tabs[key].addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      var next = key === "android" ? "iphone" : "android";
+      pick(next);
+      tabs[next].focus();
+    });
+  });
+  document.querySelectorAll("[data-platform]").forEach(function (a) {
+    a.addEventListener("click", function () { pick(a.dataset.platform); });
+  });
+
+  show(chosen());
+  pick(/iPhone|iPad|iPod/.test(navigator.userAgent) ? "iphone" : "android");
+
+  // One moment of motion: the row's amount rolls in, as amounts do in the app.
+  var odo = document.querySelector(".odo");
+  requestAnimationFrame(function () { requestAnimationFrame(function () { odo.classList.add("run"); }); });
+})();
+</script>
 </body>
 </html>
