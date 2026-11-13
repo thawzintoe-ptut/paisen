@@ -28,6 +28,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * #212 on Android: the on-device recogniser first (Android 12 and later), so a language with a pack
@@ -178,14 +179,14 @@ class AndroidSpeechInput(context: Context) : SpeechInput {
 
     /**
      * Android 13 takes the request and answers nothing. The recogniser queues the request until it
-     * connects and destroying it clears that queue, so it is held for [PACK_REQUEST_HOLD_MS] first.
+     * connects and destroying it clears that queue, so it is held for [PACK_REQUEST_KEEP] first.
      */
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun askForPack(language: SpeechLanguage): VoiceDownload {
         packRequest?.destroy()
         val recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(app)
         packRequest = recognizer
-        mainHandler.postDelayed({ releasePackRequest(recognizer) }, PACK_REQUEST_HOLD_MS)
+        mainHandler.postDelayed({ releasePackRequest(recognizer) }, PACK_REQUEST_KEEP.inWholeMilliseconds)
         return runCatching { recognizer.triggerModelDownload(listenIntent(language)) }
             .fold(onSuccess = { VoiceDownload.Started }, onFailure = { VoiceDownload.Failed })
     }
@@ -293,7 +294,7 @@ class AndroidSpeechInput(context: Context) : SpeechInput {
         const val KEY_LANGUAGE = "language"
 
         /** Long enough for the queued request to reach the speech service, short enough to let it go. */
-        const val PACK_REQUEST_HOLD_MS = 30_000L
+        val PACK_REQUEST_KEEP = 30.seconds
 
         /** A pack is tens of megabytes; past this the sheet says "downloading" and stops waiting. */
         val PACK_ANSWER_WAIT = 2.minutes
