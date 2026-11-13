@@ -148,7 +148,8 @@ jobs:
           PROFILE: ${{ steps.signing.outputs.uuid }}
         run: |
           if [ "$SIGNING" = none ]; then
-            sign=(CODE_SIGNING_ALLOWED=NO)
+            # SideStore signs with the tester's free Apple ID, which can't sign Sign in with Apple.
+            sign=(CODE_SIGNING_ALLOWED=NO PAISEN_FREE_APPLE_ID=YES)
           else
             sign=(CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_IDENTITY="Apple Distribution"
               PAISEN_PROVISIONING_PROFILE="$PROFILE" OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/signing.keychain-db")
