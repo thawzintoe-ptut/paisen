@@ -35,6 +35,7 @@
 		1A0000000000000000000028 /* th */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = th; path = th.lproj/Localizable.strings; sourceTree = "<group>"; };
 		1A0000000000000000000029 /* my */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = my; path = my.lproj/Localizable.strings; sourceTree = "<group>"; };
 		1A000000000000000000002C /* th */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = th; path = th.lproj/AppShortcuts.strings; sourceTree = "<group>"; };
+		1A0000000000000000000036 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -52,9 +53,18 @@
 		1A0000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
+				1A0000000000000000000037 /* Configuration */,
 				1A0000000000000000000004 /* iosApp */,
 				1A0000000000000000000003 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		1A0000000000000000000037 /* Configuration */ = {
+			isa = PBXGroup;
+			children = (
+				1A0000000000000000000036 /* Config.xcconfig */,
+			);
+			path = Configuration;
 			sourceTree = "<group>";
 		};
 		1A0000000000000000000003 /* Products */ = {
@@ -271,10 +281,10 @@
 		};
 		1A0000000000000000000015 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1A0000000000000000000036 /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = iosApp/iosApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
@@ -309,10 +319,10 @@
 		};
 		1A0000000000000000000016 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1A0000000000000000000036 /* Config.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = iosApp/iosApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;

@@ -1,0 +1,10 @@
+// The iosApp target's signing settings. CI and release builds use them as they are.
+// To run on your own iPhone, copy Local.xcconfig.example to Local.xcconfig (gitignored).
+
+// A free Apple ID can't sign Sign in with Apple, Associated Domains or Push, so its build has none.
+PAISEN_FREE_APPLE_ID = NO
+PAISEN_ENTITLEMENTS_NO = iosApp/iosApp.entitlements
+PAISEN_ENTITLEMENTS_YES =
+CODE_SIGN_ENTITLEMENTS = $(PAISEN_ENTITLEMENTS_$(PAISEN_FREE_APPLE_ID))
+
+#include? "Local.xcconfig"

@@ -1,0 +1,9 @@
+// Copy this file to Local.xcconfig in the same folder. git ignores it.
+
+// Your team ID. For a free Apple ID, run this and use the 10 characters after OU=:
+//   security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject
+DEVELOPMENT_TEAM = ABCDE12345
+
+// YES drops Sign in with Apple, invite links that open the app, and push. Remove it if you pay
+// for the Apple Developer Program.
+PAISEN_FREE_APPLE_ID = YES

@@ -11,6 +11,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import org.koin.compose.koinInject
 import platform.CoreCrypto.CC_SHA256
 import platform.CoreCrypto.CC_SHA256_DIGEST_LENGTH
+import platform.Foundation.NSBundle
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.io.encoding.Base64
@@ -29,7 +30,8 @@ actual fun rememberSignInLauncher(): SignInLauncher {
 }
 
 private class BridgeSignIn(private val oauth: GoogleOAuth) : SignInLauncher {
-    override val offersApple: Boolean = true
+    // A free Apple ID can't sign the Sign in with Apple entitlement, so its build shows Google only.
+    override val offersApple: Boolean = NSBundle.mainBundle.objectForInfoDictionaryKey("PaiSenFreeAppleId") != "YES"
 
     override suspend fun google(): ProviderToken {
         val bridge = IosBridges.auth ?: throw AuthException("Sign-in is not set up in this build")

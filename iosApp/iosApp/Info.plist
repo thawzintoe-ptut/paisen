@@ -4,6 +4,9 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- YES in a build signed with a free Apple ID (Configuration/Config.xcconfig): it has no Sign in with Apple. -->
+	<key>PaiSenFreeAppleId</key>
+	<string>$(PAISEN_FREE_APPLE_ID)</string>
 	<!-- Shared-group pushes: a content-available push wakes the app to sync the group, with no banner. -->
 	<key>FirebaseMessagingInstallationIdEnabled</key>
 	<true/>

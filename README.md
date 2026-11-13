@@ -172,6 +172,22 @@ plutil -create xml1 iosApp/iosApp/GoogleService-Info.plist
 Then open `iosApp/iosApp.xcodeproj` in Xcode and run the `iosApp` scheme. The build phase runs
 Gradle for the Kotlin framework.
 
+**iOS on your iPhone, with a free Apple ID.** Add your Apple ID in Xcode › Settings › Accounts,
+then copy the local settings file and put your team ID in it. The file says how to find the ID.
+
+```bash
+cp iosApp/Configuration/Local.xcconfig.example iosApp/Configuration/Local.xcconfig
+```
+
+1. Plug in the iPhone and pick it in Xcode's device menu.
+2. On the iPhone, turn on Settings › Privacy & Security › Developer Mode. The phone restarts.
+3. Run the `iosApp` scheme. The first time, trust your Apple ID on the iPhone in Settings ›
+   General › VPN & Device Management.
+
+A free Apple ID signs the app for 7 days. After that it won't open until you run it from Xcode
+again, and your data stays. Like the SideStore build, this build has no Sign in with Apple, push
+notifications or invite links that open the app.
+
 **Tests**
 
 ```bash

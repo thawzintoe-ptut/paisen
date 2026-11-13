@@ -16,6 +16,8 @@ local.properties
 xcuserdata/
 *.xcworkspace/xcuserdata/
 DerivedData/
+# Your own team and free Apple ID switch; see Local.xcconfig.example.
+/iosApp/Configuration/Local.xcconfig
 
 # Slip fixtures may contain real account data — never commit raw images
 data/src/commonTest/resources/slips/*.jpg
