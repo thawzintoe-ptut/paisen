@@ -40,6 +40,7 @@ import com.ptut.expense.ui.NoteRow
 import com.ptut.expense.ui.sky.SkyAskField
 import com.ptut.expense.ui.sky.SkyBarIconAction
 import com.ptut.expense.ui.sky.SkyButton
+import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyChip
 import com.ptut.expense.ui.sky.SkyDateTimeRow
 import com.ptut.expense.ui.sky.SkySegmentedToggle
@@ -77,6 +78,7 @@ fun AddSheet(
     onListen: () -> Unit = {},
     onStopListening: () -> Unit = {},
     onVoiceLanguage: (SpeechLanguage) -> Unit = {},
+    onDownloadVoice: () -> Unit = {},
 ) {
     if (uiState.editingMemo) MemoSheet(memo = uiState.memo, onMemo = onMemo, onDismiss = onCloseMemo)
     val common = LocalCopy.current.common
@@ -105,6 +107,7 @@ fun AddSheet(
                 onListen = onListen,
                 onStopListening = onStopListening,
                 onVoiceLanguage = onVoiceLanguage,
+                onDownloadVoice = onDownloadVoice,
             )
         }
 
@@ -180,6 +183,7 @@ private fun QuickAdd(
     onListen: () -> Unit,
     onStopListening: () -> Unit,
     onVoiceLanguage: (SpeechLanguage) -> Unit,
+    onDownloadVoice: () -> Unit,
 ) {
     val text = LocalCopy.current.add
     val voice = uiState.voice
@@ -220,11 +224,19 @@ private fun QuickAdd(
                 selected = SpeechLanguage.entries.indexOf(voice.language),
                 onSelect = { onVoiceLanguage(SpeechLanguage.entries[it]) },
             )
-            voice.unavailableNote?.let { note ->
+            voice.note?.let { note ->
                 Text(
                     text = note,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+            if (voice.canDownload) {
+                SkyButton(
+                    label = text.downloadVoice(voice.language.fullName),
+                    onClick = onDownloadVoice,
+                    kind = SkyButtonKind.Outline,
                 )
             }
         }

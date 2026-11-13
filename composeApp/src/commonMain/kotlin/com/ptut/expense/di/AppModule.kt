@@ -385,8 +385,6 @@ val viewModelModule: Module = module {
             haptics = get(),
             agent = getOrNull(),
             reader = getOrNull(),
-            // #207: once a model is on the phone; a debug build shows it for the grammar alone.
-            offerQuickAdd = { scope.getOrNull<AppBuild>()?.debug == true || scope.getOrNull<LanguageModelPort>()?.state?.value is ModelState.Ready },
             speech = getOrNull(),
         )
     }

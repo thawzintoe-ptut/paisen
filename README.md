@@ -53,7 +53,7 @@ those slips and turns them into a record of where your money went.
   <tr><td><b>To check</b></td><td>A slip it cannot read waits with its picture, so you can fix it by hand.</td></tr>
   <tr><td><b>Today, week, month</b></td><td>What you spent, your top categories, and how today compares with a usual day.</td></tr>
   <tr><td><b>Reports</b></td><td>3 months, 6 months or a year, by category and sub-category.</td></tr>
-  <tr><td><b>Quick add</b></td><td>Type or say “coffee 60” in English, Thai or Burmese.</td></tr>
+  <tr><td><b>Quick add</b></td><td>Type or say “coffee 60” in English, Thai or Burmese. On Android, a language your phone cannot recognise offline, like Burmese, is recognised online by Google.</td></tr>
   <tr><td><b>Shared groups (optional)</b></td><td>Split a bill or a trip. Join by link or QR, settle up with a PromptPay QR.</td></tr>
   <tr><td><b>Your file</b></td><td>Export the whole record and import it on a new phone.</td></tr>
   <tr><td><b>English and မြန်မာ</b></td><td>Burmese digits included, in light and dark.</td></tr>
@@ -62,10 +62,12 @@ those slips and turns them into a record of where your money went.
 ## Privacy
 
 > [!NOTE]
-> Your own spending, slips and reports never leave the phone. No ads, no analytics, no crash
-> reporting — and Android and iCloud backups of the app's data are turned off.
+> Your own spending, slips and reports stay on the phone. No ads, no analytics, no crash
+> reporting — and Android and iCloud backups of the app's data are turned off. The one exception
+> you choose: on Android, saying an expense in a language your phone cannot recognise offline sends
+> your voice to Google, and Quick add says so first.
 
-Only shared groups use the network, and only after you sign in to share. Everything that is sent,
+PaiSeN itself uses the network only for shared groups, and only after you sign in to share. Everything that is sent,
 and where, is in [PRIVACY.md](PRIVACY.md).
 
 #### CI checks these promises on every push

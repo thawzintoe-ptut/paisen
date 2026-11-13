@@ -23,7 +23,8 @@ These Burmese strings are not in the PaiSen Sky Screens MY design. A native read
 | Slip picture | စလစ်ပုံ | ShellCopy.kt `slipPicture` |
 | Close the slip picture | စလစ်ပုံ ပိတ်မယ် | ShellCopy.kt `closeSlipPicture` |
 | Delete the last digit | နောက်ဆုံးဂဏန်း ဖျက်မယ် | ShellCopy.kt `deleteLastDigit` |
-| X is not available offline on this phone. Type it instead. | ဒီဖုန်းမှာ X ကို အင်တာနက်မပါဘဲ နားမထောင်နိုင်ဘူး။ စာရိုက်ပြီး ထည့်ပါ။ | ShellCopy.kt `voiceUnavailable` |
+| X isn't available on this phone right now. Type it instead. | ဒီဖုန်းမှာ X ကို အခု နားမထောင်နိုင်ဘူး။ စာရိုက်ပြီး ထည့်ပါ။ | ShellCopy.kt `voiceUnavailable` |
+| X voice needs the internet. Check your connection, or type it. | X နဲ့ ပြောဖို့ အင်တာနက် လိုတယ်။ ချိတ်ဆက်မှု စစ်ပါ၊ ဒါမှမဟုတ် စာရိုက်ပြီး ထည့်ပါ။ | locale/ShellCopy.kt `voiceNeedsInternet` |
 | The phone's speech service is busy. Try again. | ဖုန်းရဲ့ အသံဖတ်စနစ် အလုပ်များနေတယ်။ ထပ်ကြိုးစားပါ။ | ShellCopy.kt `speechBusy` |
 | Could not hear that. Type it instead. | မကြားရဘူး။ စာရိုက်ပြီး ထည့်ပါ။ | ShellCopy.kt `couldNotHear` |
 | This phone has no microphone it can use right now. Type it instead. | ဒီဖုန်းမှာ အခု သုံးလို့ရတဲ့ မိုက်ခရိုဖုန်း မရှိဘူး။ စာရိုက်ပြီး ထည့်ပါ။ | ShellCopy.kt `noMicrophone` |

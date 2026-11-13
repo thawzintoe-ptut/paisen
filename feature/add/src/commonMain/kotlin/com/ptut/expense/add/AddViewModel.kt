@@ -12,6 +12,8 @@ import com.ptut.expense.agent.ReadCall
 import com.ptut.expense.agent.SpeechInput
 import com.ptut.expense.agent.SpeechLanguage
 import com.ptut.expense.agent.SpendWindow
+import com.ptut.expense.agent.VoiceDownload
+import com.ptut.expense.agent.VoiceLanguages
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.SubCategory
@@ -55,7 +57,7 @@ data class AddUiState(
     val saving: Boolean = false,
     /** True once a row has been written. The shell closes the sheet on it. */
     val saved: Boolean = false,
-    /** #207: the Quick add field, shown once a model is on the phone, and in a debug build for the grammar. */
+    /** #207: the Quick add field. The grammar reads short commands with no model, so any graph with an agent shows it. */
     val quickAdd: Boolean = false,
     /** True while a typed sentence is being read. */
     val reading: Boolean = false,
@@ -92,17 +94,46 @@ data class AddUiState(
 
 /**
  * #212: the mic in Quick add and its EN · ไทย · မြန်မာ switch. Every language stays on the switch,
- * so one this phone cannot hear offline says so instead of disappearing.
+ * so one this phone cannot hear says so instead of disappearing.
  */
 data class QuickAddVoice(
     val language: SpeechLanguage,
     /** The languages this phone can hear with the network off. */
     val heard: Set<SpeechLanguage>,
     val listening: Boolean = false,
+    /** Packs the phone can fetch, so the switch offers a download instead of a dead end. */
+    val downloadable: Set<SpeechLanguage> = emptySet(),
+    val downloading: Set<SpeechLanguage> = emptySet(),
+    /** Heard by the phone's online speech service: the voice then leaves the phone. */
+    val online: Set<SpeechLanguage> = emptySet(),
 ) {
-    val canListen: Boolean get() = language in heard
+    /** An offline pack wins, so the voice goes online only for a language the phone cannot hear itself. */
+    val usesOnline: Boolean get() = language !in heard && language in online
 
-    val unavailableNote: String? get() = if (canListen) null else AppText.copy.add.voiceUnavailable(language.label)
+    val canListen: Boolean get() = language in heard || usesOnline
+
+    /** Offered even where online works, because a pack keeps the voice on the phone. */
+    val canDownload: Boolean get() = language in downloadable
+
+    val isDownloading: Boolean get() = language in downloading
+
+    /** The line under the switch: what the mic does for this language, or why it cannot. */
+    val note: String? get() = AppText.copy.add.let { text ->
+        when {
+            language in heard -> null
+            isDownloading -> text.voiceDownloading(language.fullName)
+            usesOnline -> text.voiceOnline(language.fullName)
+            canDownload -> text.voiceDownloadable(language.fullName)
+            else -> text.voiceUnavailable(language.fullName)
+        }
+    }
+
+    fun with(languages: VoiceLanguages): QuickAddVoice = copy(
+        heard = languages.heard,
+        downloadable = languages.downloadable,
+        downloading = languages.downloading,
+        online = languages.online,
+    )
 }
 
 /** #216: one line under Quick add. [problem] is a sentence not read or a mic that heard nothing. */
@@ -126,8 +157,6 @@ class AddViewModel(
     private val agent: AgentLoop? = null,
     /** Answers a question typed into Quick add. */
     private val reader: AgentReader? = null,
-    /** Asked on each open, because the model can arrive or go while the shell lives. */
-    private val offerQuickAdd: () -> Boolean = { false },
     /** #212: on-device speech for Quick add. Null in a graph that binds none. */
     private val speech: SpeechInput? = null,
 ) : ViewModel() {
@@ -160,7 +189,7 @@ class AddViewModel(
     /** The mic carries over: which languages this phone hears does not change between opens. */
     private fun fresh(voice: QuickAddVoice? = state.value.voice) = AddUiState(
         categories = categories(Direction.Expense),
-        quickAdd = agent != null && offerQuickAdd(),
+        quickAdd = agent != null,
         voice = voice?.copy(listening = false),
     )
 
@@ -240,15 +269,48 @@ class AddViewModel(
 
     /**
      * #212: asked each time the sheet opens, because a language pack can arrive while the shell
-     * lives. A phone that hears none of the three shows no mic.
+     * lives. Only a phone with no offline recogniser at all shows no mic; any other gets the switch
+     * and a line on what it can do.
      */
     fun openVoice() {
         val input = speech ?: return
         if (!state.value.quickAdd) return
         viewModelScope.launch {
-            val heard = input.onDeviceLanguages()
-            val voice = if (heard.isEmpty()) null else QuickAddVoice(language = input.preferredLanguage(), heard = heard)
+            val languages = input.languages()
+            val voice = if (!languages.hasRecogniser) {
+                null
+            } else {
+                QuickAddVoice(
+                    language = input.preferredLanguage(),
+                    heard = languages.heard,
+                    downloadable = languages.downloadable,
+                    downloading = languages.downloading,
+                    online = languages.online,
+                )
+            }
             state.update { it.copy(voice = voice) }
+        }
+    }
+
+    /** The phone fetches the pack itself. Whatever it answers, the switch then shows the phone as it is. */
+    fun downloadVoice() {
+        val input = speech ?: return
+        val language = state.value.voice?.takeIf { it.canDownload }?.language ?: return
+        state.update { current ->
+            current.copy(
+                voice = current.voice?.let { it.copy(downloadable = it.downloadable - language, downloading = it.downloading + language) },
+                askNote = null,
+            )
+        }
+        viewModelScope.launch {
+            val result = input.download(language)
+            val now = input.languages()
+            state.update {
+                it.copy(
+                    voice = it.voice?.with(now),
+                    askNote = if (result == VoiceDownload.Failed) AskNote(AppText.copy.add.voiceDownloadFailed(language.fullName), problem = true) else it.askNote,
+                )
+            }
         }
     }
 
@@ -264,7 +326,7 @@ class AddViewModel(
         if (voice.listening || !voice.canListen || state.value.reading) return
         state.update { it.copy(voice = voice.copy(listening = true), askNote = null) }
         listening = viewModelScope.launch {
-            val heard = input.listen(voice.language)
+            val heard = if (voice.usesOnline) input.listenOnline(voice.language) else input.listen(voice.language)
             state.update { it.copy(voice = it.voice?.copy(listening = false)) }
             when (heard) {
                 is Heard.Words -> quickAdd(heard.text)

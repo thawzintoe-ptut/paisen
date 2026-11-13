@@ -10,7 +10,22 @@ data class AddCopy(
     val sayIt: String = "Say it",
     val stopListening: String = "Stop listening",
     val voiceUnavailable: (language: String) -> String = { language ->
-        "$language is not available offline on this phone. Type it instead."
+        "$language voice isn't available on this phone. Type it instead."
+    },
+    /** Said whenever the voice will leave the phone, before the person speaks. */
+    val voiceOnline: (language: String) -> String = { language ->
+        "$language is recognised online by Google, so your voice is sent to Google."
+    },
+    /** A pack the phone can fetch. Android downloads it, and the words still stay on the phone. */
+    val voiceDownloadable: (language: String) -> String = { language ->
+        "$language voice isn't on this phone yet. Download it once and it works offline."
+    },
+    val downloadVoice: (language: String) -> String = { language -> "Download $language" },
+    val voiceDownloading: (language: String) -> String = { language ->
+        "Downloading $language. The mic appears when it's ready."
+    },
+    val voiceDownloadFailed: (language: String) -> String = { language ->
+        "The phone couldn't download $language. Try again on Wi-Fi, or type it."
     },
     val couldNotRead: String = "Could not read that. Fill it in below.",
     /** #216: the part of a sentence Quick add could not read. Only one is ever missing today. */
@@ -39,7 +54,12 @@ val BurmeseAdd = AddCopy(
     listening = "နားထောင်နေတယ်…",
     sayIt = "ပြောမယ်",
     stopListening = "နားထောင်တာ ရပ်မယ်",
-    voiceUnavailable = { language -> "ဒီဖုန်းမှာ $language ကို အင်တာနက်မပါဘဲ နားမထောင်နိုင်ဘူး။ ရိုက်ထည့်ပါ။" },
+    voiceUnavailable = { language -> "ဒီဖုန်းမှာ $language အသံနဲ့ ထည့်လို့ မရသေးဘူး။ ရိုက်ထည့်ပါ။" },
+    voiceOnline = { language -> "$language ကို Google က အွန်လိုင်းကနေ နားထောင်ပေးတာမို့ သင့်အသံကို Google ဆီ ပို့ရတယ်။" },
+    voiceDownloadable = { language -> "ဒီဖုန်းမှာ $language အသံ မရှိသေးဘူး။ တစ်ခါ ဒေါင်းလုဒ်လုပ်ထားရင် အင်တာနက်မပါဘဲ ပြောလို့ရမယ်။" },
+    downloadVoice = { language -> "$language ဒေါင်းလုဒ်လုပ်မယ်" },
+    voiceDownloading = { language -> "$language ဒေါင်းလုဒ်လုပ်နေတယ်။ ပြီးရင် မိုက် ပေါ်လာမယ်။" },
+    voiceDownloadFailed = { language -> "ဖုန်းက $language ကို ဒေါင်းလုဒ် မလုပ်နိုင်ဘူး။ Wi-Fi နဲ့ ထပ်ကြိုးစားပါ၊ ဒါမှမဟုတ် ရိုက်ထည့်ပါ။" },
     couldNotRead = "ဒါကို ဖတ်လို့ မရဘူး။ အောက်မှာ ဖြည့်ပါ။",
     notRead = { amount, category ->
         when {

@@ -1,10 +1,12 @@
 # PaiSeN privacy policy
 
-Last updated: 18 October 2026
+Last updated: 13 November 2026
 
 PaiSeN is an expense tracker made by Thaw Zin Toe. This policy explains what the app does with
 your data. The short version: your own spending stays on your phone. Only shared groups use the
-internet, and only after you sign in to share.
+internet, and only after you sign in to share. The one exception you choose: on Android, saying an
+expense in a language your phone cannot recognise offline sends your voice to Google to turn it
+into text.
 
 ## What stays on your phone
 
@@ -25,9 +27,9 @@ file goes only where you choose to put it.
 | Permission | Why the app asks |
 |---|---|
 | Photos | To read payment slips from the folders or album you choose. Slips are read on the phone. |
-| Microphone and speech recognition (iOS) | To turn what you say in Quick add into an expense. Recognition runs on the iPhone, and nothing is recorded or uploaded. On Android the app uses the phone's on-device recognizer. |
+| Microphone and speech recognition | To turn what you say in Quick add into an expense. On iPhone, recognition runs on the phone and nothing is recorded or uploaded. On Android, a language with an offline pack is recognised on the phone. A language without one, such as Burmese, goes to the phone's speech service, usually Google, which sends your voice to its servers and returns the words. Quick add says so before you speak, and PaiSeN keeps no audio. If you tap Download for a voice language, Android fetches it from Google. |
 | Notifications | To tell you when someone changes a shared group. |
-| Internet | For shared groups only. |
+| Internet | For shared groups only. Online voice is sent by Android's speech service, not by PaiSeN. |
 
 On Android, the slip reader is Google's ML Kit with its model built into the app. The app removes
 ML Kit's usage-statistics uploader, so ML Kit sends nothing to Google.

@@ -2,19 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!--
-      #212: Quick add's mic, asked on its first tap. Debug only while Quick add is (ADR 0002); it
-      moves to the main manifest with Quick add. The queries entry lets Android 11+ see the
-      phone's speech service at all.
-    -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-
-    <queries>
-        <intent>
-            <action android:name="android.speech.RecognitionService" />
-        </intent>
-    </queries>
-
     <application>
         <!--
           #213: Gemini's actions, debug builds only until Google's Early Access Program says yes.

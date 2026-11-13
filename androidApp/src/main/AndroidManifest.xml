@@ -25,6 +25,12 @@
         android:maxSdkVersion="32" />
 
     <!--
+      #212: Quick add's mic, asked on its first tap. A language with an offline pack is heard on
+      the phone; one without, by the phone's online speech service, and the sheet says so first.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!--
       #199: "Open my bank app" lists the Thai bank apps installed. Android 11 and later show an
       app only the packages it names here; nothing else on the phone becomes visible.
     -->
@@ -36,6 +42,10 @@
         <package android:name="com.krungsri.kma" />
         <package android:name="com.TMBTOUCH.PRODUCTION" />
         <package android:name="com.mobilegsb" />
+        <!-- #212: lets Android 11+ see the phone's speech service at all. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <!--

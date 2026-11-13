@@ -1,6 +1,14 @@
 package com.ptut.expense.add
 
 import com.ptut.expense.ViewModelTest
+import com.ptut.expense.agent.AgentLoop
+import com.ptut.expense.agent.Heard
+import com.ptut.expense.agent.NormaliserSource
+import com.ptut.expense.agent.SpeechInput
+import com.ptut.expense.agent.SpeechLanguage
+import com.ptut.expense.agent.UnavailableLanguageModel
+import com.ptut.expense.agent.VoiceDownload
+import com.ptut.expense.agent.VoiceLanguages
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.ImportRun
@@ -26,6 +34,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -299,9 +308,196 @@ class AddViewModelTest : ViewModelTest() {
     private fun entryOf(typed: String): AmountEntry =
         typed.fold(AmountEntry()) { entry, key -> if (key == '.') entry.decimal() else entry.digit(key) }
 
+    @Test
+    fun `a phone with no recogniser shows no voice`() = runTest {
+        val viewModel = quickAdd(FakeSpeech(VoiceLanguages(heard = emptySet(), hasRecogniser = false)))
+
+        viewModel.openVoice()
+        runCurrent()
+
+        assertNull(viewModel.uiState.value.voice)
+    }
+
+    /** Some phones' recognisers cannot list their packs. Hiding the mic there left no reason on screen. */
+    @Test
+    fun `a recogniser with no pack it can hear or fetch says so instead of hiding`() = runTest {
+        val viewModel = quickAdd(FakeSpeech(VoiceLanguages(heard = emptySet())))
+
+        viewModel.openVoice()
+        runCurrent()
+
+        val voice = assertNotNull(viewModel.uiState.value.voice)
+        assertFalse(voice.canListen)
+        assertFalse(voice.canDownload)
+        assertTrue(assertNotNull(voice.note).contains("English"))
+    }
+
+    /** Google offers no offline Burmese, so Burmese is heard online or not at all. */
+    @Test
+    fun `a language the phone hears only online gets the mic and says the voice goes to Google`() = runTest {
+        val viewModel = quickAdd(FakeSpeech(VoiceLanguages(heard = emptySet(), online = setOf(SpeechLanguage.Burmese)), preferred = SpeechLanguage.Burmese))
+
+        viewModel.openVoice()
+        runCurrent()
+
+        val voice = assertNotNull(viewModel.uiState.value.voice)
+        assertTrue(voice.canListen)
+        assertTrue(voice.usesOnline)
+        assertTrue(assertNotNull(voice.note).contains("Google"))
+    }
+
+    @Test
+    fun `an offline pack is used before online for the same language`() = runTest {
+        val viewModel = quickAdd(
+            FakeSpeech(VoiceLanguages(heard = setOf(SpeechLanguage.English), online = setOf(SpeechLanguage.English))),
+        )
+
+        viewModel.openVoice()
+        runCurrent()
+
+        val voice = assertNotNull(viewModel.uiState.value.voice)
+        assertTrue(voice.canListen)
+        assertFalse(voice.usesOnline)
+        assertNull(voice.note)
+    }
+
+    @Test
+    fun `listening in a language heard only online asks for online recognition`() = runTest {
+        val speech = FakeSpeech(VoiceLanguages(heard = emptySet(), online = setOf(SpeechLanguage.Burmese)), preferred = SpeechLanguage.Burmese)
+        val viewModel = quickAdd(speech)
+        viewModel.openVoice()
+        runCurrent()
+
+        viewModel.listen()
+        runCurrent()
+
+        assertEquals(listOf(SpeechLanguage.Burmese to true), speech.listens)
+    }
+
+    /** The emulator's case: a recogniser with no pack yet. Hiding the mic left no way to get one. */
+    @Test
+    fun `a language the phone can download is offered instead of hiding the mic`() = runTest {
+        val viewModel = quickAdd(FakeSpeech(VoiceLanguages(heard = emptySet(), downloadable = setOf(SpeechLanguage.English))))
+
+        viewModel.openVoice()
+        runCurrent()
+
+        val voice = assertNotNull(viewModel.uiState.value.voice)
+        assertFalse(voice.canListen)
+        assertTrue(voice.canDownload)
+        assertTrue(assertNotNull(voice.note).contains("English"))
+    }
+
+    @Test
+    fun `a finished download turns the mic on`() = runTest {
+        val speech = FakeSpeech(
+            VoiceLanguages(heard = emptySet(), downloadable = setOf(SpeechLanguage.English)),
+            download = VoiceDownload.Ready,
+        )
+        val viewModel = quickAdd(speech)
+        viewModel.openVoice()
+        runCurrent()
+
+        viewModel.downloadVoice()
+        runCurrent()
+
+        assertTrue(assertNotNull(viewModel.uiState.value.voice).canListen)
+        assertEquals(listOf(SpeechLanguage.English), speech.downloads)
+    }
+
+    @Test
+    fun `a download the phone only scheduled shows as downloading`() = runTest {
+        val viewModel = quickAdd(
+            FakeSpeech(
+                VoiceLanguages(heard = emptySet(), downloadable = setOf(SpeechLanguage.English)),
+                download = VoiceDownload.Started,
+            ),
+        )
+        viewModel.openVoice()
+        runCurrent()
+
+        viewModel.downloadVoice()
+        runCurrent()
+
+        val voice = assertNotNull(viewModel.uiState.value.voice)
+        assertTrue(voice.isDownloading)
+        assertFalse(voice.canDownload)
+        assertFalse(voice.canListen)
+    }
+
+    @Test
+    fun `a failed download says so and keeps the offer`() = runTest {
+        val viewModel = quickAdd(
+            FakeSpeech(
+                VoiceLanguages(heard = emptySet(), downloadable = setOf(SpeechLanguage.English)),
+                download = VoiceDownload.Failed,
+            ),
+        )
+        viewModel.openVoice()
+        runCurrent()
+
+        viewModel.downloadVoice()
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertTrue(assertNotNull(state.voice).canDownload)
+        val note = assertNotNull(state.askNote)
+        assertTrue(note.problem)
+        // Named, because the switch may show another language by the time the phone answers.
+        assertTrue(note.text.contains("English"))
+    }
+
+    /** Quick add shows only with an agent; these tests never read a sentence with it. */
+    private fun quickAdd(speech: SpeechInput) = AddViewModel(
+        ledger = RecordingLedger(),
+        toasts = ToastMessages(),
+        agent = AgentLoop(
+            normaliser = NormaliserSource { null },
+            model = UnavailableLanguageModel(),
+            context = { error("The voice tests read no sentence") },
+        ),
+        speech = speech,
+    )
+
     /** Everything the toast seam carried during the test, in order. */
     private fun TestScope.collect(toasts: ToastMessages): List<ToastMessage> =
         mutableListOf<ToastMessage>().also { seen -> backgroundScope.launch { toasts.messages.toList(seen) } }
+}
+
+/** A recogniser whose packs the test sets. A finished download moves the language into `heard`. */
+private class FakeSpeech(
+    private var languages: VoiceLanguages,
+    private val download: VoiceDownload = VoiceDownload.Failed,
+    private val preferred: SpeechLanguage = SpeechLanguage.English,
+) : SpeechInput {
+    val downloads = mutableListOf<SpeechLanguage>()
+
+    /** Each listen, and whether it asked for online recognition. */
+    val listens = mutableListOf<Pair<SpeechLanguage, Boolean>>()
+
+    override suspend fun onDeviceLanguages(): Set<SpeechLanguage> = languages.heard
+
+    override suspend fun languages(): VoiceLanguages = languages
+
+    override suspend fun download(language: SpeechLanguage): VoiceDownload {
+        downloads += language
+        languages = when (download) {
+            VoiceDownload.Ready -> languages.copy(heard = languages.heard + language, downloadable = languages.downloadable - language)
+            VoiceDownload.Started -> languages.copy(downloadable = languages.downloadable - language, downloading = languages.downloading + language)
+            VoiceDownload.Failed -> languages
+        }
+        return download
+    }
+
+    override fun preferredLanguage(): SpeechLanguage = preferred
+
+    override fun rememberLanguage(language: SpeechLanguage) = Unit
+
+    override suspend fun listen(language: SpeechLanguage): Heard = Heard.Nothing.also { listens += language to false }
+
+    override suspend fun listenOnline(language: SpeechLanguage): Heard = Heard.Nothing.also { listens += language to true }
+
+    override fun stop() = Unit
 }
 
 /** A ledger with nothing in it that remembers what it was asked to write. */

@@ -19,8 +19,9 @@ The first public version.
 - History with search, and adding or editing a transaction with its date, time, category,
   sub-category and note.
 - Delete with undo.
-- Quick add by typing or speaking in English, Thai or Burmese, with on-device speech recognition.
-  Siri and app icon shortcuts on iOS.
+- Quick add by typing or speaking in English, Thai or Burmese. Speech is recognised on the phone
+  where it has an offline pack. On Android, other languages such as Burmese are recognised online
+  by Google, and the sheet says so. Siri and app icon shortcuts on iOS.
 - Shared groups: split costs, see balances, record payments, settle with a PromptPay QR, invite by
   link or QR code, and get told about changes.
 - Export and import of the whole ledger as a file.

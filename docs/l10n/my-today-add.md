@@ -36,7 +36,12 @@ Burmese for Today, the Add sheet and the day receipt that the Sky MY design does
 | Listening… | နားထောင်နေတယ်… | locale/AddCopy.kt:29 |
 | Say it | ပြောမယ် | locale/AddCopy.kt:30 |
 | Stop listening | နားထောင်တာ ရပ်မယ် | locale/AddCopy.kt:31 |
-| {language} is not available offline on this phone. Type it instead. | ဒီဖုန်းမှာ {language} ကို အင်တာနက်မပါဘဲ နားမထောင်နိုင်ဘူး။ ရိုက်ထည့်ပါ။ | locale/AddCopy.kt:32 |
+| {language} voice isn't available on this phone. Type it instead. | ဒီဖုန်းမှာ {language} အသံနဲ့ ထည့်လို့ မရသေးဘူး။ ရိုက်ထည့်ပါ။ | locale/AddCopy.kt `voiceUnavailable` |
+| {language} is recognised online by Google, so your voice is sent to Google. | {language} ကို Google က အွန်လိုင်းကနေ နားထောင်ပေးတာမို့ သင့်အသံကို Google ဆီ ပို့ရတယ်။ | locale/AddCopy.kt `voiceOnline` |
+| {language} voice isn't on this phone yet. Download it once and it works offline. | ဒီဖုန်းမှာ {language} အသံ မရှိသေးဘူး။ တစ်ခါ ဒေါင်းလုဒ်လုပ်ထားရင် အင်တာနက်မပါဘဲ ပြောလို့ရမယ်။ | locale/AddCopy.kt:52 `voiceDownloadable` |
+| Download {language} | {language} ဒေါင်းလုဒ်လုပ်မယ် | locale/AddCopy.kt:53 `downloadVoice` |
+| Downloading {language}. The mic appears when it's ready. | {language} ဒေါင်းလုဒ်လုပ်နေတယ်။ ပြီးရင် မိုက် ပေါ်လာမယ်။ | locale/AddCopy.kt:54 `voiceDownloading` |
+| The phone couldn't download {language}. Try again on Wi-Fi, or type it. | ဖုန်းက {language} ကို ဒေါင်းလုဒ် မလုပ်နိုင်ဘူး။ Wi-Fi နဲ့ ထပ်ကြိုးစားပါ၊ ဒါမှမဟုတ် ရိုက်ထည့်ပါ။ | locale/AddCopy.kt `voiceDownloadFailed` |
 | Could not read that. Fill it in below. | ဒါကို ဖတ်လို့ မရဘူး။ အောက်မှာ ဖြည့်ပါ။ | locale/AddCopy.kt:33 |
 | Could not read the amount or the category. Fill them in below. | ပမာဏနဲ့ အမျိုးအစားကို ဖတ်လို့ မရဘူး။ အောက်မှာ ဖြည့်ပါ။ | locale/AddCopy.kt:46 `notRead` |
 | Could not read the amount. Type it below. | ပမာဏကို ဖတ်လို့ မရဘူး။ အောက်မှာ ရိုက်ထည့်ပါ။ | locale/AddCopy.kt:47 `notRead` |
