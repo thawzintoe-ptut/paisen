@@ -12,6 +12,12 @@ class InviteLinksTest {
         assertEquals("ABC234XYZ", InviteLinks.codeIn("https://paisen.web.app/join/ABC234XYZ"))
     }
 
+    /** The join page's Open in PaiSeN button, for an iPhone build without universal links. */
+    @Test
+    fun theAppSchemeLinkGivesBackTheSameCode() {
+        assertEquals("ABC234XYZ", InviteLinks.codeIn("paisen://join/ABC234XYZ"))
+    }
+
     @Test
     fun aQueryOrATrailingSlashAfterTheCodeIsIgnored() {
         assertEquals("ABC234XYZ", InviteLinks.codeIn("https://paisen.web.app/join/ABC234XYZ/?from=line"))

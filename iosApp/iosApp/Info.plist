@@ -55,5 +55,20 @@
 			</array>
 		</dict>
 	</array>
+	<!--
+	  #190: a free Apple ID can't sign universal links, so the join page also offers
+	  paisen://join/<code>. iOS asks before it opens the app, and no account is needed.
+	-->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.ptut.expense.invite</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>paisen</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

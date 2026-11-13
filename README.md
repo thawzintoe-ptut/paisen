@@ -135,8 +135,8 @@ so you sign it with your own Apple ID in [SideStore](https://sidestore.io) or
    days, and after that PaiSeN won't open until you refresh. Your data stays on the phone.
 
 A free Apple ID can't sign Sign in with Apple, push notifications or links that open an app. So in
-this build those three don't work, and an invite link opens in Safari. A free Apple ID can also
-keep only 3 sideloaded apps at a time.
+this build Sign in with Apple and push don't work, and an invite link opens in Safari first: tap
+**Open in PaiSen** there. A free Apple ID can also keep only 3 sideloaded apps at a time.
 
 ## Build it yourself
 
@@ -185,8 +185,8 @@ cp iosApp/Configuration/Local.xcconfig.example iosApp/Configuration/Local.xcconf
    General › VPN & Device Management.
 
 A free Apple ID signs the app for 7 days. After that it won't open until you run it from Xcode
-again, and your data stays. Like the SideStore build, this build has no Sign in with Apple, push
-notifications or invite links that open the app.
+again, and your data stays. Like the SideStore build, this build has no Sign in with Apple or push
+notifications, and an invite link opens in Safari first, with an **Open in PaiSen** button.
 
 **Tests**
 

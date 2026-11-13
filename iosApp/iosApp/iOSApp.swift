@@ -21,7 +21,8 @@ struct iOSApp: App {
                 // FR-1: a slip sent here from the share sheet, or #190: an invite link. The Kotlin
                 // side owns what happens next, so this hands over the URL and says nothing about it.
                 .onOpenURL { url in
-                    if url.scheme == "https" && url.path.hasPrefix("/join/") {
+                    // paisen://join/<code> comes from the join page's button, for builds without universal links.
+                    if url.scheme == "paisen" || (url.scheme == "https" && url.path.hasPrefix("/join/")) {
                         MainViewControllerKt.receiveInviteLink(url: url)
                     } else {
                         MainViewControllerKt.receiveSharedSlip(url: url)

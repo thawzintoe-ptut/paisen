@@ -19,6 +19,7 @@
   .ink { background: var(--ink); color: var(--bg); }
   .outline { border: 1px solid var(--ink); color: var(--ink); }
   .soon { opacity: 0.6; pointer-events: none; }
+  .store[hidden] { display: none; }
   ol { color: var(--soft); padding-left: 20px; line-height: 1.6; }
 </style>
 </head>
@@ -28,6 +29,8 @@
   <p>Someone invited you to split costs with them. With PaiSen installed, this link opens the group.</p>
   <div id="code" class="code" aria-label="Invite code"></div>
   <div class="stores">
+    <!-- An iPhone build signed with a free Apple ID has no universal links, so it opens from here. -->
+    <a id="open" class="store ink" href="#" hidden>Open in PaiSen</a>
     <a id="play" class="store ink" href="https://play.google.com/store/apps/details?id=com.ptut.expense">Get it on Google Play</a>
     <!-- The App Store link goes here once PaiSen has an App Store ID. -->
     <a id="appstore" class="store outline soon" href="#" aria-disabled="true">App Store · coming soon</a>
@@ -47,6 +50,11 @@
   if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
     var stores = document.querySelector(".stores");
     stores.insertBefore(document.getElementById("appstore"), document.getElementById("play"));
+    if (code.length === 9) {
+      var open = document.getElementById("open");
+      open.href = "paisen://join/" + code;
+      open.hidden = false;
+    }
   }
 </script>
 </body>

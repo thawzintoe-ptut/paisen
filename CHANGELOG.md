@@ -26,8 +26,8 @@ The first public version.
 - Export and import of the whole ledger as a file.
 - English and Burmese, in light and dark.
 - An iPhone build (`.ipa`) on each GitHub release, to install with SideStore or AltStore and your
-  own Apple ID. Sign in with Apple, push notifications and invite links that open the app don't
-  work in it.
+  own Apple ID. Sign in with Apple and push notifications don't work in it, and an invite link
+  opens in Safari, where **Open in PaiSen** takes you to the app.
 
 ### Security
 
