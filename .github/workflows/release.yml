@@ -108,6 +108,8 @@ jobs:
     needs: [meta, checks]
     permissions:
       contents: read
+      id-token: write # build provenance for the APK and AAB
+      attestations: write
     uses: ./.github/workflows/build-signed.yml
     secrets: inherit
     with:
@@ -121,6 +123,8 @@ jobs:
     if: needs.meta.outputs.kind == 'beta' && vars.IOS_ENABLED == 'true'
     permissions:
       contents: read
+      id-token: write # build provenance for the IPA
+      attestations: write
     uses: ./.github/workflows/build-ios.yml
     secrets: inherit
     with:
@@ -135,6 +139,8 @@ jobs:
     if: vars.IOS_SIDELOAD_ENABLED == 'true'
     permissions:
       contents: read
+      id-token: write # build provenance for the IPA
+      attestations: write
     uses: ./.github/workflows/build-ios.yml
     secrets: inherit
     with:
