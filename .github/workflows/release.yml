@@ -26,6 +26,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # every tag and branch, for the version and branch checks
+          persist-credentials: false
       # A release comes from main, or from a release/* branch for a hotfix.
       - name: The tag is on main or a release branch
         run: |
@@ -111,7 +112,6 @@ jobs:
       id-token: write # build provenance for the APK and AAB
       attestations: write
     uses: ./.github/workflows/build-signed.yml
-    secrets: inherit
     with:
       version-name: ${{ needs.meta.outputs.name }}
       version-code: ${{ needs.meta.outputs.code }}
@@ -126,7 +126,6 @@ jobs:
       id-token: write # build provenance for the IPA
       attestations: write
     uses: ./.github/workflows/build-ios.yml
-    secrets: inherit
     with:
       version-name: ${{ needs.meta.outputs.name }}
       version-code: ${{ needs.meta.outputs.code }}
@@ -142,7 +141,6 @@ jobs:
       id-token: write # build provenance for the IPA
       attestations: write
     uses: ./.github/workflows/build-ios.yml
-    secrets: inherit
     with:
       version-name: ${{ needs.meta.outputs.name }}
       version-code: ${{ needs.meta.outputs.code }}
@@ -216,6 +214,8 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+          # A release restores no cache another run could have written.
+          package-manager-cache: false
       # The app id comes from firebase.properties, so it is not a second secret to keep in step.
       - name: Send the APK to the testers group
         env:
@@ -251,6 +251,8 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+          # A release restores no cache another run could have written.
+          package-manager-cache: false
       # The app id comes from the plist the build already uses, so it is not a second secret.
       - name: Send the IPA to the testers group
         env:

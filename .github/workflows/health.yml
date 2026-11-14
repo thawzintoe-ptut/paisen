@@ -1,0 +1,62 @@
+name: Health
+
+# The tag-day builds, every Monday, with no tag and nothing published: the signed APK and AAB
+# (R8, upload key, certificate check) and the unsigned IPA (the iOS release framework link that ran
+# out of a 4 GB heap on 18 Oct, and the archive). A new runner image or Xcode then breaks a Monday
+# check, not a release. The files are deleted after 7 days.
+on:
+  schedule:
+    - cron: '0 3 * * 1' # Monday 10:00 in Bangkok
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: health
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      name: ${{ steps.version.outputs.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # tags
+          persist-credentials: false
+      # The last release's X.Y.Z plus -health, so nobody mistakes these files for a release.
+      - name: Version name
+        id: version
+        run: |
+          last=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo v0.0.0)
+          base=${last#v}
+          echo "name=${base%%-*}-health" >> "$GITHUB_OUTPUT"
+
+  # Build number 1, which Play already holds, so Play would refuse these files.
+  android:
+    needs: version
+    permissions:
+      contents: read
+      id-token: write # build provenance, as in a release
+      attestations: write
+    uses: ./.github/workflows/build-signed.yml
+    with:
+      version-name: ${{ needs.version.outputs.name }}
+      version-code: '1'
+
+  ios:
+    needs: version
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/build-ios.yml
+    with:
+      version-name: ${{ needs.version.outputs.name }}
+      version-code: '1'
+      signing: none
