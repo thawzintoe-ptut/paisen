@@ -41,11 +41,17 @@ data class SharedExpenseCopy(
     val splitSoFar: (String, String) -> String = { assigned, total -> "$assigned of $total is split so far" },
     val giveTo: (String) -> String = { name -> "Give to ${name.uppercase()}" },
     val hintAmount: String = "Type an amount to save",
-    val hintDescription: String = "Say what it was for to save",
     val hintRate: String = "Type the baht rate to save",
     val hintCategory: String = "Pick a category to save",
     val hintSplit: String = "The split doesn't add up yet. Open Split to fix it.",
     val countsAs: (String, String) -> String = { typed, whole -> "$typed counts as $whole" },
+    val paidAndSplit: String = "Paid by and split",
+    val quickYouEqual: String = "You paid, split equally",
+    val quickYouFull: String = "You are owed the full amount",
+    val quickOtherEqual: (String) -> String = { name -> "$name paid, split equally" },
+    val quickOtherFull: (String) -> String = { name -> "$name is owed the full amount" },
+    val quickFull: String = "Owed the full amount",
+    val moreOptions: String = "More options",
 )
 
 val BurmeseSharedExpense = SharedExpenseCopy(
@@ -88,11 +94,17 @@ val BurmeseSharedExpense = SharedExpenseCopy(
     splitSoFar = { assigned, total -> "$total ထဲက $assigned ခွဲပြီးပြီ" },
     giveTo = { name -> "${sharedMyTo(name)} ပေးမယ်" },
     hintAmount = "သိမ်းဖို့ ပမာဏ ရိုက်ပါ",
-    hintDescription = "သိမ်းဖို့ ဘာအတွက်လဲ ရေးပါ",
     hintRate = "သိမ်းဖို့ ဘတ်နှုန်း ရိုက်ပါ",
     hintCategory = "သိမ်းဖို့ အမျိုးအစား ရွေးပါ",
     hintSplit = "ခွဲပုံ မကိုက်သေးဘူး။ ခွဲပုံ ဖွင့်ပြီး ပြင်ပါ။",
     countsAs = { typed, whole -> "$typed ကို $whole လို့ ယူမယ်" },
+    paidAndSplit = "ပေးတဲ့သူ နဲ့ ခွဲပုံ",
+    quickYouEqual = "သင်ပေးခဲ့၊ တူတူခွဲ",
+    quickYouFull = "သင်ပေးခဲ့၊ အကုန် ပြန်ရမယ်",
+    quickOtherEqual = { name -> "$name ပေးခဲ့၊ တူတူခွဲ" },
+    quickOtherFull = { name -> "$name ပေးခဲ့၊ အကုန် ပြန်ရမယ်" },
+    quickFull = "အကုန် ပြန်ရမယ်",
+    moreOptions = "တခြား ခွဲပုံများ",
 )
 
 /** Repeat an expense: rent, a bill or a subscription that adds itself. */

@@ -2,6 +2,7 @@ package com.ptut.expense.shared
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -46,9 +48,11 @@ import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
+import com.ptut.expense.design.ptut
 import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.shared.Currency
+import com.ptut.expense.domain.shared.QuickSplit
 import com.ptut.expense.domain.shared.SplitMode
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.ui.sky.AskBeforeLeaving
@@ -56,6 +60,7 @@ import com.ptut.expense.ui.sky.SkyBarIconAction
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
+import com.ptut.expense.ui.sky.SkyChip
 import com.ptut.expense.ui.sky.SkyDateTimeRow
 import com.ptut.expense.ui.sky.SkyDiscardSheet
 import com.ptut.expense.ui.sky.SkyEmptyState
@@ -75,6 +80,8 @@ data class AddExpenseActions(
     val onTime: (Long) -> Unit,
     val onCategory: (String) -> Unit,
     val onPayer: (String) -> Unit,
+    val onQuickSplit: (String, QuickSplit) -> Unit,
+    val onQuickPayer: (String) -> Unit,
     val onOpenSplit: (Boolean) -> Unit,
     val onSplitMode: (SplitMode) -> Unit,
     val onWeight: (String, String) -> Unit,
@@ -160,7 +167,7 @@ private fun Form(state: AddExpenseUiState.Ready, actions: AddExpenseActions, mod
             Spacer(Modifier.height(Spacing.md))
             SkyHairline()
             IconRow(icon = PtutIcon.Edit) {
-                SharedTextField(value = form.description, onValueChange = actions.onDescription, label = words.whatFor, placeholder = words.whatForHint)
+                SharedTextField(value = form.description, onValueChange = actions.onDescription, label = words.whatFor, placeholder = state.categoryName ?: words.whatForHint)
             }
             // #186: a locked date still shows; it only stops opening the picker.
             SkyDateTimeRow(epochMillis = form.occurredAtEpochMillis, onPick = actions.onTime, enabled = !form.locked)
@@ -171,7 +178,7 @@ private fun Form(state: AddExpenseUiState.Ready, actions: AddExpenseActions, mod
             IconRow(icon = PtutIcon.ListAlt) {
                 SharedTextField(value = form.note, onValueChange = actions.onNote, label = text.common.note, placeholder = words.addNote)
             }
-            PaidAndSplit(state, onPayer = { sheet = SHEET_PAYER }, onSplit = { actions.onOpenSplit(true) }, modifier = Modifier.padding(top = Spacing.md))
+            PaidAndSplit(state, onClick = { sheet = SHEET_QUICK }, modifier = Modifier.padding(top = Spacing.md))
             Spacer(Modifier.height(Spacing.lg))
         }
         SkyButton(
@@ -234,18 +241,19 @@ private fun Form(state: AddExpenseUiState.Ready, actions: AddExpenseActions, mod
             }
         }
 
-        SHEET_PAYER -> SkyBottomSheet(onDismissRequest = { sheet = null }) {
-            Text(text.shared.paidBy, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.sm))
-            state.payers.forEach { payer ->
-                ChoiceRow(
-                    text = payer.name,
-                    selected = payer.name == state.payerName,
-                    onClick = {
-                        sheet = null
-                        actions.onPayer(payer.memberId)
-                    },
-                )
-            }
+        SHEET_QUICK -> SkyBottomSheet(onDismissRequest = { sheet = null }) {
+            QuickSplitSheet(
+                state = state,
+                onPayer = actions.onQuickPayer,
+                onChoice = { payerId, choice ->
+                    sheet = null
+                    actions.onQuickSplit(payerId, choice)
+                },
+                onMore = {
+                    sheet = null
+                    actions.onOpenSplit(true)
+                },
+            )
         }
 
         SHEET_REMOVE -> SkyBottomSheet(onDismissRequest = { sheet = null }) {
@@ -269,33 +277,89 @@ private fun Form(state: AddExpenseUiState.Ready, actions: AddExpenseActions, mod
     }
 }
 
-/** p28's grey card: Paid by and Split decide the result together, and the line under them says it. */
+/** The grey card: who paid and how it splits in one line, and what that means for you under it. */
 @Composable
-private fun PaidAndSplit(state: AddExpenseUiState.Ready, onPayer: () -> Unit, onSplit: () -> Unit, modifier: Modifier = Modifier) {
-    val text = LocalCopy.current.shared
+private fun PaidAndSplit(state: AddExpenseUiState.Ready, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val text = LocalCopy.current.shared.expense
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(PtutRadii.r22)
             .background(MaterialTheme.colorScheme.surface)
+            .tappable(PtutRadii.r22, Role.Button, onClick = onClick)
             .padding(horizontal = Spacing.sm, vertical = Spacing.s12),
     ) {
-        CardRow(label = text.paidBy, value = state.payerName, onClick = if (state.form.locked) null else onPayer)
-        CardRow(label = text.expense.split, value = state.splitLabel, onClick = onSplit)
+        Text(text.paidAndSplit, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        ) {
+            Text(state.quick.summary, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+            Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.cardGlyph))
+        }
         state.resultLine?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.xs))
         }
     }
 }
 
+/** The quick choices: a chip per payer in a group of three or more, the rows, then More options. */
 @Composable
-private fun CardRow(label: String, value: String, onClick: (() -> Unit)?) {
+private fun QuickSplitSheet(
+    state: AddExpenseUiState.Ready,
+    onPayer: (String) -> Unit,
+    onChoice: (String, QuickSplit) -> Unit,
+    onMore: () -> Unit,
+) {
+    val text = LocalCopy.current.shared
+    val quick = state.quick
+    Text(text.expense.paidAndSplit, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.sm))
+    state.lockedLine?.let {
+        Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
+    }
+    if (quick.chips.isNotEmpty()) {
+        Text(text.paidBy, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.sm))
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        ) {
+            quick.chips.forEach { chip -> SkyChip(label = chip.name, selected = chip.selected, onClick = { onPayer(chip.memberId) }) }
+        }
+    }
+    quick.rows.forEach { row ->
+        TwoLineChoiceRow(title = row.label, detail = row.result, owe = row.owe, selected = row.selected, onClick = { onChoice(row.payerId, row.choice) })
+    }
+    SkyHairline()
+    TwoLineChoiceRow(title = text.expense.moreOptions, detail = quick.moreHint, owe = false, selected = quick.moreSelected, onClick = onMore, chevron = true)
+}
+
+@Composable
+private fun TwoLineChoiceRow(title: String, detail: String?, owe: Boolean, selected: Boolean, onClick: () -> Unit, chevron: Boolean = false) {
+    val chosen = LocalCopy.current.shared.chosen
     Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = SkySizes.transactionRow),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = SkySizes.transactionRow)
+            .tappable(PtutRadii.r12, Role.Button, onClick = onClick)
+            .semantics { this.selected = selected }
+            .padding(vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-        Pill(text = value, icon = null, onClick = onClick, chevron = onClick != null, white = true)
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            detail?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (owe) MaterialTheme.ptut.signatureInk else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = Spacing.xxs),
+                )
+            }
+        }
+        if (selected) Icon(PtutIcon.Check.image, contentDescription = chosen, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.cardGlyph))
+        if (chevron) Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.cardGlyph))
     }
 }
 
@@ -305,10 +369,23 @@ private fun SplitOptions(state: AddExpenseUiState.Ready, actions: AddExpenseActi
     val text = LocalCopy.current
     val split = state.split
     val modes = SplitMode.entries
+    var payerOpen by rememberSaveable { mutableStateOf(false) }
     CloseOnBack { actions.onOpenSplit(false) }
     Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer)) {
         SkyTopBar(title = split.title, onBack = { actions.onOpenSplit(false) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.md)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = SkySizes.transactionRow)
+                    .then(if (state.form.locked) Modifier else Modifier.tappable(PtutRadii.r12, Role.Button) { payerOpen = true }),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            ) {
+                Text(text.shared.paidBy, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                Text(state.payerName, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                if (!state.form.locked) Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.cardGlyph))
+            }
             SkySegmentedToggle(
                 options = modes.map { it.label() },
                 selected = modes.indexOf(split.mode),
@@ -370,6 +447,21 @@ private fun SplitOptions(state: AddExpenseUiState.Ready, actions: AddExpenseActi
             enabled = split.complete,
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md).padding(bottom = Spacing.md),
         )
+    }
+    if (payerOpen) {
+        SkyBottomSheet(onDismissRequest = { payerOpen = false }) {
+            Text(text.shared.paidBy, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.sm))
+            state.payers.forEach { payer ->
+                ChoiceRow(
+                    text = payer.name,
+                    selected = payer.name == state.payerName,
+                    onClick = {
+                        payerOpen = false
+                        actions.onPayer(payer.memberId)
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -529,6 +621,6 @@ private fun CloseOnBack(onBack: () -> Unit) {
 
 private const val SHEET_CURRENCY = "currency"
 private const val SHEET_CATEGORY = "category"
-private const val SHEET_PAYER = "payer"
+private const val SHEET_QUICK = "quick"
 private const val SHEET_REMOVE = "remove"
 private const val SHEET_DISCARD = "discard"

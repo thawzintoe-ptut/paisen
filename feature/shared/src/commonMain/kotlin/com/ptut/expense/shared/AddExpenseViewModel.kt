@@ -10,6 +10,7 @@ import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.ExpenseChanged
 import com.ptut.expense.domain.shared.ExpenseDraft
 import com.ptut.expense.domain.shared.LogOrder
+import com.ptut.expense.domain.shared.QuickSplit
 import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.shared.SharedExpense
 import com.ptut.expense.domain.shared.SharedGroup
@@ -19,8 +20,11 @@ import com.ptut.expense.domain.shared.SplitCheck
 import com.ptut.expense.domain.shared.SplitMember
 import com.ptut.expense.domain.shared.SplitMode
 import com.ptut.expense.domain.shared.formatMinor
+import com.ptut.expense.domain.shared.inOddUnitOrder
 import com.ptut.expense.domain.shared.membersToSplit
 import com.ptut.expense.domain.shared.parseMinor
+import com.ptut.expense.domain.shared.quickSplitOf
+import com.ptut.expense.domain.shared.quickSplitWeights
 import com.ptut.expense.domain.shared.split
 import com.ptut.expense.domain.shared.toSatang
 import com.ptut.expense.locale.AppText
@@ -81,6 +85,30 @@ data class SplitUiModel(
     val complete: Boolean,
 )
 
+/** One tap in the Paid by and split sheet: who paid and how it splits, with what that means for you. */
+data class QuickRowUiModel(
+    val payerId: String,
+    val choice: QuickSplit,
+    val label: String,
+    val result: String?,
+    /** The result is money you owe, so the view paints it in the owe colour. */
+    val owe: Boolean,
+    val selected: Boolean,
+)
+
+data class PayerChipUiModel(val memberId: String, val name: String, val selected: Boolean)
+
+data class QuickSplitUiModel(
+    /** The card's line: the chosen row's words, or payer and mode for a split set by hand. */
+    val summary: String,
+    /** Empty in a group of two, where the four rows name the payer themselves. */
+    val chips: List<PayerChipUiModel>,
+    val rows: List<QuickRowUiModel>,
+    /** Under More options: the modes behind it, or the split set by hand. */
+    val moreHint: String,
+    val moreSelected: Boolean,
+)
+
 sealed interface AddExpenseUiState {
     data object Missing : AddExpenseUiState
 
@@ -101,6 +129,7 @@ sealed interface AddExpenseUiState {
         val splitLabel: String,
         val resultLine: String?,
         val split: SplitUiModel,
+        val quick: QuickSplitUiModel,
         val canSave: Boolean,
         /** #186: why the locked fields can't change here, or null when nothing is locked. */
         val lockedLine: String? = null,
@@ -241,6 +270,43 @@ class AddExpenseViewModel(
 
     fun setPayer(memberId: String) = unlocked { it.copy(payerMemberId = memberId) }
 
+    /** A row in the sheet: payer and split change together. A locked payer stays (#186). */
+    fun setQuickSplit(payerId: String, choice: QuickSplit) {
+        val members = currentMembers() ?: return
+        form.update { if (it.locked && it.payerMemberId != payerId) it else it.withQuick(payerId, choice, members) }
+    }
+
+    /** A payer chip: Owed the full amount moves with the payer, any other split keeps its parts. */
+    fun setQuickPayer(payerId: String) {
+        val snapshot = repository.snapshot.value
+        val group = snapshot.group(groupId) ?: return
+        val members = membersOf(snapshot, group)
+        unlocked {
+            if (quickOf(group, it, members) == QuickSplit.OwedInFull) it.withQuick(payerId, QuickSplit.OwedInFull, members) else it.copy(payerMemberId = payerId)
+        }
+    }
+
+    private fun currentMembers(): List<SplitMember>? {
+        val snapshot = repository.snapshot.value
+        return snapshot.group(groupId)?.let { membersOf(snapshot, it) }
+    }
+
+    private fun ExpenseForm.withQuick(payerId: String, choice: QuickSplit, members: List<SplitMember>): ExpenseForm = when (choice) {
+        QuickSplit.Equally -> copy(payerMemberId = payerId, splitMode = SplitMode.Equally, weightTexts = emptyMap(), lastEdited = null)
+
+        QuickSplit.OwedInFull -> copy(
+            payerMemberId = payerId,
+            splitMode = SplitMode.Shares,
+            weightTexts = quickSplitWeights(payerId, members).mapValues { (_, shares) -> shares.toString() },
+            lastEdited = null,
+        )
+    }
+
+    private fun quickOf(group: SharedGroup, form: ExpenseForm, members: List<SplitMember>): QuickSplit? {
+        val payer = form.payerMemberId ?: group.meMemberId ?: return null
+        return quickSplitOf(form.splitMode, payer, members, weightsOf(group, form))
+    }
+
     private fun unlocked(change: (ExpenseForm) -> ExpenseForm) = form.update { if (it.locked) it else change(it) }
 
     fun openSplit(open: Boolean) = form.update { it.copy(splitOpen = open) }
@@ -268,6 +334,7 @@ class AddExpenseViewModel(
         if (!state.canSave || form.value.saving) return
         val form = state.form
         val group = repository.snapshot.value.group(groupId) ?: return
+        val title = titleOf(form)
         // Worked out before Save goes dark, so nothing below can leave it dark with no hint.
         val amount = amountOf(form) ?: return
         val payer = form.payerMemberId ?: group.meMemberId ?: return
@@ -279,7 +346,7 @@ class AddExpenseViewModel(
                     ExpenseDraft(
                         expenseId = expenseId,
                         groupId = groupId,
-                        description = form.description,
+                        description = title,
                         occurredAtEpochMillis = form.occurredAtEpochMillis ?: clock.now().toEpochMilliseconds(),
                         categoryId = form.categoryId,
                         subCategoryId = form.subCategoryId,
@@ -309,7 +376,7 @@ class AddExpenseViewModel(
                     text = if (expenseId != null) {
                         text.updated
                     } else {
-                        listOfNotNull(text.added(form.description.trim()), meaning).joinToString(" · ")
+                        listOfNotNull(text.added(title), meaning).joinToString(" · ")
                     },
                 ),
             )
@@ -379,6 +446,7 @@ class AddExpenseViewModel(
             splitLabel = text.splitLabel(form.splitMode.label(), members.size),
             resultLine = resultLine(group, form, check, baht),
             split = splitModel(group, form, members, check, amount),
+            quick = quickModel(group, form, members),
             canSave = form.loaded && !form.saving && missing == null,
             lockedLine = if (form.locked) text.locked else null,
             hint = missing.takeIf { form.loaded && !form.saving },
@@ -391,7 +459,6 @@ class AddExpenseViewModel(
         return when {
             amount == null || amount <= 0 -> text.hintAmount
             baht == null -> text.hintRate
-            form.description.isBlank() -> text.hintDescription
             form.categoryId == null -> text.hintCategory
             check?.complete != true -> text.hintSplit
             else -> null
@@ -401,21 +468,81 @@ class AddExpenseViewModel(
     /** "₫462,500 each · you owe Tom ฿640" (p28): the split, and what it means for you. */
     private fun resultLine(group: SharedGroup, form: ExpenseForm, check: SplitCheck?, baht: Satang?): String? {
         if (check == null || !check.complete || baht == null) return null
+        val each = check.parts.values.takeIf { it.size > 1 }?.distinct()?.singleOrNull()?.let { AppText.copy.shared.expense.each(formatMinor(it, form.currency)) }
+        return listOfNotNull(each, meaning(group, form, check, baht)?.first).joinToString(" · ")
+    }
+
+    /** What a complete split means for this phone's member, and whether it is money they owe. */
+    private fun meaning(group: SharedGroup, form: ExpenseForm, check: SplitCheck, baht: Satang): Pair<String, Boolean>? {
         val me = group.meMemberId ?: return null
+        val amount = amountOf(form) ?: return null
         val text = AppText.copy.shared
         val payer = form.payerMemberId ?: me
-        val parts = check.parts
-        val each = parts.values.distinct().singleOrNull()?.let { text.expense.each(formatMinor(it, form.currency)) }
-        val myShareMinor = parts[me] ?: 0L
-        val amount = amountOf(form) ?: return each
+        val myShareMinor = check.parts[me] ?: 0L
         val myShareBaht = if (amount == 0L) Satang.Zero else toSatang(myShareMinor, form.currency, rateOf(form))
-        val meaning = when {
-            payer == me && myShareMinor < amount -> text.expense.owedAmount((baht - myShareBaht).formatCompact())
-            payer != me && myShareMinor > 0 -> text.expense.oweTo(group.displayName(payer), myShareBaht.formatCompact())
-            payer != me -> text.expense.notInThis
-            else -> text.allYours
+        return when {
+            payer == me && myShareMinor < amount -> text.expense.owedAmount((baht - myShareBaht).formatCompact()) to false
+            payer != me && myShareMinor > 0 -> text.expense.oweTo(group.displayName(payer), myShareBaht.formatCompact()) to true
+            payer != me -> text.expense.notInThis to false
+            else -> text.allYours to false
         }
-        return listOfNotNull(each, meaning).joinToString(" · ")
+    }
+
+    /**
+     * The sheet behind the card. Two people: four rows that name the payer. More: a chip per payer
+     * and two rows. A locked payer (#186) leaves out the other payers.
+     */
+    private fun quickModel(group: SharedGroup, form: ExpenseForm, members: List<SplitMember>): QuickSplitUiModel {
+        val copy = AppText.copy
+        val text = copy.shared.expense
+        val ordered = members.inOddUnitOrder()
+        val payerId = form.payerMemberId ?: group.meMemberId ?: ordered.firstOrNull()?.id.orEmpty()
+        val current = quickOf(group, form, members)
+        val named = ordered.size == 2 && ordered.first().isMe
+        val payers = if (form.locked) ordered.filter { it.id == payerId } else ordered
+
+        fun label(payer: SplitMember, choice: QuickSplit): String = when {
+            choice == QuickSplit.Equally && payer.isMe -> text.quickYouEqual
+            choice == QuickSplit.Equally -> text.quickOtherEqual(payer.name)
+            payer.isMe -> text.quickYouFull
+            else -> text.quickOtherFull(payer.name)
+        }
+
+        fun row(payer: SplitMember, choice: QuickSplit): QuickRowUiModel {
+            val tried = form.withQuick(payer.id, choice, members)
+            val check = check(group, tried, members)?.takeIf { it.complete }
+            val baht = amountOf(tried)?.takeIf { tried.currency.isBaht || rateOf(tried) != null }?.let { toSatang(it, tried.currency, rateOf(tried)) }
+            val meaning = if (check != null && baht != null) meaning(group, tried, check, baht) else null
+            return QuickRowUiModel(
+                payerId = payer.id,
+                choice = choice,
+                label = when {
+                    named -> label(payer, choice)
+                    choice == QuickSplit.Equally -> text.splitLabel(copy.shared.modeEqually, members.size)
+                    else -> text.quickFull
+                },
+                result = meaning?.first,
+                owe = meaning?.second == true,
+                selected = current == choice && payer.id == payerId,
+            )
+        }
+
+        val choices = if (ordered.size > 1) QuickSplit.entries else listOf(QuickSplit.Equally)
+        val shown = if (named) payers else payers.filter { it.id == payerId }
+        val chosen = ordered.firstOrNull { it.id == payerId }
+        val paid = if (chosen == null || chosen.isMe) copy.shared.repeat.youPaid else copy.shared.repeat.paid(chosen.name)
+        val byHand = "$paid · ${text.splitLabel(form.splitMode.label(), members.size)}"
+        return QuickSplitUiModel(
+            summary = if (current != null && chosen != null) label(chosen, current) else byHand,
+            chips = if (named) emptyList() else payers.map { PayerChipUiModel(it.id, if (it.isMe) copy.common.you else it.name, it.id == payerId) },
+            rows = shown.flatMap { payer -> choices.map { row(payer, it) } },
+            moreHint = if (current == null) {
+                text.splitLabel(form.splitMode.label(), members.size)
+            } else {
+                listOf(SplitMode.Exact, SplitMode.Percent, SplitMode.Shares).joinToString(" · ") { it.label() }
+            },
+            moreSelected = current == null,
+        )
     }
 
     private fun splitModel(group: SharedGroup, form: ExpenseForm, members: List<SplitMember>, check: SplitCheck?, amount: Long?): SplitUiModel {
@@ -500,6 +627,10 @@ class AddExpenseViewModel(
         SplitMode.Percent -> percentText(weight)
         else -> weight.toString()
     }
+
+    /** What the expense is called: the typed description, or the category's name when none was typed. */
+    private fun titleOf(form: ExpenseForm): String =
+        form.description.trim().ifEmpty { categories.firstOrNull { it.id == form.categoryId }?.name.orEmpty() }
 
     private fun amountOf(form: ExpenseForm): Long? = parseMinor(form.amountText, form.currency)
 

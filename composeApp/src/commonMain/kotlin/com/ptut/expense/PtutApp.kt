@@ -577,6 +577,8 @@ private fun LedgerShell() {
                         onTime = add::setTime,
                         onCategory = add::setCategory,
                         onPayer = add::setPayer,
+                        onQuickSplit = add::setQuickSplit,
+                        onQuickPayer = add::setQuickPayer,
                         onOpenSplit = add::openSplit,
                         onSplitMode = add::setSplitMode,
                         onWeight = add::setWeight,

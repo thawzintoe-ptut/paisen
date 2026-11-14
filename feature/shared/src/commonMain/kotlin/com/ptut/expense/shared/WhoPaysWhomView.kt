@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
@@ -142,11 +143,12 @@ private fun PaymentCard(card: PaymentCardUiModel, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         MemberAvatar(label = card.fromLabel, isMe = card.fromIsMe)
-        SkyHairline(Modifier.weight(1f))
+        SkyHairline(Modifier.weight(0.4f))
         Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(SkySizes.cardGlyph))
         MemberAvatar(label = card.toLabel, isMe = card.toIsMe)
-        Column(Modifier.weight(1.4f), horizontalAlignment = Alignment.End) {
-            Text(card.sentence, style = MaterialTheme.typography.bodySmall, color = card.tone.ink(), maxLines = 1)
+        // Burmese sentences run long ("hgyugtyu က sheilarzune ကို ပေးမယ်"): two lines, never cut.
+        Column(Modifier.weight(1.6f), horizontalAlignment = Alignment.End) {
+            Text(card.sentence, style = MaterialTheme.typography.bodySmall, color = card.tone.ink(), maxLines = 2, textAlign = TextAlign.End)
             Text(card.amount, style = MaterialTheme.typography.titleMedium, color = card.tone.ink())
         }
     }

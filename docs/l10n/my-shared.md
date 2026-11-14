@@ -284,11 +284,17 @@ These Burmese strings for the Shared tab, groups, splits, payments, people, join
 | Join as {name} | {name} အဖြစ် ဝင်မယ် | `SharedHomeCopy.kt:118` |
 | Pick again | ပြန်ရွေးမယ် | `SharedHomeCopy.kt:119` |
 | Type an amount to save | သိမ်းဖို့ ပမာဏ ရိုက်ပါ | `SharedExpenseCopy.kt:84` |
-| Say what it was for to save | သိမ်းဖို့ ဘာအတွက်လဲ ရေးပါ | `SharedExpenseCopy.kt:85` |
 | Type the baht rate to save | သိမ်းဖို့ ဘတ်နှုန်း ရိုက်ပါ | `SharedExpenseCopy.kt:86` |
 | Pick a category to save | သိမ်းဖို့ အမျိုးအစား ရွေးပါ | `SharedExpenseCopy.kt:87` |
 | The split doesn't add up yet. Open Split to fix it. | ခွဲပုံ မကိုက်သေးဘူး။ ခွဲပုံ ဖွင့်ပြီး ပြင်ပါ။ | `SharedExpenseCopy.kt:88` |
 | {typed} counts as {whole} | {typed} ကို {whole} လို့ ယူမယ် | `SharedExpenseCopy.kt:89` |
+| Paid by and split (draft, 14 Nov, needs a native reader) | ပေးတဲ့သူ နဲ့ ခွဲပုံ | `SharedExpenseCopy.kt:104` |
+| You paid, split equally (draft, 14 Nov) | သင်ပေးခဲ့၊ တူတူခွဲ | `SharedExpenseCopy.kt:105` |
+| You are owed the full amount (draft, 14 Nov) | သင်ပေးခဲ့၊ အကုန် ပြန်ရမယ် | `SharedExpenseCopy.kt:106` |
+| {name} paid, split equally (draft, 14 Nov) | {name} ပေးခဲ့၊ တူတူခွဲ | `SharedExpenseCopy.kt:107` |
+| {name} is owed the full amount (draft, 14 Nov) | {name} ပေးခဲ့၊ အကုန် ပြန်ရမယ် | `SharedExpenseCopy.kt:108` |
+| Owed the full amount (draft, 14 Nov) | အကုန် ပြန်ရမယ် | `SharedExpenseCopy.kt:109` |
+| More options (draft, 14 Nov) | တခြား ခွဲပုံများ | `SharedExpenseCopy.kt:110` |
 | Stop repeating {name}? | {name} ထပ်တာ ရပ်မလား။ | `SharedExpenseCopy.kt:169` |
 | No more dates are added. What was already added stays in the group. | နောက်ထပ် ရက်တွေ မထည့်တော့ဘူး။ ထည့်ပြီးသားတွေက အဖွဲ့ထဲမှာ ကျန်မယ်။ | `SharedExpenseCopy.kt:170` |
 | Sign out? | အကောင့်ထွက်မှာ သေချာလား။ | `SharedAccountCopy.kt:101` |
