@@ -137,6 +137,8 @@ sealed interface GroupDetailUiState {
         val addable: List<Person> = emptyList(),
         /** #218: a removed payment leaves a line in Activity only where the group syncs. */
         val isShared: Boolean = false,
+        /** Pull-to-refresh: only a shared group in a build that syncs has anything to pull. */
+        val canRefresh: Boolean = false,
     ) : GroupDetailUiState
 }
 
@@ -183,7 +185,8 @@ class GroupDetailViewModel(
 
     private val status = sync?.status(groupId) ?: flowOf(GroupSyncStatus(SyncHealth.Local, 0))
 
-    // #189: while the group is open, what other members add shows up within a minute.
+    // #189: while the group is open, what other members add shows up within 15 seconds. iOS has no
+    // push yet, so this is how an iPhone hears of it.
     private val polling = sync?.takeIf { it.available }?.let { syncPolling(it, runner, SYNC_INTERVAL) } ?: flowOf(Unit)
 
     /** The mark as it stood when the group opened; rows others wrote after it are new this visit. */
@@ -220,6 +223,25 @@ class GroupDetailViewModel(
 
     val signedIn: StateFlow<Boolean> = (sync?.signedIn ?: flowOf(false))
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), sync?.isSignedIn == true)
+
+    private val refreshing = MutableStateFlow(false)
+
+    /** True only while a pull-to-refresh runs; the polling's own syncs never show the spinner. */
+    val isRefreshing: StateFlow<Boolean> = refreshing
+
+    /** Pull-to-refresh: syncs now instead of at the next tick. A second pull while one runs does nothing. */
+    fun refresh() {
+        val sync = sync?.takeIf { it.available } ?: return
+        if (refreshing.value) return
+        refreshing.value = true
+        viewModelScope.launch {
+            try {
+                syncOnce(sync, runner)
+            } finally {
+                refreshing.value = false
+            }
+        }
+    }
 
     /** #199: true when [text] is a PromptPay ID (or empty, to take it off) and was saved. */
     fun setPromptPay(text: String): Boolean {
@@ -334,6 +356,7 @@ class GroupDetailViewModel(
             else -> AppText.copy.shared.offlineWaiting(status.waiting)
         },
         canInvite = sync?.available == true,
+        canRefresh = group.remote && sync?.available == true,
         isCreator = !group.remote || group.creatorUid == null || group.creatorUid == group.member(group.meMemberId.orEmpty())?.claimedByUid,
         removal = when {
             !group.remote -> GroupRemoval.DeleteHere
@@ -438,7 +461,7 @@ class GroupDetailViewModel(
 
     private companion object {
         const val DEFAULT_ICON = "receipt_long"
-        val SYNC_INTERVAL = 60.seconds
+        val SYNC_INTERVAL = 15.seconds
     }
 }
 

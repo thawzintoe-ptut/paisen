@@ -23,7 +23,8 @@ The first public version.
   where it has an offline pack. On Android, other languages such as Burmese are recognised online
   by Google, and the sheet says so. Siri and app icon shortcuts on iOS.
 - Shared groups: split costs, see balances, record payments, settle with a PromptPay QR, invite by
-  link or QR code, and get told about changes.
+  link or QR code, and get told about changes. An open group checks for changes every 15 seconds,
+  or at once when you pull it down.
 - Export and import of the whole ledger as a file.
 - Send feedback in Settings: opens your email app with the app version and phone model filled in.
 - English and Burmese, in light and dark.

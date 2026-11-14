@@ -522,6 +522,7 @@ private fun LedgerShell() {
                 val inviteAction by group.inviteAction.collectAsStateWithLifecycle()
                 val groupAction by group.groupActionState.collectAsStateWithLifecycle()
                 val groupRemoved by group.isRemoved.collectAsStateWithLifecycle()
+                val refreshing by group.isRefreshing.collectAsStateWithLifecycle()
                 LaunchedEffect(groupRemoved) { if (groupRemoved) navController.popBackStack() }
                 GroupDetailView(
                     uiState = state,
@@ -551,6 +552,8 @@ private fun LedgerShell() {
                         onNewLink = group::newLink,
                         onSwitchOff = group::switchOff,
                     ),
+                    refreshing = refreshing,
+                    onRefresh = group::refresh,
                 )
             }
 

@@ -14,12 +14,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.pullToRefresh
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -86,6 +90,9 @@ fun GroupDetailView(
     onOpenRepeat: (String) -> Unit = {},
     /** Edit group, and Delete or Leave from the "···" menu. */
     manage: GroupManage = GroupManage(),
+    /** Pull down on a shared group to sync now, not at the next tick. */
+    refreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
 ) {
     val text = LocalCopy.current.shared
     when (uiState) {
@@ -100,7 +107,9 @@ fun GroupDetailView(
             )
         }
 
-        is GroupDetailUiState.Loaded -> Loaded(uiState, onBack, onSettleUp, onBalances, onAddExpense, onOpenExpense, onActivity, invite, onRepeat, onOpenRepeat, manage, modifier)
+        is GroupDetailUiState.Loaded -> Loaded(
+            uiState, onBack, onSettleUp, onBalances, onAddExpense, onOpenExpense, onActivity, invite, onRepeat, onOpenRepeat, manage, refreshing, onRefresh, modifier,
+        )
     }
 }
 
@@ -117,6 +126,8 @@ private fun Loaded(
     onRepeat: () -> Unit,
     onOpenRepeat: (String) -> Unit,
     manage: GroupManage,
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val text = LocalCopy.current.shared
@@ -144,7 +155,13 @@ private fun Loaded(
     }
     // The feed scrolls under the add button, which shows it through iOS glass (#123).
     val glass = rememberGlassBackdrop()
-    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer)) {
+    val pull = rememberPullToRefreshState()
+    Box(
+        modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.tertiaryContainer)
+            .pullToRefresh(isRefreshing = refreshing, state = pull, enabled = state.canRefresh, onRefresh = onRefresh),
+    ) {
         LazyColumn(Modifier.fillMaxSize().glassSource(glass)) {
             item {
                 Column(Modifier.fillMaxWidth().background(MaterialTheme.ptut.heroBg).padding(bottom = Spacing.lg)) {
@@ -256,6 +273,12 @@ private fun Loaded(
             item { Spacer(Modifier.height(SkySizes.pillClearance)) }
         }
         AddButton(glass, onClick = onAddExpense, modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.md))
+        // Below the status bar, so the spinner never sits under the clock.
+        PullToRefreshDefaults.Indicator(
+            state = pull,
+            isRefreshing = refreshing,
+            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding(),
+        )
     }
 
     if (menu) {

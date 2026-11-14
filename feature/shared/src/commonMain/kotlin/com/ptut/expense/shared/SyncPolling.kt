@@ -16,10 +16,15 @@ import kotlin.time.Duration
 internal fun syncPolling(sync: SharedSync, runner: RepeatRunner?, every: Duration): Flow<Unit> = flow {
     emit(Unit)
     while (true) {
-        // #203: a group deleted for everyone has gone from this phone, so its repeat reminders are rebuilt.
-        val removedAny = runCatching { sync.syncAll() }.getOrDefault(false)
-        if (removedAny) runCatching { runner?.run() }
+        syncOnce(sync, runner)
         // #218: a Sign in from the signed-out line syncs at once instead of at the next tick.
         withTimeoutOrNull(every) { sync.signedIn.drop(1).first { it } }
     }
+}
+
+/** One sync, as a tick or a pull-to-refresh runs it. A failure waits for the next one. */
+internal suspend fun syncOnce(sync: SharedSync, runner: RepeatRunner?) {
+    // #203: a group deleted for everyone has gone from this phone, so its repeat reminders are rebuilt.
+    val removedAny = runCatching { sync.syncAll() }.getOrDefault(false)
+    if (removedAny) runCatching { runner?.run() }
 }
