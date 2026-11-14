@@ -95,6 +95,8 @@ data class BackupShopRule(
     val counterparty: String,
     val categoryId: String,
     val createdAtEpochMillis: Long,
+    /** The reader's own name for a shop the slip printed as noise. Optional, so format 3 files without it still read. */
+    val displayName: String? = null,
 )
 
 /**

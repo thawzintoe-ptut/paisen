@@ -1,9 +1,11 @@
 package com.ptut.expense.data.backup
 
+import com.ptut.expense.data.local.dao.CatalogBackupDao
 import com.ptut.expense.data.local.dao.CategoryDao
 import com.ptut.expense.data.local.dao.LedgerMergeDao
 import com.ptut.expense.data.local.dao.TransactionDao
 import com.ptut.expense.data.local.entity.CategoryEntity
+import com.ptut.expense.data.local.entity.RuleEntity
 import com.ptut.expense.data.local.entity.SubCategoryEntity
 import com.ptut.expense.data.local.entity.TransactionEntity
 import com.ptut.expense.data.repository.RoomLedgerArchive
@@ -154,13 +156,54 @@ class RoomLedgerArchiveTest {
         assertEquals(null, table.rows.single().subCategoryId)
     }
 
+    /** #7: format 3 brings back what the reader made, not only the rows filed under it. */
+    @Test
+    fun `export then import keeps the note and a custom category with its sub-category and shop rule`() = runTest {
+        val hobbies = CategoryEntity(id = "hobbies", name = "Hobbies", icon = "toys", sortOrder = 9)
+        val boardGames = SubCategoryEntity(id = "board-games", categoryId = "hobbies", name = "Board games")
+        // A name the reader typed for a shop the slip printed as noise.
+        val rule = RuleEntity(id = "rule-1", counterparty = "msus quus", categoryId = "hobbies", createdAtEpochMillis = 1_754_000_000_000, displayName = "Board game cafe")
+        val filed = satangExact.copy(categoryId = "hobbies", subCategoryId = "board-games", memo = "Catan with Aye", ruleId = "rule-1")
+        val file = archive(holding = listOf(filed), catalog = FakeCatalog(listOf(hobbies), listOf(boardGames), listOf(rule))).export()
+
+        val fresh = FakeCatalog()
+        val table = FakeLedgerTable()
+        val report = archive(table = table, catalog = fresh).restore(file)
+
+        assertEquals(listOf(filed), table.rows)
+        assertEquals(0, report.lostCategory)
+        assertEquals(hobbies, fresh.categories().single { it.id == "hobbies" })
+        assertEquals(listOf(boardGames), fresh.subCategories())
+        assertEquals(listOf(rule), fresh.rules())
+    }
+
+    /** The file is a contract: one written before #215 holds no categories or shop rules. */
+    @Test
+    fun `a format 2 backup still imports with its category and sub-category`() = runTest {
+        val format2 = """
+            {"format": 2, "exportedAtEpochMillis": ${satangExact.occurredAtEpochMillis}, "transactions": [
+              {"id": "t1", "occurredAtEpochMillis": ${satangExact.occurredAtEpochMillis}, "amountMinor": 2825,
+               "direction": "Expense", "categoryId": "food", "subCategoryId": "coffee", "source": "Scan", "reference": "0142K9"}
+            ], "shared": {"people": [], "groups": []}}
+        """.trimIndent()
+
+        val table = FakeLedgerTable()
+        val report = archive(table = table, catalog = FakeCatalog()).restore(format2)
+
+        assertEquals(1, report.added)
+        assertEquals("food", table.rows.single().categoryId)
+        assertEquals("coffee", table.rows.single().subCategoryId)
+    }
+
     private fun archive(
         holding: List<TransactionEntity> = emptyList(),
         table: FakeLedgerTable = FakeLedgerTable(),
+        catalog: FakeCatalog? = null,
     ) = RoomLedgerArchive(
-        transactionDao = TransactionsOnDisk(holding),
+        transactionDao = TransactionsOnDisk(holding) { mapOf("coffee" to "food") + catalog?.parents().orEmpty() },
         categoryDao = SeededCategories(setOf("food", "transport")),
         mergeDao = table,
+        catalogDao = catalog,
     )
 
     private fun row(
@@ -216,8 +259,8 @@ private class FakeLedgerTable(vararg initial: TransactionEntity) : LedgerMergeDa
  */
 private class TransactionsOnDisk(
     private val rows: List<TransactionEntity>,
-    /** Sub-category to its parent, as this install's `sub_category` table holds them. */
-    private val subCategories: Map<String, String> = mapOf("coffee" to "food"),
+    /** Sub-category to its parent, as this install's `sub_category` table holds them right now. */
+    private val subCategories: () -> Map<String, String>,
 ) : TransactionDao {
 
     override suspend fun all(): List<TransactionEntity> = rows
@@ -248,9 +291,50 @@ private class TransactionsOnDisk(
     ) = never<Unit>()
 
     override suspend fun subCategoryUnder(subCategoryId: String, categoryId: String): String? =
-        subCategoryId.takeIf { subCategories[it] == categoryId }
+        subCategoryId.takeIf { subCategories()[it] == categoryId }
 
     private fun <T> never(): T = throw AssertionError("The archive does not read the ledger this way.")
+}
+
+/**
+ * The catalog tables with IGNORE on conflict, as the real DAO declares them. A new install already
+ * holds the built-in categories, so a restore never meets an empty `category` table.
+ */
+private class FakeCatalog(
+    categories: List<CategoryEntity> = emptyList(),
+    subCategories: List<SubCategoryEntity> = emptyList(),
+    rules: List<RuleEntity> = emptyList(),
+) : CatalogBackupDao() {
+
+    private val categoryRows = (BUILT_IN + categories).toMutableList()
+    private val subCategoryRows = subCategories.toMutableList()
+    private val ruleRows = rules.toMutableList()
+
+    fun parents(): Map<String, String> = subCategoryRows.associate { it.id to it.categoryId }
+
+    override suspend fun categories() = categoryRows.toList()
+
+    override suspend fun subCategories() = subCategoryRows.toList()
+
+    override suspend fun rules() = ruleRows.toList()
+
+    override suspend fun categoryIds() = categoryRows.map { it.id }
+
+    override suspend fun insertCategories(rows: List<CategoryEntity>) {
+        categoryRows += rows.filter { row -> categoryRows.none { it.id == row.id } }
+    }
+
+    override suspend fun insertSubCategories(rows: List<SubCategoryEntity>) {
+        subCategoryRows += rows.filter { row -> subCategoryRows.none { it.id == row.id } }
+    }
+
+    override suspend fun insertRules(rows: List<RuleEntity>) {
+        ruleRows += rows.filter { row -> ruleRows.none { it.id == row.id } }
+    }
+
+    private companion object {
+        val BUILT_IN = listOf(CategoryEntity("food", "Food", "restaurant"), CategoryEntity("transport", "Transport", "commute"))
+    }
 }
 
 private class SeededCategories(private val known: Set<String>) : CategoryDao {

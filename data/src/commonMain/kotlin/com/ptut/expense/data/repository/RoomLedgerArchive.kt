@@ -60,7 +60,7 @@ class RoomLedgerArchive(
             shared = sharedDao?.let { exportShared(it) },
             categories = catalogDao?.categories().orEmpty().map(CategoryEntity::toBackup),
             subCategories = catalogDao?.subCategories().orEmpty().map { BackupSubCategory(it.id, it.categoryId, it.name) },
-            shopRules = catalogDao?.rules().orEmpty().map { BackupShopRule(it.id, it.counterparty, it.categoryId, it.createdAtEpochMillis) },
+            shopRules = catalogDao?.rules().orEmpty().map { BackupShopRule(it.id, it.counterparty, it.categoryId, it.createdAtEpochMillis, it.displayName) },
         ),
     )
 
@@ -70,7 +70,7 @@ class RoomLedgerArchive(
         val known = catalogDao?.restore(
             categories = backup.categories.map(BackupCategory::toEntity),
             subCategories = backup.subCategories.map { SubCategoryEntity(it.id, it.categoryId, it.name) },
-            rules = backup.shopRules.map { RuleEntity(it.id, it.counterparty, it.categoryId, it.createdAtEpochMillis) },
+            rules = backup.shopRules.map { RuleEntity(it.id, it.counterparty, it.categoryId, it.createdAtEpochMillis, displayName = it.displayName) },
         ) ?: categoryDao.ids().toSet()
         val rows = backup.transactions.map { transactionDao.withCheckedSubCategory(it.toEntity(known)) }
         val lost = backup.transactions.filter { it.categoryId != null && it.categoryId !in known }.map { it.id }.toSet()
