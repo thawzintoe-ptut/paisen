@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.PromptPay
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.currenciesOf
 import com.ptut.expense.domain.shared.whoPaysWhom
@@ -24,6 +25,10 @@ data class PaymentCardUiModel(
     val sentence: String,
     val amount: String,
     val tone: BalanceTone,
+    /** The payer's name, for "Ask Aye to pay" on a debt owed to me. */
+    val fromName: String = "",
+    /** The card to send. Null on a debt that is not owed to me, and until my PromptPay ID is saved. */
+    val payMe: PayMeCard? = null,
 )
 
 sealed interface WhoPaysWhomUiState {
@@ -67,6 +72,8 @@ class WhoPaysWhomViewModel(private val groupId: String, private val repository: 
                     else -> text.pays(from, to)
                 },
                 amount = transfer.amount.format(),
+                fromName = from,
+                payMe = payMeCard(group, transfer),
                 tone = when {
                     group.isMe(transfer.toMemberId) -> BalanceTone.Owed
                     group.isMe(transfer.fromMemberId) -> BalanceTone.Owe
@@ -86,6 +93,13 @@ class WhoPaysWhomViewModel(private val groupId: String, private val repository: 
             firstMine = cards.firstOrNull { it.fromIsMe || it.toIsMe },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WhoPaysWhomUiState.Missing)
+
+    /** True when [text] is a PromptPay ID and was saved for my name in this group, as on the group's own sheet. */
+    fun setPromptPay(text: String): Boolean {
+        val id = PromptPay.normalize(text) ?: return false
+        viewModelScope.launch { repository.setPromptPay(groupId, id) }
+        return true
+    }
 
     fun setSimplify(on: Boolean) {
         viewModelScope.launch { repository.setSimplifyDebts(groupId, on) }

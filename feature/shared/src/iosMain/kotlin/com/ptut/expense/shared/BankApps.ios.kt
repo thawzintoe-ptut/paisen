@@ -37,8 +37,8 @@ private class IosBankApps : BankApps {
         }
     }
 
-    override fun sharePng(png: ByteArray) {
-        val sheet = UIActivityViewController(activityItems = listOf(UIImage(data = png.toNSData())), applicationActivities = null)
+    override fun sharePng(png: ByteArray, text: String?) {
+        val sheet = UIActivityViewController(activityItems = listOfNotNull(UIImage(data = png.toNSData()), text), applicationActivities = null)
         var top = UIApplication.sharedApplication.keyWindow?.rootViewController
         while (top?.presentedViewController != null) top = top.presentedViewController
         top?.presentViewController(sheet, animated = true, completion = null)

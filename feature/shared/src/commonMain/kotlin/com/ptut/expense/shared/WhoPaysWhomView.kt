@@ -17,9 +17,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -30,11 +38,14 @@ import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.tappable
 import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
+import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyHairline
 import com.ptut.expense.ui.sky.SkyNoticeCard
 import com.ptut.expense.ui.sky.SkySwitch
 import com.ptut.expense.ui.sky.SkyTopBar
+import kotlinx.coroutines.launch
 
 /** #184 (p30): the count first, then one card per payment, then the Simplify debts switch. */
 @Composable
@@ -44,8 +55,13 @@ fun WhoPaysWhomView(
     onSimplify: (Boolean) -> Unit,
     onSettle: (from: String, to: String) -> Unit,
     modifier: Modifier = Modifier,
+    /** The "Pay me" card. Off until the shell turns it on. */
+    offerPayMe: Boolean = false,
+    onPromptPay: (String) -> Boolean = { false },
 ) {
     val text = LocalCopy.current.shared
+    // The payer whose card is open. Read from the state each time, so a saved ID turns the ID sheet into the card.
+    var askingFrom by rememberSaveable { mutableStateOf<String?>(null) }
     Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         SkyTopBar(title = text.whoPaysWhom, onBack = onBack)
         val state = uiState as? WhoPaysWhomUiState.Loaded ?: return@Column GroupGone(status = text.detail.goneStatus)
@@ -72,7 +88,12 @@ fun WhoPaysWhomView(
             }
             Column(Modifier.padding(horizontal = Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.s12)) {
                 Spacer(Modifier.height(Spacing.xs))
-                state.cards.forEach { card -> PaymentCard(card, onClick = { onSettle(card.fromId, card.toId) }) }
+                state.cards.forEach { card ->
+                    PaymentCard(card, onClick = { onSettle(card.fromId, card.toId) })
+                    if (offerPayMe && card.toIsMe) {
+                        SkyButton(text.settle.askToPay(card.fromName), onClick = { askingFrom = card.fromId }, kind = SkyButtonKind.Outline, modifier = Modifier.fillMaxWidth())
+                    }
+                }
                 state.currencyNote?.let { SkyNoticeCard(text = it, icon = PtutIcon.Info.image) }
                 Row(
                     modifier = Modifier
@@ -85,6 +106,14 @@ fun WhoPaysWhomView(
                     Text(text.settle.simplify, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
                     SkySwitch(checked = state.simplify, onCheckedChange = onSimplify, label = text.settle.simplify)
                 }
+            }
+        }
+        state.cards.firstOrNull { it.toIsMe && it.fromId == askingFrom }?.let { asked ->
+            val card = asked.payMe
+            if (card == null) {
+                PromptPaySheet(current = null, onSave = onPromptPay, onDismiss = { askingFrom = null })
+            } else {
+                PayMeSheet(card, onDismiss = { askingFrom = null })
             }
         }
         state.firstMine?.let { card ->
@@ -120,5 +149,32 @@ private fun PaymentCard(card: PaymentCardUiModel, onClick: () -> Unit) {
             Text(card.sentence, style = MaterialTheme.typography.bodySmall, color = card.tone.ink(), maxLines = 1)
             Text(card.amount, style = MaterialTheme.typography.titleMedium, color = card.tone.ink())
         }
+    }
+}
+
+/** The card as it will arrive, then the share sheet. What is drawn here is the picture that is sent. */
+@Composable
+private fun PayMeSheet(card: PayMeCard, onDismiss: () -> Unit) {
+    val text = LocalCopy.current.shared.settle
+    val banks = rememberBankApps()
+    val layer = rememberGraphicsLayer()
+    val scope = rememberCoroutineScope()
+    SkyBottomSheet(onDismissRequest = onDismiss) {
+        PayMeCardPicture(
+            card,
+            modifier = Modifier
+                .padding(top = Spacing.sm)
+                .align(Alignment.CenterHorizontally)
+                .clip(PtutRadii.r22)
+                .drawWithContent {
+                    layer.record { this@drawWithContent.drawContent() }
+                    drawLayer(layer)
+                },
+        )
+        SkyButton(
+            text.sendCard,
+            onClick = { scope.launch { banks.sharePng(layer.toImageBitmap().encodePng(), card.shareText) } },
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
+        )
     }
 }

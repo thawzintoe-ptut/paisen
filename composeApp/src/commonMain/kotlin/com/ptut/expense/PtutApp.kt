@@ -593,6 +593,9 @@ private fun LedgerShell() {
                     onBack = { navController.popBackStack() },
                     onSimplify = who::setSimplify,
                     onSettle = { from, to -> navController.navigate(PtutRoute.RecordPayment(groupId, from, to)) { launchSingleTop = true } },
+                    // Debug builds only until the card has been scanned by a real bank app.
+                    offerPayMe = koinInject<AppBuild>().debug,
+                    onPromptPay = who::setPromptPay,
                 )
             }
 

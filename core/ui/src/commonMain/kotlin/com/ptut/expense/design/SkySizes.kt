@@ -119,6 +119,9 @@ object SkySizes {
     /** #190's invite QR, large enough for a camera across a table. */
     val inviteQr = 200.dp
 
+    /** The shared "Pay me" picture: wide enough that its QR stays over half the width. */
+    val payMeCard = 320.dp
+
     /** p31's payer and payee, the largest initials v2 draws. */
     val payAvatar = 64.dp
 

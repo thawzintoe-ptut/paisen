@@ -39,6 +39,7 @@ import com.ptut.expense.design.GlassBackdrop
 import com.ptut.expense.design.GlassSurface
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
+import com.ptut.expense.design.Sizes
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.glassSource
@@ -59,6 +60,7 @@ import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyChange
 import com.ptut.expense.ui.sky.SkyChip
 import com.ptut.expense.ui.sky.SkyEmptyState
+import com.ptut.expense.ui.sky.SkyGroupedCard
 import com.ptut.expense.ui.sky.SkyKeyValueRow
 import com.ptut.expense.ui.sky.SkyPageSheet
 import com.ptut.expense.ui.sky.SkyProgress
@@ -257,78 +259,27 @@ private fun Loaded(
     }
 
     if (menu) {
+        // One filled action, then grouped rows as in Settings (p21), and the way out kept apart in red.
         SkyBottomSheet(onDismissRequest = { menu = false }) {
-            Text(state.name, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.sm))
-            SkyButton(
-                text.detail.editGroup,
-                onClick = {
-                    menu = false
-                    manageStep = STEP_EDIT
-                },
-                kind = SkyButtonKind.Outline,
-                modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
-            )
-            SkyButton(
-                text.detail.myPromptPay,
-                onClick = {
-                    menu = false
-                    manageStep = STEP_PROMPTPAY
-                },
-                kind = SkyButtonKind.Outline,
-                modifier = Modifier.fillMaxWidth().padding(top = Spacing.s12),
-            )
-            SkyButton(
-                text.detail.addPeople,
-                onClick = {
-                    menu = false
-                    manageStep = STEP_ADD_PEOPLE
-                },
-                kind = SkyButtonKind.Outline,
-                modifier = Modifier.fillMaxWidth().padding(top = Spacing.s12),
-            )
-            if (state.canRemovePeople && state.others.isNotEmpty()) {
-                SkyButton(
-                    text.detail.removeSomeone,
-                    onClick = {
-                        menu = false
-                        manageStep = STEP_REMOVE_PEOPLE
-                    },
-                    kind = SkyButtonKind.Outline,
-                    modifier = Modifier.fillMaxWidth().padding(top = Spacing.s12),
-                )
+            fun pick(then: () -> Unit): () -> Unit = {
+                menu = false
+                then()
             }
-            SkyButton(
-                text.activity,
-                onClick = {
-                    menu = false
-                    onActivity()
-                },
-                kind = SkyButtonKind.Outline,
-                modifier = Modifier.fillMaxWidth().padding(top = Spacing.s12),
-            )
-            SkyButton(
-                text.whoPaysWhom,
-                onClick = {
-                    menu = false
-                    onBalances()
-                },
-                kind = SkyButtonKind.Outline,
-                modifier = Modifier.fillMaxWidth().padding(top = Spacing.s12),
-            )
-            SkyButton(
-                text.detail.repeatAnExpense,
-                onClick = {
-                    menu = false
-                    onRepeat()
-                },
-                kind = SkyButtonKind.Outline,
-                modifier = Modifier.fillMaxWidth().padding(top = Spacing.s12),
-            )
+            Row(
+                modifier = Modifier.padding(top = Spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                GroupTile(icon = state.icon, ink = false)
+                Column(Modifier.weight(1f)) {
+                    Text(state.name, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                    Text(text.home.peopleCount(state.members.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             if (state.canInvite) {
                 SkyButton(
                     text.invitePeople,
-                    onClick = {
-                        menu = false
+                    onClick = pick {
                         askFirst = false
                         if (invite.signedIn) {
                             invite.onInvite()
@@ -337,17 +288,33 @@ private fun Loaded(
                             inviteStep = STEP_SIGN_IN
                         }
                     },
-                    modifier = Modifier.fillMaxWidth().padding(top = Spacing.s12),
+                    modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
                 )
             }
-            SkyButton(
-                state.removal.label(),
-                onClick = {
-                    menu = false
-                    manageStep = STEP_REMOVE
-                },
-                kind = SkyButtonKind.DangerOutline,
-                modifier = Modifier.fillMaxWidth().padding(top = Spacing.s12),
+            SkyGroupedCard(
+                rows = listOf(
+                    { MenuRow(PtutIcon.Payments, text.whoPaysWhom, onClick = pick(onBalances)) },
+                    { MenuRow(PtutIcon.Sync, text.detail.repeatAnExpense, onClick = pick(onRepeat)) },
+                    { MenuRow(PtutIcon.History, text.activity, onClick = pick(onActivity)) },
+                ),
+                modifier = Modifier.padding(top = Spacing.md),
+            )
+            SkyGroupedCard(
+                rows = listOfNotNull<@Composable () -> Unit>(
+                    { MenuRow(PtutIcon.Edit, text.detail.editGroup, onClick = pick { manageStep = STEP_EDIT }) },
+                    { MenuRow(PtutIcon.AccountBalanceWallet, text.detail.myPromptPay, value = state.myPromptPay, onClick = pick { manageStep = STEP_PROMPTPAY }) },
+                    { MenuRow(PtutIcon.GroupAdd, text.detail.addPeople, onClick = pick { manageStep = STEP_ADD_PEOPLE }) },
+                    if (state.canRemovePeople && state.others.isNotEmpty()) {
+                        { MenuRow(PtutIcon.Group, text.detail.removeSomeone, onClick = pick { manageStep = STEP_REMOVE_PEOPLE }) }
+                    } else {
+                        null
+                    },
+                ),
+                modifier = Modifier.padding(top = Spacing.s12),
+            )
+            SkyGroupedCard(
+                rows = listOf({ MenuRow(PtutIcon.Delete, state.removal.label(), onClick = pick { manageStep = STEP_REMOVE }, danger = true) }),
+                modifier = Modifier.padding(top = Spacing.s12),
             )
         }
     }
@@ -469,6 +436,41 @@ data class GroupManage(
     val onRemovePayment: (paymentId: String) -> Unit = {},
 )
 
+/**
+ * One line of the group menu: Settings' row (p21) with its glyph in the feed's circle. [danger] is
+ * the way out of the group, in the warning red and with no chevron, since it asks before it acts.
+ */
+@Composable
+private fun MenuRow(icon: PtutIcon, label: String, onClick: () -> Unit, value: String? = null, danger: Boolean = false) {
+    val ink = if (danger) MaterialTheme.ptut.warnInk else MaterialTheme.colorScheme.onSurface
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = SkySizes.transactionRow)
+            .tappable(PtutRadii.r12, Role.Button, onClick = onClick)
+            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s14),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(SkySizes.rowCircle)
+                .clip(CircleShape)
+                .background(if (danger) MaterialTheme.ptut.warnBg else MaterialTheme.colorScheme.surface),
+        ) {
+            Icon(icon.image, contentDescription = null, tint = ink, modifier = Modifier.size(SkySizes.rowGlyph))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge, color = ink)
+            value?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        if (!danger) {
+            Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.settingsTrailing))
+        }
+    }
+}
+
 private fun GroupRemoval.label(): String {
     val text = AppText.copy.shared.detail
     return when (this) {
@@ -510,7 +512,7 @@ private fun EditGroupSheet(name: String, type: GroupType, icon: String, onSave: 
  * except inside the QR their bank app reads.
  */
 @Composable
-private fun PromptPaySheet(current: String?, onSave: (String) -> Boolean, onDismiss: () -> Unit) {
+internal fun PromptPaySheet(current: String?, onSave: (String) -> Boolean, onDismiss: () -> Unit) {
     val text = LocalCopy.current
     var typed by rememberSaveable { mutableStateOf("") }
     var wrong by rememberSaveable { mutableStateOf(false) }

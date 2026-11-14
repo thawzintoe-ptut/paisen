@@ -30,8 +30,8 @@ interface BankApps {
     /** Saves [png] to the photo library; false where this phone can't without a new permission. */
     suspend fun savePng(png: ByteArray, name: String): Boolean
 
-    /** The system share sheet with the QR image, where [canList] is false. */
-    fun sharePng(png: ByteArray)
+    /** The system share sheet with a picture, and [text] beside it where the receiving app takes both. */
+    fun sharePng(png: ByteArray, text: String? = null)
 }
 
 @Composable

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The one folder the share provider may hand out: the "Pay me" picture in the app's cache. -->
+<paths>
+    <cache-path name="share" path="share/" />
+</paths>

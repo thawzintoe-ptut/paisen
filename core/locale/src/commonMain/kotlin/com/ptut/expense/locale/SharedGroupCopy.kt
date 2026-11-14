@@ -133,6 +133,15 @@ data class SharedSettleCopy(
     val pays: (String, String) -> String = { from, to -> "$from pays $to" },
     val allSettled: String = "All settled",
     val payments: (Int) -> String = { n -> if (n == 1) "1 payment" else "$n payments" },
+    /** The "Pay me" card: a picture with a PromptPay QR, sent to whoever owes me. */
+    val askToPay: (String) -> String = { name -> "Ask $name to pay" },
+    val payMeFor: (String) -> String = { group -> "For $group" },
+    val payMeFrom: (String) -> String = { payer -> "$payer pays" },
+    val payMeScan: (String) -> String = { masked -> "Scan with any Thai bank app · PromptPay $masked" },
+    val payMeText: (String, String, String) -> String = { payer, amount, group ->
+        "$payer, your part in $group is $amount. Scan the QR in the picture with your bank app to pay me."
+    },
+    val sendCard: String = "Send the card",
     val converted: (List<String>) -> String = { codes ->
         "Amounts in ${codes.joinToString(" and ")} were converted to THB at the rate saved on each expense, so nobody's total moves with the market."
     },
@@ -150,6 +159,12 @@ val BurmeseSharedSettle = SharedSettleCopy(
     pays = { from, to -> "$from က $to ကို ပေးမယ်" },
     allSettled = "အားလုံး ရှင်းပြီး",
     payments = { n -> "လွှဲရန် ${n.inMyanmarDigits()} ကြိမ်" },
+    askToPay = { name -> "$name ကို ပေးဖို့ ပြောမယ်" },
+    payMeFor = { group -> "$group အတွက်" },
+    payMeFrom = { payer -> "$payer က ပေးရမယ်" },
+    payMeScan = { masked -> "ထိုင်းဘဏ်အက်ပ် တစ်ခုခုနဲ့ စကင်ဖတ်ပါ · PromptPay $masked" },
+    payMeText = { payer, amount, group -> "$payer၊ $group ထဲက သင့်ဝေစုက $amount ပါ။ ပုံထဲက QR ကို ဘဏ်အက်ပ်နဲ့ စကင်ဖတ်ပြီး ပေးပါ။" },
+    sendCard = "ကတ် ပို့မယ်",
     converted = { codes ->
         "${codes.joinToString(" နဲ့ ")} ပမာဏတွေကို စရိတ်တစ်ခုချင်းမှာ သိမ်းထားတဲ့ နှုန်းနဲ့ THB ပြောင်းထားတယ်၊ ဒါကြောင့် ဈေးကွက် ပြောင်းလည်း ဘယ်သူ့ စုစုပေါင်းမှ မပြောင်းဘူး။"
     },

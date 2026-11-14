@@ -1,5 +1,6 @@
 package com.ptut.expense.shared
 
+import android.content.ClipData
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -12,9 +13,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 /**
  * The Thai bank apps with PromptPay scan-from-photo. Each package is also listed under `<queries>`
@@ -61,7 +64,19 @@ private class AndroidBankApps(private val context: Context) : BankApps {
     }
 
     /** Not used: Android lists the bank apps instead. */
-    override fun sharePng(png: ByteArray) = Unit
+
+    /** Through the app's own FileProvider: the picture sits in the cache and only the chosen app may read it. */
+    override fun sharePng(png: ByteArray, text: String?) {
+        val file = File(context.cacheDir, SHARE_FILE).apply {
+            parentFile?.mkdirs()
+            writeBytes(png)
+        }
+        val uri = FileProvider.getUriForFile(context, context.packageName + SHARE_AUTHORITY, file)
+        val send = Intent(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        send.clipData = ClipData.newRawUri(null, uri)
+        text?.let { send.putExtra(Intent.EXTRA_TEXT, it) }
+        context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 }
 
 @Composable
@@ -75,3 +90,7 @@ actual fun ImageBitmap.encodePng(): ByteArray =
 
 /** PNG ignores quality; the API still asks for one. */
 private const val PNG_QUALITY = 100
+
+/** Matches the provider in the app manifest and its share_paths.xml. */
+private const val SHARE_AUTHORITY = ".share"
+private const val SHARE_FILE = "share/paisen-card.png"
