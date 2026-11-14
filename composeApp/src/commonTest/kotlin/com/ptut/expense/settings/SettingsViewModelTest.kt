@@ -39,6 +39,7 @@ class SettingsViewModelTest : ViewModelTest() {
                 "Timezone",
                 "Export",
                 "Import",
+                "Send feedback",
                 "Licences",
             ),
             rows.map { it.name },
@@ -51,7 +52,7 @@ class SettingsViewModelTest : ViewModelTest() {
      * without a destination, because the enum has to name one.
      */
     @Test
-    fun `every row names a destination except the two switches`() {
+    fun `every row names a destination except the two switches and feedback`() {
         assertEquals(
             listOf(
                 PtutRoute.PhotoFolders,
@@ -67,10 +68,20 @@ class SettingsViewModelTest : ViewModelTest() {
                 PtutRoute.ImportData,
                 PtutRoute.Timezone,
                 PtutRoute.AssistantModel,
+                // Opens the phone's mail app, not a screen.
+                null,
                 PtutRoute.Licences,
             ),
             SettingsAction.entries.map { it.destination() },
         )
+    }
+
+    /** The address is the row's value, so a phone with no mail app still shows where to write. */
+    @Test
+    fun `the feedback row shows the address it writes to`() = runTest {
+        val row = viewModel().uiState.value.rows.first { it.id == SettingsAction.Feedback }
+
+        assertEquals(FEEDBACK_ADDRESS, row.value)
     }
 
     @Test

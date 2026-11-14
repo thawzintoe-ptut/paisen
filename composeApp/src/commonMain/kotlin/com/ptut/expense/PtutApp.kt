@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -65,6 +66,7 @@ import com.ptut.expense.ledger.LedgerView
 import com.ptut.expense.ledger.LedgerViewModel
 import com.ptut.expense.ledger.scope
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.nav.BarDestination
 import com.ptut.expense.nav.PtutNavHost
 import com.ptut.expense.nav.PtutRoute
@@ -91,6 +93,7 @@ import com.ptut.expense.settings.AssistantModelViewModel
 import com.ptut.expense.settings.BackgroundImportView
 import com.ptut.expense.settings.BackgroundImportViewModel
 import com.ptut.expense.settings.ExportDataView
+import com.ptut.expense.settings.FEEDBACK_ADDRESS
 import com.ptut.expense.settings.ImportDataView
 import com.ptut.expense.settings.KeepFailedSlipsView
 import com.ptut.expense.settings.KeepFailedSlipsViewModel
@@ -105,6 +108,7 @@ import com.ptut.expense.settings.SettingsViewModel
 import com.ptut.expense.settings.TimezoneView
 import com.ptut.expense.settings.TimezoneViewModel
 import com.ptut.expense.settings.destination
+import com.ptut.expense.settings.feedbackMail
 import com.ptut.expense.settings.focusedRow
 import com.ptut.expense.settings.settingsRoute
 import com.ptut.expense.shared.AccountCard
@@ -142,6 +146,9 @@ import com.ptut.expense.ui.HapticEvent
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.LocalSlipPictures
 import com.ptut.expense.ui.ToastHost
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import com.ptut.expense.ui.sky.AskBeforeLeaving
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyDiscardSheet
@@ -617,12 +624,25 @@ private fun LedgerShell() {
                 val state by settings.uiState.collectAsStateWithLifecycle()
                 // The switch in the background import row is that screen's own lever (#168).
                 val background = koinViewModel<BackgroundImportViewModel>()
+                val uriHandler = LocalUriHandler.current
+                val build = koinInject<AppBuild>()
+                val toasts = koinInject<ToastMessages>()
+                val scope = rememberCoroutineScope()
+                val noEmailApp = LocalCopy.current.settings.noEmailApp(FEEDBACK_ADDRESS)
                 SettingsView(
                     uiState = state,
-                    // Every row is a destination, so the screen navigates and the state holder
-                    // holds no action — an operation started here would report its result over
-                    // whichever screen the reader had moved on to.
-                    onAction = { action -> action.destination()?.let { navController.navigate(it) } },
+                    // Every row but one is a destination, so the screen navigates and the state
+                    // holder holds no action — an operation started here would report its result
+                    // over whichever screen the reader had moved on to.
+                    onAction = { action ->
+                        if (action == SettingsAction.Feedback) {
+                            // The phone's own mail app writes and sends it. Android throws when it has none.
+                            runCatching { uriHandler.openUri(feedbackMail(build)) }
+                                .onFailure { scope.launch { toasts.show(ToastMessage(noEmailApp, ToastTone.Error)) } }
+                        } else {
+                            action.destination()?.let { navController.navigate(it) }
+                        }
+                    },
                     focusRow = entry.toRoute<PtutRoute.Settings>().focusedRow(),
                     onSwitch = { action, on ->
                         when (action) {

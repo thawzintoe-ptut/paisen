@@ -25,6 +25,7 @@ The first public version.
 - Shared groups: split costs, see balances, record payments, settle with a PromptPay QR, invite by
   link or QR code, and get told about changes.
 - Export and import of the whole ledger as a file.
+- Send feedback in Settings: opens your email app with the app version and phone model filled in.
 - English and Burmese, in light and dark.
 - An iPhone build (`.ipa`) on each GitHub release, to install with SideStore or AltStore and your
   own Apple ID. It has no Sign in with Apple or push notifications, and an invite link opens in

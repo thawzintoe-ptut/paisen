@@ -9,7 +9,7 @@ The Burmese on `firebase/hosting/index.html` (the `MY` table in its script). A n
 | PaiSeN reads the payment slips in your photos and keeps a record of what you spent. Slips are read on your phone, and nothing is uploaded. Before it goes on Google Play, I need 20 friends to test it. | PaiSeN က ဓာတ်ပုံထဲက ငွေလွှဲစလစ်တွေကို ဖတ်ပြီး သင် ဘာတွေ သုံးခဲ့လဲ မှတ်ပေးတယ်။ စလစ်တွေကို ဖုန်းထဲမှာပဲ ဖတ်တာမို့ ဘယ်ကိုမှ မပို့ပါဘူး။ Google Play ပေါ် မတင်ခင် စမ်းသုံးပေးမယ့် သူငယ်ချင်း ၂၀ ယောက် လိုပါတယ်။ | `heroBody` |
 | Join on Android | Android နဲ့ ဝင်မယ် | `ctaAndroid` |
 | Install on iPhone | iPhone မှာ ထည့်မယ် (checked by a native reader, 13 Nov) | `ctaIphone` |
-| Free. Your own spending needs no account. | အခမဲ့ပါ။ ကိုယ်ပိုင် အသုံးစရိတ်အတွက် အကောင့် မလိုပါဘူး။ | `heroFine` |
+| Free. Your own spending needs no account. For now, slip reading works with K PLUS set to English. | အခမဲ့ပါ။ ကိုယ်ပိုင် အသုံးစရိတ်အတွက် အကောင့် မလိုပါဘူး။ စလစ်ဖတ်တာက အခုတော့ English ထားတဲ့ K PLUS နဲ့ပဲ ရသေးတယ်။ (second sentence new 14 Nov, not yet checked) | `heroFine` |
 | Transfer complete | ငွေလွှဲပြီးပါပြီ | `slipDone` |
 | To | လက်ခံသူ | `slipTo` |
 | Date | ရက်စွဲ | `slipDate` |
@@ -61,6 +61,7 @@ The Burmese on `firebase/hosting/index.html` (the `MY` table in its script). A n
 | Only a group you share is sent, and only after you sign in. | မျှသုံးတဲ့ group ကိုပဲ ပို့ပြီး sign in ဝင်ပြီးမှ ပို့တာပါ။ | `p3b` |
 | Read the privacy policy | Privacy policy ဖတ်မယ် | `privacyLink` |
 | What testing asks of you | စမ်းသုံးသူတွေဆီက လိုချင်တာ | `askTitle` |
+| PaiSeN reads K PLUS slips for now, and K PLUS has to be set to English. With another bank, add expenses by hand or with Quick add, and tell me which bank you use. | အခုတော့ PaiSeN က K PLUS စလစ်တွေကိုပဲ ဖတ်နိုင်တယ်၊ K PLUS ကိုလည်း English ထားပေးရမယ်။ တခြားဘဏ် သုံးရင် အသုံးစရိတ်ကို ကိုယ်တိုင် ဒါမှမဟုတ် Quick add နဲ့ ထည့်ပြီး ဘယ်ဘဏ် သုံးလဲ ပြောပြပါ။ (new 14 Nov, not yet checked) | `askSlips` |
 | Keep PaiSeN installed for 14 days. | PaiSeN ကို ၁၄ ရက် မဖျက်ဘဲ ထားပါ။ | `ask1` |
 | Add a few expenses, or let it read your slips. | အသုံးစရိတ် နည်းနည်း ထည့်ကြည့်ပါ၊ ဒါမှမဟုတ် စလစ်တွေကို ဖတ်ခိုင်းကြည့်ပါ။ | `ask2` |
 | When something breaks or confuses you, take a screenshot and send it to the friend who shared this page. | တစ်ခုခု မှားနေရင် ဒါမှမဟုတ် နားမလည်ရင် screenshot ရိုက်ပြီး ဒီ link ပို့ပေးတဲ့ သူငယ်ချင်းဆီ ပို့ပေးပါ။ | `ask3` |

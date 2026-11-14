@@ -28,6 +28,7 @@ fun SettingsAction.opensScreen(): Boolean = when (this) {
     SettingsAction.Timezone,
     SettingsAction.Language,
     SettingsAction.Assistant,
+    SettingsAction.Feedback,
     SettingsAction.Licences,
     -> true
 }

@@ -1,6 +1,7 @@
 package com.ptut.expense
 
 import android.app.Application
+import android.os.Build
 import com.ptut.expense.di.AppBuild
 import com.ptut.expense.di.initKoin
 import com.ptut.expense.sync.push.startPushAfterSignIn
@@ -15,7 +16,14 @@ import com.ptut.expense.sync.push.startPushAfterSignIn
 class PtutApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        initKoin(this, AppBuild(debug = BuildConfig.DEBUG))
+        initKoin(
+            this,
+            AppBuild(
+                debug = BuildConfig.DEBUG,
+                version = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                device = "${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}",
+            ),
+        )
         startPushAfterSignIn(this)
     }
 }

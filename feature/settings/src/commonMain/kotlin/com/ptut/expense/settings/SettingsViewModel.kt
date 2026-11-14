@@ -21,7 +21,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 
 /** Which row. It is the row's identity as well as the destination it opens. */
-enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, Activity, Categories, MoodByTimeOfDay, Transparency, Language, ExportLedger, ImportLedger, Timezone, Assistant, Licences }
+enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, Activity, Categories, MoodByTimeOfDay, Transparency, Language, ExportLedger, ImportLedger, Timezone, Assistant, Feedback, Licences }
+
+/** Where Send feedback writes to. The same address PRIVACY.md and SECURITY.md give. */
+const val FEEDBACK_ADDRESS = "developer.ptut@gmail.com"
 
 /**
  * [id] is the row's identity as well as its destination. It is a field of its own rather than the
@@ -194,6 +197,14 @@ class SettingsViewModel(
             icon = "auto_awesome",
             group = 3,
         ).takeIf { showAssistant || model != ModelState.NotOffered },
+        // The address is the value, so a phone with no mail app still shows where to write.
+        SettingsRowUiModel(
+            id = SettingsAction.Feedback,
+            name = text.feedback,
+            value = FEEDBACK_ADDRESS,
+            icon = "help",
+            group = 3,
+        ),
         SettingsRowUiModel(
             id = SettingsAction.Licences,
             name = text.licences,

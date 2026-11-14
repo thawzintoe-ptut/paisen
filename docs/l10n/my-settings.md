@@ -11,6 +11,10 @@ Burmese for Settings, its sub-screens and Categories that the PaiSen Sky Screens
 | On-device assistant | ဖုန်းထဲက အကူ | locale/SettingsCopy.kt:139 |
 | Licences | လိုင်စင်များ | locale/SettingsCopy.kt:140 |
 | Fonts, icons and Burmese text | ဖောင့်၊ အိုင်ကွန်နဲ့ မြန်မာစာ | locale/SettingsCopy.kt:141 |
+| Send feedback | အကြံပြုချက် ပို့မယ် | locale/SettingsCopy.kt `feedback` |
+| PaiSeN feedback ({version}) | PaiSeN အကြံပြုချက် ({version}) | locale/SettingsCopy.kt `feedbackSubject` |
+| What happened? | ဘာဖြစ်ခဲ့လဲ ရေးပေးပါ။ | locale/SettingsCopy.kt `feedbackBody` |
+| No email app on this phone. Write to {address}. | ဒီဖုန်းမှာ အီးမေးလ်အက်ပ် မရှိဘူး။ {address} ဆီ ရေးပို့ပါ။ | locale/SettingsCopy.kt `noEmailApp` |
 | Off · scans when you open the app | ပိတ်ထားတယ် · အက်ပ်ဖွင့်ရင် စစ်တယ် | locale/SettingsCopy.kt:142 |
 | last run {elapsed} ago | နောက်ဆုံး စစ်တာ {elapsed} အရင်က | locale/SettingsCopy.kt:143 |
 | no run yet | မစစ်ရသေးဘူး | locale/SettingsCopy.kt:144 |

@@ -40,5 +40,8 @@ fun SettingsAction.destination(): PtutRoute? = when (this) {
 
     SettingsAction.Assistant -> PtutRoute.AssistantModel
 
+    // No screen: the shell opens the phone's mail app with [feedbackMail].
+    SettingsAction.Feedback -> null
+
     SettingsAction.Licences -> PtutRoute.Licences
 }

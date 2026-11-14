@@ -8,7 +8,9 @@ import com.ptut.expense.platform.share.SharedSlipReceiver
 import com.ptut.expense.platform.work.SlipImportSchedule
 import com.ptut.expense.sync.InviteLinks
 import org.koin.mp.KoinPlatform
+import platform.Foundation.NSBundle
 import platform.Foundation.NSURL
+import platform.UIKit.UIDevice
 import platform.UIKit.UIViewController
 import kotlin.experimental.ExperimentalNativeApi
 import kotlin.native.Platform
@@ -19,7 +21,16 @@ import kotlin.native.Platform
  */
 @OptIn(ExperimentalNativeApi::class)
 internal val graphStarted: Unit by lazy {
-    initKoin(IosPtutDatabaseContext, AppBuild(debug = Platform.isDebugBinary))
+    val info = NSBundle.mainBundle
+    val phone = UIDevice.currentDevice
+    initKoin(
+        IosPtutDatabaseContext,
+        AppBuild(
+            debug = Platform.isDebugBinary,
+            version = "${info.objectForInfoDictionaryKey("CFBundleShortVersionString")} (${info.objectForInfoDictionaryKey("CFBundleVersion")})",
+            device = "${phone.model}, iOS ${phone.systemVersion}",
+        ),
+    )
 }
 
 /**

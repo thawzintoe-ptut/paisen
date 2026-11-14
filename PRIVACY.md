@@ -99,3 +99,6 @@ top. You can see every past version in the repository's history.
 ## Contact
 
 Questions about your data, or a request to delete it: developer.ptut@gmail.com
+
+**Settings › Send feedback** opens your own email app with the app version and your phone model
+filled in. Nothing is sent unless you send that email.
