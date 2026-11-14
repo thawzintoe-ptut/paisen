@@ -14,21 +14,28 @@ on:
         type: boolean
         default: false
 
+# release.yml calls this file too, and gives it the same read-only token.
+permissions:
+  contents: read
+
+# A new push replaces a pull request's run. On main each commit has its own group, because a
+# shared group still cancels a waiting run when a third one arrives.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   android:
     name: Build and test (Android)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       # pre-push can be skipped with --no-verify, so the source rules are re-checked here.
       # Unqualified task names run in every module that has the task.
       - run: ./gradlew verifySourceRules
@@ -48,24 +55,42 @@ jobs:
       - run: ./gradlew spotlessCheck
       - run: ./gradlew testAndroidHostTest
       - run: ./gradlew :androidApp:assembleDebug
+      # R8 runs only in a release build. Without the upload key the APK stays unsigned, so a
+      # missing keep rule fails on the commit that breaks it, not on tag day.
+      - run: ./gradlew :androidApp:assembleRelease
+      - name: Keep the test reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-reports-${{ github.job }}-${{ github.run_attempt }}
+          path: '**/build/reports/tests/'
+          retention-days: 7
+          if-no-files-found: ignore
 
-  ios:
-    name: Link and test (iOS)
+  # The two iOS jobs don't need each other, so they run side by side.
+  ios-app:
+    name: Link and build (iOS)
     # On a push or pull request the input is empty, so iOS runs; an Android release skips it.
     if: inputs.skip-ios != true
-    runs-on: macos-latest
+    runs-on: macos-26
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The same Xcode as the Mac that builds releases. The image's default can change without notice.
+      - run: sudo xcode-select -s /Applications/Xcode_26.6.app
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      # Kotlin/Native keeps its toolchain and compiler caches here, outside Gradle's cache.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-${{ runner.arch }}-
       # The slow one. Kept off the pre-push hook on purpose so committing stays cheap.
       - run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64
-      # commonTest runs on the JVM everywhere else. Without this the iOS target can stop
-      # compiling and nothing says so — which is how it stayed broken.
-      - run: ./gradlew iosSimulatorArm64Test
       # Xcode copies GoogleService-Info.plist into the app, and the real one is gitignored. A build
       # only needs the file to exist, so CI writes an empty one and no Firebase value reaches GitHub.
       - run: test -f iosApp/iosApp/GoogleService-Info.plist || plutil -create xml1 iosApp/iosApp/GoogleService-Info.plist
@@ -76,3 +101,33 @@ jobs:
           xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug
           -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'
           -derivedDataPath build/dd ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
+
+  ios-test:
+    name: Test (iOS)
+    if: inputs.skip-ios != true
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: sudo xcode-select -s /Applications/Xcode_26.6.app
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-${{ runner.arch }}-
+      # commonTest runs on the JVM everywhere else. Without this the iOS target can stop
+      # compiling and nothing says so — which is how it stayed broken.
+      - run: ./gradlew iosSimulatorArm64Test
+      - name: Keep the test reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-reports-${{ github.job }}-${{ github.run_attempt }}
+          path: '**/build/reports/tests/'
+          retention-days: 7
+          if-no-files-found: ignore
