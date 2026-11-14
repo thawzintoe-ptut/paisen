@@ -164,6 +164,26 @@ class EditTransactionViewModelTest : ViewModelTest() {
         }
     }
 
+    /** #6: an emptied amount is not ฿0.00, so Save stays dark and a save that still arrives writes nothing. */
+    @Test
+    fun `an emptied amount cannot be saved`() = runTest {
+        val ledger = FakeLedger(listOf(filedSlip))
+        afterChanging(
+            ledger = ledger,
+            change = {
+                type(AmountEntry())
+                save()
+            },
+        ) { state ->
+            assertFalse(state.canSave, "an empty amount lit Save")
+        }
+        runCurrent()
+
+        val row = ledger.allTransactions.value.rows().single()
+        assertEquals(Satang(64_250), row.amount)
+        assertNull(row.editedAt, "an empty amount was written")
+    }
+
     @Test
     fun `saving writes the three fields and leaves the evidence alone`() = runTest {
         val ledger = FakeLedger(listOf(filedSlip))
