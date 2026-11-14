@@ -40,6 +40,8 @@ qrose = "1.1.1"
 # #213: Gemini calls these on Android 16+. Alpha, and debug builds only until Google's Early Access
 # Program says yes; a release build carries none of it.
 androidxAppFunctions = "1.0.0-alpha13"
+# Only a floor for appfunctions, which pulls 32.0.1 (deserialization DoS, fixed in 33.7.2).
+guava = "33.7.2-android"
 
 turbine = "1.2.1"
 
@@ -102,6 +104,7 @@ qrose = { module = "io.github.alexzhirkevich:qrose", version.ref = "qrose" }
 # Gemini actions (#213)
 androidx-appfunctions = { module = "androidx.appfunctions:appfunctions", version.ref = "androidxAppFunctions" }
 androidx-appfunctions-compiler = { module = "androidx.appfunctions:appfunctions-compiler", version.ref = "androidxAppFunctions" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
 
 # Test
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }

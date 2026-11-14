@@ -94,6 +94,9 @@ dependencies {
     // and the service live in src/debug, so a release build is unchanged.
     debugImplementation(libs.androidx.appfunctions)
     add("kspDebug", libs.androidx.appfunctions.compiler)
+    constraints {
+        debugImplementation(libs.guava)
+    }
 }
 
 // The app module gathers every AppFunction into the XML the system indexes.
