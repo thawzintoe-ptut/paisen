@@ -58,6 +58,7 @@ import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.platform.photos.PhotoAccessRequest
 import com.ptut.expense.platform.photos.PhotoSettings
 import com.ptut.expense.ui.AmountEntry
+import com.ptut.expense.ui.ScreenReader
 import com.ptut.expense.ui.ToastAction
 import com.ptut.expense.ui.ToastHost
 import com.ptut.expense.ui.ToastMessage
@@ -390,6 +391,8 @@ class TouchTargetFloorTest {
                     single<PhotoAccessRequest> { FakePhotoAccessRequest() }
                     // Today's Fix reads its steps from here when photo access is limited.
                     single<PhotoSettings> { FakePhotoSettings() }
+                    // The toast clock asks it; the data module that binds it is not loaded here.
+                    single { ScreenReader { false } }
                     // #118: the shell provides slip pictures; these screens never load one.
                     single { SlipPictures { null } }
                     single {

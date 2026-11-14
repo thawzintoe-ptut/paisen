@@ -44,6 +44,7 @@ import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.platform.photos.PhotoAccessRequest
 import com.ptut.expense.platform.photos.PhotoSettings
 import com.ptut.expense.settings.NEEDS_ATTENTION
+import com.ptut.expense.ui.ScreenReader
 import org.koin.compose.KoinApplication
 import org.koin.dsl.koinConfiguration
 import org.koin.dsl.module
@@ -98,6 +99,8 @@ class PtutAppTest {
                     single<PhotoAccessRequest> { FakePhotoAccessRequest() }
                     // Today's Fix reads its steps from here when photo access is limited.
                     single<PhotoSettings> { FakePhotoSettings() }
+                    // The toast clock asks it; the data module that binds it is not loaded here.
+                    single { ScreenReader { false } }
                     // #118: the shell provides slip pictures; these screens never load one.
                     single { SlipPictures { null } }
                     // The shell sweeps evidence on start, so the graph has to answer for an
