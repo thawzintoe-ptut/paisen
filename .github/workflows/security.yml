@@ -79,7 +79,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      # Only what ships. buildSrc carries AGP, the Kotlin plugin and their tools on its runtime
+      # classpath; reported, they raise alerts no app update can fix.
       - uses: gradle/actions/dependency-submission@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          dependency-graph-exclude-projects: ':buildSrc'
+          dependency-graph-include-configurations: '.*[Rr]untimeClasspath'
+          dependency-graph-exclude-configurations: '.*[Tt]est.*'
 
   workflow-lint:
     name: Workflow lint
