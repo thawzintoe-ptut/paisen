@@ -127,6 +127,9 @@ data class SlipsCopy(
     val shareAlreadyRecorded: String = "Already recorded",
     val shareWaiting: String = "Waiting in To check",
     val shareNotASlip: String = "No slip found in that picture",
+    val shareNotReadYet: String = "Not read yet, tried again on the next scan",
+    val shareGone: String = "The picture was gone before it was read",
+    val shareLookIn: String = "It will show in Today or To check",
 )
 
 val BurmeseSlips = SlipsCopy(
@@ -240,4 +243,7 @@ val BurmeseSlips = SlipsCopy(
     shareAlreadyRecorded = "မှတ်ပြီးသားပါ",
     shareWaiting = "စစ်ဖို့ထဲမှာ စောင့်နေတယ်",
     shareNotASlip = "ဒီပုံထဲမှာ စလစ် မတွေ့ဘူး",
+    shareNotReadYet = "မဖတ်ရသေးဘူး၊ နောက်တစ်ခါ ရှာရင် ပြန်ဖတ်မယ်",
+    shareGone = "မဖတ်ခင် ပုံက မရှိတော့ဘူး",
+    shareLookIn = "ဒီနေ့ ဒါမှမဟုတ် စစ်ဖို့ထဲမှာ ပေါ်လာမယ်",
 )

@@ -32,7 +32,9 @@ suspend fun SlipSource.pictureAddedBy(accept: suspend () -> Unit): String? {
 
 /**
  * #219: a slip shared in by hand always says what happened to it. "Slip received" at once, then
- * where it went once [scan] has read it: filed to a day, already recorded, or waiting in To check.
+ * where it went once [scan] has read it: filed to a day, already recorded, waiting in To check, or
+ * not read yet. When the picture cannot be told apart, or the run takes longer than [LANDING_WAIT],
+ * it says where the slip will show instead (#11).
  */
 suspend fun SlipImporter.tellWhereSharedSlipWent(
     inboxId: String?,
@@ -40,13 +42,20 @@ suspend fun SlipImporter.tellWhereSharedSlipWent(
     scan: () -> Unit,
     clock: Clock = Clock.System,
 ) = coroutineScope {
-    toasts.show(ToastMessage(AppText.copy.slips.shareReceived))
+    val text = AppText.copy.slips
+    val lookIn = ToastMessage(text.shareLanded(text.shareLookIn))
+    if (inboxId == null) {
+        toasts.show(lookIn)
+        scan()
+        return@coroutineScope
+    }
+    toasts.show(ToastMessage(text.shareReceived))
     // Listening starts before the scan does, so a fast run cannot land the slip unheard.
     val landing = async(start = CoroutineStart.UNDISPATCHED) {
-        inboxId?.let { id -> withTimeoutOrNull(LANDING_WAIT) { landings.first { it.isFor(id) } } }
+        withTimeoutOrNull(LANDING_WAIT) { landings.first { it.isFor(inboxId) } }
     }
     scan()
-    landing.await()?.let { toasts.show(it.sharedMessage(clock)) }
+    toasts.show(landing.await()?.sharedMessage(clock) ?: lookIn)
 }
 
 /** The importer sees the inbox's id behind the prefix of the source that owns it ("shared:…"). */
@@ -61,8 +70,12 @@ private fun SlipLanding.sharedMessage(clock: Clock): ToastMessage {
 
         SlipPlace.AlreadyRecorded -> text.shareAlreadyRecorded
 
-        // Nothing was recorded, so it takes the refusal's tone rather than a tick.
+        SlipPlace.NotReadYet -> text.shareNotReadYet
+
+        // Nothing was recorded, so these take the refusal's tone rather than a tick.
         SlipPlace.NotASlip -> return ToastMessage(text.shareNotASlip, ToastTone.Error)
+
+        SlipPlace.Gone -> return ToastMessage(text.shareGone, ToastTone.Error)
     }
     return ToastMessage(text.shareLanded(where))
 }

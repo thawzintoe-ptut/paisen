@@ -129,3 +129,11 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | Not this | ဒါ မဟုတ်ဘူး | `SlipsCopy` debtNotThis |
 | Recorded {amount} to {name} in {group} | {group} ထဲက {name} ကို {amount} ပေးပြီးလို့ မှတ်ထားပြီ | `SlipsCopy` debtRecorded |
 | Recorded as paid to {name}. File it below to keep it in your spending. | {name} ကို ပေးပြီးလို့ မှတ်ထားပြီ။ ကိုယ့်အသုံးထဲ ထားဖို့ အောက်မှာ ဆက်သိမ်းပါ။ | `SlipsCopy` debtKeepNote |
+
+## A shared slip always says what happened (14 Nov, not yet checked)
+
+| English | Burmese | Where |
+|---|---|---|
+| Not read yet, tried again on the next scan | မဖတ်ရသေးဘူး၊ နောက်တစ်ခါ ရှာရင် ပြန်ဖတ်မယ် | `SlipsCopy` shareNotReadYet |
+| The picture was gone before it was read | မဖတ်ခင် ပုံက မရှိတော့ဘူး | `SlipsCopy` shareGone |
+| It will show in Today or To check | ဒီနေ့ ဒါမှမဟုတ် စစ်ဖို့ထဲမှာ ပေါ်လာမယ် | `SlipsCopy` shareLookIn |

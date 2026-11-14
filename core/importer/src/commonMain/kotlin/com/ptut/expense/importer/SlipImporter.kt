@@ -45,8 +45,11 @@ data class ImportSummary(
     val unreadable: Int,
 )
 
-/** Where one picture went on a run (#219), so a slip shared in by hand can say so. */
-enum class SlipPlace { Filed, ToCheck, AlreadyRecorded, NotASlip }
+/**
+ * Where one picture went on a run (#219), so a slip shared in by hand can say so. [NotReadYet]: the
+ * reader failed and the picture waits for the next run. [Gone]: the picture went before it was read.
+ */
+enum class SlipPlace { Filed, ToCheck, AlreadyRecorded, NotASlip, NotReadYet, Gone }
 
 data class SlipLanding(
     val candidateId: String,
@@ -221,7 +224,7 @@ class SlipImporter(
     }
 
     private suspend fun importOne(candidate: SlipCandidate, rules: List<MerchantRule>): Outcome {
-        val bytes = source.bytesOf(candidate.id) ?: return Outcome.Gone
+        val bytes = source.bytesOf(candidate.id) ?: return Outcome.Gone.also { land(candidate, SlipPlace.Gone) }
         val hash = bytes.toByteString().sha256().hex()
 
         if (store.isImported(hash)) {
@@ -235,6 +238,7 @@ class SlipImporter(
             reader.read(bytes)
         } catch (failure: Exception) {
             // One unreadable slip does not fail the run. The picture stays for the retry.
+            land(candidate, SlipPlace.NotReadYet)
             return Outcome.Unreadable
         }
 
