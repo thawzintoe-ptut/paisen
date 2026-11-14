@@ -44,7 +44,7 @@ androidxAppFunctions = "1.0.0-alpha13"
 turbine = "1.2.1"
 
 # Build-time only: the format check never reaches a shipped classpath.
-spotless = "8.9.0"
+spotless = "8.11.0"
 ktlint = "1.8.0"
 
 [libraries]
