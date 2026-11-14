@@ -45,6 +45,9 @@ jobs:
       id-token: write # build provenance, as in a release
       attestations: write
     uses: ./.github/workflows/build-signed.yml
+    # The release environment's secrets reach a called workflow only through inherit, even with
+    # `environment: release` there. Health run 43612489148 got empty ones without it.
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       version-name: ${{ needs.version.outputs.name }}
       version-code: '1'
@@ -56,6 +59,7 @@ jobs:
       id-token: write
       attestations: write
     uses: ./.github/workflows/build-ios.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
     with:
       version-name: ${{ needs.version.outputs.name }}
       version-code: '1'
