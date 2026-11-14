@@ -33,7 +33,7 @@ okio = "3.9.1"
 ktor = "3.6.0"
 androidxCredentials = "1.6.0"
 googleId = "1.2.1"
-firebaseMessaging = "25.1.3"
+firebaseMessaging = "26.0.2"
 # #190: draws the invite QR code. Pure Compose, no camera. Held at 1.1.1: 1.2.0 and later ship
 # iOS klibs built with Kotlin 2.4 (ABI 2.4.0), which this Kotlin 2.3 build cannot read.
 qrose = "1.1.1"
