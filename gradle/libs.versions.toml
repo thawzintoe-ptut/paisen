@@ -1,7 +1,7 @@
 [versions]
 # Kotlin is held at 2.3.x deliberately: KSP has no 2.4.x build yet and Room needs KSP.
-kotlin = "2.3.21"
-ksp = "2.3.11"
+kotlin = "2.4.21"
+ksp = "2.3.13"
 agp = "9.2.1"
 composeMultiplatform = "1.11.1"
 
