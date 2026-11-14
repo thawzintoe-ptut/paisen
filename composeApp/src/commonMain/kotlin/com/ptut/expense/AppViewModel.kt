@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.design.PtutMotion
 import com.ptut.expense.domain.folders.FirstRunFolders
 import com.ptut.expense.importer.SlipImporter
+import com.ptut.expense.ui.ScreenReader
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import kotlinx.coroutines.delay
@@ -32,6 +33,8 @@ class AppViewModel(
      */
     firstRun: FirstRunFolders? = null,
     private val motion: PtutMotion = PtutMotion.Default,
+    /** #8: asked each time an Undo shows, because TalkBack or VoiceOver can be switched on at any time. */
+    private val screenReader: ScreenReader = ScreenReader { false },
 ) : ViewModel() {
 
     private val shown = MutableStateFlow<ToastMessage?>(null)
@@ -57,9 +60,9 @@ class AppViewModel(
                 shown.value?.takeIf { it !== message }?.let(::leave)
                 shown.value = message
                 shownAt = TimeSource.Monotonic.markNow()
-                // An Undo stays longer than a plain line, and leaves sooner if the next line or
-                // screen comes first. Undo already tapped means the line is gone, so nothing runs.
-                delay(if (message.action != null) motion.undoWindow else motion.toastHold)
+                // An Undo stays longer than a plain line, longer still while it is read aloud, and leaves
+                // sooner if the next line or screen comes first. Undo already tapped means nothing runs.
+                delay(if (message.action != null) motion.undoWindowFor(screenReader.isOn()) else motion.toastHold)
                 if (shown.value === message) {
                     shown.value = null
                     leave(message)

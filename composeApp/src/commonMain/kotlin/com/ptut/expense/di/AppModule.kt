@@ -192,7 +192,7 @@ val viewModelModule: Module = module {
 
     // getOrNull: a screen test builds a graph with no folder seams in it, and the shell still
     // has to start. On a device the binding is always there.
-    viewModel { AppViewModel(toasts = get(), importer = get(), firstRun = getOrNull()) }
+    viewModel { AppViewModel(toasts = get(), importer = get(), firstRun = getOrNull(), screenReader = get()) }
     // FR-12: a renamed category has to reach every screen that names one, so these read the
     // table rather than the compiled-in seed. Read at construction, which is when a screen is
     // built — a rename shows the next time the screen is opened, not while it is on top.

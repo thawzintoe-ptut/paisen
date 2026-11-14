@@ -4,6 +4,7 @@ import com.ptut.expense.importer.FakeSlipSource
 import com.ptut.expense.importer.FakeSlipTextReader
 import com.ptut.expense.importer.InMemoryImportStore
 import com.ptut.expense.importer.SlipImporter
+import com.ptut.expense.ui.ScreenReader
 import com.ptut.expense.ui.ToastAction
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
@@ -86,6 +87,25 @@ class AppViewModelTest : ViewModelTest() {
         runCurrent()
         assertNull(viewModel.toast.value, "the undo outstayed its four seconds")
         assertTrue(gone, "the undo left without saying so")
+    }
+
+    /** #8: four seconds is not enough to hear the line and find Undo with TalkBack or VoiceOver. */
+    @Test
+    fun anUndoStaysTwentySecondsWhileAScreenReaderIsOn() = runTest {
+        val toasts = ToastMessages()
+        val viewModel = AppViewModel(toasts, importer(), screenReader = ScreenReader { true })
+        runCurrent()
+
+        toasts.show(ToastMessage("Deleted Foodland Rama IV", action = ToastAction("Undo") {}))
+        runCurrent()
+
+        advanceTimeBy(19_000)
+        runCurrent()
+        assertNotNull(viewModel.toast.value, "the undo left before a screen reader could reach it")
+
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertNull(viewModel.toast.value, "the undo outstayed its twenty seconds")
     }
 
     @Test
