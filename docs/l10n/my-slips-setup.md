@@ -118,3 +118,14 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | That file could not be opened for reading. Choose the backup file again. | ဒီဖိုင်ကို ဖတ်ဖို့ ဖွင့်လို့ မရဘူး။ backup ဖိုင်ကို ပြန်ရွေးပါ။ | `FoldersCopy.kt:68` |
 | The file could not be written before saving. Free some space on the phone, then try again. | မသိမ်းခင် ဖိုင်ကို ရေးလို့ မရဘူး။ ဖုန်းထဲ နေရာလွတ် လုပ်ပြီး ထပ်ကြိုးစားပါ။ | `FoldersCopy.kt:69` |
 | That file could not be read. Choose the backup file again. | ဒီဖိုင်ကို ဖတ်လို့ မရဘူး။ backup ဖိုင်ကို ပြန်ရွေးပါ။ | `FoldersCopy.kt:70` |
+
+## A slip that pays a shared-group debt (14 Nov, not yet checked)
+
+| English | Burmese | Where |
+|---|---|---|
+| Is this your {amount} payment to {name} in {group}? | ဒါ {group} ထဲက {name} ကို ပေးတဲ့ {amount} လား။ | `SlipsCopy` debtQuestion |
+| Yes, group payment only | ဟုတ်တယ်၊ အဖွဲ့ငွေရှင်းတာပဲ | `SlipsCopy` debtOnly |
+| Yes, and keep it in my spending | ဟုတ်တယ်၊ ကိုယ့်အသုံးထဲမှာလည်း ထားမယ် | `SlipsCopy` debtKeep |
+| Not this | ဒါ မဟုတ်ဘူး | `SlipsCopy` debtNotThis |
+| Recorded {amount} to {name} in {group} | {group} ထဲက {name} ကို {amount} ပေးပြီးလို့ မှတ်ထားပြီ | `SlipsCopy` debtRecorded |
+| Recorded as paid to {name}. File it below to keep it in your spending. | {name} ကို ပေးပြီးလို့ မှတ်ထားပြီ။ ကိုယ့်အသုံးထဲ ထားဖို့ အောက်မှာ ဆက်သိမ်းပါ။ | `SlipsCopy` debtKeepNote |

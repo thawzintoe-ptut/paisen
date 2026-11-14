@@ -329,3 +329,14 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | {name} added {n} | {name} က {n} ခု ထည့်ခဲ့တယ် | `SharedHomeCopy.kt:42` |
 | {n} new | အသစ် {n} ခု | `SharedHomeCopy.kt:43` |
 | New (spoken for the dot on a row) | အသစ် | `SharedGroupCopy.kt:69` |
+
+## Pay me card (14 Nov, debug builds only, not yet checked)
+
+| English | Burmese | Where |
+|---|---|---|
+| Ask {name} to pay | {name} ကို ပေးဖို့ ပြောမယ် | `SharedSettleCopy` askToPay |
+| For {group} | {group} အတွက် | `SharedSettleCopy` payMeFor |
+| {payer} pays | {payer} က ပေးရမယ် | `SharedSettleCopy` payMeFrom |
+| Scan with any Thai bank app · PromptPay {masked} | ထိုင်းဘဏ်အက်ပ် တစ်ခုခုနဲ့ စကင်ဖတ်ပါ · PromptPay {masked} | `SharedSettleCopy` payMeScan |
+| {payer}, your part in {group} is {amount}. Scan the QR in the picture with your bank app to pay me. | {payer}၊ {group} ထဲက သင့်ဝေစုက {amount} ပါ။ ပုံထဲက QR ကို ဘဏ်အက်ပ်နဲ့ စကင်ဖတ်ပြီး ပေးပါ။ | `SharedSettleCopy` payMeText |
+| Send the card | ကတ် ပို့မယ် | `SharedSettleCopy` sendCard |

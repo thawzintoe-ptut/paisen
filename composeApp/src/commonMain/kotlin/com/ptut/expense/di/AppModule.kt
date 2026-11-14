@@ -40,6 +40,7 @@ import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.domain.settings.ImportSettings
 import com.ptut.expense.domain.settings.ImportSettingsStore
 import com.ptut.expense.domain.shared.SharedRepository
+import com.ptut.expense.domain.shared.debtsPaidBy
 import com.ptut.expense.domain.slip.ImportStore
 import com.ptut.expense.domain.slip.SlipPictures
 import com.ptut.expense.edit.EditTransactionViewModel
@@ -338,6 +339,11 @@ val viewModelModule: Module = module {
             discards = get(),
             categories = storedCategories().forDirection(Direction.Expense),
             subCategories = storedSubCategories(),
+            // "A slip closes the debt": debug builds only until it has been tried with real groups.
+            debtsFor = { amount, payee ->
+                if (getOrNull<AppBuild>()?.debug == true) getOrNull<SharedRepository>()?.snapshot?.value?.debtsPaidBy(amount, payee).orEmpty() else emptyList()
+            },
+            recordPayment = { draft -> getOrNull<SharedRepository>()?.recordPayment(draft) },
             haptics = get(),
         )
     }

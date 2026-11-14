@@ -12,6 +12,9 @@ import com.ptut.expense.ui.AmountEntry
  */
 enum class ConfirmSlipPhase { Loading, Ready, Missing }
 
+/** A slip for exactly what I owe in a shared group: the question, and which debt is picked when several fit. */
+data class DebtMatchUiModel(val question: String, val choices: List<String>, val chosen: Int)
+
 /**
  * What the confirm screen draws.
  *
@@ -54,6 +57,10 @@ data class ConfirmSlipUiState(
     val phase: ConfirmSlipPhase = ConfirmSlipPhase.Ready,
     /** Confirm was pressed with no category. Cleared by picking one (#216). */
     val askForCategory: Boolean = false,
+    /** Null unless the slip's amount is a debt I owe in a shared group, and until it is answered. */
+    val debtMatch: DebtMatchUiModel? = null,
+    /** Said once the payment is recorded and the slip stays to be filed as my own spending. */
+    val debtPaidNote: String? = null,
 ) {
     /**
      * Inline, beside Confirm, rather than a toast: the keyboard covers the toast, and Confirm then

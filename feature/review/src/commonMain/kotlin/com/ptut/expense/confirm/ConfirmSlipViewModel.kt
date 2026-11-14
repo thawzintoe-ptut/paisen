@@ -7,14 +7,19 @@ import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.ReviewReason
+import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayAndMonth
 import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.domain.forDirection
+import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.rules.ShopNames
+import com.ptut.expense.domain.shared.PaymentDraft
+import com.ptut.expense.domain.shared.PaymentMethod
+import com.ptut.expense.domain.shared.SlipDebt
 import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.isReaderNoise
 import com.ptut.expense.domain.slip.shownShop
@@ -60,6 +65,9 @@ class ConfirmSlipViewModel(
     // C-2: a slip is money sent, so only the categories the reader files spending under.
     private val categories: List<Category> = Category.seed().forDirection(Direction.Expense),
     private val subCategories: List<SubCategory> = emptyList(),
+    /** The shared-group debts a slip for this amount could have paid, the slip's payee as a hint. */
+    private val debtsFor: (Satang, String?) -> List<SlipDebt> = { _, _ -> emptyList() },
+    private val recordPayment: suspend (PaymentDraft) -> Unit = {},
     private val clock: Clock = Clock.System,
     /** Injected so a test can name the rows it wrote. Random everywhere else. */
     /** #114: a haptic on every save and delete, played by the shell. */
@@ -69,8 +77,11 @@ class ConfirmSlipViewModel(
 
     private var slip: QueuedSlip? = ledger.queuedSlips.value.firstOrNull { it.id == slipId }
 
+    private var debts: List<SlipDebt> = slip?.let(::debtsOf).orEmpty()
+    private var chosenDebt = 0
+
     private val state = MutableStateFlow(
-        slip.toUiState().copy(phase = if (slip == null) ConfirmSlipPhase.Loading else ConfirmSlipPhase.Ready),
+        slip.toUiState().copy(phase = if (slip == null) ConfirmSlipPhase.Loading else ConfirmSlipPhase.Ready, debtMatch = debtMatch()),
     )
     val uiState: StateFlow<ConfirmSlipUiState> = state.asStateFlow()
 
@@ -87,7 +98,12 @@ class ConfirmSlipViewModel(
     private fun arrive(found: QueuedSlip) {
         val first = slip == null
         slip = found
-        if (first) state.value = found.toUiState() else state.update { it.copy(phase = ConfirmSlipPhase.Ready) }
+        if (first) {
+            debts = debtsOf(found)
+            state.value = found.toUiState().copy(debtMatch = debtMatch())
+        } else {
+            state.update { it.copy(phase = ConfirmSlipPhase.Ready) }
+        }
     }
 
     /** Gone by this screen's own Confirm or Not mine is expected. Gone any other way is said. */
@@ -189,6 +205,57 @@ class ConfirmSlipViewModel(
             haptics.deleted()
             state.update { it.copy(saving = false, dismissed = true) }
         }
+    }
+
+    fun chooseDebt(index: Int) {
+        if (index !in debts.indices) return
+        chosenDebt = index
+        state.update { it.copy(debtMatch = debtMatch()) }
+    }
+
+    fun notThisDebt() {
+        debts = emptyList()
+        state.update { it.copy(debtMatch = null) }
+    }
+
+    /**
+     * Records the picked debt as paid by bank transfer at the slip's own time. The person chose
+     * whether the slip also stays as their own spending: kept, it is filed as usual below; not
+     * kept, it leaves To check, since paying a friend back is not new spending.
+     */
+    fun payDebt(keepInSpending: Boolean) {
+        val slip = slip ?: return
+        val debt = debts.getOrNull(chosenDebt) ?: return
+        if (state.value.saving) return
+        state.update { it.copy(saving = true) }
+        viewModelScope.launch {
+            recordPayment(
+                PaymentDraft(debt.groupId, debt.fromMemberId, debt.toMemberId, debt.amount, PaymentMethod.BankTransfer, slip.occurredAtEpochMillis),
+            )
+            debts = emptyList()
+            val text = AppText.copy.slips
+            haptics.saved()
+            toasts.show(ToastMessage(text.debtRecorded(debt.amount.format(), debt.toName, debt.groupName)))
+            if (keepInSpending) {
+                state.update { it.copy(saving = false, debtMatch = null, debtPaidNote = text.debtKeepNote(debt.toName)) }
+            } else {
+                // Dismissed first, so the queue emptying reads as this screen's own doing.
+                state.update { it.copy(saving = false, debtMatch = null, dismissed = true) }
+                importer.discard(slip.id)
+            }
+        }
+    }
+
+    private fun debtsOf(slip: QueuedSlip): List<SlipDebt> = slip.amount?.let { debtsFor(it, slip.merchant) }.orEmpty()
+
+    private fun debtMatch(): DebtMatchUiModel? {
+        val chosen = debts.getOrNull(chosenDebt) ?: return null
+        val text = AppText.copy.slips
+        return DebtMatchUiModel(
+            question = text.debtQuestion(chosen.amount.format(), chosen.toName, chosen.groupName),
+            choices = debts.map { text.debtChoice(it.toName, it.groupName) },
+            chosen = chosenDebt,
+        )
     }
 
     private fun QueuedSlip?.toUiState() = ConfirmSlipUiState(

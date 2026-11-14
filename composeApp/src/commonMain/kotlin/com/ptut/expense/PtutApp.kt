@@ -846,6 +846,9 @@ private fun LedgerShell() {
                     onNotMine = confirm::notMine,
                     onClose = { navController.popBackStack() },
                     onShopName = confirm::nameShop,
+                    onChooseDebt = confirm::chooseDebt,
+                    onPayDebt = confirm::payDebt,
+                    onNotThisDebt = confirm::notThisDebt,
                 )
             }
 

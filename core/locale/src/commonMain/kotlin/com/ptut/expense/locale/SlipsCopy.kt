@@ -35,6 +35,18 @@ data class SlipsCopy(
     val reference: String = "Reference",
     val checkIt: (String) -> String = { label -> "$label · check it" },
     val notMine: String = "Not mine",
+    /** A slip for exactly what I owe someone in a shared group. */
+    val debtQuestion: (amount: String, name: String, group: String) -> String = { amount, name, group ->
+        "Is this your $amount payment to $name in $group?"
+    },
+    val debtChoice: (name: String, group: String) -> String = { name, group -> "$name · $group" },
+    val debtOnly: String = "Yes, group payment only",
+    val debtKeep: String = "Yes, and keep it in my spending",
+    val debtNotThis: String = "Not this",
+    val debtRecorded: (amount: String, name: String, group: String) -> String = { amount, name, group ->
+        "Recorded $amount to $name in $group"
+    },
+    val debtKeepNote: (name: String) -> String = { name -> "Recorded as paid to $name. File it below to keep it in your spending." },
     val confirm: String = "Confirm",
     val pickCategory: String = "Pick a category to save this slip",
     val slipRemoved: String = "Removed from PaiSeN. Your gallery photo stays.",
@@ -149,6 +161,13 @@ val BurmeseSlips = SlipsCopy(
     reference = "အမှတ်စဉ်",
     checkIt = { label -> "$label · ပြန်စစ်ပါ" },
     notMine = "ကျွန်တော့်ဟာ မဟုတ်ဘူး",
+    debtQuestion = { amount, name, group -> "ဒါ $group ထဲက $name ကို ပေးတဲ့ $amount လား။" },
+    debtChoice = { name, group -> "$name · $group" },
+    debtOnly = "ဟုတ်တယ်၊ အဖွဲ့ငွေရှင်းတာပဲ",
+    debtKeep = "ဟုတ်တယ်၊ ကိုယ့်အသုံးထဲမှာလည်း ထားမယ်",
+    debtNotThis = "ဒါ မဟုတ်ဘူး",
+    debtRecorded = { amount, name, group -> "$group ထဲက $name ကို $amount ပေးပြီးလို့ မှတ်ထားပြီ" },
+    debtKeepNote = { name -> "$name ကို ပေးပြီးလို့ မှတ်ထားပြီ။ ကိုယ့်အသုံးထဲ ထားဖို့ အောက်မှာ ဆက်သိမ်းပါ။" },
     confirm = "အတည်ပြုမယ်",
     pickCategory = "ဒီစလစ်ကို သိမ်းဖို့ အမျိုးအစား ရွေးပါ",
     slipRemoved = "PaiSeN ထဲက ဖယ်လိုက်ပြီ။ ဂယ်လာရီထဲက ပုံကတော့ ဒီအတိုင်း ရှိမယ်။",

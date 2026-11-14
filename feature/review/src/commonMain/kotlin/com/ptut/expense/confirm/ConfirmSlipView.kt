@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +28,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -34,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.Sizes
+import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
 import com.ptut.expense.design.ptutType
@@ -56,6 +60,7 @@ import com.ptut.expense.ui.sky.SkyHairline
 import com.ptut.expense.ui.sky.SkyKeyValueRow
 import com.ptut.expense.ui.sky.SkyNoticeCard
 import com.ptut.expense.ui.sky.SkySubChipBox
+import com.ptut.expense.ui.sky.SkyTextAction
 import com.ptut.expense.ui.sky.SkyTopBar
 
 /**
@@ -84,6 +89,9 @@ fun ConfirmSlipView(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     onShopName: (String) -> Unit = {},
+    onChooseDebt: (Int) -> Unit = {},
+    onPayDebt: (keepInSpending: Boolean) -> Unit = {},
+    onNotThisDebt: () -> Unit = {},
 ) {
     val text = LocalCopy.current.slips
     val common = LocalCopy.current.common
@@ -133,6 +141,11 @@ fun ConfirmSlipView(
                 .padding(horizontal = Spacing.md),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
+            // First, because the answer decides whether the rest of the form is needed at all.
+            uiState.debtMatch?.let { match ->
+                DebtMatchCard(match, enabled = !uiState.saving, onChoose = onChooseDebt, onPay = onPayDebt, onNotThis = onNotThisDebt)
+            }
+            uiState.debtPaidNote?.let { SkyNoticeCard(text = it, icon = PtutIcon.CheckCircle.image) }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 SlipPicture(
                     id = uiState.slipId,
@@ -252,6 +265,46 @@ fun ConfirmSlipView(
                 modifier = Modifier.weight(1.6f),
             )
         }
+    }
+}
+
+/** The slip's amount is a debt I owe in a shared group: say which, and let the person decide. */
+@Composable
+private fun DebtMatchCard(
+    match: DebtMatchUiModel,
+    enabled: Boolean,
+    onChoose: (Int) -> Unit,
+    onPay: (keepInSpending: Boolean) -> Unit,
+    onNotThis: () -> Unit,
+) {
+    val text = LocalCopy.current.slips
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(PtutRadii.r20)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+            Icon(PtutIcon.Group.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.rowGlyph))
+            Text(
+                match.question,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
+        if (match.choices.size > 1) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                match.choices.forEachIndexed { index, choice ->
+                    SkyChip(label = choice, selected = index == match.chosen, onClick = { onChoose(index) })
+                }
+            }
+        }
+        SkyButton(text.debtOnly, onClick = { onPay(false) }, enabled = enabled, modifier = Modifier.fillMaxWidth().padding(top = Spacing.xxs))
+        SkyButton(text.debtKeep, onClick = { onPay(true) }, kind = SkyButtonKind.Outline, enabled = enabled, modifier = Modifier.fillMaxWidth())
+        SkyTextAction(text.debtNotThis, onClick = onNotThis, enabled = enabled, modifier = Modifier.align(Alignment.CenterHorizontally))
     }
 }
 

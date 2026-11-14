@@ -13,6 +13,9 @@ import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.shared.PaymentDraft
+import com.ptut.expense.domain.shared.PaymentMethod
+import com.ptut.expense.domain.shared.SlipDebt
 import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.domain.slip.SlipParser
 import com.ptut.expense.domain.slip.SlipRead
@@ -45,6 +48,8 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Instant
+
+private val Owed = Satang(24_000)
 
 class ConfirmSlipViewModelTest : ViewModelTest() {
 
@@ -357,12 +362,82 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         assertFalse(RECIPIENT_LAST_FOUR in state.toString(), "a masked account survived into $state")
     }
 
+    @Test
+    fun `a slip for what I owe in a group asks whether it paid that debt`() = runTest {
+        val viewModel = viewModel(slip(amount = Owed), debts = listOf(ayeDebt))
+
+        val match = viewModel.uiState.value.debtMatch
+        assertEquals(1, match?.choices?.size)
+        assertTrue(match!!.question.contains("Aye") && match.question.contains("Flat 12"), match.question)
+    }
+
+    @Test
+    fun `a slip with no amount read asks about no debt`() = runTest {
+        assertNull(viewModel(slip(amount = null), debts = listOf(ayeDebt)).uiState.value.debtMatch)
+    }
+
+    @Test
+    fun `group payment only records the payment at the slip's time and takes the slip off the list`() = runTest {
+        val recorded = mutableListOf<PaymentDraft>()
+        val viewModel = viewModel(slip(amount = Owed), debts = listOf(ayeDebt), recorded = recorded)
+
+        viewModel.payDebt(keepInSpending = false)
+        runCurrent()
+
+        assertEquals(listOf(PaymentDraft("flat", "me", "aye", Owed, PaymentMethod.BankTransfer, now.toEpochMilliseconds())), recorded)
+        assertTrue(viewModel.uiState.value.dismissed)
+    }
+
+    @Test
+    fun `keeping it in my spending records the payment and leaves the slip to file`() = runTest {
+        val recorded = mutableListOf<PaymentDraft>()
+        val viewModel = viewModel(slip(amount = Owed), debts = listOf(ayeDebt), recorded = recorded)
+
+        viewModel.payDebt(keepInSpending = true)
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertEquals(1, recorded.size)
+        assertFalse(state.dismissed)
+        assertNull(state.debtMatch)
+        assertTrue(state.debtPaidNote?.contains("Aye") == true)
+    }
+
+    @Test
+    fun `not this hides the question and records nothing`() = runTest {
+        val recorded = mutableListOf<PaymentDraft>()
+        val viewModel = viewModel(slip(amount = Owed), debts = listOf(ayeDebt), recorded = recorded)
+
+        viewModel.notThisDebt()
+        runCurrent()
+
+        assertNull(viewModel.uiState.value.debtMatch)
+        assertTrue(recorded.isEmpty())
+    }
+
+    @Test
+    fun `with two debts of the amount the one picked is the one paid`() = runTest {
+        val recorded = mutableListOf<PaymentDraft>()
+        val koMin = SlipDebt("trip", "Trip", "me", "ko", "Ko Min", Owed)
+        val viewModel = viewModel(slip(amount = Owed), debts = listOf(ayeDebt, koMin), recorded = recorded)
+
+        viewModel.chooseDebt(1)
+        viewModel.payDebt(keepInSpending = false)
+        runCurrent()
+
+        assertEquals("ko", recorded.single().toMemberId)
+    }
+
+    private val ayeDebt = SlipDebt("flat", "Flat 12", "me", "aye", "Aye", Owed)
+
     private fun viewModel(
         slip: QueuedSlip,
         source: FakeSlipSource = FakeSlipSource(),
         store: InMemoryImportStore = InMemoryImportStore(),
         toasts: ToastMessages = ToastMessages(),
         subCategories: List<SubCategory> = emptyList(),
+        debts: List<SlipDebt> = emptyList(),
+        recorded: MutableList<PaymentDraft> = mutableListOf(),
     ) = ConfirmSlipViewModel(
         slipId = slip.id,
         ledger = FakeLedger(listOf(slip)),
@@ -370,6 +445,8 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         toasts = toasts,
         discards = SlipDiscards(SlipImporter(source, FakeSlipTextReader(), store), toasts, CoroutineScope(Dispatchers.Main)) { Duration.ZERO },
         subCategories = subCategories,
+        debtsFor = { amount, _ -> debts.filter { it.amount == amount } },
+        recordPayment = { recorded += it },
         clock = object : Clock {
             override fun now(): Instant = this@ConfirmSlipViewModelTest.now
         },
