@@ -10,3 +10,21 @@ updates:
     groups:
       actions:
         patterns: ['*']
+
+  # Libraries and Gradle plugins from gradle/libs.versions.toml. Versions that only work
+  # together share a group, so one PR tests them together.
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+    groups:
+      # Each KSP release is built for one Kotlin version.
+      kotlin:
+        patterns: ['org.jetbrains.kotlin:*', 'org.jetbrains.kotlin.*', 'com.google.devtools.ksp*']
+      # JetBrains' lifecycle and navigation forks ship with Compose Multiplatform.
+      compose-multiplatform:
+        patterns: ['org.jetbrains.compose*', 'org.jetbrains.androidx.*']
+      androidx:
+        patterns: ['androidx.*']

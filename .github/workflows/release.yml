@@ -60,6 +60,50 @@ jobs:
     with:
       skip-ios: true
 
+  # The checks above skip iOS to keep a release short, so an IPA ships only when main's CI passed
+  # both iOS checks on this commit. A tag pushed right after its commit waits for that run.
+  ios-checks:
+    name: iOS checks passed on main
+    needs: meta
+    if: vars.IOS_SIDELOAD_ENABLED == 'true' || (needs.meta.outputs.kind == 'beta' && vars.IOS_ENABLED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      checks: read
+    steps:
+      # Exact names: this release's own runs are called "checks / ...", and they skip iOS.
+      - name: Wait for both iOS checks on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          state() {
+            gh api -X GET "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
+              -f check_name="$1" -f filter=latest \
+              --jq 'if .total_count == 0 then "missing" else (.check_runs[0].conclusion // "running") end'
+          }
+          for attempt in $(seq 80); do
+            waiting=0
+            for check in 'Link and build (iOS)' 'Test (iOS)'; do
+              s=$(state "$check")
+              case "$s" in
+                success) ;;
+                running) waiting=1 ;;
+                # main's run shows up within seconds of the push; after 2 minutes there is none.
+                missing)
+                  [ "$attempt" -le 4 ] || { echo "::error::main's CI never ran '$check' on $GITHUB_SHA (an older commit, a release/* hotfix, or not the last commit of a push), so no IPA ships."; exit 1; }
+                  waiting=1 ;;
+                *) echo "::error::'$check' is $s on $GITHUB_SHA, so no IPA ships. Fix main and tag again."; exit 1 ;;
+              esac
+            done
+            if [ "$waiting" = 0 ]; then
+              echo "Both iOS checks passed on $GITHUB_SHA."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "::error::main's iOS checks on $GITHUB_SHA did not finish in 40 minutes, so no IPA ships."
+          exit 1
+
   build:
     needs: [meta, checks]
     permissions:
@@ -73,7 +117,7 @@ jobs:
   # Off until the Apple Developer Program is paid and the signing secrets are in `release`. Only
   # the iPhones in the ad hoc profile can install it, so it goes to App Distribution, not GitHub.
   build-ios:
-    needs: [meta, checks]
+    needs: [meta, checks, ios-checks]
     if: needs.meta.outputs.kind == 'beta' && vars.IOS_ENABLED == 'true'
     permissions:
       contents: read
@@ -87,7 +131,7 @@ jobs:
   # The free way onto an iPhone: an unsigned IPA on the GitHub release, which each tester signs with
   # their own Apple ID in SideStore or AltStore. Off until IOS_SIDELOAD_ENABLED is true.
   build-ios-sideload:
-    needs: [meta, checks]
+    needs: [meta, checks, ios-checks]
     if: vars.IOS_SIDELOAD_ENABLED == 'true'
     permissions:
       contents: read

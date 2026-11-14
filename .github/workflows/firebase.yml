@@ -1,0 +1,59 @@
+name: Firebase
+
+# The Firestore rules guard shared groups, and the push Worker sends every notification. Both
+# are deployed by hand; this workflow only checks them, and holds no secret.
+on:
+  push:
+    branches: [main]
+    paths: ['firebase/**', '.github/workflows/firebase.yml']
+  pull_request:
+    branches: [main]
+    paths: ['firebase/**', '.github/workflows/firebase.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  rules:
+    name: Firestore rules tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The Firestore emulator needs Java 21 or newer.
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+      # npm test calls the firebase CLI, which package.json leaves to the machine. Same version
+      # as the Mac that deploys the rules.
+      - run: npm install --global --ignore-scripts firebase-tools@15.33.0
+      - run: npm ci --ignore-scripts
+        working-directory: firebase/rules-test
+      # A demo project: the emulator runs offline and needs no Firebase login.
+      - run: npm test
+        working-directory: firebase/rules-test
+
+  worker:
+    name: Push Worker type check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Node 26 brings npm 11. npm 10 refuses the lockfile, because wrangler's optional peer
+      # wants a newer @cloudflare/workers-types than package.json pins.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+      # tsc needs only the type packages, so wrangler's install scripts never run here.
+      - run: npm ci --ignore-scripts
+        working-directory: firebase/push-worker
+      - run: npm run check
+        working-directory: firebase/push-worker
