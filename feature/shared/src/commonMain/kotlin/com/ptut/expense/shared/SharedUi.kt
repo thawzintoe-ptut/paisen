@@ -118,12 +118,21 @@ fun GroupTile(icon: String, ink: Boolean, modifier: Modifier = Modifier, size: D
     }
 }
 
-/** p26 and p27's big figure: the baht sign and the satang smaller, in the balance's colour. */
+/**
+ * p26 and p27's big figure: the baht sign and the satang smaller, in the balance's colour. On the
+ * group's sky hero the label takes [labelColor] = heroOn, since grey there is 3.81:1.
+ */
 @Composable
-fun SharedHero(label: String, amount: Satang, tint: Color, modifier: Modifier = Modifier) {
+fun SharedHero(
+    label: String,
+    amount: Satang,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    labelColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
     val parts = amount.formatParts()
     Column(modifier = modifier.semantics(mergeDescendants = true) { contentDescription = "$label, ${amount.spoken()}" }) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = labelColor)
         // #200: a new balance rolls to its figure, so the change is seen as well as read.
         SkyRollingAmount(
             symbol = "${parts.symbol} ",

@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -43,6 +44,7 @@ import com.ptut.expense.locale.LocalCopy
  * History's search (p15): a grey pill with the magnifier and the hint inside it. The field is named
  * by its hint, which a screen reader otherwise loses once the hint is drawn over. Typed text brings a
  * clear button, and the keyboard's Search key puts the keyboard away over the results (#220).
+ * On a grey page, pass [color] = tertiaryContainer so the pill still shows.
  */
 @Composable
 fun SkySearchField(
@@ -51,6 +53,7 @@ fun SkySearchField(
     placeholder: String,
     modifier: Modifier = Modifier,
     clearLabel: String = LocalCopy.current.history.clearSearch,
+    color: Color = MaterialTheme.colorScheme.surface,
 ) {
     val hint = MaterialTheme.colorScheme.onSurfaceVariant
     val focus = LocalFocusManager.current
@@ -58,7 +61,7 @@ fun SkySearchField(
         modifier = modifier
             .heightIn(min = SkySizes.search)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surface)
+            .background(color)
             .padding(start = Spacing.sm, end = if (query.isEmpty()) Spacing.sm else Spacing.none),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s10),
         verticalAlignment = Alignment.CenterVertically,

@@ -192,6 +192,7 @@ private fun Loaded(
                             label = state.balanceLabel,
                             amount = state.balance,
                             tint = MaterialTheme.ptut.heroOn,
+                            labelColor = MaterialTheme.ptut.heroOn,
                             modifier = Modifier.padding(top = Spacing.md),
                         )
                         Text(
@@ -320,6 +321,7 @@ private fun Loaded(
                     { MenuRow(PtutIcon.Sync, text.detail.repeatAnExpense, onClick = pick(onRepeat)) },
                     { MenuRow(PtutIcon.History, text.activity, onClick = pick(onActivity)) },
                 ),
+                color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.padding(top = Spacing.md),
             )
             SkyGroupedCard(
@@ -333,10 +335,12 @@ private fun Loaded(
                         null
                     },
                 ),
+                color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.padding(top = Spacing.s12),
             )
             SkyGroupedCard(
                 rows = listOf({ MenuRow(PtutIcon.Delete, state.removal.label(), onClick = pick { manageStep = STEP_REMOVE }, danger = true) }),
+                color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.padding(top = Spacing.s12),
             )
         }
@@ -460,7 +464,7 @@ data class GroupManage(
 )
 
 /**
- * One line of the group menu: Settings' row (p21) with its glyph in the feed's circle. [danger] is
+ * One line of the group menu: Settings' row (p21) with its glyph in a white circle. [danger] is
  * the way out of the group, in the warning red and with no chevron, since it asks before it acts.
  */
 @Composable
@@ -480,7 +484,7 @@ private fun MenuRow(icon: PtutIcon, label: String, onClick: () -> Unit, value: S
             modifier = Modifier
                 .size(SkySizes.rowCircle)
                 .clip(CircleShape)
-                .background(if (danger) MaterialTheme.ptut.warnBg else MaterialTheme.colorScheme.surface),
+                .background(if (danger) MaterialTheme.ptut.warnBg else MaterialTheme.colorScheme.tertiaryContainer),
         ) {
             Icon(icon.image, contentDescription = null, tint = ink, modifier = Modifier.size(SkySizes.rowGlyph))
         }

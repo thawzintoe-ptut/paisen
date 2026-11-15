@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -35,14 +36,21 @@ import com.ptut.expense.design.ptut
 import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
 
-/** Settings' white card on the grey page (p21), a hairline between its rows, 16 in from each side. */
+/**
+ * Settings' white card on the grey page (p21), a hairline between its rows, 16 in from each side.
+ * On a white sheet, pass [color] = surface so the card still shows.
+ */
 @Composable
-fun SkyGroupedCard(rows: List<@Composable () -> Unit>, modifier: Modifier = Modifier) {
+fun SkyGroupedCard(
+    rows: List<@Composable () -> Unit>,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.tertiaryContainer,
+) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(PtutRadii.r20)
-            .background(MaterialTheme.colorScheme.tertiaryContainer),
+            .background(color),
     ) {
         rows.forEachIndexed { index, row ->
             if (index > 0) SkyHairline(Modifier.padding(horizontal = Spacing.sm))

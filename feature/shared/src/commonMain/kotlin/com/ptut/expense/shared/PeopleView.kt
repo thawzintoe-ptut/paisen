@@ -52,7 +52,13 @@ fun PeopleView(
 
     SkyListScreen(title = text.people, onBack = onBack, modifier = modifier) {
         item {
-            SkySearchField(query = uiState.query, onSearch = onSearch, placeholder = text.person.search, modifier = Modifier.padding(horizontal = Spacing.sm))
+            SkySearchField(
+                query = uiState.query,
+                onSearch = onSearch,
+                placeholder = text.person.search,
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                modifier = Modifier.padding(horizontal = Spacing.sm),
+            )
         }
         items(uiState.rows, key = { it.key }) { row ->
             PeopleRow(row, onClick = row.personId?.let { id -> { picked = id } }, modifier = skyItem().padding(horizontal = Spacing.sm))

@@ -33,7 +33,6 @@ import com.ptut.expense.sync.push.pushConfigured
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
-import com.ptut.expense.ui.sky.SkyIntro
 import com.ptut.expense.ui.sky.SkyProgress
 import com.ptut.expense.ui.sky.SkyTopBar
 
@@ -67,21 +66,21 @@ fun JoinView(
             verticalArrangement = Arrangement.spacedBy(Spacing.s12),
         ) {
             when (uiState) {
-                JoinUiState.Unavailable -> SkyIntro(words.unavailable)
+                JoinUiState.Unavailable -> Intro(words.unavailable)
 
                 JoinUiState.NeedsSignIn -> {
-                    SkyIntro(words.signInFirst)
+                    Intro(words.signInFirst)
                     SkyButton(text.shared.signIn, onClick = { signIn = true }, modifier = Modifier.fillMaxWidth())
                 }
 
                 JoinUiState.Loading, is JoinUiState.Done -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     SkyProgress()
-                    SkyIntro(words.opening)
+                    Intro(words.opening)
                 }
 
                 is JoinUiState.Choose -> {
                     Text(words.whichOne, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
-                    SkyIntro(words.pickYours(uiState.groupName))
+                    Intro(words.pickYours(uiState.groupName))
                     uiState.names.forEach { name ->
                         NameRow(name.name, enabled = !uiState.joining, onClick = { asking = name.memberId })
                     }
@@ -96,12 +95,12 @@ fun JoinView(
 
                 is JoinUiState.AlreadyIn -> {
                     Text(words.alreadyIn(uiState.groupName), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
-                    SkyIntro(words.joinedAs(uiState.memberName))
+                    Intro(words.joinedAs(uiState.memberName))
                     SkyButton(words.openGroup, onClick = onOpenGroup, enabled = !uiState.opening, modifier = Modifier.fillMaxWidth())
                 }
 
                 is JoinUiState.Failed -> {
-                    SkyIntro(uiState.message)
+                    Intro(uiState.message)
                     SkyButton(text.common.tryAgain, onClick = onRetry, modifier = Modifier.fillMaxWidth())
                 }
             }
@@ -154,4 +153,10 @@ private fun NameRow(name: String, enabled: Boolean, onClick: () -> Unit) {
         MemberAvatar(label = name.trim().firstOrNull()?.uppercase() ?: "?", isMe = false)
         Text(name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
     }
+}
+
+/** [com.ptut.expense.ui.sky.SkyIntro]'s words without its own inset: this column is already 24 in. */
+@Composable
+private fun Intro(text: String) {
+    Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
