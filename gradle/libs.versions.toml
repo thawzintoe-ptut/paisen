@@ -27,7 +27,7 @@ serialization = "1.11.0"
 
 mlkitTextRecognition = "16.0.1"
 
-okio = "3.9.1"
+okio = "3.18.2"
 
 # #191: shared groups sync over Firebase's REST APIs. Ktor's client is allowed under sync/ only.
 ktor = "3.6.0"
