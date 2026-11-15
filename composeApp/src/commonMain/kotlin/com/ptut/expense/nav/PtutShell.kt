@@ -2,6 +2,10 @@ package com.ptut.expense.nav
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
@@ -20,42 +24,54 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.coerceAtMost
+import androidx.compose.ui.unit.coerceIn
 import com.ptut.expense.design.GlassBackdrop
 import com.ptut.expense.design.GlassSurface
 import com.ptut.expense.design.LocalGlassOn
 import com.ptut.expense.design.LocalShellBackdrop
+import com.ptut.expense.design.PRESS_SCALE_COMPACT
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
@@ -66,6 +82,8 @@ import com.ptut.expense.design.ptutMotion
 import com.ptut.expense.design.rememberGlassBackdrop
 import com.ptut.expense.design.tappable
 import com.ptut.expense.locale.LocalCopy
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * The chrome around the nav graph: one floating pill over the content, the same on both platforms
@@ -141,10 +159,18 @@ fun PtutShell(
     }
 }
 
-/** The pill's slots in order. Add takes the middle one. */
+/** Where each slot sits in the pill, counted in slots. Add takes the middle one. */
 private val PILL_ORDER: List<BarDestination?> =
     listOf(BarDestination.Today, BarDestination.Reports, null, BarDestination.Shared, BarDestination.Settings)
 
+/** From one slot's start to the next. */
+private val PILL_STEP = SkySizes.pillSlot + SkySizes.pillGap
+
+/**
+ * The pill (p05): glyphs alone, the lit one on an ink disc, ruby Add in the middle. The disc is drawn
+ * once behind the slots and travels between them; each glyph is drawn again in the lit ink, clipped to
+ * wherever the disc is, so it changes colour as the disc covers it rather than fading.
+ */
 @Composable
 private fun NavPill(
     selected: BarDestination,
@@ -154,12 +180,14 @@ private fun NavPill(
     backdrop: GlassBackdrop,
 ) {
     val night = MaterialTheme.colorScheme.background.luminance() < NIGHT_LUMINANCE
+    val still = MaterialTheme.ptutMotion.navIndicator.orStill() == 0
+    val disc = rememberTravellingDisc(slot = PILL_ORDER.indexOf(selected), still = still)
+    val ink = MaterialTheme.colorScheme.primary
     GlassSurface(
         backdrop = backdrop,
         shape = CircleShape,
         // The card colour in both themes: lighter than the night ground, and dark enough that the ruby Add
-        // keeps 3:1 against it (on containerHigh it fell to 2.5). At night a denser tint, so rows scrolling
-        // under it stop reading through.
+        // keeps 3:1 against it. At night a denser tint, so rows scrolling under it stop reading through.
         fill = MaterialTheme.colorScheme.tertiaryContainer,
         tint = if (night) NIGHT_FROST_TINT else FROST_TINT,
         modifier = Modifier.shadow(
@@ -170,19 +198,31 @@ private fun NavPill(
         ),
     ) {
         Row(
-            modifier = Modifier.padding(SkySizes.pillGap).selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(SkySizes.pillTabGap),
-            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .padding(SkySizes.pillGap)
+                // Read in the draw phase only, so the disc moves without recomposing the pill.
+                .drawBehind {
+                    drawRoundRect(
+                        color = ink,
+                        topLeft = Offset(disc.left.toPx(), 0f),
+                        size = Size(disc.width.toPx(), size.height),
+                        cornerRadius = CornerRadius(size.height / 2),
+                    )
+                }
+                .selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(SkySizes.pillGap),
         ) {
-            PILL_ORDER.forEach { destination ->
+            PILL_ORDER.forEachIndexed { index, destination ->
                 if (destination == null) {
-                    AddSlot(onAdd = onAdd)
+                    AddSlot(onAdd = onAdd, still = still)
                 } else {
                     DestinationSlot(
                         destination = destination,
                         selected = destination == selected,
                         onGlass = backdrop.enabled,
-                        night = night,
+                        disc = disc,
+                        at = PILL_STEP * index,
+                        still = still,
                         onSelect = { onSelect(destination) },
                     )
                 }
@@ -192,103 +232,152 @@ private fun NavPill(
 }
 
 /**
- * A destination: its glyph in an indicator over its name, so the pill says where you are in words
- * as well as ink. By day the indicator is the ink pill with a white glyph; at night a soft sky
- * tint with a sky glyph, because a white disc there glared and read as a second Add.
- *
- * [onGlass]: the frosted pill lets more of the page through, so idle glyphs take the stronger ink (see [FROST_TINT]).
+ * The ink disc's two edges, each on its own spring. The edge facing the new slot leads and the other
+ * follows a beat behind, so the disc stretches into a capsule on the way and settles round with a give.
+ */
+@Stable
+private class TravellingDisc(start: Dp) {
+    private val leftEdge = Animatable(start, Dp.VectorConverter)
+    private val rightEdge = Animatable(start + SkySizes.pillSlot, Dp.VectorConverter)
+
+    /** Held inside the end slots, so the springs' give past Today or Settings is never cut by the pill. */
+    val right: Dp get() = rightEdge.value.coerceIn(SkySizes.pillSlot, PILL_STEP * PILL_ORDER.lastIndex + SkySizes.pillSlot)
+
+    /** Never closer to [right] than [MIN_DISC], so a trailing edge springing past its rest squashes the disc rather than crossing it. */
+    val left: Dp get() = leftEdge.value.coerceIn(Spacing.none, PILL_STEP * PILL_ORDER.lastIndex).coerceAtMost(right - SkySizes.pillSlot * MIN_DISC)
+
+    val width: Dp get() = right - left
+
+    suspend fun travelTo(start: Dp, still: Boolean) = coroutineScope {
+        val end = start + SkySizes.pillSlot
+        if (still) {
+            leftEdge.snapTo(start)
+            rightEdge.snapTo(end)
+            return@coroutineScope
+        }
+        val rightward = start > leftEdge.value
+        launch { leftEdge.animateTo(start, edgeSpring(leads = !rightward)) }
+        launch { rightEdge.animateTo(end, edgeSpring(leads = rightward)) }
+    }
+}
+
+@Composable
+private fun rememberTravellingDisc(slot: Int, still: Boolean): TravellingDisc {
+    val disc = remember { TravellingDisc(PILL_STEP * slot) }
+    LaunchedEffect(slot, still) { disc.travelTo(PILL_STEP * slot, still) }
+    return disc
+}
+
+private fun edgeSpring(leads: Boolean) = spring(
+    dampingRatio = if (leads) LEAD_DAMPING else TRAIL_DAMPING,
+    stiffness = if (leads) LEAD_STIFFNESS else TRAIL_STIFFNESS,
+    visibilityThreshold = Dp.VisibilityThreshold,
+)
+
+/**
+ * One destination: its glyph in the idle ink, and again in the lit ink clipped to the disc. [at] is
+ * where this slot starts in the pill. [onGlass]: the frosted pill lets more of the page through, so
+ * idle glyphs take the stronger ink (see [FROST_TINT]).
  */
 @Composable
 private fun DestinationSlot(
     destination: BarDestination,
     selected: Boolean,
     onGlass: Boolean,
-    night: Boolean,
+    disc: TravellingDisc,
+    at: Dp,
+    still: Boolean,
     onSelect: () -> Unit,
 ) {
-    val motion = MaterialTheme.ptutMotion
-    val move = motion.navIndicator.orStill()
     val idle = if (onGlass) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-    val indicatorFill = if (night) MaterialTheme.ptut.accent.copy(alpha = NIGHT_INDICATOR_ALPHA) else MaterialTheme.colorScheme.primary
-    val litGlyph = if (night) MaterialTheme.ptut.accent else MaterialTheme.colorScheme.onPrimary
-
-    // The indicator grows out from the glyph (M3 Expressive's spatial spring), and the inks follow it.
-    val lit by animateFloatAsState(
-        targetValue = if (selected) 1f else 0f,
-        animationSpec = if (move == 0) snap() else spring(dampingRatio = INDICATOR_DAMPING, stiffness = INDICATOR_STIFFNESS),
-        label = "pill indicator",
-    )
-    val glyph by animateColorAsState(if (selected) litGlyph else idle, tween(move, easing = motion.standard), label = "pill glyph")
-    val word by animateColorAsState(
-        if (selected) MaterialTheme.colorScheme.onSurface else idle,
-        tween(move, easing = motion.standard),
-        label = "pill label",
-    )
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(SkySizes.pillLabelGap, Alignment.CenterVertically),
+    val pop = rememberPop(selected = selected, still = still)
+    val clip = remember { Path() }
+    Box(
+        contentAlignment = Alignment.Center,
         modifier = Modifier
+            .size(SkySizes.pillSlot)
             .semantics { contentDescription = destination.label }
-            // No ripple: the indicator growing under the glyph is the answer to the tap.
+            // No ripple: the disc travelling to the glyph is the answer to the tap.
             .selectable(
                 selected = selected,
                 interactionSource = null,
                 indication = null,
                 role = Role.Tab,
                 onClick = onSelect,
-            )
-            .widthIn(min = SkySizes.pillTabMinWidth)
-            .heightIn(min = SkySizes.pillTabHeight)
-            .padding(horizontal = Spacing.xxs),
+            ),
     ) {
+        PillGlyph(icon = destination.icon, tint = idle, scale = { pop.value })
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.size(width = SkySizes.pillIndicatorWidth, height = SkySizes.pillIndicatorHeight),
+            modifier = Modifier
+                .matchParentSize()
+                .drawWithContent {
+                    val left = (disc.left - at).toPx()
+                    clip.reset()
+                    clip.addRoundRect(RoundRect(left, 0f, left + disc.width.toPx(), size.height, CornerRadius(size.height / 2)))
+                    clipPath(clip) { this@drawWithContent.drawContent() }
+                },
         ) {
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .graphicsLayer {
-                        scaleX = lit
-                        alpha = lit.coerceIn(0f, 1f)
-                    }
-                    .background(indicatorFill, CircleShape),
-            )
-            Icon(imageVector = destination.icon, contentDescription = null, tint = glyph, modifier = Modifier.size(SkySizes.pillGlyph))
+            PillGlyph(icon = destination.icon, tint = MaterialTheme.colorScheme.onPrimary, scale = { pop.value })
         }
-        Text(
-            text = destination.label,
-            style = MaterialTheme.typography.labelMedium,
-            color = word,
-            maxLines = 1,
-            softWrap = false,
-            // The slot already says it; the word would be read twice.
-            modifier = Modifier.clearAndSetSemantics {},
-        )
     }
 }
 
-/** The one ruby object on the screen, so nothing else competes with it. */
+/** The glyph that lights dips and springs back to size, so the tap is felt to land. Not on the first frame. */
 @Composable
-private fun AddSlot(onAdd: () -> Unit) {
+private fun rememberPop(selected: Boolean, still: Boolean): Animatable<Float, AnimationVector1D> {
+    val pop = remember { Animatable(1f) }
+    val settled = remember { mutableStateOf(false) }
+    LaunchedEffect(selected) {
+        if (selected && settled.value && !still) {
+            pop.snapTo(POP_FROM)
+            pop.animateTo(1f, spring(dampingRatio = POP_DAMPING, stiffness = POP_STIFFNESS))
+        }
+        settled.value = true
+    }
+    return pop
+}
+
+/** The one ruby object on the screen, so nothing else competes with it. It gives under the finger, and the plus turns a quarter. */
+@Composable
+private fun AddSlot(onAdd: () -> Unit, still: Boolean) {
     val addLabel = LocalCopy.current.shell.addByHand
+    var turns by remember { mutableIntStateOf(0) }
+    val turn by animateFloatAsState(
+        targetValue = turns * QUARTER_TURN,
+        animationSpec = if (still) snap() else spring(dampingRatio = TURN_DAMPING, stiffness = TURN_STIFFNESS),
+        label = "add turn",
+    )
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(SkySizes.pillAdd)
+            .size(SkySizes.pillSlot)
+            .tappable(CircleShape, Role.Button, pressScale = PRESS_SCALE_COMPACT) {
+                turns++
+                onAdd()
+            }
             .clip(CircleShape)
             .background(MaterialTheme.ptut.signature)
-            .semantics { contentDescription = addLabel }
-            .tappable(CircleShape, Role.Button, onClick = onAdd),
+            .semantics { contentDescription = addLabel },
     ) {
-        Icon(
-            imageVector = PtutIcon.Add.image,
-            contentDescription = null,
-            tint = MaterialTheme.ptut.onSignature,
-            modifier = Modifier.size(SkySizes.pillGlyph),
-        )
+        PillGlyph(icon = PtutIcon.Add.image, tint = MaterialTheme.ptut.onSignature, rotation = { turn })
     }
+}
+
+@Composable
+private fun PillGlyph(icon: ImageVector, tint: Color, scale: () -> Float = { 1f }, rotation: () -> Float = { 0f }) {
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = tint,
+        modifier = Modifier
+            .size(SkySizes.pillGlyph)
+            .graphicsLayer {
+                scaleX = scale()
+                scaleY = scale()
+                rotationZ = rotation()
+            },
+    )
 }
 
 /**
@@ -300,16 +389,29 @@ private const val FROST_TINT = 0.55f
 
 /**
  * The same at night. At 0.55 the light rows under a dark pill read straight through it, names and
- * amounts competing with the glyphs; at 0.88 they are a soft shape and the glyphs and names stay clear.
+ * amounts competing with the glyphs; at 0.88 they are a soft shape and the glyphs stay clear.
  */
 private const val NIGHT_FROST_TINT = 0.88f
 
 /** Below this the ground is a night one (SkyNight's is #121316; Sky's and SkyEvening's are near white). */
 private const val NIGHT_LUMINANCE = 0.5f
 
-/** The night indicator: sky at this alpha over the pill, so the lit slot glows rather than glares. */
-private const val NIGHT_INDICATOR_ALPHA = 0.22f
+/** The disc's leading edge: quick and nearly still on arrival. */
+private const val LEAD_DAMPING = 0.8f
+private const val LEAD_STIFFNESS = 700f
 
-/** M3 Expressive's default spatial spring: it settles with a little give. */
-private const val INDICATOR_DAMPING = 0.6f
-private const val INDICATOR_STIFFNESS = 380f
+/** The trailing edge: a beat behind, with M3 Expressive's give. */
+private const val TRAIL_DAMPING = 0.62f
+private const val TRAIL_STIFFNESS = 300f
+
+/** The narrowest the disc squashes to, as a share of a slot. */
+private const val MIN_DISC = 0.8f
+
+/** A lit glyph dips to this and springs back with a small bounce. */
+private const val POP_FROM = 0.86f
+private const val POP_DAMPING = 0.45f
+private const val POP_STIFFNESS = 600f
+
+private const val QUARTER_TURN = 90f
+private const val TURN_DAMPING = 0.6f
+private const val TURN_STIFFNESS = 400f
