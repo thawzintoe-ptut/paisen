@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
+import com.ptut.expense.design.ptutIcon
 import com.ptut.expense.design.ptutType
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.SubCategory
@@ -175,6 +176,7 @@ private fun Form(
                         label = category.name,
                         selected = category.id == state.categoryId,
                         onClick = { onCategory(category) },
+                        icon = ptutIcon(category.icon),
                     )
                 }
             }

@@ -4,8 +4,6 @@ package com.ptut.expense.locale
 data class AddCopy(
     val pickCategoryHint: String = "Pick a category to save this",
     val typeAmountHint: String = "Type an amount to save this",
-    val incomeHint: String = "Income · lands in today, week and month",
-    val byHandHint: String = "Added by hand · no slip for this",
     val askPlaceholder: String = "Type it: coffee 60",
     val listening: String = "Listening…",
     val sayIt: String = "Say it",
@@ -59,8 +57,6 @@ data class AddCopy(
 val BurmeseAdd = AddCopy(
     pickCategoryHint = "သိမ်းဖို့ အမျိုးအစား ရွေးပါ",
     typeAmountHint = "သိမ်းဖို့ ပမာဏ ရိုက်ထည့်ပါ",
-    incomeHint = "ဝင်ငွေ · ဒီနေ့၊ ဒီအပတ်နဲ့ ဒီလ စုစုပေါင်းထဲ ဝင်မယ်",
-    byHandHint = "ကိုယ်တိုင် ထည့်တာ · စလစ် မရှိဘူး",
     askPlaceholder = "ရိုက်ထည့်ပါ: ကော်ဖီ ၆၀",
     listening = "နားထောင်နေတယ်…",
     sayIt = "ပြောမယ်",

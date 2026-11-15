@@ -31,8 +31,6 @@ Burmese for Today, the Add sheet and the day receipt that the Sky MY design does
 | `, ` (between the reasons above) | `၊ ` | locale/HomeCopy.kt:91 |
 | Pick a category to save this | သိမ်းဖို့ အမျိုးအစား ရွေးပါ | locale/AddCopy.kt:25 |
 | Type an amount to save this (draft, 15 Nov) | သိမ်းဖို့ ပမာဏ ရိုက်ထည့်ပါ | locale/AddCopy.kt `typeAmountHint` |
-| Income · lands in today, week and month | ဝင်ငွေ · ဒီနေ့၊ ဒီအပတ်နဲ့ ဒီလ စုစုပေါင်းထဲ ဝင်မယ် | locale/AddCopy.kt:26 |
-| Added by hand · no slip for this | ကိုယ်တိုင် ထည့်တာ · စလစ် မရှိဘူး | locale/AddCopy.kt:27 |
 | Type it: coffee 60 (draft, 15 Nov: one example now, the language sits beside the mic) | ရိုက်ထည့်ပါ: ကော်ဖီ ၆၀ | locale/AddCopy.kt `askPlaceholder` |
 | Listening… | နားထောင်နေတယ်… | locale/AddCopy.kt:29 |
 | Say it | ပြောမယ် | locale/AddCopy.kt:30 |
