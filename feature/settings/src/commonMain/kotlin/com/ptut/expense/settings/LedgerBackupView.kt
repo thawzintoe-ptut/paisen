@@ -1,5 +1,7 @@
 package com.ptut.expense.settings
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -106,7 +108,36 @@ private fun BackupScreen(
     secondary: String? = null,
     onSecondary: () -> Unit = {},
 ) {
-    SkyListScreen(title = title, onBack = onBack, modifier = modifier) {
+    SkyListScreen(
+        title = title,
+        onBack = onBack,
+        modifier = modifier,
+        // The one action at the bottom, in reach of the thumb; with a file chosen, Cancel beside it,
+        // the way Not mine sits beside Confirm (UX pass, Nov 2026).
+        bottomBar = {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(Spacing.md),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
+            ) {
+                // Cancel takes the width its own word needs (Burmese's is the longest) and the action the rest,
+                // so neither is cut off in any of the three languages.
+                if (secondary != null) {
+                    SkyButton(
+                        label = secondary,
+                        onClick = onSecondary,
+                        kind = SkyButtonKind.Outline,
+                        enabled = enabled,
+                    )
+                }
+                SkyButton(
+                    label = action,
+                    onClick = onAction,
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        },
+    ) {
         item { SkyIntro(intro) }
         item {
             SkyNoticeCard(
@@ -115,25 +146,6 @@ private fun BackupScreen(
                 icon = cardIcon.image,
                 modifier = Modifier.padding(horizontal = Spacing.sm),
             )
-        }
-        item {
-            SkyButton(
-                label = action,
-                onClick = onAction,
-                enabled = enabled,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.sm),
-            )
-        }
-        if (secondary != null) {
-            item {
-                SkyButton(
-                    label = secondary,
-                    onClick = onSecondary,
-                    kind = SkyButtonKind.Outline,
-                    enabled = enabled,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.sm),
-                )
-            }
         }
         item {
             Text(

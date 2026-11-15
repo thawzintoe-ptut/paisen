@@ -54,9 +54,10 @@ internal fun skyTypeOf(geist: FontFamily, mono: FontFamily = geist) = PtutType(
     display = style(geist, 52f, FontWeight.Light, 52.sp, (-0.04).em),
     screenTitle = style(geist, 34f, FontWeight.Medium, 40.sp, (-0.02).em),
     sectionTitle = style(geist, 17.5f, FontWeight.Medium, 23.sp),
-    listHeadline = style(geist, 15f, FontWeight.Medium, 20.sp),
-    meta = style(geist, 12.5f, FontWeight.Normal, 17.sp),
-    eyebrow = style(geist, 11.5f, FontWeight.Bold, 15.sp, 0.08.em),
+    // A row's name at the main text size, its meta and eyebrow at the 13 and 12 floors (UX pass, Nov 2026).
+    listHeadline = style(geist, 16f, FontWeight.Medium, 22.sp),
+    meta = style(geist, 13f, FontWeight.Normal, 18.sp),
+    eyebrow = style(geist, 12f, FontWeight.Bold, 16.sp, 0.08.em),
     // p09's receipt, measured off the artboard: lines at 14, the heading spaced out, the total large.
     receipt = style(mono, 14f, FontWeight.Normal, 22.sp),
     receiptHeading = style(mono, 13f, FontWeight.SemiBold, 18.sp, 0.2.em),

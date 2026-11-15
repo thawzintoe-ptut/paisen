@@ -143,7 +143,7 @@ private fun NameRow(name: String, enabled: Boolean, onClick: () -> Unit) {
             .fillMaxWidth()
             .clip(PtutRadii.r22)
             .background(MaterialTheme.colorScheme.tertiaryContainer)
-            .tappable(PtutRadii.r22, Role.Button, enabled, onClick)
+            .tappable(PtutRadii.r22, Role.Button, enabled, onClick = onClick)
             .semantics(mergeDescendants = true) {}
             .heightIn(min = SkySizes.transactionRow)
             .padding(horizontal = Spacing.sm),

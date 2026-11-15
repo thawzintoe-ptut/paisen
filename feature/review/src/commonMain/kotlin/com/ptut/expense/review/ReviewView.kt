@@ -42,6 +42,7 @@ import com.ptut.expense.locale.SlipsCopy
 import com.ptut.expense.ui.DisplayAmount
 import com.ptut.expense.ui.SlipPicture
 import com.ptut.expense.ui.sky.SkyButton
+import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyEmptyState
 import com.ptut.expense.ui.sky.SkyStatusPill
 import com.ptut.expense.ui.sky.SkyStatusPillTone
@@ -194,7 +195,8 @@ private fun QueuedSlipCard(
             horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SkyButton(label = text.checkSlip, onClick = onOpen, modifier = Modifier.weight(1f))
+            // Outlined: one per slip, so an ink button repeated down the list would be every slip shouting at once.
+            SkyButton(label = text.checkSlip, onClick = onOpen, kind = SkyButtonKind.Outline, modifier = Modifier.weight(1f))
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier

@@ -139,11 +139,18 @@ object SkySizes {
     val barGlyph = 24.dp
 
     /**
-     * The nav pill (p05): five 44 circles, 6 apart and 6 in from the pill's edge, so the pill is 56
-     * tall. It floats 12 above the system's own bottom inset.
+     * The nav pill (p05): four destinations, each its glyph in a 56 x 32 indicator over its name,
+     * at least 56 wide and 60 tall, 4 apart; Add a 52 circle in the middle. 6 in from the pill's
+     * edge, so the pill is 72 tall. It floats 12 above the system's own bottom inset.
      */
-    val pillSlot = 44.dp
     val pillGap = 6.dp
+    val pillTabGap = 4.dp
+    val pillTabMinWidth = 56.dp
+    val pillTabHeight = 60.dp
+    val pillIndicatorWidth = 56.dp
+    val pillIndicatorHeight = 32.dp
+    val pillLabelGap = 4.dp
+    val pillAdd = 52.dp
     val pillGlyph = 24.dp
     val pillMargin = 12.dp
     val pillShadow = 12.dp
@@ -152,10 +159,10 @@ object SkySizes {
     val glassBlur = 28.dp
 
     /**
-     * What the end of a scroll leaves free under the pill: its 12 of margin, its 56 and 20 more, so
+     * What the end of a scroll leaves free under the pill: its 12 of margin, its 72 and 20 more, so
      * the last row comes to rest clear of it rather than under it.
      */
-    val pillClearance = 88.dp
+    val pillClearance = 104.dp
 
     /**
      * Reports' chart on the sky field (p14): bars in a 220 band, an empty bucket as a 6 stub (p15),

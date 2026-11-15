@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.em
+import com.ptut.expense.design.PRESS_SCALE_COMPACT
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.Sizes
 import com.ptut.expense.design.SkySizes
@@ -47,7 +48,7 @@ fun SkyButton(
         modifier = modifier
             .heightIn(min = SkySizes.button)
             .semantics { contentDescription = label }
-            .tappable(CircleShape, Role.Button, enabled, onClick)
+            .tappable(CircleShape, Role.Button, enabled, pressScale = PRESS_SCALE_COMPACT, onClick = onClick)
             .background(colors.fill)
             .then(
                 if (colors.edge == null) {
@@ -85,7 +86,7 @@ fun SkyTextAction(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .sizeIn(minWidth = Sizes.minTouchTarget, minHeight = Sizes.minTouchTarget)
-            .tappable(PtutRadii.r12, Role.Button, enabled, onClick)
+            .tappable(PtutRadii.r12, Role.Button, enabled, onClick = onClick)
             .padding(horizontal = Spacing.xs),
     ) {
         Text(

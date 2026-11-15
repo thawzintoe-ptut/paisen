@@ -127,16 +127,18 @@ val SkyEvening = Sky.copy(
  * `SkyKeepsItsMeaningAtNightTest` holds the parts of that rule an edit could break on one side.
  */
 val SkyNight = Palette(
-    surface = Color(0xFF0B0B0C),
-    container = Color(0xFF17191C),
-    containerHigh = Color(0xFF25282D),
+    // Charcoal, not near-black: on OLED a #0B0B0C ground against light text glared and smeared as
+    // rows scrolled. Each step up stays one shade lighter, so depth reads without shadows.
+    surface = Color(0xFF121316),
+    container = Color(0xFF1C1E22),
+    containerHigh = Color(0xFF2A2D32),
     onSurface = Color(0xFFF4F6F8),
     onVar = Color(0xFF9AA0A6),
     primary = Color(0xFFF4F6F8),
     onPrimary = Color(0xFF0B0B0C),
     accent = Color(0xFFA9DCF7),
     accentOn = Color(0xFF0B0B0C),
-    // Day ruby is 2.2:1 on the night bar; lifted until Add stands off it at 3.2:1, white still 5.5:1 on it.
+    // Day ruby is 2.2:1 on the night bar; lifted until Add stands off it at 3:1 (3.04 on the charcoal bar), white still 5.5:1 on it.
     signature = Color(0xFFC2304E),
     onSignature = Color(0xFFFFFFFF),
     // The fill is 3.2:1 on a night card, under the body floor for an amount; this rose reads 6.6:1.
@@ -145,19 +147,19 @@ val SkyNight = Palette(
     heroBg = Color(0xFF153647),
     heroOn = Color(0xFFF4F6F8),
     heroInner = Color(0x26A9DCF7),
-    navBg = Color(0xFF17191C),
+    navBg = Color(0xFF1C1E22),
     pillShadow = Color(0x8C000000),
     glassHighlight = Color(0xFFFFFFFF),
     outline = Color(0x1FF4F6F8),
     barTrack = Color(0x40A9DCF7),
     stripe = Color(0x38F4F6F8),
-    slipCap = Color(0xEB0B0B0C),
+    slipCap = Color(0xEB121316),
     warn = Color(0xFFC8372D),
     warnInk = Color(0xFFDA635A),
     warnOn = Color(0xFFFFFFFF),
     warnBg = Color(0xFF3A1714),
     ok = Color(0xFF2FB981),
-    sheetBg = Color(0xFF0B0B0C),
+    sheetBg = Color(0xFF121316),
     // A light toast would hide the sky check, so this one stays dark.
     toastBg = Color(0xFF2E3238),
     toastOn = Color(0xFFF4F6F8),

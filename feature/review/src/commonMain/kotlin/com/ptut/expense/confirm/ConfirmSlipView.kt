@@ -302,7 +302,14 @@ private fun DebtMatchCard(
                 }
             }
         }
-        SkyButton(text.debtOnly, onClick = { onPay(false) }, enabled = enabled, modifier = Modifier.fillMaxWidth().padding(top = Spacing.xxs))
+        // Both answers outlined: Confirm at the bottom stays the screen's one ink button (UX pass, Nov 2026).
+        SkyButton(
+            text.debtOnly,
+            onClick = { onPay(false) },
+            kind = SkyButtonKind.Outline,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.xxs),
+        )
         SkyButton(text.debtKeep, onClick = { onPay(true) }, kind = SkyButtonKind.Outline, enabled = enabled, modifier = Modifier.fillMaxWidth())
         SkyTextAction(text.debtNotThis, onClick = onNotThis, enabled = enabled, modifier = Modifier.align(Alignment.CenterHorizontally))
     }

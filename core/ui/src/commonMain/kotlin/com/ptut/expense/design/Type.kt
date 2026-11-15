@@ -105,12 +105,15 @@ internal fun typographyOf(display: FontFamily, reading: FontFamily): Typography 
     titleLarge = style(display, 20f, FontWeight.SemiBold, 26.sp, (-0.02).em),
     titleMedium = style(reading, 16f, FontWeight.Medium, 22.sp),
     titleSmall = style(reading, 14.5f, FontWeight.Medium, 20.sp),
-    bodyLarge = style(reading, 15f, FontWeight.Normal, 21.sp),
-    bodyMedium = style(reading, 13.5f, FontWeight.Normal, 20.sp),
-    bodySmall = style(reading, 12.5f, FontWeight.Normal, 17.sp),
+    // Reading text a step up from the handoff (UX pass, Nov 2026): main text 16 at 1.5, the rest
+    // 14 and 13, so nothing a sentence is set in falls under 13 or reads cramped on a phone.
+    bodyLarge = style(reading, 16f, FontWeight.Normal, 24.sp),
+    bodyMedium = style(reading, 14f, FontWeight.Normal, 21.sp),
+    bodySmall = style(reading, 13f, FontWeight.Normal, 19.sp),
     labelLarge = style(reading, 14f, FontWeight.Medium, 19.sp),
     labelMedium = style(reading, 12.5f, FontWeight.Medium, 17.sp),
-    labelSmall = style(reading, 11.5f, FontWeight.Medium, 15.sp),
+    // 12 is the floor for any label (was 11.5).
+    labelSmall = style(reading, 12f, FontWeight.Medium, 16.sp),
 )
 
 /**

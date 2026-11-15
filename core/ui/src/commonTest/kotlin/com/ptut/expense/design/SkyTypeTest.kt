@@ -30,12 +30,12 @@ class SkyTypeTest {
             Slot("titleLarge", 20.sp, 26.sp, FontWeight.Medium),
             Slot("titleMedium", 16.sp, 22.sp, FontWeight.Medium),
             Slot("titleSmall", 14.5.sp, 20.sp, FontWeight.Medium),
-            Slot("bodyLarge", 15.sp, 21.sp, FontWeight.Normal),
-            Slot("bodyMedium", 13.5.sp, 20.sp, FontWeight.Normal),
-            Slot("bodySmall", 12.5.sp, 17.sp, FontWeight.Normal),
+            Slot("bodyLarge", 16.sp, 24.sp, FontWeight.Normal),
+            Slot("bodyMedium", 14.sp, 21.sp, FontWeight.Normal),
+            Slot("bodySmall", 13.sp, 19.sp, FontWeight.Normal),
             Slot("labelLarge", 14.sp, 19.sp, FontWeight.Medium),
             Slot("labelMedium", 12.5.sp, 17.sp, FontWeight.Medium),
-            Slot("labelSmall", 11.5.sp, 15.sp, FontWeight.Medium),
+            Slot("labelSmall", 12.sp, 16.sp, FontWeight.Medium),
         ).forEach { want ->
             val style = slots.getValue(want.name)
             assertEquals(want.size, style.fontSize, "${want.name} size")
@@ -70,7 +70,7 @@ class SkyTypeTest {
     fun theTitlesAreMedium() {
         assertEquals(34.sp, type.screenTitle.fontSize)
         assertEquals(17.5.sp, type.sectionTitle.fontSize)
-        assertEquals(15.sp, type.listHeadline.fontSize)
+        assertEquals(16.sp, type.listHeadline.fontSize)
         listOf(type.screenTitle, type.sectionTitle, type.listHeadline).forEach {
             assertEquals(FontWeight.Medium, it.fontWeight)
         }
@@ -86,9 +86,9 @@ class SkyTypeTest {
 
     @Test
     fun metaAndTheEyebrowKeepTheirValues() {
-        assertEquals(12.5.sp, type.meta.fontSize)
+        assertEquals(13.sp, type.meta.fontSize)
         assertEquals(FontWeight.Normal, type.meta.fontWeight)
-        assertEquals(11.5.sp, type.eyebrow.fontSize)
+        assertEquals(12.sp, type.eyebrow.fontSize)
         assertEquals(FontWeight.Bold, type.eyebrow.fontWeight)
         assertEquals(0.08.em, type.eyebrow.letterSpacing)
     }

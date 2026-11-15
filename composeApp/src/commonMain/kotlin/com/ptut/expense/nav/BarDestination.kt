@@ -23,6 +23,6 @@ enum class BarDestination(
     Settings(PtutRoute.Settings(), ShellCopy::tabSettings, PtutIcon.Settings.image),
     ;
 
-    /** What a screen reader says for the slot (N6). The pill draws the glyph alone. */
+    /** The slot's name: drawn under its glyph, and what a screen reader says for it (N6). */
     val label: String get() = labelIn(AppText.copy.shell)
 }

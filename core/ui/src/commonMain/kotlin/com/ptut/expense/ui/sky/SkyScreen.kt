@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -19,6 +20,9 @@ import com.ptut.expense.design.Spacing
 /**
  * A pushed Sky screen with no artboard of its own (#172): the top bar over a list on the grey
  * page, ending clear of the pill's space. The screens built on it share one shape.
+ *
+ * [bottomBar] holds the screen's actions under the list, in reach of the thumb, the way Photo
+ * folders' Save sits (UX pass, Nov 2026): the list scrolls above it and the bar stays put.
  */
 @Composable
 fun SkyListScreen(
@@ -26,14 +30,24 @@ fun SkyListScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
+    bottomBar: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
-    Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .then(if (bottomBar == null) Modifier else Modifier.navigationBarsPadding()),
+    ) {
         SkyTopBar(title = title, onBack = onBack, trailing = trailing)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(Spacing.s12)) {
+        LazyColumn(
+            modifier = if (bottomBar == null) Modifier else Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s12),
+        ) {
             content()
-            item { Box(Modifier.height(SkySizes.pillClearance)) }
+            if (bottomBar == null) item { Box(Modifier.height(SkySizes.pillClearance)) }
         }
+        bottomBar?.invoke()
     }
 }
 
