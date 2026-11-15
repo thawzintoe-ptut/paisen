@@ -3,6 +3,7 @@ package com.ptut.expense.shared
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.PaymentMethod
 import com.ptut.expense.domain.shared.Share
 import com.ptut.expense.domain.shared.SharedExpense
 import com.ptut.expense.domain.shared.SharedSnapshot
@@ -13,9 +14,11 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 private val Half = Satang.ofMinorUnits(24_000)
 private val Whole = Satang.ofMinorUnits(48_000)
@@ -74,7 +77,31 @@ class RecordPaymentViewModelTest : ViewModelTest() {
         assertNull(ready.askToPay)
     }
 
-    private fun TestScope.ready(expense: SharedExpense?, from: String, to: String, myPromptPay: String? = null): RecordPaymentUiState.Ready {
+    /** #6: the balance filled in on open is not a change; what is typed or picked after it is. */
+    @Test
+    fun `leaving asks first only once the payment differs from how it opened`() = runTest {
+        val viewModel = viewModel(dinner(paidBy = "me"), from = "aye", to = "me")
+        assertFalse(viewModel.ready().changed)
+
+        viewModel.setAmount("100")
+        runCurrent()
+        assertTrue(viewModel.ready().changed)
+
+        viewModel.setAmount("240.00")
+        runCurrent()
+        assertFalse(viewModel.ready().changed)
+
+        viewModel.setMethod(PaymentMethod.Cash)
+        runCurrent()
+        assertTrue(viewModel.ready().changed)
+    }
+
+    private fun TestScope.ready(expense: SharedExpense?, from: String, to: String, myPromptPay: String? = null): RecordPaymentUiState.Ready =
+        viewModel(expense, from, to, myPromptPay).ready()
+
+    private fun RecordPaymentViewModel.ready() = assertIs<RecordPaymentUiState.Ready>(uiState.value)
+
+    private fun TestScope.viewModel(expense: SharedExpense?, from: String, to: String, myPromptPay: String? = null): RecordPaymentViewModel {
         val group = flat12.copy(members = flat12.members.map { if (it.id == "me") it.copy(promptPayId = myPromptPay) else it })
         val repository = FakeSharedRepository(group)
         repository.snapshot.value = SharedSnapshot(
@@ -87,7 +114,7 @@ class RecordPaymentViewModelTest : ViewModelTest() {
         val viewModel = RecordPaymentViewModel(groupId = group.id, fromMemberId = from, toMemberId = to, repository = repository)
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
-        return assertIs<RecordPaymentUiState.Ready>(viewModel.uiState.value)
+        return viewModel
     }
 
     /** A ฿480 dinner split equally, so whoever did not pay owes ฿240. */

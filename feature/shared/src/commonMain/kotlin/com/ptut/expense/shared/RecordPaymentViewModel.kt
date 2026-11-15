@@ -36,7 +36,10 @@ data class PaymentForm(
     val loaded: Boolean = false,
     /** #214: true from the tap until the screen leaves, so two fast taps record one payment. */
     val saving: Boolean = false,
-)
+) {
+    /** What the person can change, so a close can tell whether anything would be lost (#6). */
+    val content: PaymentForm get() = copy(saving = false)
+}
 
 /** The share sheet's button and text when the money comes to you: "Ask Thaw to pay". */
 data class AskToPayUiModel(val label: String, val message: String)
@@ -62,6 +65,8 @@ sealed interface RecordPaymentUiState {
         /** "Pay Mali by PromptPay ••••••5678". */
         val promptPayLine: String? = null,
         val askToPay: AskToPayUiModel? = null,
+        /** #6: something differs from how the screen opened, so leaving asks first. */
+        val changed: Boolean = false,
     ) : RecordPaymentUiState
 }
 
@@ -81,16 +86,18 @@ class RecordPaymentViewModel(
 ) : ViewModel() {
 
     private val form = MutableStateFlow(PaymentForm())
+    private val opened = MutableStateFlow<PaymentForm?>(null)
 
     init {
         viewModelScope.launch {
             val snapshot = repository.snapshot.first { it.group(groupId) != null }
             val owed = owedBetween(snapshot)
             form.update { it.copy(amountText = if (owed > Satang.Zero) plain(owed) else "", loaded = true) }
+            opened.value = form.value.content
         }
     }
 
-    val uiState: StateFlow<RecordPaymentUiState> = combine(repository.snapshot, form) { snapshot, form ->
+    val uiState: StateFlow<RecordPaymentUiState> = combine(repository.snapshot, form, opened) { snapshot, form, opened ->
         val group = snapshot.group(groupId) ?: return@combine RecordPaymentUiState.Missing
         val owed = owedBetween(snapshot)
         val paying = amountOf(form)
@@ -118,6 +125,7 @@ class RecordPaymentViewModel(
             promptPayQr = payeePromptPay(group)?.takeIf { paying != null && paying > Satang.Zero }?.let { PromptPay.payload(it, paying ?: Satang.Zero) },
             promptPayLine = payeePromptPay(group)?.let { text.payBy(toName, PromptPay.masked(it)) },
             askToPay = askToPay(group, owed, fromName),
+            changed = opened != null && form.content != opened,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecordPaymentUiState.Missing)
 

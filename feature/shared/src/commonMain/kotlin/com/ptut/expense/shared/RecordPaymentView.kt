@@ -43,11 +43,13 @@ import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptutType
 import com.ptut.expense.domain.shared.PaymentMethod
 import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.ui.sky.AskBeforeLeaving
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyChip
 import com.ptut.expense.ui.sky.SkyDateTimeRow
+import com.ptut.expense.ui.sky.SkyDiscardSheet
 import com.ptut.expense.ui.sky.SkyHairline
 import com.ptut.expense.ui.sky.SkyKeyValueRow
 import com.ptut.expense.ui.sky.SkyTopBar
@@ -67,9 +69,15 @@ fun RecordPaymentView(
 ) {
     val text = LocalCopy.current
     val words = text.shared.payment
+    val state = uiState as? RecordPaymentUiState.Ready
+    var askDiscard by rememberSaveable { mutableStateOf(false) }
+    val asksFirst = state != null && state.changed && !state.form.saving
+    val leave: () -> Unit = { if (asksFirst) askDiscard = true else onClose() }
+    // #6: back, the iOS swipe, ✕ and Cancel ask before a changed payment is lost.
+    AskBeforeLeaving(changed = asksFirst, onAsk = { askDiscard = true })
     Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer)) {
-        SkyTopBar(title = words.title, onBack = onClose, backIcon = PtutIcon.Close, backLabel = text.common.close)
-        val state = uiState as? RecordPaymentUiState.Ready ?: return@Column GroupGone(status = text.shared.expense.goneStatus)
+        SkyTopBar(title = words.title, onBack = leave, backIcon = PtutIcon.Close, backLabel = text.common.close)
+        if (state == null) return@Column GroupGone(status = text.shared.expense.goneStatus)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.md)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
@@ -148,9 +156,18 @@ fun RecordPaymentView(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md).padding(bottom = Spacing.md),
             horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
         ) {
-            SkyButton(text.common.cancel, onClick = onClose, kind = SkyButtonKind.Outline, modifier = Modifier.weight(1f))
+            SkyButton(text.common.cancel, onClick = leave, kind = SkyButtonKind.Outline, modifier = Modifier.weight(1f))
             SkyButton(state.buttonLabel, onClick = onRecord, enabled = state.canSave, modifier = Modifier.weight(1.5f))
         }
+    }
+    if (askDiscard) {
+        SkyDiscardSheet(
+            onKeep = { askDiscard = false },
+            onDiscard = {
+                askDiscard = false
+                onClose()
+            },
+        )
     }
 }
 

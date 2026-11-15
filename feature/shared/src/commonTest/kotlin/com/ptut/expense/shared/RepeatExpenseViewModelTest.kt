@@ -8,6 +8,9 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class RepeatExpenseViewModelTest : ViewModelTest() {
 
@@ -35,4 +38,33 @@ class RepeatExpenseViewModelTest : ViewModelTest() {
 
         assertEquals(1, repository.repeats.size)
     }
+
+    /** #6: a new repeat opens on next month's first day; only what is typed or picked after that asks. */
+    @Test
+    fun `leaving asks first only once the repeat differs from how it opened`() = runTest {
+        val viewModel = RepeatExpenseViewModel(
+            groupId = "g1",
+            ruleId = null,
+            repository = FakeSharedRepository(),
+            categories = Category.seed(),
+            toasts = ToastMessages(),
+        )
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        assertFalse(viewModel.ready().changed)
+
+        viewModel.setAmount("18000")
+        runCurrent()
+        assertTrue(viewModel.ready().changed)
+
+        viewModel.setAmount("")
+        runCurrent()
+        assertFalse(viewModel.ready().changed)
+
+        viewModel.setRemind(false)
+        runCurrent()
+        assertTrue(viewModel.ready().changed)
+    }
+
+    private fun RepeatExpenseViewModel.ready() = assertIs<RepeatExpenseUiState.Ready>(uiState.value)
 }

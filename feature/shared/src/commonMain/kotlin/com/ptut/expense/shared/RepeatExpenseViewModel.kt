@@ -53,7 +53,10 @@ data class RepeatForm(
     val loaded: Boolean = false,
     /** #214: true from the tap until the screen leaves, so two fast taps save one repeat. */
     val saving: Boolean = false,
-)
+) {
+    /** What the person can change, so a back can tell whether anything would be lost (#6). */
+    val content: RepeatForm get() = copy(saving = false)
+}
 
 data class RepeatDateUiModel(val date: String, val meaning: String)
 
@@ -78,6 +81,8 @@ sealed interface RepeatExpenseUiState {
         val canSave: Boolean,
         /** Today in Bangkok: a repeat starts no earlier, or saving would add dates already gone. */
         val earliestStart: LocalDate,
+        /** #6: something differs from how the screen opened, so leaving asks first. */
+        val changed: Boolean = false,
     ) : RepeatExpenseUiState
 }
 
@@ -97,18 +102,23 @@ class RepeatExpenseViewModel(
 ) : ViewModel() {
 
     private val form = MutableStateFlow(RepeatForm())
+    private val opened = MutableStateFlow<RepeatForm?>(null)
     private val done = MutableStateFlow(false)
 
     /** True once the repeat is saved or stopped; the shell leaves on this. */
     val isDone: StateFlow<Boolean> = done.asStateFlow()
 
-    val uiState: StateFlow<RepeatExpenseUiState> = combine(repository.snapshot, form) { snapshot, form ->
+    val uiState: StateFlow<RepeatExpenseUiState> = combine(repository.snapshot, form, opened) { snapshot, form, opened ->
         val group = snapshot.group(groupId) ?: return@combine RepeatExpenseUiState.Missing
         ready(group, form, snapshot.repeats.firstOrNull { it.id == ruleId }?.active ?: true)
+            .copy(changed = opened != null && form.content != opened)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RepeatExpenseUiState.Missing)
 
     init {
-        viewModelScope.launch { load() }
+        viewModelScope.launch {
+            load()
+            opened.value = form.value.content
+        }
     }
 
     private suspend fun load() {

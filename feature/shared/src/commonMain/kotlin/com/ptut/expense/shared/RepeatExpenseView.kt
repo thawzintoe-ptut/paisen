@@ -47,10 +47,12 @@ import com.ptut.expense.domain.shared.RepeatFrequency
 import com.ptut.expense.domain.shared.RepeatKind
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.platform.notify.rememberNotificationAsk
+import com.ptut.expense.ui.sky.AskBeforeLeaving
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyChip
+import com.ptut.expense.ui.sky.SkyDiscardSheet
 import com.ptut.expense.ui.sky.SkyHairline
 import com.ptut.expense.ui.sky.SkyKeyValueRow
 import com.ptut.expense.ui.sky.SkySegmentedToggle
@@ -100,9 +102,12 @@ fun RepeatExpenseView(uiState: RepeatExpenseUiState, actions: RepeatExpenseActio
     val scope = rememberCoroutineScope()
     val form = state.form
     val frequencies = RepeatFrequency.entries
+    val asksFirst = state.changed && !form.saving
+    // #6: back and the iOS swipe ask before a changed repeat is lost.
+    AskBeforeLeaving(changed = asksFirst, onAsk = { sheet = SHEET_DISCARD })
 
     Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer)) {
-        SkyTopBar(title = words.title, onBack = actions.onBack)
+        SkyTopBar(title = words.title, onBack = { if (asksFirst) sheet = SHEET_DISCARD else actions.onBack() })
         Column(
             modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.md),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -205,6 +210,14 @@ fun RepeatExpenseView(uiState: RepeatExpenseUiState, actions: RepeatExpenseActio
     }
 
     when (sheet) {
+        SHEET_DISCARD -> SkyDiscardSheet(
+            onKeep = { sheet = null },
+            onDiscard = {
+                sheet = null
+                actions.onBack()
+            },
+        )
+
         // #218: no Undo follows a stop, so it is asked first.
         SHEET_STOP -> SkyBottomSheet(onDismissRequest = { sheet = null }) {
             Text(
@@ -314,6 +327,7 @@ private class OnOrAfter(private val first: LocalDate) : SelectableDates {
         Instant.fromEpochMilliseconds(utcTimeMillis).toLocalDateTime(TimeZone.UTC).date >= first
 }
 
+private const val SHEET_DISCARD = "discard"
 private const val SHEET_PAYER = "payer"
 private const val SHEET_STOP = "stop"
 private const val SHEET_END = "end"
