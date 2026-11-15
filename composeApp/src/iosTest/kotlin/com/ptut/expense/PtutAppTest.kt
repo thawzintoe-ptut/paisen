@@ -7,7 +7,6 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
@@ -226,10 +225,11 @@ class PtutAppTest {
         onNode(hasSetTextAction() and hasContentDescription("Amount")).performTextInput("485")
         // The chip, not Home's category tile behind the sheet, which carries the same name.
         onNode(hasText("Food & drink") and hasClickAction()).performClick()
-        onNodeWithContentDescription("Save").performClick()
+        // Named with the amount once it can save, so the key says what it writes.
+        onNodeWithContentDescription("Save ฿485").performClick()
 
         // The sheet is gone, so the write finished: it closes on the save, not on the tap.
-        onNodeWithContentDescription("Save").assertDoesNotExist()
+        onNodeWithContentDescription("Save ฿485").assertDoesNotExist()
 
         onNode(hasScrollToNodeAction()).performScrollToNode(hasContentDescription("฿485, spent"))
         onNodeWithContentDescription("฿485, spent").assertIsDisplayed()
@@ -237,16 +237,20 @@ class PtutAppTest {
         onNodeWithText("added by hand").assertIsDisplayed()
     }
 
-    /** The save key stays dark until a category is chosen, and says why (plan §G item 6). */
+    /** The save key stays lit, so a tap with no category writes nothing and says why (plan §G item 6). */
     @Test
     fun anAmountWithNoCategorySaysWhatIsMissingRatherThanRefusingSilently() = runComposeUiTest {
         setContent { TestApp() }
 
         onNodeWithContentDescription("Add an expense by hand").performClick()
         onNode(hasSetTextAction() and hasContentDescription("Amount")).performTextInput("485")
-
         onNodeWithText("Pick a category to save this").assertIsDisplayed()
-        onNodeWithContentDescription("Save").assertIsNotEnabled()
+
+        onNodeWithContentDescription("Save").performClick()
+
+        // Still open: nothing was written, and the line under the form still names what is missing.
+        onNodeWithContentDescription("Save").assertIsDisplayed()
+        onNodeWithText("Pick a category to save this").assertIsDisplayed()
     }
 
     /**
