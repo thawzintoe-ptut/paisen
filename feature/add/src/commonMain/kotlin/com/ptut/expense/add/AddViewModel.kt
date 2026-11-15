@@ -70,26 +70,29 @@ data class AddUiState(
      * this sheet, where nobody sees it.
      */
     val askNote: AskNote? = null,
+    /** The language whose first online listen waits on a yes, since the voice would go to Google. */
+    val askingOnline: SpeechLanguage? = null,
+    /** True once SAVE was tapped before the row could be written, so [missing] is said as a warning. */
+    val triedSave: Boolean = false,
 ) {
     /**
-     * FR-14: an amount and a category. Both kinds, so income cannot skip the rule (plan §G item 6).
-     * Dark while [saving] too, because two taps on one row is two rows.
+     * What still stops a save, amount first, or null once the row can be written. FR-14: both kinds
+     * need an amount and a category, so income cannot skip the rule (plan §G item 6).
      */
-    val canSave: Boolean get() = !entry.isEmpty && category != null && !saving
+    val missing: String?
+        get() = when {
+            entry.isEmpty -> AppText.copy.add.typeAmountHint
+            category == null -> AppText.copy.add.pickCategoryHint
+            else -> null
+        }
+
+    /** "Save ฿60" once the row can be written, so the key says what it will write. */
+    val saveLabel: String
+        get() = if (missing == null) AppText.copy.add.saveAmount(entry.toSatang().formatCompact()) else AppText.copy.common.save
 
     /** #214: something typed or picked that closing the sheet would lose, so closing asks first. */
     val changed: Boolean
         get() = !entry.isEmpty || category != null || memo != null || occurredAtEpochMillis != null || askText.isNotBlank()
-
-    /**
-     * Says why the save key is dark when it is, and what the row will do when it is not. A disabled
-     * key with no sentence beside it reads as a broken app rather than as a missing choice.
-     */
-    val hint: String get() = when {
-        category == null && !entry.isEmpty -> AppText.copy.add.pickCategoryHint
-        kind == Direction.Income -> AppText.copy.add.incomeHint
-        else -> AppText.copy.add.byHandHint
-    }
 }
 
 /**
@@ -117,14 +120,14 @@ data class QuickAddVoice(
 
     val isDownloading: Boolean get() = language in downloading
 
-    /** The line under the switch: what the mic does for this language, or why it cannot. */
-    val note: String? get() = AppText.copy.add.let { text ->
+    /** A row in the voice language sheet: what the mic does for [choice], or null where the phone hears it offline. */
+    fun noteFor(choice: SpeechLanguage): String? = AppText.copy.add.let { text ->
         when {
-            language in heard -> null
-            isDownloading -> text.voiceDownloading(language.fullName)
-            usesOnline -> text.voiceOnline(language.fullName)
-            canDownload -> text.voiceDownloadable(language.fullName)
-            else -> text.voiceUnavailable(language.fullName)
+            choice in heard -> null
+            choice in downloading -> text.voiceDownloading(choice.fullName)
+            choice in online -> text.voiceOnline(choice.fullName)
+            choice in downloadable -> text.voiceDownloadable(choice.fullName)
+            else -> text.voiceUnavailable(choice.fullName)
         }
     }
 
@@ -324,6 +327,11 @@ class AddViewModel(
         val input = speech ?: return
         val voice = state.value.voice ?: return
         if (voice.listening || !voice.canListen || state.value.reading) return
+        // The voice would leave the phone, so the first time for each language asks before the mic opens.
+        if (voice.usesOnline && !input.agreedOnline(voice.language)) {
+            state.update { it.copy(askingOnline = voice.language) }
+            return
+        }
         state.update { it.copy(voice = voice.copy(listening = true), askNote = null) }
         listening = viewModelScope.launch {
             val heard = if (voice.usesOnline) input.listenOnline(voice.language) else input.listen(voice.language)
@@ -341,6 +349,17 @@ class AddViewModel(
         }
     }
 
+    /** Yes to [AddUiState.askingOnline]: kept for that language on this phone, and the mic opens. */
+    fun agreeOnline() {
+        val language = state.value.askingOnline ?: return
+        speech?.agreeOnline(language)
+        state.update { it.copy(askingOnline = null) }
+        listen()
+    }
+
+    /** Type instead: nothing is kept, so the next tap on the mic asks again. */
+    fun dismissOnlineAsk() = state.update { it.copy(askingOnline = null) }
+
     /** The mic tapped again: stop listening and read what was said. */
     fun stopListening() {
         speech?.stop()
@@ -350,7 +369,7 @@ class AddViewModel(
     fun closeVoice() {
         listening?.cancel()
         listening = null
-        state.update { it.copy(voice = it.voice?.copy(listening = false)) }
+        state.update { it.copy(voice = it.voice?.copy(listening = false), askingOnline = null) }
     }
 
     private suspend fun answer(reader: AgentReader, call: ReadCall): String = when (call) {
@@ -390,8 +409,8 @@ class AddViewModel(
     fun setMemo(memo: String) = state.update { it.copy(memo = memo.trim().ifEmpty { null }, editingMemo = false) }
 
     /**
-     * Writes the row, then says so. Nothing happens without a category: the key that calls this is
-     * disabled without one, and this second guard is what keeps that rule true if it ever is not.
+     * Writes the row, then says so. Nothing is written without an amount and a category (FR-14): the
+     * key stays lit, so a tap without them only sets [AddUiState.triedSave] and the sheet says why.
      *
      * [AddUiState.saving] is set before the launch, not inside it, so a second tap in the same frame
      * finds it already true rather than writing the row twice.
@@ -402,8 +421,13 @@ class AddViewModel(
      */
     fun save() {
         val current = state.value
-        val category = current.category ?: return
-        if (current.entry.isEmpty || current.saving) return
+        if (current.saving) return
+        val category = current.category
+        if (current.entry.isEmpty || category == null) {
+            // SAVE stays lit, so a tap too early is answered with what is missing.
+            state.update { it.copy(triedSave = true) }
+            return
+        }
 
         val amount = current.entry.toSatang()
         state.update { it.copy(saving = true) }

@@ -33,11 +33,7 @@ import kotlin.time.Instant
 
 private enum class PickStep { None, Date, Time }
 
-/**
- * "Date & time" as a row: a tap picks the day, then the clock, never later than now. The one file
- * that reads the phone's own time zone (the reader's choice); totals still count the Bangkok day.
- */
-@OptIn(ExperimentalMaterial3Api::class)
+/** "Date & time" as a row: a tap opens [SkyDateTimePicker]. */
 @Composable
 fun SkyDateTimeRow(
     epochMillis: Long?,
@@ -48,16 +44,34 @@ fun SkyDateTimeRow(
     /** False shows the time without opening a picker, for a date another screen owns (#186). */
     enabled: Boolean = true,
 ) {
+    SkyDateTimePicker(epochMillis = epochMillis, onPick = onPick, clock = clock) { value, open ->
+        SkyKeyValueRow(
+            label = label,
+            value = value,
+            modifier = if (enabled) modifier.tappable(RectangleShape, Role.Button, onClick = open) else modifier,
+        )
+    }
+}
+
+/**
+ * Picks the day, then the clock, never later than now. [trigger] draws what opens it from the value
+ * it shows: a row on Edit purchase, a button on the add sheet. The one file that reads the phone's
+ * own time zone (the reader's choice); totals still count the Bangkok day.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SkyDateTimePicker(
+    epochMillis: Long?,
+    onPick: (Long) -> Unit,
+    clock: Clock = Clock.System,
+    trigger: @Composable (value: String, open: () -> Unit) -> Unit,
+) {
     val zone = remember { TimeZone.currentSystemDefault() }
     var step by remember { mutableStateOf(PickStep.None) }
     var pickedDate by remember { mutableStateOf<LocalDate?>(null) }
     val shown = epochMillis?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(zone) }
 
-    SkyKeyValueRow(
-        label = label,
-        value = shown?.let { "${it.date.dayLabel()}, ${it.hour.pad()}:${it.minute.pad()}" } ?: LocalCopy.current.shell.now,
-        modifier = if (enabled) modifier.tappable(RectangleShape, Role.Button) { step = PickStep.Date } else modifier,
-    )
+    trigger(shown?.let { "${it.date.dayLabel()}, ${it.hour.pad()}:${it.minute.pad()}" } ?: LocalCopy.current.shell.now) { step = PickStep.Date }
 
     val today = clock.now().toLocalDateTime(zone).date
     when (step) {

@@ -989,6 +989,8 @@ private fun LedgerShell() {
                 onStopListening = addViewModel::stopListening,
                 onVoiceLanguage = addViewModel::chooseVoiceLanguage,
                 onDownloadVoice = addViewModel::downloadVoice,
+                onAgreeOnline = addViewModel::agreeOnline,
+                onDismissOnlineAsk = addViewModel::dismissOnlineAsk,
             )
         }
         if (askDiscard) {

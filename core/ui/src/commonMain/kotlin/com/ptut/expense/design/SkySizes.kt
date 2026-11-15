@@ -18,6 +18,9 @@ object SkySizes {
     val sheetChip = 36.dp
     val chipBorder = 1.dp
 
+    /** The category's own glyph before its name on the add sheet's chips. */
+    val chipGlyph = 18.dp
+
     /** A sub-category chip on the grey box under the categories (p18), and its chosen tick. */
     val subChip = 32.dp
     val subChipTick = 16.dp

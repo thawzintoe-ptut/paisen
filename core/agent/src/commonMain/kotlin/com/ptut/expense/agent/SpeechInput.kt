@@ -89,6 +89,11 @@ interface SpeechInput {
 
     fun rememberLanguage(language: SpeechLanguage)
 
+    /** True once the person said yes, on this phone, to [language] being heard online. Asked once per language. */
+    fun agreedOnline(language: SpeechLanguage): Boolean = false
+
+    fun agreeOnline(language: SpeechLanguage) = Unit
+
     /** Asks for the microphone on first use, then listens until the person stops talking. */
     suspend fun listen(language: SpeechLanguage): Heard
 

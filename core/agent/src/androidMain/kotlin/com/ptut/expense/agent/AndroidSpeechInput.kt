@@ -126,6 +126,12 @@ class AndroidSpeechInput(context: Context) : SpeechInput {
         choices.edit().putString(KEY_LANGUAGE, language.name).apply()
     }
 
+    override fun agreedOnline(language: SpeechLanguage): Boolean = choices.getBoolean(KEY_ONLINE_AGREED + language.name, false)
+
+    override fun agreeOnline(language: SpeechLanguage) {
+        choices.edit().putBoolean(KEY_ONLINE_AGREED + language.name, true).apply()
+    }
+
     override suspend fun listen(language: SpeechLanguage): Heard {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return Heard.Nothing
         if (!hasMicrophone() && !askForMicrophone()) return Heard.NoPermission
@@ -292,6 +298,7 @@ class AndroidSpeechInput(context: Context) : SpeechInput {
     private companion object {
         const val CHOICES_FILE = "quick_add_voice"
         const val KEY_LANGUAGE = "language"
+        const val KEY_ONLINE_AGREED = "online_agreed_"
 
         /** Long enough for the queued request to reach the speech service, short enough to let it go. */
         val PACK_REQUEST_KEEP = 30.seconds

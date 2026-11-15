@@ -17,11 +17,14 @@ The first public version.
 - Today, week and month totals, top categories, and a comparison with a usual day.
 - Reports for 3 months, 6 months and a year, by category and sub-category.
 - History with search, and adding or editing a transaction with its date, time, category,
-  sub-category and note.
+  sub-category and note. The add sheet asks Expense or Income first, colours the amount to match,
+  shows each category's icon, puts the note and the time on one line, and keeps *Save* above the
+  keyboard with the amount on it. A tap on *Save* too early says what is missing.
 - Delete with undo.
 - Quick add by typing or speaking in English, Thai or Burmese. Speech is recognised on the phone
   where it has an offline pack. On Android, other languages such as Burmese are recognised online
-  by Google, and the sheet says so. Siri and app icon shortcuts on iOS.
+  by Google, and the first time for each language asks before your voice is sent. The voice
+  language sits beside the mic. Siri and app icon shortcuts on iOS.
 - Shared groups: split costs, see balances, record payments, settle with a PromptPay QR, invite by
   link or QR code, and get told about changes. An open group checks for changes every 15 seconds,
   or at once when you pull it down.

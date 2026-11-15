@@ -31,14 +31,14 @@ class AddSheetTest {
         }
     }
 
-    /** The default text size keeps the layout p10 draws: the selector beside the amount. */
+    /** The kind comes first, because it decides which categories are offered under the amount. */
     @Test
-    fun atTheDefaultTextSizeTheSelectorSitsBesideTheAmount() = runComposeUiTest {
+    fun theSelectorSitsAboveTheAmount() = runComposeUiTest {
         setContent { PtutTheme { Sheet() } }
 
         val amount = onNodeWithText("฿").getUnclippedBoundsInRoot()
         val selector = onNodeWithText("Expense", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        assertTrue(selector.top < amount.bottom, "the selector dropped under the amount")
+        assertTrue(selector.bottom <= amount.top, "the selector is not above the amount")
     }
 
     @Composable

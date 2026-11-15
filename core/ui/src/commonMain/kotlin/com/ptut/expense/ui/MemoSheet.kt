@@ -31,7 +31,7 @@ import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
 
-/** The note line on Edit purchase and the add sheet (#211): the note itself, or "Add a note". */
+/** The note line on Edit purchase (#211): the note itself, or "Add a note". The add sheet draws a button. */
 @Composable
 fun NoteRow(memo: String?, onOpenMemo: () -> Unit) {
     Row(

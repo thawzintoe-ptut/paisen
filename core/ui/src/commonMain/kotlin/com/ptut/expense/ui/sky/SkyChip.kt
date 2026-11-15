@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import com.ptut.expense.design.PtutIcon
@@ -42,8 +43,8 @@ import com.ptut.expense.design.ptutMotion
 import com.ptut.expense.locale.LocalCopy
 
 /**
- * A category chip (p10, p13): white with a hairline, ink when chosen, no glyph. The pill is painted
- * at [height] inside a 44 tap area, so a wrapped row of chips needs no gap of its own.
+ * A category chip (p10, p13): white with a hairline, ink when chosen, and [icon] before the name when
+ * given. The pill is painted at [height] inside a 44 tap area, so a wrapped row needs no gap of its own.
  */
 @Composable
 fun SkyChip(
@@ -52,6 +53,7 @@ fun SkyChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     height: Dp = SkySizes.chip,
+    icon: ImageVector? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val fill by animateColorAsState(
@@ -65,8 +67,9 @@ fun SkyChip(
         label = "sky chip ink",
     )
     SkyChipTarget(selected = selected, onClick = onClick, modifier = modifier) { press ->
-        Box(
-            contentAlignment = Alignment.Center,
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .heightIn(min = height)
                 .clip(CircleShape)
@@ -75,6 +78,7 @@ fun SkyChip(
                 .border(SkySizes.chipBorder, if (selected) Color.Transparent else scheme.surfaceContainerHigh, CircleShape)
                 .padding(horizontal = Spacing.s14),
         ) {
+            icon?.let { Icon(imageVector = it, contentDescription = null, tint = ink, modifier = Modifier.size(SkySizes.chipGlyph)) }
             Text(text = label, style = MaterialTheme.typography.labelLarge, color = ink, maxLines = 1)
         }
     }

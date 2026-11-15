@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
@@ -33,8 +34,7 @@ import com.ptut.expense.design.ptutType
  * tap, the add sheet as soon as it opens. A supplied amount opens selected, so the first digit
  * replaces it, the way [AmountEntry.pending] works on a pad.
  *
- * [fillWidth] is false where the field sits beside other controls, as the add sheet's amount sits
- * beside Expense / Income, so it is as wide as its digits.
+ * [color] is the typed figure's ink; the add sheet passes the kind's, ruby out and green in.
  */
 @Composable
 fun KeyboardAmountField(
@@ -43,7 +43,7 @@ fun KeyboardAmountField(
     label: String,
     openOnStart: Boolean,
     modifier: Modifier = Modifier,
-    fillWidth: Boolean = true,
+    color: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     val focusRequester = remember { FocusRequester() }
     var field by remember { mutableStateOf(TextFieldValue(entry.typed)) }
@@ -55,7 +55,6 @@ fun KeyboardAmountField(
     val openNow by rememberUpdatedState(open)
     LaunchedEffect(Unit) { if (openOnStart) openNow() }
 
-    val ink = MaterialTheme.colorScheme.onSurface
     Box(contentAlignment = Alignment.CenterStart, modifier = modifier) {
         if (entry.typed.isEmpty()) Text("0", style = MaterialTheme.ptutType.sheet, color = MaterialTheme.colorScheme.onSurfaceVariant)
         BasicTextField(
@@ -67,11 +66,11 @@ fun KeyboardAmountField(
                 if (typed.typed != entry.typed) onType(typed)
             },
             singleLine = true,
-            textStyle = MaterialTheme.ptutType.sheet.copy(color = ink),
+            textStyle = MaterialTheme.ptutType.sheet.copy(color = color),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             modifier = Modifier
-                .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
+                .fillMaxWidth()
                 .focusRequester(focusRequester)
                 .onFocusChanged { focused = it.isFocused }
                 .semantics { contentDescription = label },

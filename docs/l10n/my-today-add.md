@@ -30,12 +30,20 @@ Burmese for Today, the Add sheet and the day receipt that the Sky MY design does
 | one unread slip / {n} unread slips | မဖတ်ရသေးတဲ့ စလစ် {n} ခု | locale/HomeCopy.kt:90 |
 | `, ` (between the reasons above) | `၊ ` | locale/HomeCopy.kt:91 |
 | Pick a category to save this | သိမ်းဖို့ အမျိုးအစား ရွေးပါ | locale/AddCopy.kt:25 |
+| Type an amount to save this (draft, 15 Nov) | သိမ်းဖို့ ပမာဏ ရိုက်ထည့်ပါ | locale/AddCopy.kt `typeAmountHint` |
 | Income · lands in today, week and month | ဝင်ငွေ · ဒီနေ့၊ ဒီအပတ်နဲ့ ဒီလ စုစုပေါင်းထဲ ဝင်မယ် | locale/AddCopy.kt:26 |
 | Added by hand · no slip for this | ကိုယ်တိုင် ထည့်တာ · စလစ် မရှိဘူး | locale/AddCopy.kt:27 |
-| Type it: coffee 60 · กาแฟ 60 · ကော်ဖီ ၆၀ | ရိုက်ထည့်ပါ: coffee 60 · กาแฟ 60 · ကော်ဖီ ၆၀ | locale/AddCopy.kt:28 |
+| Type it: coffee 60 (draft, 15 Nov: one example now, the language sits beside the mic) | ရိုက်ထည့်ပါ: ကော်ဖီ ၆၀ | locale/AddCopy.kt `askPlaceholder` |
 | Listening… | နားထောင်နေတယ်… | locale/AddCopy.kt:29 |
 | Say it | ပြောမယ် | locale/AddCopy.kt:30 |
 | Stop listening | နားထောင်တာ ရပ်မယ် | locale/AddCopy.kt:31 |
+| Voice language (draft, 15 Nov, needs a native reader) | အသံ ဘာသာစကား | locale/AddCopy.kt `voiceLanguageTitle` |
+| Voice language: {language} (spoken on the pill, draft, 15 Nov) | အသံ ဘာသာစကား: {language} | locale/AddCopy.kt `voiceLanguageLabel` |
+| On this phone. Works offline. (draft, 15 Nov) | ဖုန်းထဲမှာ ရှိတယ်။ အင်တာနက် မလိုဘူး။ | locale/AddCopy.kt `voiceOnPhone` |
+| {language} is heard online (draft, 15 Nov; asked once per language) | {language} ကို အွန်လိုင်းကနေ နားထောင်တယ် | locale/AddCopy.kt `onlineAskTitle` |
+| Listen (draft, 15 Nov) | နားထောင်မယ် | locale/AddCopy.kt `listenOnline` |
+| Type instead (draft, 15 Nov) | ရိုက်ထည့်မယ် | locale/AddCopy.kt `typeInstead` |
+| Save {amount} (draft, 15 Nov) | {amount} သိမ်းမယ် | locale/AddCopy.kt `saveAmount` |
 | {language} voice isn't available on this phone. Type it instead. | ဒီဖုန်းမှာ {language} အသံနဲ့ ထည့်လို့ မရသေးဘူး။ ရိုက်ထည့်ပါ။ | locale/AddCopy.kt `voiceUnavailable` |
 | {language} is recognised online by Google, so your voice is sent to Google. | {language} ကို Google က အွန်လိုင်းကနေ နားထောင်ပေးတာမို့ သင့်အသံကို Google ဆီ ပို့ရတယ်။ | locale/AddCopy.kt `voiceOnline` |
 | {language} voice isn't on this phone yet. Download it once and it works offline. | ဒီဖုန်းမှာ {language} အသံ မရှိသေးဘူး။ တစ်ခါ ဒေါင်းလုဒ်လုပ်ထားရင် အင်တာနက်မပါဘဲ ပြောလို့ရမယ်။ | locale/AddCopy.kt:52 `voiceDownloadable` |

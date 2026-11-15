@@ -91,7 +91,6 @@ class AddViewModelTest : ViewModelTest() {
         val state = viewModel.uiState.value
         assertEquals(listOf("Income"), state.categories.map { it.name })
         assertNull(state.category)
-        assertFalse(state.canSave, "no category is chosen yet, so the key stays dark")
     }
 
     @Test
@@ -278,7 +277,7 @@ class AddViewModelTest : ViewModelTest() {
         viewModel.choose(Food)
 
         assertEquals(null, viewModel.uiState.value.category)
-        assertFalse(viewModel.uiState.value.canSave)
+        assertEquals("Pick a category to save this", viewModel.uiState.value.missing)
     }
 
     /** The design reopens the sheet cleared, and this holder outlives the sheet. */
@@ -295,14 +294,42 @@ class AddViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun theSaveKeySaysWhyItIsDarkOnceAnAmountIsTypedWithNoCategory() = runTest {
+    fun theSheetSaysWhatStillStopsASaveAmountFirst() = runTest {
         val viewModel = AddViewModel(ledger = RecordingLedger(), toasts = ToastMessages())
 
-        assertEquals("Added by hand · no slip for this", viewModel.uiState.value.hint)
+        assertEquals("Type an amount to save this", viewModel.uiState.value.missing)
 
         viewModel.type(entryOf("485"))
+        assertEquals("Pick a category to save this", viewModel.uiState.value.missing)
 
-        assertEquals("Pick a category to save this", viewModel.uiState.value.hint)
+        viewModel.choose(Food)
+        assertNull(viewModel.uiState.value.missing)
+    }
+
+    /** SAVE stays lit, so a tap too early has to answer with what is missing and write nothing. */
+    @Test
+    fun aSaveTappedTooEarlyWritesNothingAndMarksWhatIsMissing() = runTest {
+        val ledger = RecordingLedger()
+        val viewModel = AddViewModel(ledger = ledger, toasts = ToastMessages())
+
+        viewModel.type(entryOf("485"))
+        viewModel.save()
+        runCurrent()
+
+        assertTrue(ledger.recorded.isEmpty())
+        assertTrue(viewModel.uiState.value.triedSave)
+        assertEquals("Pick a category to save this", viewModel.uiState.value.missing)
+    }
+
+    @Test
+    fun `the save key names the amount once the row can be written`() = runTest {
+        val viewModel = AddViewModel(ledger = RecordingLedger(), toasts = ToastMessages())
+
+        viewModel.type(entryOf("60"))
+        assertEquals("Save", viewModel.uiState.value.saveLabel)
+
+        viewModel.choose(Food)
+        assertEquals("Save ฿60", viewModel.uiState.value.saveLabel)
     }
 
     private fun entryOf(typed: String): AmountEntry =
@@ -329,7 +356,7 @@ class AddViewModelTest : ViewModelTest() {
         val voice = assertNotNull(viewModel.uiState.value.voice)
         assertFalse(voice.canListen)
         assertFalse(voice.canDownload)
-        assertTrue(assertNotNull(voice.note).contains("English"))
+        assertTrue(assertNotNull(voice.noteFor(voice.language)).contains("English"))
     }
 
     /** Google offers no offline Burmese, so Burmese is heard online or not at all. */
@@ -343,7 +370,7 @@ class AddViewModelTest : ViewModelTest() {
         val voice = assertNotNull(viewModel.uiState.value.voice)
         assertTrue(voice.canListen)
         assertTrue(voice.usesOnline)
-        assertTrue(assertNotNull(voice.note).contains("Google"))
+        assertTrue(assertNotNull(voice.noteFor(voice.language)).contains("Google"))
     }
 
     @Test
@@ -358,12 +385,16 @@ class AddViewModelTest : ViewModelTest() {
         val voice = assertNotNull(viewModel.uiState.value.voice)
         assertTrue(voice.canListen)
         assertFalse(voice.usesOnline)
-        assertNull(voice.note)
+        assertNull(voice.noteFor(voice.language))
     }
 
     @Test
     fun `listening in a language heard only online asks for online recognition`() = runTest {
-        val speech = FakeSpeech(VoiceLanguages(heard = emptySet(), online = setOf(SpeechLanguage.Burmese)), preferred = SpeechLanguage.Burmese)
+        val speech = FakeSpeech(
+            VoiceLanguages(heard = emptySet(), online = setOf(SpeechLanguage.Burmese)),
+            preferred = SpeechLanguage.Burmese,
+            agreed = mutableSetOf(SpeechLanguage.Burmese),
+        )
         val viewModel = quickAdd(speech)
         viewModel.openVoice()
         runCurrent()
@@ -385,7 +416,7 @@ class AddViewModelTest : ViewModelTest() {
         val voice = assertNotNull(viewModel.uiState.value.voice)
         assertFalse(voice.canListen)
         assertTrue(voice.canDownload)
-        assertTrue(assertNotNull(voice.note).contains("English"))
+        assertTrue(assertNotNull(voice.noteFor(voice.language)).contains("English"))
     }
 
     @Test
@@ -447,6 +478,91 @@ class AddViewModelTest : ViewModelTest() {
         assertTrue(note.text.contains("English"))
     }
 
+    @Test
+    fun `the first listen in a language heard online asks before the mic opens`() = runTest {
+        val speech = onlineBurmese()
+        val viewModel = quickAdd(speech)
+        viewModel.openVoice()
+        runCurrent()
+
+        viewModel.listen()
+        runCurrent()
+
+        assertEquals(SpeechLanguage.Burmese, viewModel.uiState.value.askingOnline)
+        assertTrue(speech.listens.isEmpty())
+    }
+
+    @Test
+    fun `a yes to the online ask opens the mic and is not asked again`() = runTest {
+        val speech = onlineBurmese()
+        val viewModel = quickAdd(speech)
+        viewModel.openVoice()
+        runCurrent()
+        viewModel.listen()
+
+        viewModel.agreeOnline()
+        runCurrent()
+        viewModel.listen()
+        runCurrent()
+
+        assertNull(viewModel.uiState.value.askingOnline)
+        assertEquals(setOf(SpeechLanguage.Burmese), speech.agreed)
+        assertEquals(listOf(SpeechLanguage.Burmese to true, SpeechLanguage.Burmese to true), speech.listens)
+    }
+
+    @Test
+    fun `type instead opens no mic and the next tap asks again`() = runTest {
+        val speech = onlineBurmese()
+        val viewModel = quickAdd(speech)
+        viewModel.openVoice()
+        runCurrent()
+        viewModel.listen()
+
+        viewModel.dismissOnlineAsk()
+        runCurrent()
+
+        assertNull(viewModel.uiState.value.askingOnline)
+        assertTrue(speech.listens.isEmpty())
+        viewModel.listen()
+        assertEquals(SpeechLanguage.Burmese, viewModel.uiState.value.askingOnline)
+    }
+
+    @Test
+    fun `a language heard on the phone never asks`() = runTest {
+        val speech = FakeSpeech(VoiceLanguages(heard = setOf(SpeechLanguage.English), online = setOf(SpeechLanguage.English)))
+        val viewModel = quickAdd(speech)
+        viewModel.openVoice()
+        runCurrent()
+
+        viewModel.listen()
+        runCurrent()
+
+        assertNull(viewModel.uiState.value.askingOnline)
+        assertEquals(listOf(SpeechLanguage.English to false), speech.listens)
+    }
+
+    @Test
+    fun `each language in the voice sheet says how this phone hears it`() = runTest {
+        val viewModel = quickAdd(
+            FakeSpeech(
+                VoiceLanguages(
+                    heard = setOf(SpeechLanguage.English),
+                    downloadable = setOf(SpeechLanguage.Thai),
+                    online = setOf(SpeechLanguage.Burmese),
+                ),
+            ),
+        )
+        viewModel.openVoice()
+        runCurrent()
+
+        val voice = assertNotNull(viewModel.uiState.value.voice)
+        assertNull(voice.noteFor(SpeechLanguage.English))
+        assertTrue(assertNotNull(voice.noteFor(SpeechLanguage.Thai)).contains("Download"))
+        assertTrue(assertNotNull(voice.noteFor(SpeechLanguage.Burmese)).contains("Google"))
+    }
+
+    private fun onlineBurmese() = FakeSpeech(VoiceLanguages(heard = emptySet(), online = setOf(SpeechLanguage.Burmese)), preferred = SpeechLanguage.Burmese)
+
     /** Quick add shows only with an agent; these tests never read a sentence with it. */
     private fun quickAdd(speech: SpeechInput) = AddViewModel(
         ledger = RecordingLedger(),
@@ -469,6 +585,8 @@ private class FakeSpeech(
     private var languages: VoiceLanguages,
     private val download: VoiceDownload = VoiceDownload.Failed,
     private val preferred: SpeechLanguage = SpeechLanguage.English,
+    /** The languages the person already let go online. */
+    val agreed: MutableSet<SpeechLanguage> = mutableSetOf(),
 ) : SpeechInput {
     val downloads = mutableListOf<SpeechLanguage>()
 
@@ -492,6 +610,12 @@ private class FakeSpeech(
     override fun preferredLanguage(): SpeechLanguage = preferred
 
     override fun rememberLanguage(language: SpeechLanguage) = Unit
+
+    override fun agreedOnline(language: SpeechLanguage): Boolean = language in agreed
+
+    override fun agreeOnline(language: SpeechLanguage) {
+        agreed += language
+    }
 
     override suspend fun listen(language: SpeechLanguage): Heard = Heard.Nothing.also { listens += language to false }
 

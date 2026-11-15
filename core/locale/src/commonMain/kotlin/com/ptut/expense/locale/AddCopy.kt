@@ -3,12 +3,22 @@ package com.ptut.expense.locale
 /** The Add sheet, Quick add and the mic. */
 data class AddCopy(
     val pickCategoryHint: String = "Pick a category to save this",
+    val typeAmountHint: String = "Type an amount to save this",
     val incomeHint: String = "Income · lands in today, week and month",
     val byHandHint: String = "Added by hand · no slip for this",
-    val askPlaceholder: String = "Type it: coffee 60 · กาแฟ 60 · ကော်ဖီ ၆၀",
+    val askPlaceholder: String = "Type it: coffee 60",
     val listening: String = "Listening…",
     val sayIt: String = "Say it",
     val stopListening: String = "Stop listening",
+    /** The pill beside the mic and the sheet it opens. */
+    val voiceLanguageTitle: String = "Voice language",
+    val voiceLanguageLabel: (language: String) -> String = { language -> "Voice language: $language" },
+    val voiceOnPhone: String = "On this phone. Works offline.",
+    /** Asked once per language, before its first online listen. The body is [voiceOnline]. */
+    val onlineAskTitle: (language: String) -> String = { language -> "$language is heard online" },
+    val listenOnline: String = "Listen",
+    val typeInstead: String = "Type instead",
+    val saveAmount: (amount: String) -> String = { amount -> "Save $amount" },
     val voiceUnavailable: (language: String) -> String = { language ->
         "$language voice isn't available on this phone. Type it instead."
     },
@@ -48,12 +58,20 @@ data class AddCopy(
 
 val BurmeseAdd = AddCopy(
     pickCategoryHint = "သိမ်းဖို့ အမျိုးအစား ရွေးပါ",
+    typeAmountHint = "သိမ်းဖို့ ပမာဏ ရိုက်ထည့်ပါ",
     incomeHint = "ဝင်ငွေ · ဒီနေ့၊ ဒီအပတ်နဲ့ ဒီလ စုစုပေါင်းထဲ ဝင်မယ်",
     byHandHint = "ကိုယ်တိုင် ထည့်တာ · စလစ် မရှိဘူး",
-    askPlaceholder = "ရိုက်ထည့်ပါ: coffee 60 · กาแฟ 60 · ကော်ဖီ ၆၀",
+    askPlaceholder = "ရိုက်ထည့်ပါ: ကော်ဖီ ၆၀",
     listening = "နားထောင်နေတယ်…",
     sayIt = "ပြောမယ်",
     stopListening = "နားထောင်တာ ရပ်မယ်",
+    voiceLanguageTitle = "အသံ ဘာသာစကား",
+    voiceLanguageLabel = { language -> "အသံ ဘာသာစကား: $language" },
+    voiceOnPhone = "ဖုန်းထဲမှာ ရှိတယ်။ အင်တာနက် မလိုဘူး။",
+    onlineAskTitle = { language -> "$language ကို အွန်လိုင်းကနေ နားထောင်တယ်" },
+    listenOnline = "နားထောင်မယ်",
+    typeInstead = "ရိုက်ထည့်မယ်",
+    saveAmount = { amount -> "$amount သိမ်းမယ်" },
     voiceUnavailable = { language -> "ဒီဖုန်းမှာ $language အသံနဲ့ ထည့်လို့ မရသေးဘူး။ ရိုက်ထည့်ပါ။" },
     voiceOnline = { language -> "$language ကို Google က အွန်လိုင်းကနေ နားထောင်ပေးတာမို့ သင့်အသံကို Google ဆီ ပို့ရတယ်။" },
     voiceDownloadable = { language -> "ဒီဖုန်းမှာ $language အသံ မရှိသေးဘူး။ တစ်ခါ ဒေါင်းလုဒ်လုပ်ထားရင် အင်တာနက်မပါဘဲ ပြောလို့ရမယ်။" },
