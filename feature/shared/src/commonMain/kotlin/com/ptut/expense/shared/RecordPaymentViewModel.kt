@@ -38,6 +38,9 @@ data class PaymentForm(
     val saving: Boolean = false,
 )
 
+/** The share sheet's button and text when the money comes to you: "Ask Thaw to pay". */
+data class AskToPayUiModel(val label: String, val message: String)
+
 sealed interface RecordPaymentUiState {
     data object Missing : RecordPaymentUiState
 
@@ -58,6 +61,7 @@ sealed interface RecordPaymentUiState {
         val promptPayQr: String? = null,
         /** "Pay Mali by PromptPay ••••••5678". */
         val promptPayLine: String? = null,
+        val askToPay: AskToPayUiModel? = null,
     ) : RecordPaymentUiState
 }
 
@@ -113,6 +117,7 @@ class RecordPaymentViewModel(
             canSave = form.loaded && !form.saving && paying != null && paying > Satang.Zero,
             promptPayQr = payeePromptPay(group)?.takeIf { paying != null && paying > Satang.Zero }?.let { PromptPay.payload(it, paying ?: Satang.Zero) },
             promptPayLine = payeePromptPay(group)?.let { text.payBy(toName, PromptPay.masked(it)) },
+            askToPay = askToPay(group, owed, fromName),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecordPaymentUiState.Missing)
 
@@ -154,6 +159,14 @@ class RecordPaymentViewModel(
     /** #199: only when you are the one paying; a QR to pay yourself would be no use. */
     private fun payeePromptPay(group: SharedGroup): String? =
         group.member(toMemberId)?.promptPayId?.takeIf { group.isMe(fromMemberId) }
+
+    /** Only when the money comes to you and something is still owed. The PromptPay ID goes in full, so they can pay from the chat. */
+    private fun askToPay(group: SharedGroup, owed: Satang, fromName: String): AskToPayUiModel? {
+        if (!group.isMe(toMemberId) || owed <= Satang.Zero) return null
+        val text = AppText.copy.shared.payment
+        val promptPay = group.member(toMemberId)?.promptPayId?.let { "\n" + text.askPromptPay(it) }.orEmpty()
+        return AskToPayUiModel(label = text.askToPay(fromName), message = text.askMessage(group.name, fromName, owed.format()) + promptPay)
+    }
 
     /** What [fromMemberId] owes [toMemberId] in the payments the group would settle with (#135). */
     private fun owedBetween(snapshot: SharedSnapshot): Satang =

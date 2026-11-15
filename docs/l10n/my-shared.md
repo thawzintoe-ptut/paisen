@@ -295,6 +295,9 @@ These Burmese strings for the Shared tab, groups, splits, payments, people, join
 | {name} is owed the full amount (draft, 14 Nov) | {name} ပေးခဲ့၊ အကုန် ပြန်ရမယ် | `SharedExpenseCopy.kt:108` |
 | Owed the full amount (draft, 14 Nov) | အကုန် ပြန်ရမယ် | `SharedExpenseCopy.kt:109` |
 | More options (draft, 14 Nov) | တခြား ခွဲပုံများ | `SharedExpenseCopy.kt:110` |
+| Ask {name} to pay (draft, 15 Nov, needs a native reader) | {name} ဆီ ငွေတောင်းမယ် | `SharedPaymentCopy.kt:63` |
+| {group}: {name}, you owe me {amount}. (draft, 15 Nov; sent to a friend, so မင်း/ငါ) | {group}: {name}၊ မင်းက ငါ့ကို {amount} ပေးရမယ်။ | `SharedPaymentCopy.kt:64` |
+| My PromptPay: {id} (draft, 15 Nov) | ငါ့ PromptPay: {id} | `SharedPaymentCopy.kt:65` |
 | Stop repeating {name}? | {name} ထပ်တာ ရပ်မလား။ | `SharedExpenseCopy.kt:169` |
 | No more dates are added. What was already added stays in the group. | နောက်ထပ် ရက်တွေ မထည့်တော့ဘူး။ ထည့်ပြီးသားတွေက အဖွဲ့ထဲမှာ ကျန်မယ်။ | `SharedExpenseCopy.kt:170` |
 | Sign out? | အကောင့်ထွက်မှာ သေချာလား။ | `SharedAccountCopy.kt:101` |

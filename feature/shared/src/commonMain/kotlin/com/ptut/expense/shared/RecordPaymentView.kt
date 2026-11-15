@@ -133,6 +133,10 @@ fun RecordPaymentView(
                     OpenBankApp(qrPainter)
                 }
             }
+            state.askToPay?.let { ask ->
+                val share = rememberShareText()
+                SkyButton(ask.label, onClick = { share(ask.message) }, kind = SkyButtonKind.Outline, modifier = Modifier.fillMaxWidth().padding(top = Spacing.md))
+            }
             Text(
                 words.onlyRecords,
                 style = MaterialTheme.typography.bodyMedium,

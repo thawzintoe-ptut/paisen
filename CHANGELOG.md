@@ -28,6 +28,8 @@ The first public version.
 - Adding a shared expense: one tap picks who paid and how it splits. Split equally, or one person
   is owed the full amount. Exact, percent and shares are under *More options*. A blank
   description saves as the category's name.
+- Asking to be paid: when someone owes you, *Record a payment* has a button that shares the amount
+  and your PromptPay number to a chat.
 - Export and import of the whole ledger as a file.
 - Send feedback in Settings: opens your email app with the app version and phone model filled in.
 - English and Burmese, in light and dark.
