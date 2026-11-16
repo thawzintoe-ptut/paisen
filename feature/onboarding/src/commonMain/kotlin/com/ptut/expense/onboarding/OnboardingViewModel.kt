@@ -2,6 +2,7 @@ package com.ptut.expense.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.phrase
@@ -128,8 +129,12 @@ class OnboardingViewModel(
         val text = chosenText ?: return
         whileRestoring {
             letGo()
-            commitHome()
-            toasts?.show(ToastMessage(archive.restore(text).phrase()))
+            // Before the restore, so a file with no home of its own lands in the chosen one; a file
+            // that carries one takes it over this. The launch home as chosen needs no rebuild.
+            if (home.value != Home.choice.value) commitHome()
+            // Restored before the toast is looked at: a safe call skips its argument too.
+            val merged = archive.restore(text)
+            toasts?.show(ToastMessage(merged.phrase()))
             onboarding.finish()
         }
     }

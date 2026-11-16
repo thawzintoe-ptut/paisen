@@ -6,6 +6,7 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.ptut.expense.agent.ProposedAction
+import com.ptut.expense.domain.Home
 import com.ptut.expense.ui.AmountEntry
 import kotlin.reflect.KClass
 
@@ -88,7 +89,7 @@ fun NavController.openProposed(action: ProposedAction) {
 
         is ProposedAction.AddGroupExpense -> {
             val groupId = action.groupId ?: return switchTab(PtutRoute.Shared)
-            val amount = action.amount?.let { AmountEntry.of(it).typed }
+            val amount = action.amount?.let { AmountEntry.of(it, action.amountDigits ?: Home.money.digits).typed }
             navigate(PtutRoute.AddSharedExpense(groupId, amount = amount, description = action.description)) { launchSingleTop = true }
         }
 

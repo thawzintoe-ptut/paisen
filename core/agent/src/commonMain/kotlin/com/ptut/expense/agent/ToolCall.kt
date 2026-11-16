@@ -57,6 +57,8 @@ sealed interface ProposedAction {
         val groupId: String?,
         val amount: Satang? = null,
         val description: String? = null,
+        /** #48: the decimals [amount] was read with, the group's own, so the sheet types it back the same way. */
+        val amountDigits: Int? = null,
     ) : ProposedAction, ToolCall {
         override val tool: AgentTool get() = AgentTool.AddGroupExpense
     }

@@ -123,8 +123,8 @@ fun Satang.formatCompact(money: HomeMoney = Home.money): String =
  * No currency symbol: the hero above the chart has already said what the units are, and seven
  * of these across a week would be seven copies of the same fact.
  */
-fun Satang.abbreviated(): String {
-    val whole = (if (raw < 0) -raw else raw) / minorPerWhole()
+fun Satang.abbreviated(money: HomeMoney = Home.money): String {
+    val whole = (if (raw < 0) -raw else raw) / minorPerWhole(money)
     if (whole < 1_000) return whole.toString()
     val thousands = whole / 100 / 10.0
     return if (whole % 1_000 < 50) "${whole / 1_000}k" else "${thousands}k"
@@ -146,10 +146,13 @@ fun Satang.formatDigits(money: HomeMoney = Home.money): String {
 }
 
 /** 100 for baht, 1 for kyat: how many minor units one whole home unit holds. */
-fun minorPerWhole(money: HomeMoney = Home.money): Long {
-    var unit = 1L
-    repeat(money.digits) { unit *= 10 }
-    return unit
+fun minorPerWhole(money: HomeMoney = Home.money): Long = pow10(money.digits)
+
+/** 10 to the [exponent], as a Long: the one place money's decimal shifts are computed. */
+fun pow10(exponent: Int): Long {
+    var result = 1L
+    repeat(exponent) { result *= 10 }
+    return result
 }
 
 private fun groupThousands(value: Long): String {

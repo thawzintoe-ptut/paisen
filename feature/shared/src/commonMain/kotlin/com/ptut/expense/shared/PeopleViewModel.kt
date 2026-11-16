@@ -2,8 +2,10 @@ package com.ptut.expense.shared
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.format
+import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.NewMember
 import com.ptut.expense.domain.shared.Person
@@ -18,7 +20,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** One person (Sky p31): their groups and one balance across them. [personId] null is a name only. */
+/**
+ * One person (Sky p31): their groups and one balance across them, one row per money those groups
+ * count in (#48). [personId] null is a name only.
+ */
 data class PeopleRowUiModel(
     val key: String,
     val personId: String?,
@@ -72,13 +77,13 @@ class PeopleViewModel(private val repository: SharedRepository) : ViewModel() {
             val person = byId[balance.key]
             val archived = person?.archived == true
             PeopleRowUiModel(
-                key = balance.key,
+                key = "${balance.key}:${balance.currency}",
                 personId = person?.id,
                 name = balance.name,
                 initial = balance.name.initial(),
                 detail = if (archived) text.person.archived else balance.groupIds.mapNotNull { group(it)?.name }.distinct().joinToString(", "),
                 word = balance.amount.word(),
-                amount = balance.amount.magnitude().format(moneyOf(balance.groupIds)),
+                amount = balance.amount.magnitude().format(Currencies.of(balance.currency).toHomeMoney()),
                 tone = balance.amount.tone(),
                 archived = archived,
             )
@@ -92,7 +97,7 @@ class PeopleViewModel(private val repository: SharedRepository) : ViewModel() {
                 initial = person.name.initial(),
                 detail = if (person.archived) text.person.archived else text.person.inNoGroup,
                 word = Satang.Zero.word(),
-                amount = Satang.Zero.format(),
+                amount = Satang.Zero.format(Home.money),
                 tone = BalanceTone.Settled,
                 archived = person.archived,
             )

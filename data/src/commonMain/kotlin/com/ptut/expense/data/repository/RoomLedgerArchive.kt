@@ -86,7 +86,10 @@ class RoomLedgerArchive(
 
     override suspend fun restore(json: String): MergeReport {
         val backup = LedgerBackup.decode(json)
-        takeFileHome(backup)
+        refuseOtherHome(backup)
+        // #46: decided before the merge, which is what stops the ledger being empty.
+        val fileHome = backup.home()
+        val takesFileHome = fileHome != Home.choice.value && homeBook?.isEmpty() == true
         // Categories before rows, so a row filed under one the reader made keeps it (#215).
         val known = catalogDao?.restore(
             categories = backup.categories.map(BackupCategory::toEntity),
@@ -103,6 +106,8 @@ class RoomLedgerArchive(
         val added = mergeDao.merge(rows)
         // After the transactions, so a link finds the row it points at.
         val groupsAdded = backup.shared?.let { shared -> sharedDao?.let { restoreShared(it, shared, known) } } ?: 0
+        // Last of all: the new home rebuilds the shell, and nothing may still be merging under the old one.
+        if (takesFileHome) homeBook?.adopt(fileHome)
         return MergeReport(
             added = added.size,
             alreadyHeld = rows.size - added.size,
@@ -117,11 +122,7 @@ class RoomLedgerArchive(
         if (homeBook?.isEmpty() != true) throw BackupUnreadable(AppText.copy.phrases.backupOtherHome(backup.homeCode, Home.money.code))
     }
 
-    private suspend fun takeFileHome(backup: LedgerBackup) {
-        if (backup.homeCode == Home.money.code) return
-        val fileHome = HomeChoice(Currencies.of(backup.homeCode).toHomeMoney(), backup.homeZone ?: HomeChoice.BANGKOK)
-        if (homeBook?.choose(fileHome) != true) throw BackupUnreadable(AppText.copy.phrases.backupOtherHome(backup.homeCode, Home.money.code))
-    }
+    private fun LedgerBackup.home(): HomeChoice = HomeChoice.of(Currencies.of(homeCode).toHomeMoney(), homeZone ?: HomeChoice.BANGKOK)
 
     private suspend fun exportShared(dao: SharedDao): BackupShared {
         val groups = dao.localGroups()

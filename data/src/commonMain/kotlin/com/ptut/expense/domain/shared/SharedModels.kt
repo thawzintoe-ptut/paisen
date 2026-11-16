@@ -66,7 +66,7 @@ data class SharedGroup(
 /**
  * One member's part of an expense. [weight] is what the mode reads (an exact amount, basis points
  * of a percent, or a count of shares); [amountMinor] is their part in the expense's currency and
- * [satang] the same part in baht at the saved rate.
+ * [satang] the same part in the group's money at the saved rate.
  */
 data class Share(val memberId: String, val weight: Long, val amountMinor: Long, val satang: Satang)
 
@@ -86,9 +86,9 @@ data class SharedExpense(
     val note: String?,
     val currency: String,
     val amountMinor: Long,
-    /** Baht per one unit of [currency]. Null for THB. */
+    /** The group's money per one unit of [currency]. Null in the group's own money. */
     val rate: Rate?,
-    /** The whole amount in baht at [rate]. */
+    /** The whole amount in the group's money at [rate]. */
     val satang: Satang,
     val payerMemberId: String,
     val splitMode: SplitMode,

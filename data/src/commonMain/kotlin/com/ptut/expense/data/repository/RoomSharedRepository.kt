@@ -56,7 +56,6 @@ import com.ptut.expense.domain.shared.sharedExpenseOf
 import com.ptut.expense.domain.shared.shares
 import com.ptut.expense.domain.shared.split
 import com.ptut.expense.domain.shared.splitMembers
-import com.ptut.expense.domain.shared.toSatang
 import com.ptut.expense.domain.startOfDayEpochMillis
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -225,6 +224,8 @@ class RoomSharedRepository(
         )
         val link = dao.link(expenseId)
         val youPaid = group.isMe(draft.payerMemberId)
+        // A group in other money keeps no own transaction (#48) until a second rate is asked.
+        val inHome = group.currency == Home.money.code
         val shareOf = draft.linkTransactionId?.takeIf { link == null }
         // #186: a transaction is shared once at most. A link left by a removed expense gives way.
         if (shareOf != null) {
@@ -234,11 +235,11 @@ class RoomSharedRepository(
         dao.writeVersion(
             version = row,
             shares = shares.map { ExpenseShareEntity(versionId, it.memberId, it.weight, it.amountMinor, it.satang.toMinorUnits()) },
-            newTransaction = if (youPaid && link == null && shareOf == null && draft.categoryId != null) yourTransaction(draft, satang, now) else null,
+            newTransaction = if (youPaid && inHome && link == null && shareOf == null && draft.categoryId != null) yourTransaction(draft, satang, now) else null,
         )
         if (shareOf != null) dao.upsertLink(ExpenseLinkEntity(expenseId = expenseId, transactionId = shareOf))
         // #32: the full amount you paid stays your own transaction's amount after an edit too.
-        if (youPaid && link != null && draft.categoryId != null) {
+        if (youPaid && inHome && link != null && draft.categoryId != null) {
             ledger.applyEdit(
                 link.transactionId,
                 TransactionEdit(

@@ -10,6 +10,7 @@ import com.ptut.expense.data.local.entity.TransactionEntity
 import com.ptut.expense.data.local.entity.toDomain
 import com.ptut.expense.data.local.entity.toEntity
 import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.QueuedSlip
@@ -20,9 +21,11 @@ import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.startOfDayEpochMillis
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.datetime.DateTimeUnit
@@ -42,7 +45,7 @@ import kotlin.uuid.Uuid
  *
  * Known limit: the day window is fixed when this is built, so an app left open across midnight
  * keeps yesterday's "today" until it is rebuilt. Slice 4 owns that, where a lifecycle-aware
- * holder can notice the date change.
+ * holder can notice the date change. A new home (#41) is noticed: its zone re-cuts the window.
  */
 @OptIn(ExperimentalUuidApi::class)
 class DefaultLedgerRepository(
@@ -57,11 +60,13 @@ class DefaultLedgerRepository(
 
     private val today: LocalDate = clock.now().toLocalDateTime(HomeTime).date
 
+    /** Built here, as every other window is, so a database that cannot answer fails the constructor. */
+    private val launchHome: HomeChoice = Home.choice.value
+    private val launchDay: Flow<List<TransactionEntity>> = dayIn(launchHome)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     override val todaysTransactions: StateFlow<LedgerSnapshot> =
-        transactionDao.observeBetween(
-            fromEpochMillis = today.startOfDayEpochMillis(),
-            untilEpochMillis = today.plus(1, DateTimeUnit.DAY).startOfDayEpochMillis(),
-        ).asTransactions(scope)
+        Home.choice.flatMapLatest { home -> if (home == launchHome) launchDay else dayIn(home) }.asTransactions(scope)
 
     override val recentTransactions: StateFlow<LedgerSnapshot> =
         transactionDao.observeSince(startOfPreviousMonth()).asTransactions(scope)
@@ -130,6 +135,16 @@ class DefaultLedgerRepository(
      * The reports measure a period against the one before it, and the longest of those is a
      * month, so history reaches back to the first of the previous month and no further.
      */
+
+    /** The day it is now in [home]'s zone, as a window the DAO can answer. */
+    private fun dayIn(home: HomeChoice): Flow<List<TransactionEntity>> {
+        val day = clock.now().toLocalDateTime(home.zone).date
+        return transactionDao.observeBetween(
+            fromEpochMillis = day.startOfDayEpochMillis(home.zone),
+            untilEpochMillis = day.plus(1, DateTimeUnit.DAY).startOfDayEpochMillis(home.zone),
+        )
+    }
+
     private fun startOfPreviousMonth(): Long {
         val previousMonth = today.minus(1, DateTimeUnit.MONTH)
         return LocalDate(previousMonth.year, previousMonth.month, 1).startOfDayEpochMillis()

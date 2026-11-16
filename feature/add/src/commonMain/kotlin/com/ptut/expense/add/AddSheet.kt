@@ -55,6 +55,7 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
+import com.ptut.expense.domain.shared.pickerLabel
 import com.ptut.expense.locale.CommonCopy
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.currencyCopy
@@ -126,7 +127,7 @@ fun AddSheet(
     if (choosingCurrency) {
         SkyChoiceSheet(
             title = currencyCopy().currencyTitle,
-            options = Currencies.all.map { SkyChoice(it.code, "${it.code}  ${it.symbol}") },
+            options = Currencies.all.map { SkyChoice(it.code, it.pickerLabel) },
             chosen = uiState.currency.code,
             onPick = { code ->
                 onCurrency(Currencies.of(code))
@@ -550,7 +551,7 @@ private fun RateSheet(uiState: AddUiState, onRate: (String) -> Unit, onClose: (k
         SkyRateRow(
             rateText = uiState.rateText,
             unit = uiState.rateUnit,
-            bahtLine = uiState.bahtLine,
+            homeLine = uiState.homeLine,
             onRate = onRate,
             showLabel = false,
             focusOnStart = true,

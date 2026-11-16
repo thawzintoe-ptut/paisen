@@ -30,14 +30,14 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.locale.currencyCopy
 
 /**
- * Baht for one [unit] of another currency, typed: "Rate [8.2] ฿ per 1,000 K", then what the entry
- * saves as. [onTodaysRate] draws a link to a page that shows the day's rate, where one is known.
+ * Home money for one [unit] of another currency, typed: "Rate [8.2] ฿ per 1,000 K", then what the
+ * entry saves as. [onTodaysRate] draws a link to a page that shows the day's rate, where one is known.
  */
 @Composable
 fun SkyRateRow(
     rateText: String,
     unit: String,
-    bahtLine: String?,
+    homeLine: String?,
     onRate: (String) -> Unit,
     modifier: Modifier = Modifier,
     onTodaysRate: (() -> Unit)? = null,
@@ -58,7 +58,8 @@ fun SkyRateRow(
             if (showLabel) Text(words.rateLabel, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
             BasicTextField(
                 value = rateText,
-                onValueChange = { typed -> onRate(typed.filter { it.isDigit() || it == '.' }) },
+                // Some decimal keyboards print a comma; the row owns the filter, so no caller repeats it.
+                onValueChange = { typed -> onRate(typed.replace(',', '.').filter { it.isDigit() || it == '.' }) },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.onSurface),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -74,7 +75,7 @@ fun SkyRateRow(
             )
             Text(perUnit, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        bahtLine?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        homeLine?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         onTodaysRate?.let { SkyTextAction(label = words.todaysRate, onClick = it, enabled = true) }
     }

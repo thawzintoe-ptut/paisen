@@ -49,6 +49,7 @@ import kotlin.time.Clock
 
 /** What the person is typing. Everything shown is worked out from this and the group (#183, #138). */
 data class ExpenseForm(
+    /** The group's money once [loaded]; until then nothing about money is drawn from it (#48). */
     val currency: Currency = Currencies.Thb,
     val amountText: String = "",
     val rateText: String = "",
@@ -123,7 +124,7 @@ sealed interface AddExpenseUiState {
         val currencies: List<Currency>,
         val amountShown: String,
         /** "≈ ฿2,560 at ฿1.38 per 1,000 ₫, saved with the expense", or null in the group's own money (#48). */
-        val bahtLine: String?,
+        val groupMoneyLine: String?,
         val rateUnitLabel: String?,
         val categories: List<Category>,
         val categoryName: String?,
@@ -432,13 +433,13 @@ class AddExpenseViewModel(
         val you = AppText.copy.common.you
         val amount = amountOf(form)
         val inGroup = inGroupMoney(group, form)
-        val own = form.currency.code == group.currency
+        val own = !form.loaded || form.currency.code == group.currency
         val symbol = group.money.symbol
         val check = check(group, form, members)
         val payerId = form.payerMemberId ?: group.meMemberId
         val category = categories.firstOrNull { it.id == form.categoryId }
         val unit = form.currency.rateUnit
-        val missing = missingFor(form, amount, inGroup, check)
+        val missing = missingFor(group, form, amount, inGroup, check)
 
         return AddExpenseUiState.Ready(
             form = form,
@@ -446,10 +447,10 @@ class AddExpenseViewModel(
             groupLine = text.groupLine(group.name, members.size),
             currencies = Currencies.all,
             amountShown = form.amountText.ifEmpty { "0" },
-            bahtLine = if (own) {
+            groupMoneyLine = if (own) {
                 null
             } else if (inGroup == null) {
-                text.typeBaht(if (unit == 1L) "1" else formatUnit(unit), form.currency.symbol)
+                text.typeGroupMoney(group.currency, if (unit == 1L) "1" else formatUnit(unit), form.currency.symbol)
             } else {
                 text.bahtAtRate(inGroup.formatCompact(group.moneyFormat()), symbol, form.rateText, if (unit == 1L) form.currency.symbol else "${formatUnit(unit)} ${form.currency.symbol}")
             },
@@ -470,11 +471,11 @@ class AddExpenseViewModel(
     }
 
     /** #216: the first thing Save still needs, in the order the form asks for it; null when nothing. */
-    private fun missingFor(form: ExpenseForm, amount: Long?, inGroup: Satang?, check: SplitCheck?): String? {
+    private fun missingFor(group: SharedGroup, form: ExpenseForm, amount: Long?, inGroup: Satang?, check: SplitCheck?): String? {
         val text = AppText.copy.shared.expense
         return when {
             amount == null || amount <= 0 -> text.hintAmount
-            inGroup == null -> text.hintRate
+            inGroup == null -> text.hintRate(group.currency)
             form.categoryId == null -> text.hintCategory
             check?.complete != true -> text.hintSplit
             else -> null

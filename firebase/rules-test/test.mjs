@@ -189,19 +189,32 @@ await check('4.17 new group as the app shares it', 'allow', {}, () => setDoc(doc
 const kyatGroup = (currency) => ({ name: 'Home', type: 'Flat', icon: 'group', simplifyDebts: true, createdAt: 1, creatorUid: 'carol', memberUids: ['carol'], inviteCode: null, inviteActive: false, currency });
 await check('4.18 new group in kyat', 'allow', {}, () => setDoc(doc(as('carol'), 'groups/g3'), kyatGroup('MMK')));
 await check('4.19 new group with a currency that is not a code', 'deny', {}, () => setDoc(doc(as('carol'), 'groups/g4'), kyatGroup('KYAT')));
-await check('4.20 a member changes the group money', 'deny', {}, () => updateDoc(doc(as('bob'), 'groups/g1'), { currency: 'MMK' }));
-await check('4.21 expense with amountGroup and no amountSatang', 'allow', {}, () => {
+await check('4.20 a member changes the group money (no update may touch it)', 'deny', {}, () => updateDoc(doc(as('bob'), 'groups/g1'), { currency: 'MMK' }));
+await check('4.20b a member renames a group made before #48, which has no currency field', 'allow', {}, () => updateDoc(doc(as('bob'), 'groups/g1'), { name: 'Old trip' }));
+await check('4.20c new group with a number for its money', 'deny', {}, () => setDoc(doc(as('carol'), 'groups/g4'), kyatGroup(840)));
+await check('4.20d new group with a lower-case code', 'deny', {}, () => setDoc(doc(as('carol'), 'groups/g4'), kyatGroup('thb')));
+// The amount key is the group's: amountGroup in a kyat group, amountSatang in a baht one, never both.
+const kyat = { group: { currency: 'MMK' } };
+const groupVersion = () => {
   const { amountSatang, shares: _s, ...rest } = version();
-  return entry('groups/g1/entries/e2', 'bob', { ...rest, amountGroup: 29500, shares: [{ memberId: 'mBob', weight: 1, amountMinor: 29500, amountGroup: 29500 }] });
-});
+  return { ...rest, currency: 'MMK', amountMinor: 29500, amountGroup: 29500, shares: [{ memberId: 'mBob', weight: 1, amountMinor: 29500, amountGroup: 29500 }] };
+};
+const groupPayment = () => {
+  const { amountSatang, ...rest } = payment();
+  return { ...rest, amountGroup: 29500 };
+};
+await check('4.21 kyat group: expense with amountGroup and no amountSatang', 'allow', kyat, () => entry('groups/g1/entries/e2', 'bob', groupVersion()));
+await check('4.21b kyat group: expense with amountSatang, as a build from before #48 writes it', 'deny', kyat, () => entry('groups/g1/entries/e2', 'bob', version()));
+await check('4.21c kyat group: expense with both keys', 'deny', kyat, () => entry('groups/g1/entries/e2', 'bob', { ...groupVersion(), amountSatang: 29500 }));
+await check('4.21d baht group: expense with amountGroup', 'deny', {}, () => entry('groups/g1/entries/e2', 'bob', groupVersion()));
 await check('4.22 expense with neither amount', 'deny', {}, () => {
   const { amountSatang, ...rest } = version();
   return entry('groups/g1/entries/e3', 'bob', rest);
 });
-await check('4.23 payment with amountGroup', 'allow', {}, () => {
-  const { amountSatang, ...rest } = payment();
-  return entry('groups/g1/entries/p2', 'bob', { ...rest, amountGroup: 29500 });
-});
+await check('4.23 kyat group: payment with amountGroup', 'allow', kyat, () => entry('groups/g1/entries/p2', 'bob', groupPayment()));
+await check('4.23b kyat group: payment with amountSatang', 'deny', kyat, () => entry('groups/g1/entries/p2', 'bob', payment()));
+await check('4.23c baht group: payment with amountGroup', 'deny', {}, () => entry('groups/g1/entries/p2', 'bob', groupPayment()));
+await check('4.23d baht group: payment with amountSatang still goes through', 'allow', {}, () => entry('groups/g1/entries/p2', 'bob', payment()));
 
 // 5. Devices, sessions, deleted groups
 await check('5.1 someone else rewrites a phone\'s device document', 'deny', {}, () => setDoc(doc(as('bob'), 'devices/devA'), { uid: 'bob', platform: 'ios', language: 'en', updatedAt: 2 }));

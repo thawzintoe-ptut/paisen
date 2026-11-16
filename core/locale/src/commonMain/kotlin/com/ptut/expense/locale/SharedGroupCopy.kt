@@ -42,7 +42,8 @@ data class SharedDetailCopy(
     val owedHere: String = "In this group you are owed",
     val oweHere: String = "In this group you owe",
     val settledHere: String = "In this group you are settled up",
-    val spendLine: (Boolean, String) -> String = { trip, amount -> "${if (trip) "Total trip spend" else "Total spend"} $amount · shown in THB" },
+    /** #48: [code] is what the group counts in. */
+    val spendLine: (Boolean, String, String) -> String = { trip, amount, code -> "${if (trip) "Total trip spend" else "Total spend"} $amount · shown in $code" },
     val payerPaid: (String, String) -> String = { payer, amount -> "$payer paid $amount" },
     val notInvolved: String = "not involved",
     val youLent: String = "you lent",
@@ -102,7 +103,7 @@ val BurmeseSharedDetail = SharedDetailCopy(
     owedHere = "ဒီအဖွဲ့မှာ သင်က ရမယ်",
     oweHere = "ဒီအဖွဲ့မှာ မင်းက ပေးရမယ်",
     settledHere = "ဒီအဖွဲ့မှာ သင် ရှင်းပြီး",
-    spendLine = { trip, amount -> "${if (trip) "ခရီး စုစုပေါင်း သုံးငွေ" else "စုစုပေါင်း သုံးငွေ"} $amount · THB နဲ့ ပြထားတယ်" },
+    spendLine = { trip, amount, code -> "${if (trip) "ခရီး စုစုပေါင်း သုံးငွေ" else "စုစုပေါင်း သုံးငွေ"} $amount · $code နဲ့ ပြထားတယ်" },
     payerPaid = { payer, amount -> "${if (payer == SHARED_MY_YOU) "သင်ပေးခဲ့" else "$payer ပေးခဲ့"} $amount" },
     notInvolved = "မပါဘူး",
     youLent = "သင်စိုက်ထား",
@@ -142,8 +143,9 @@ data class SharedSettleCopy(
         "$payer, your part in $group is $amount. Scan the QR in the picture with your bank app to pay me."
     },
     val sendCard: String = "Send the card",
-    val converted: (List<String>) -> String = { codes ->
-        "Amounts in ${codes.joinToString(" and ")} were converted to THB at the rate saved on each expense, so nobody's total moves with the market."
+    /** #48: [into] is what the group counts in. */
+    val converted: (List<String>, String) -> String = { codes, into ->
+        "Amounts in ${codes.joinToString(" and ")} were converted to $into at the rate saved on each expense, so nobody's total moves with the market."
     },
 )
 
@@ -165,8 +167,8 @@ val BurmeseSharedSettle = SharedSettleCopy(
     payMeScan = { masked -> "ထိုင်းဘဏ်အက်ပ် တစ်ခုခုနဲ့ စကင်ဖတ်ပါ · PromptPay $masked" },
     payMeText = { payer, amount, group -> "$payer၊ $group ထဲက သင့်ဝေစုက $amount ပါ။ ပုံထဲက QR ကို ဘဏ်အက်ပ်နဲ့ စကင်ဖတ်ပြီး ပေးပါ။" },
     sendCard = "ကတ် ပို့မယ်",
-    converted = { codes ->
-        "${codes.joinToString(" နဲ့ ")} ပမာဏတွေကို စရိတ်တစ်ခုချင်းမှာ သိမ်းထားတဲ့ နှုန်းနဲ့ THB ပြောင်းထားတယ်၊ ဒါကြောင့် ဈေးကွက် ပြောင်းလည်း ဘယ်သူ့ စုစုပေါင်းမှ မပြောင်းဘူး။"
+    converted = { codes, into ->
+        "${codes.joinToString(" နဲ့ ")} ပမာဏတွေကို စရိတ်တစ်ခုချင်းမှာ သိမ်းထားတဲ့ နှုန်းနဲ့ $into ပြောင်းထားတယ်၊ ဒါကြောင့် ဈေးကွက် ပြောင်းလည်း ဘယ်သူ့ စုစုပေါင်းမှ မပြောင်းဘူး။"
     },
 )
 
@@ -275,7 +277,7 @@ val ThaiSharedDetail = SharedDetailCopy(
     owedHere = "ในกลุ่มนี้ คุณจะได้รับ",
     oweHere = "ในกลุ่มนี้ คุณต้องจ่าย",
     settledHere = "ในกลุ่มนี้ คุณเคลียร์แล้ว",
-    spendLine = { trip, amount -> "${if (trip) "ค่าใช้จ่ายทั้งทริป" else "ค่าใช้จ่ายทั้งหมด"} $amount · แสดงเป็น THB" },
+    spendLine = { trip, amount, code -> "${if (trip) "ค่าใช้จ่ายทั้งทริป" else "ค่าใช้จ่ายทั้งหมด"} $amount · แสดงเป็น $code" },
     payerPaid = { payer, amount -> "$payer จ่าย $amount" },
     notInvolved = "ไม่เกี่ยวข้อง",
     youLent = "คุณออกให้",
@@ -311,8 +313,8 @@ val ThaiSharedSettle = SharedSettleCopy(
     payMeScan = { masked -> "สแกนด้วยแอปธนาคารไทยใดก็ได้ · PromptPay $masked" },
     payMeText = { payer, amount, group -> "$payer ส่วนของคุณใน $group คือ $amount สแกน QR ในรูปด้วยแอปธนาคารเพื่อจ่ายให้ฉัน" },
     sendCard = "ส่งการ์ด",
-    converted = { codes ->
-        "ยอดใน ${codes.joinToString(" และ ")} แปลงเป็น THB ด้วยอัตราที่บันทึกไว้ในแต่ละค่าใช้จ่าย ยอดของทุกคนจึงไม่เปลี่ยนตามตลาด"
+    converted = { codes, into ->
+        "ยอดใน ${codes.joinToString(" และ ")} แปลงเป็น $into ด้วยอัตราที่บันทึกไว้ในแต่ละค่าใช้จ่าย ยอดของทุกคนจึงไม่เปลี่ยนตามตลาด"
     },
 )
 

@@ -19,6 +19,7 @@ import com.ptut.expense.data.repository.KIND_VERSION
 import com.ptut.expense.data.repository.toDomain
 import com.ptut.expense.data.repository.toEntity
 import com.ptut.expense.domain.BangkokTime
+import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.Member
 import com.ptut.expense.domain.shared.PaymentRemoval
@@ -29,6 +30,7 @@ import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedPayment
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.firstLastAdded
+import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.sync.auth.Account
 import com.ptut.expense.sync.auth.AuthException
@@ -249,7 +251,9 @@ class SharedSync internal constructor(
                 firestore.create(
                     "groups",
                     groupId,
-                    group.fields() + mapOf("creatorUid" to account.uid, "memberUids" to listOf(account.uid), "inviteCode" to null, "inviteActive" to false),
+                    // #48: the money travels only here. A patch carrying it would change a key on a group made
+                    // before #48, which the rules refuse, so every later edit of that group would be a 403.
+                    group.fields() + mapOf("currency" to group.currency, "creatorUid" to account.uid, "memberUids" to listOf(account.uid), "inviteCode" to null, "inviteActive" to false),
                 )
                 val local = requireNotNull(dao.group(groupId))
                 dao.upsertGroup(local.copy(remote = true, creatorUid = account.uid))
@@ -625,7 +629,7 @@ class SharedSync internal constructor(
     private fun noticesFor(group: SharedGroup): PushNotices {
         // The name this phone's member has in the group, which is how the others see it.
         val actor = group.meMemberId?.let(group::member)?.name ?: signedIn().name.firstWord()
-        return PushNotices(group.name, actor, group.members)
+        return PushNotices(group.name, actor, group.members, money = group.moneyFormat())
     }
 
     private fun noticesFor(groupId: String): PushNotices? = pushes?.let { repository.snapshot.value.group(groupId)?.let(::noticesFor) }
@@ -673,7 +677,7 @@ class SharedSync internal constructor(
                 // This phone's own mark, never on the server: a pull must not reset it.
                 lastSeenAtEpochMillis = local?.lastSeenAtEpochMillis,
                 // #48: set when the group was made and never changed; a group from before #48 is baht.
-                currency = fields.string("currency") ?: local?.currency ?: BAHT,
+                currency = fields.string("currency") ?: local?.currency ?: Currencies.Thb.code,
             ),
         )
         val known = dao.membersOf(groupId).associateBy { it.id }
@@ -695,7 +699,10 @@ class SharedSync internal constructor(
         )
         val since = pullSince(local?.lastSyncedAtEpochMillis)
         val log = if (since == null) wholeLog(groupId) else newerLog(groupId, since)
-        log.entries.forEach { doc -> receive(groupId, doc) }
+        // #48: read with the key the group's money names, so a baht amount an older build wrote into a
+        // kyat group is skipped rather than taken as kyat.
+        val amountKey = WireAmount.key(dao.group(groupId)?.currency ?: Currencies.Thb.code)
+        log.entries.forEach { doc -> receive(groupId, doc, amountKey) }
         log.repeats.forEach { doc -> receiveRepeat(groupId, doc) }
         dao.markSynced(groupId, log.readTimeEpochMillis ?: now())
         return true
@@ -762,7 +769,7 @@ class SharedSync internal constructor(
     /** Outbox ids ("repeat:<id>", "member:<id>"…) for [groupId]: local changes not uploaded yet. */
     private suspend fun pendingIn(groupId: String): Set<String> = dao.outbox().filter { it.groupId == groupId }.map { it.id }.toSet()
 
-    private suspend fun receive(groupId: String, doc: FirestoreDoc) {
+    private suspend fun receive(groupId: String, doc: FirestoreDoc, amountKey: String) {
         val f = doc.fields
         when (f.string("kind")) {
             KIND_VERSION -> {
@@ -780,7 +787,7 @@ class SharedSync internal constructor(
                     amountMinor = f.long("amountMinor") ?: return,
                     rateUnscaled = f.long("rateUnscaled"),
                     rateScale = f.int("rateScale"),
-                    amountSatang = f.long("amountSatang") ?: f.long("amountGroup") ?: return,
+                    amountSatang = f.long(amountKey) ?: return,
                     payerMemberId = f.string("payerMemberId") ?: return,
                     splitMode = f.string("splitMode") ?: return,
                     authorMemberId = f.string("authorMemberId"),
@@ -795,7 +802,7 @@ class SharedSync internal constructor(
                         memberId = s.string("memberId") ?: return@mapNotNull null,
                         weight = s.long("weight") ?: 0L,
                         amountMinor = s.long("amountMinor") ?: 0L,
-                        amountSatang = s.long("amountSatang") ?: s.long("amountGroup") ?: 0L,
+                        amountSatang = s.long(amountKey) ?: 0L,
                     )
                 }
                 // A split mode or rate this build cannot read is not taken: stored, it would stop every launch.
@@ -809,7 +816,7 @@ class SharedSync internal constructor(
                     groupId = groupId,
                     fromMemberId = f.string("fromMemberId") ?: return,
                     toMemberId = f.string("toMemberId") ?: return,
-                    amountSatang = f.long("amountSatang") ?: f.long("amountGroup") ?: return,
+                    amountSatang = f.long(amountKey) ?: return,
                     method = f.string("method") ?: return,
                     occurredAtEpochMillis = f.long("occurredAt") ?: return,
                     authorMemberId = f.string("authorMemberId"),
@@ -899,14 +906,16 @@ private fun SharedGroup.fields(): Fields = mapOf(
     "icon" to icon,
     "simplifyDebts" to simplifyDebts,
     "createdAt" to createdAtEpochMillis,
-    "currency" to currency,
 )
 
 /**
  * #48: a baht group keeps `amountSatang`, which every build reads. Any other group writes
  * `amountGroup` instead, so a build from before #48 skips the entry rather than read kyat as baht.
+ * The rules hold the same line, so an older build cannot write baht into a kyat group either.
  */
-private fun groupAmountKey(groupCurrency: String): String = if (groupCurrency == BAHT) "amountSatang" else "amountGroup"
+internal object WireAmount {
+    fun key(groupCurrency: String): String = if (groupCurrency == Currencies.Thb.code) "amountSatang" else "amountGroup"
+}
 
 private fun SharedExpense.fields(uid: String, groupCurrency: String): Fields = mapOf(
     "kind" to KIND_VERSION,
@@ -923,14 +932,14 @@ private fun SharedExpense.fields(uid: String, groupCurrency: String): Fields = m
     "amountMinor" to amountMinor,
     "rateUnscaled" to rate?.unscaled,
     "rateScale" to rate?.scale?.toLong(),
-    groupAmountKey(groupCurrency) to satang.toMinorUnits(),
+    WireAmount.key(groupCurrency) to satang.toMinorUnits(),
     "payerMemberId" to payerMemberId,
     "splitMode" to splitMode.name,
     "authorMemberId" to authorMemberId,
     "removed" to removed,
     "cause" to cause,
     "shares" to shares.map {
-        mapOf("memberId" to it.memberId, "weight" to it.weight, "amountMinor" to it.amountMinor, groupAmountKey(groupCurrency) to it.satang.toMinorUnits())
+        mapOf("memberId" to it.memberId, "weight" to it.weight, "amountMinor" to it.amountMinor, WireAmount.key(groupCurrency) to it.satang.toMinorUnits())
     },
 )
 
@@ -940,7 +949,7 @@ private fun SharedPayment.fields(uid: String, groupCurrency: String): Fields = m
     "createdAt" to createdAtEpochMillis,
     "fromMemberId" to fromMemberId,
     "toMemberId" to toMemberId,
-    groupAmountKey(groupCurrency) to amount.toMinorUnits(),
+    WireAmount.key(groupCurrency) to amount.toMinorUnits(),
     "method" to method.name,
     "occurredAt" to occurredAtEpochMillis,
     "authorMemberId" to authorMemberId,
@@ -978,6 +987,3 @@ private fun RepeatRule.fields(uid: String): Fields = toEntity().let { rule ->
         "weights" to rule.weights,
     )
 }
-
-/** #48: every group made before groups had their own money. */
-private const val BAHT = "THB"

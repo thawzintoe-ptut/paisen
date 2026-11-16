@@ -123,21 +123,19 @@ class ConfirmSlipViewModel(
         state.update { if (it.saving || it.saved || it.dismissed) it else it.copy(phase = ConfirmSlipPhase.Missing) }
     }
 
-    fun type(entry: AmountEntry) = state.update { it.copy(entry = entry).withBaht() }
+    fun type(entry: AmountEntry) = state.update { it.copy(entry = entry).withHome() }
 
-    /** #33: baht for 1,000 kyat, typed. Digits and one point only. */
-    fun typeRate(text: String) = state.update {
-        it.copy(rateText = text.filter { c -> c.isDigit() || c == '.' }, askForRate = false).withBaht()
-    }
+    /** #33: home money for one rate unit of the slip's currency, typed. */
+    fun typeRate(text: String) = state.update { it.copy(rateText = text, askForRate = false).withHome() }
 
-    /** The last rate saved opens the field, so only the first kyat slip has to ask. */
+    /** The last rate saved opens the field, so only the first slip in that money has to ask. */
     private suspend fun loadRate(currency: String) {
         val last = importer.rateFor(currency) ?: return
-        state.update { if (it.rateText.isEmpty()) it.copy(rateText = last.typedFor(Currencies.of(currency).rateUnit)).withBaht() else it }
+        state.update { if (it.rateText.isEmpty()) it.copy(rateText = last.typedFor(Currencies.of(currency).rateUnit)).withHome() else it }
     }
 
-    /** What the typed kyat at the typed rate saves as, or null while either is not a number. */
-    private fun ConfirmSlipUiState.withBaht(): ConfirmSlipUiState = copy(bahtLine = foreignOf(this)?.let { currencyCopy().inBaht(it.inHome.format()) })
+    /** What the typed amount at the typed rate saves as, or null while either is not a number. */
+    private fun ConfirmSlipUiState.withHome(): ConfirmSlipUiState = copy(homeLine = foreignOf(this)?.let { currencyCopy().savedAs(it.inHome.format()) })
 
     private fun foreignOf(current: ConfirmSlipUiState): ForeignAmount? {
         val slip = slip?.takeIf { it.isForeign } ?: return null
@@ -192,7 +190,7 @@ class ConfirmSlipViewModel(
             return
         }
 
-        // #33: a kyat slip saves its baht at the typed rate, and keeps the kyat and the rate beside it.
+        // #33: a foreign slip saves its home amount at the typed rate, and keeps the original and the rate beside it.
         val foreign = foreignOf(current)
         if (slip.isForeign && foreign == null) {
             state.update { it.copy(askForRate = true) }

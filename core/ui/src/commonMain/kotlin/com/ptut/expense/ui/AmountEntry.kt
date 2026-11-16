@@ -2,6 +2,7 @@ package com.ptut.expense.ui
 
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.pow10
 
 /** The numpad's state. Kept as typed text, never a Double — money never touches a float. */
 data class AmountEntry(
@@ -82,12 +83,6 @@ data class AmountEntry(
                 typed.substringAfter('.', "").length <= digits
             return if (allowed) AmountEntry(typed, digits = digits) else null
         }
-
-        private fun pow10(exponent: Int): Long {
-            var result = 1L
-            repeat(exponent) { result *= 10 }
-            return result
-        }
     }
 
     /** Parsed digit by digit, so the value never round-trips through a Double. */
@@ -96,8 +91,6 @@ data class AmountEntry(
         val whole = typed.substringBefore('.').ifEmpty { "0" }.toLongOrNull() ?: return Satang(0)
         if (digits == 0) return Satang(whole)
         val fraction = typed.substringAfter('.', "").padEnd(digits, '0').take(digits).toLongOrNull() ?: 0L
-        var unit = 1L
-        repeat(digits) { unit *= 10 }
-        return Satang(whole * unit + fraction)
+        return Satang(whole * pow10(digits) + fraction)
     }
 }

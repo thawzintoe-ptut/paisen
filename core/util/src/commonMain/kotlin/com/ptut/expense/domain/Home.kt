@@ -12,13 +12,20 @@ data class HomeMoney(val code: String, val symbol: String, val digits: Int) {
     }
 }
 
-/** #41: the ledger's currency and the zone its days start in. A zone this phone does not know reads as Bangkok. */
+/**
+ * #41: the ledger's currency and the zone its days start in. A zone this phone does not know is
+ * read as Bangkok, and [zoneId] says so, so the Timezone screen and a backup carry the zone in use.
+ */
 data class HomeChoice(val money: HomeMoney, val zoneId: String) {
     val zone: TimeZone = runCatching { TimeZone.of(zoneId) }.getOrElse { TimeZone.of(BANGKOK) }
 
     companion object {
         const val BANGKOK = "Asia/Bangkok"
         val Default = HomeChoice(HomeMoney.Baht, BANGKOK)
+
+        /** [HomeChoice] for a zone id that may be unknown here: the id this phone will use. */
+        fun of(money: HomeMoney, zoneId: String): HomeChoice =
+            HomeChoice(money, runCatching { TimeZone.of(zoneId).id }.getOrElse { BANGKOK })
     }
 }
 
@@ -35,16 +42,28 @@ object Home {
 
     val zone: TimeZone get() = chosen.value.zone
 
+    /** At launch, after a reconcile, and on first run: the value alone. */
     fun use(choice: HomeChoice) {
         chosen.value = choice
     }
 
-    /** Set by Settings just before a change, so the rebuilt shell opens on Settings again. */
+    /** Set while a Settings screen changes the home, so the rebuilt shell opens on Settings again. */
     var reopenSettings: Boolean = false
         private set
 
-    fun reopenSettingsAfterChange() {
+    /**
+     * Runs [change] from a Settings screen: the rebuilt shell comes back to Settings when the home
+     * moved, and nowhere else when it did not. The one owner of the flag, so a new writer of the
+     * home cannot forget it.
+     */
+    suspend fun <T> fromSettings(change: suspend () -> T): T {
+        val before = chosen.value
         reopenSettings = true
+        try {
+            return change()
+        } finally {
+            if (chosen.value == before) reopenSettings = false
+        }
     }
 
     fun settingsReopened() {

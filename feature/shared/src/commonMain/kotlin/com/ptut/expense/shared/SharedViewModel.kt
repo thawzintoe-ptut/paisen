@@ -2,12 +2,15 @@ package com.ptut.expense.shared
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.format
+import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.NewMember
+import com.ptut.expense.domain.shared.Overall
 import com.ptut.expense.domain.shared.Person
 import com.ptut.expense.domain.shared.RepeatFrequency
 import com.ptut.expense.domain.shared.RepeatRule
@@ -52,18 +55,16 @@ data class SharedGroupRowUiModel(
 
 data class SharedPersonRowUiModel(val key: String, val name: String, val initial: String, val word: String, val amount: String, val tone: BalanceTone)
 
+/** p26's top for one money: the net, its two halves, and what they count in (#48). */
+data class OverallUiModel(val label: String, val amount: Satang, val money: HomeMoney, val tone: BalanceTone, val owedToYou: String, val youOwe: String)
+
 sealed interface SharedUiState {
     /** p34: before any group exists. */
     data class Empty(val people: List<Person>) : SharedUiState
 
     data class Ready(
-        val overallLabel: String,
-        val overall: Satang,
-        /** #48: what [overall] and the two totals count in. */
-        val money: HomeMoney,
-        val tone: BalanceTone,
-        val owedToYou: String,
-        val youOwe: String,
+        /** One per money the groups count in, the home's first; two moneys are never one figure (#48). */
+        val overall: List<OverallUiModel>,
         val groups: List<SharedGroupRowUiModel>,
         val people: List<SharedPersonRowUiModel>,
         val knownPeople: List<Person>,
@@ -131,8 +132,6 @@ class SharedViewModel(
 
     private fun SharedSnapshot.ready(query: String): SharedUiState.Ready {
         val text = AppText.copy.shared
-        val totals = overall()
-        val totalsMoney = moneyOf(groups.map { it.id })
         val match = query.trim().lowercase()
         val today = clock.now().toLocalDateTime(HomeTime).date
         val groupRows = groups.map { group ->
@@ -165,7 +164,7 @@ class SharedViewModel(
         }.filter { match.isEmpty() || it.name.lowercase().contains(match) }
         val peopleRows = peopleBalances().map { person ->
             SharedPersonRowUiModel(
-                key = person.key,
+                key = "${person.key}:${person.currency}",
                 name = person.name,
                 initial = person.name.trim().firstOrNull()?.uppercase() ?: "?",
                 word = when (person.amount.tone()) {
@@ -173,27 +172,37 @@ class SharedViewModel(
                     BalanceTone.Owe -> text.youOwe
                     BalanceTone.Settled -> text.settledUp
                 },
-                amount = person.amount.magnitude().format(moneyOf(person.groupIds)),
+                amount = person.amount.magnitude().format(Currencies.of(person.currency).toHomeMoney()),
                 tone = person.amount.tone(),
             )
         }.filter { match.isEmpty() || it.name.lowercase().contains(match) }
+        // Nobody to owe or be owed by yet: one settled line in the home's money.
+        val totals = overall().ifEmpty { listOf(Overall(Home.money.code, Satang.Zero, Satang.Zero, Satang.Zero)) }
         return SharedUiState.Ready(
-            overallLabel = when (totals.net.tone()) {
-                BalanceTone.Owed -> text.home.overallOwed
-                BalanceTone.Owe -> text.home.overallOwe
-                BalanceTone.Settled -> text.home.allSettledUp
-            },
-            overall = totals.net.magnitude(),
-            money = totalsMoney,
-            tone = totals.net.tone(),
-            owedToYou = totals.owedToYou.format(totalsMoney),
-            youOwe = totals.youOwe.format(totalsMoney),
+            overall = totals.map { it.uiModel() },
             groups = groupRows,
             people = peopleRows,
             knownPeople = people.filterNot { it.archived },
             query = query,
         )
     }
+}
+
+private fun Overall.uiModel(): OverallUiModel {
+    val text = AppText.copy.shared.home
+    val money = Currencies.of(currency).toHomeMoney()
+    return OverallUiModel(
+        label = when (net.tone()) {
+            BalanceTone.Owed -> text.overallOwed
+            BalanceTone.Owe -> text.overallOwe
+            BalanceTone.Settled -> text.allSettledUp
+        },
+        amount = net.magnitude(),
+        money = money,
+        tone = net.tone(),
+        owedToYou = owedToYou.format(money),
+        youOwe = youOwe.format(money),
+    )
 }
 
 /** "rent repeats 1st" for a monthly repeat, "internet repeats weekly" for the rest. */

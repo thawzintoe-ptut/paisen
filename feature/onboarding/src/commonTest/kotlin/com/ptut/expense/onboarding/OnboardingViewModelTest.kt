@@ -3,8 +3,12 @@ package com.ptut.expense.onboarding
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.domain.backup.BackupPreview
+import com.ptut.expense.domain.backup.LedgerArchive
+import com.ptut.expense.domain.backup.MergeReport
 import com.ptut.expense.domain.home.FakeHomeBook
 import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.platform.files.LedgerFileStore
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -46,7 +50,61 @@ class OnboardingViewModelTest : ViewModelTest() {
 
         assertEquals(listOf(HomeChoice(Currencies.of("USD").toHomeMoney(), "Asia/Yangon")), book.chosen)
         assertTrue(onboarding.isFinished.value)
-        Home.use(HomeChoice.Default)
+    }
+
+    @Test
+    fun `a restore with the launch home as the suggestion writes no home`() = runTest {
+        val book = FakeHomeBook()
+        val viewModel = OnboardingViewModel(
+            onboarding,
+            photoAccess,
+            archive = FakeArchive(),
+            files = FakeFiles(),
+            homeBook = book,
+            suggestedHome = Home.choice.value,
+        )
+
+        viewModel.restore()
+        runCurrent()
+        viewModel.confirmRestore()
+        runCurrent()
+
+        assertTrue(book.chosen.isEmpty())
+        assertTrue(onboarding.isFinished.value)
+    }
+
+    @Test
+    fun `a restore with another home writes it before the file merges`() = runTest {
+        val book = FakeHomeBook()
+        val archive = FakeArchive()
+        val viewModel = OnboardingViewModel(onboarding, photoAccess, archive = archive, files = FakeFiles(), homeBook = book, suggestedHome = kyat)
+
+        viewModel.restore()
+        runCurrent()
+        viewModel.confirmRestore()
+        runCurrent()
+
+        assertEquals(listOf(kyat), book.chosen)
+        assertEquals(kyat, archive.homeAtRestore)
+    }
+
+    private class FakeArchive : LedgerArchive {
+        var homeAtRestore: HomeChoice? = null
+
+        override suspend fun export(): String = ""
+
+        override suspend fun preview(json: String): BackupPreview = BackupPreview(transactions = 1, oldestEpochMillis = null, groups = 0, categories = 0, subCategories = 0, shopRules = 0)
+
+        override suspend fun restore(json: String): MergeReport {
+            homeAtRestore = Home.choice.value
+            return MergeReport(added = 1, alreadyHeld = 0)
+        }
+    }
+
+    private class FakeFiles : LedgerFileStore {
+        override suspend fun write(suggestedName: String, contents: String): String? = null
+
+        override suspend fun read(): String = "{}"
     }
 
     @Test

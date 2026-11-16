@@ -15,6 +15,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.SkySizes
@@ -35,7 +37,8 @@ fun SkyChoiceSheet(title: String, options: List<SkyChoice>, chosen: String, onPi
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = SkySizes.transactionRow)
-                        .tappable(PtutRadii.r12, Role.Button) { onPick(option.id) },
+                        .semantics { selected = option.id == chosen }
+                        .tappable(PtutRadii.r12, Role.RadioButton) { onPick(option.id) },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(option.label, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))

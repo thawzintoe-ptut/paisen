@@ -163,6 +163,8 @@ import kotlin.time.Duration.Companion.seconds
 private fun Scope.storedCategories(): List<Category> =
     getOrNull<CategoryRepository>()?.categories?.value.orEmpty().ifEmpty { Category.seed().map(Category::inAppLanguage) }
 
+private fun Scope.isDebug(): Boolean = getOrNull<AppBuild>()?.debug == true
+
 /** The sub-categories as stored, read when a screen is built, like [storedCategories] (#111). */
 private fun Scope.storedSubCategories(): List<SubCategory> =
     getOrNull<CategoryRepository>()?.subCategories?.value.orEmpty()
@@ -214,7 +216,7 @@ val viewModelModule: Module = module {
     // built — a rename shows the next time the screen is opened, not while it is on top.
     viewModel {
         val photos = getOrNull<PhotoSettings>()
-        val noteOn = getOrNull<AppBuild>()?.debug == true
+        val noteOn = isDebug()
         HomeViewModel(
             ledger = get(),
             // The fact the freshness chip needs, taken off the one object that knows it.
@@ -255,10 +257,10 @@ val viewModelModule: Module = module {
                 repository.categories.combine(repository.subCategories) { all, subs -> all.size to subs.size }
             } ?: flowOf(0 to 0),
             assistant = getOrNull<LanguageModelPort>()?.state ?: flowOf(ModelState.NotOffered),
-            showAssistant = getOrNull<AppBuild>()?.debug == true,
+            showAssistant = isDebug(),
             canLock = getOrNull<DeviceAuth>()?.isAvailable() == true,
-            showNoteTone = getOrNull<AppBuild>()?.debug == true,
-            showAddCurrency = getOrNull<AppBuild>()?.debug == true,
+            showNoteTone = isDebug(),
+            showAddCurrency = isDebug(),
             phoneCurrency = { (getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb).code },
         )
     }
@@ -279,14 +281,14 @@ val viewModelModule: Module = module {
     viewModel { LedgerBackupViewModel(ledger = get(), archive = get(), files = get(), toasts = get()) }
     viewModel { TimezoneViewModel() }
     // getOrNull: a screen test's graph binds no store; the choice then lasts until the process ends.
-    viewModel { LanguageViewModel(store = getOrNull(), offered = Language.offered(debug = getOrNull<AppBuild>()?.debug == true)) }
+    viewModel { LanguageViewModel(store = getOrNull(), offered = Language.offered(debug = isDebug())) }
     viewModel { AssistantModelViewModel(model = get()) }
     viewModel {
         val model = getOrNull<LanguageModelPort>()?.state?.value
         LicencesViewModel(
             readText = { file -> Res.readBytes(file).decodeToString() },
             // Gemma's terms apply once the model can be offered; a debug build shows its row already.
-            gemma = getOrNull<AppBuild>()?.debug == true || (model != null && model != ModelState.NotOffered),
+            gemma = isDebug() || (model != null && model != ModelState.NotOffered),
         )
     }
     viewModel { ActivityViewModel(ledger = get(), pendingDiscards = get<SlipDiscards>().pending) }
@@ -369,11 +371,11 @@ val viewModelModule: Module = module {
             toasts = get(),
             discards = get(),
             categories = storedCategories(),
-            offersPlanned = getOrNull<AppBuild>()?.debug == true,
+            offersPlanned = isDebug(),
             subCategories = storedSubCategories(),
             // "A slip closes the debt": debug builds only until it has been tried with real groups.
             debtsFor = { amount, payee ->
-                if (getOrNull<AppBuild>()?.debug == true) getOrNull<SharedRepository>()?.snapshot?.value?.debtsPaidBy(amount, payee).orEmpty() else emptyList()
+                if (isDebug()) getOrNull<SharedRepository>()?.snapshot?.value?.debtsPaidBy(amount, payee).orEmpty() else emptyList()
             },
             recordPayment = { draft -> getOrNull<SharedRepository>()?.recordPayment(draft) },
             haptics = get(),
@@ -398,7 +400,7 @@ val viewModelModule: Module = module {
             haptics = get(),
             shared = getOrNull(),
             // #22: debug builds only until the weekly note has been tried.
-            offersPlanned = getOrNull<AppBuild>()?.debug == true,
+            offersPlanned = isDebug(),
         )
     }
     viewModel { (transactionId: String) ->
@@ -426,7 +428,7 @@ val viewModelModule: Module = module {
             agent = getOrNull(),
             reader = getOrNull(),
             speech = getOrNull(),
-            offersCurrencies = getOrNull<AppBuild>()?.debug == true,
+            offersCurrencies = isDebug(),
             startingCurrency = { get<ImportSettings>().choices.value.addCurrency?.let(Currencies::of) ?: (getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb) },
             lastRate = { code -> getOrNull<ImportStore>()?.rateFor(code) },
             saveRate = { code, rate ->
@@ -435,7 +437,7 @@ val viewModelModule: Module = module {
         )
     }
 
-    viewModel { HomeCurrencyViewModel(book = get(), phoneZone = { phoneZone() }) }
+    viewModel { HomeCurrencyViewModel(book = get()) }
     viewModel { AddCurrencyViewModel(settings = get(), phoneCurrency = { (getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb) }) }
 
     viewModel { (shop: String) ->
@@ -451,7 +453,7 @@ val viewModelModule: Module = module {
             toasts = get(),
             homeBook = getOrNull(),
             // #41: debug builds first; release stays baht and Bangkok.
-            suggestedHome = if (getOrNull<AppBuild>()?.debug == true) {
+            suggestedHome = if (isDebug()) {
                 HomeChoice((getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb).toHomeMoney(), phoneZone())
             } else {
                 null
@@ -506,7 +508,15 @@ val ledgerModule: Module = module {
      * keep deleting on the old schedule until the process restarted.
      */
     single { ImportSettings(store = get()) }
-    single<HomeBook> { get<PtutDatabase>().let { database -> RoomHomeBook(database.ledgerMetaDao(), database.transactionDao(), get(), database.sharedDao()) } }
+    single<HomeBook> {
+        val database = get<PtutDatabase>()
+        RoomHomeBook(
+            meta = database.ledgerMetaDao(),
+            transactions = database.transactionDao(),
+            settings = get(),
+            rates = database.sharedDao(),
+        )
+    }
 
     single {
         val settings = get<ImportSettings>()
@@ -521,7 +531,7 @@ val ledgerModule: Module = module {
 
                 override fun learnFrom(sender: String) = settings.learnSlipOwner(sender)
             },
-            readsWallets = getOrNull<AppBuild>()?.debug == true,
+            readsWallets = isDebug(),
         )
     }
 

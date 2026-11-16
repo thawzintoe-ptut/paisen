@@ -86,4 +86,14 @@ class AmountEntryTest {
         assertEquals(AmountEntry("12", digits = 0), dollars.withDigits(0))
         assertEquals(dollars, dollars.withDigits(2))
     }
+
+    @Test
+    fun switchingToACurrencyWithMoreDecimalsKeepsTheWholeAmount() {
+        assertEquals(AmountEntry("12", digits = 2), AmountEntry("12", digits = 0).withDigits(2))
+    }
+
+    @Test
+    fun aGroupedFigureWithDecimalsIsRefusedInACurrencyWithNone() {
+        assertEquals(null, AmountEntry.ofText("1,250.50", digits = 0))
+    }
 }

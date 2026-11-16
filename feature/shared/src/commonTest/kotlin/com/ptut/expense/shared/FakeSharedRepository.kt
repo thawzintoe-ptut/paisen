@@ -1,5 +1,6 @@
 package com.ptut.expense.shared
 
+import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.shared.ExpenseDraft
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.Member
@@ -7,9 +8,12 @@ import com.ptut.expense.domain.shared.NewMember
 import com.ptut.expense.domain.shared.PaymentDraft
 import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.shared.RepeatRule
+import com.ptut.expense.domain.shared.Share
+import com.ptut.expense.domain.shared.SharedExpense
 import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
+import com.ptut.expense.domain.shared.SplitMode
 import com.ptut.expense.domain.shared.TransactionSeed
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +33,47 @@ internal val flat12 = SharedGroup(
         Member(id = "aye", groupId = "g1", name = "Aye", personId = null),
     ),
 )
+
+/** "Yangon trip": the same two people counting in kyat (#48). */
+internal val yangonTrip = flat12.copy(
+    id = "g2",
+    name = "Yangon trip",
+    type = GroupType.Trip,
+    icon = "work",
+    meMemberId = "me2",
+    members = listOf(
+        Member(id = "me2", groupId = "g2", name = "Ko Ko", personId = null),
+        Member(id = "aye2", groupId = "g2", name = "Aye", personId = null),
+    ),
+    currency = "MMK",
+)
+
+/** A dinner in the group's own money, split equally between its two members, so the other owes half. */
+internal fun SharedGroup.dinner(paidBy: String, wholeMinor: Long): SharedExpense {
+    val whole = Satang.ofMinorUnits(wholeMinor)
+    val half = Satang.ofMinorUnits(wholeMinor / 2)
+    return SharedExpense(
+        id = "$id-dinner",
+        versionId = "$id-dinner-v1",
+        version = 1,
+        groupId = id,
+        description = "Dinner",
+        occurredAtEpochMillis = 0,
+        categoryId = null,
+        subCategoryId = null,
+        note = null,
+        currency = currency,
+        amountMinor = wholeMinor,
+        rate = null,
+        satang = whole,
+        payerMemberId = paidBy,
+        splitMode = SplitMode.Equally,
+        shares = members.map { Share(it.id, 1, half.toMinorUnits(), half) },
+        authorMemberId = paidBy,
+        createdAtEpochMillis = 0,
+        removed = false,
+    )
+}
 
 /**
  * One group and the saves the screens make. Each save is counted when it starts, then waits on

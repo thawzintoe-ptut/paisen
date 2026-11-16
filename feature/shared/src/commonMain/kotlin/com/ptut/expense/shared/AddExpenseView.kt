@@ -161,7 +161,7 @@ private fun Form(state: AddExpenseUiState.Ready, actions: AddExpenseActions, mod
                     NumberField(text = form.rateText, onText = actions.onRate, label = state.rateUnitLabel, modifier = Modifier.width(SkySizes.rateField))
                 }
             }
-            state.bahtLine?.let {
+            state.groupMoneyLine?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(top = Spacing.xs))
             }
             Spacer(Modifier.height(Spacing.md))

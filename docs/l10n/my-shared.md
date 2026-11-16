@@ -349,3 +349,14 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | Scan with any Thai bank app · PromptPay {masked} | ထိုင်းဘဏ်အက်ပ် တစ်ခုခုနဲ့ စကင်ဖတ်ပါ · PromptPay {masked} | `SharedSettleCopy` payMeScan |
 | {payer}, your part in {group} is {amount}. Scan the QR in the picture with your bank app to pay me. | {payer}၊ {group} ထဲက သင့်ဝေစုက {amount} ပါ။ ပုံထဲက QR ကို ဘဏ်အက်ပ်နဲ့ စကင်ဖတ်ပြီး ပေးပါ။ | `SharedSettleCopy` payMeText |
 | Send the card | ကတ် ပို့မယ် | `SharedSettleCopy` sendCard |
+
+## Group money (16 Nov, #48, not yet checked)
+
+A group counts in its own money, so "baht" and "THB" in these lines became the group's code, written as the app fills it in: `{code}` is THB, MMK, USD and so on.
+
+| English | Burmese | Where |
+|---|---|---|
+| Type the {code} you got for {unit} {symbol} | {unit} {symbol} အတွက် ရခဲ့တဲ့ {code} ကို ရိုက်ပါ | `SharedExpenseCopy` typeGroupMoney |
+| Type the {code} rate to save | သိမ်းဖို့ {code} နှုန်း ရိုက်ပါ | `SharedExpenseCopy` hintRate |
+| Total trip spend {amount} · shown in {code} | ခရီး စုစုပေါင်း သုံးငွေ {amount} · {code} နဲ့ ပြထားတယ် | `SharedDetailCopy` spendLine |
+| Amounts in {codes, joined by "and"} were converted to {code} at the rate saved on each expense, so nobody's total moves with the market. | {codes, joined by "နဲ့"} ပမာဏတွေကို စရိတ်တစ်ခုချင်းမှာ သိမ်းထားတဲ့ နှုန်းနဲ့ {code} ပြောင်းထားတယ်၊ ဒါကြောင့် ဈေးကွက် ပြောင်းလည်း ဘယ်သူ့ စုစုပေါင်းမှ မပြောင်းဘူး။ | `SharedSettleCopy` converted |

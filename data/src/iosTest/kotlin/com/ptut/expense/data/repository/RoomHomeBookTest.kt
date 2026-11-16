@@ -23,8 +23,16 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.time.Instant
+
+private const val NOW = 1_763_300_000_000L
 
 class RoomHomeBookTest {
+
+    private object FixedClock : Clock {
+        override fun now(): Instant = Instant.fromEpochMilliseconds(NOW)
+    }
 
     private val kyat = HomeChoice(Currencies.of("MMK").toHomeMoney(), "Asia/Yangon")
 
@@ -89,11 +97,92 @@ class RoomHomeBookTest {
         assertEquals(kyat, Home.choice.value)
     }
 
+    @Test
+    fun aConvertToTheSameMoneyIsRefusedBecauseDaysNeverMove() = withBook { book, _, _ ->
+        assertFalse(book.convert(HomeChoice(HomeChoice.Default.money, "Asia/Yangon"), Rate.parse("1")!!))
+        assertEquals(HomeChoice.Default, Home.choice.value)
+    }
+
+    @Test
+    fun twoSlipsThatRoundToOneAmountLeaveTheLedgerAsItWas() = withBook { book, database, _ ->
+        val dao = database.transactionDao()
+        dao.insert(TransactionDraft(Satang(10_000), Direction.Expense, "food").toEntity("a", 1L, 1L).copy(reference = "R1"))
+        dao.insert(TransactionDraft(Satang(10_001), Direction.Expense, "food").toEntity("b", 1L, 1L).copy(reference = "R1"))
+
+        assertFalse(book.convert(HomeChoice(Currencies.of("USD").toHomeMoney(), "Asia/Bangkok"), Rate.parse("0.03")!!))
+
+        assertEquals(setOf(10_000L, 10_001L), dao.all().map { it.amountMinor }.toSet())
+        assertEquals(null, database.ledgerMetaDao().read())
+        assertEquals("THB", Home.money.code)
+    }
+
+    @Test
+    fun aKyatSlipRowKeepsItsSlipFigureNextToTheAmountItWasReadAt() = withBook { book, database, _ ->
+        val dao = database.transactionDao()
+        dao.insert(
+            TransactionDraft(Satang(24_190), Direction.Expense, "food", foreign = ForeignAmount("MMK", 29_500, Rate.parse("8.2", 1_000)!!))
+                .toEntity("kyat", 2L, 2L).copy(slipAmountMinor = 24_190),
+        )
+
+        assertTrue(book.convert(kyat, Rate.parse("125")!!))
+
+        val row = dao.all().single()
+        assertEquals(29_500L, row.amountMinor)
+        assertEquals(29_500L, row.slipAmountMinor)
+    }
+
+    @Test
+    fun aDollarRowComesBackToTheSameBahtAfterARoundTripThroughKyat() = withBook { book, database, _ ->
+        val dao = database.transactionDao()
+        dao.insert(TransactionDraft(Satang(41_750), Direction.Expense, "food", foreign = ForeignAmount("USD", 1_250, Rate.parse("33.4")!!)).toEntity("dollars", 3L, 3L))
+
+        assertTrue(book.convert(kyat, Rate.parse("125")!!))
+        assertTrue(book.convert(HomeChoice.Default, Rate.parse("0.008")!!))
+
+        val row = dao.all().single()
+        assertEquals(41_750L, row.amountMinor)
+        assertEquals(1_250L, row.originalMinor)
+        assertEquals("USD", row.currency)
+    }
+
+    @Test
+    fun theTypedRateIsSavedForTheNextSlipInTheOldMoney() = withBook { book, database, _ ->
+        database.transactionDao().insert(TransactionDraft(Satang(10_000), Direction.Expense, "food").toEntity("baht", 1L, 1L))
+
+        assertTrue(book.convert(kyat, Rate.parse("125")!!))
+
+        val saved = database.sharedDao().rate("THB", "MMK")
+        assertEquals(Rate.parse("125"), saved?.let { Rate(it.rateUnscaled, it.rateScale) })
+        assertEquals(NOW, saved?.updatedAtEpochMillis)
+    }
+
+    @Test
+    fun aCopyLeftBehindByADeathAfterTheRowsMovedIsCorrectedAtLaunch() = withBook(ImportChoices(homeCurrency = "THB", weeklyTarget = WeeklyTarget("food", Satang(200_000)))) { book, database, settings ->
+        database.ledgerMetaDao().write(LedgerMetaEntity(currency = "MMK", zone = "Asia/Yangon"))
+
+        book.reconcile()
+
+        assertEquals(kyat, Home.choice.value)
+        assertEquals("MMK", settings.choices.value.homeCurrency)
+        assertEquals(null, settings.choices.value.weeklyTarget)
+    }
+
+    @Test
+    fun aRestoredFilesHomeIsAdoptedRowCopyAndApp() = withBook { book, database, settings ->
+        database.transactionDao().insert(TransactionDraft(Satang(29_500), Direction.Expense, "food").toEntity("kyat", 1L, 1L))
+
+        book.adopt(kyat)
+
+        assertEquals(LedgerMetaEntity(currency = "MMK", zone = "Asia/Yangon"), database.ledgerMetaDao().read())
+        assertEquals("MMK", settings.choices.value.homeCurrency)
+        assertEquals(kyat, Home.choice.value)
+    }
+
     private fun withBook(choices: ImportChoices = ImportChoices(), test: suspend (RoomHomeBook, PtutDatabase, ImportSettings) -> Unit): TestResult = runTest {
         val database = Room.inMemoryDatabaseBuilder<PtutDatabase>().openPtutDatabase()
         val settings = ImportSettings(FakeImportSettingsStore(choices))
         try {
-            test(RoomHomeBook(database.ledgerMetaDao(), database.transactionDao(), settings), database, settings)
+            test(RoomHomeBook(database.ledgerMetaDao(), database.transactionDao(), settings, rates = database.sharedDao(), clock = FixedClock), database, settings)
         } finally {
             Home.use(HomeChoice.Default)
             database.close()

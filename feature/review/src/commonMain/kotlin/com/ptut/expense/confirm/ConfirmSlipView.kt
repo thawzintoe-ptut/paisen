@@ -192,7 +192,7 @@ fun ConfirmSlipView(
 
             // #33: a kyat slip becomes baht at this rate. The link opens a money-transfer rate to copy from.
             if (uiState.asksRate) {
-                SkyRateRow(uiState.rateText, uiState.rateUnit, uiState.bahtLine, onRate, onTodaysRate = { openLink.openUri(TODAYS_RATE) })
+                SkyRateRow(uiState.rateText, uiState.rateUnit, uiState.homeLine, onRate, onTodaysRate = { openLink.openUri(TODAYS_RATE) })
             }
 
             Column {

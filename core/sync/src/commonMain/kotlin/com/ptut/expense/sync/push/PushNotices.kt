@@ -1,5 +1,7 @@
 package com.ptut.expense.sync.push
 
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.shared.ExpenseCause
 import com.ptut.expense.domain.shared.LogOrder
@@ -19,11 +21,13 @@ class PushNotices(
     private val groupName: String,
     private val actor: String,
     private val members: List<Member> = emptyList(),
+    /** #48: the group's own money, so a kyat group's notice says K on every member's phone. */
+    private val money: HomeMoney = Home.money,
 ) {
 
     fun expense(version: SharedExpense, history: List<SharedExpense>): PushNotice {
         val previous = history.filter { it.id == version.id && LogOrder.compare(it, version) < 0 }.maxWithOrNull(LogOrder)
-        val amount = version.satang.formatCompact()
+        val amount = version.satang.formatCompact(money)
         return notice { shared ->
             val push = shared.push
             val what = version.description.trim().ifEmpty { push.anExpense }
@@ -39,7 +43,7 @@ class PushNotices(
 
     fun payment(payment: SharedPayment): PushNotice = notice { shared ->
         val nameOf = { id: String -> members.firstOrNull { it.id == id }?.name ?: shared.someone }
-        shared.push.paid(nameOf(payment.fromMemberId), nameOf(payment.toMemberId), payment.amount.formatCompact())
+        shared.push.paid(nameOf(payment.fromMemberId), nameOf(payment.toMemberId), payment.amount.formatCompact(money))
     }
 
     fun paymentRemoval(removal: PaymentRemoval): PushNotice =

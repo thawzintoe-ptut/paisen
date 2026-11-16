@@ -37,6 +37,8 @@ data class PhrasesCopy(
     val backupOtherVersion: (Int) -> String = { format -> "This file was written by a different version of the app (format $format)" },
     /** #46: a ledger with rows takes no file counted in other money. */
     val backupOtherHome: (file: String, here: String) -> String = { file, here -> "This file counts in $file. This phone counts in $here." },
+    /** #46: in the preview of a file an empty ledger would take its home from: "counts in MMK, Yangon days". */
+    val backupCountsIn: (code: String, place: String) -> String = { code, place -> "counts in $code, $place days" },
     val backupUnknownValue: (field: String, value: String) -> String = { field, value -> "The file holds an unknown $field: $value" },
     val everyWeekday: (weekday: String) -> String = { weekday -> "Every $weekday" },
     val everyOtherWeekday: (weekday: String) -> String = { weekday -> "Every other $weekday" },
@@ -90,6 +92,7 @@ val BurmesePhrases = PhrasesCopy(
     backupNotReadable = "ဒီဖိုင်ကို ဒီအက်ပ်က ဖတ်လို့ မရဘူး",
     backupOtherVersion = { format -> "ဒီဖိုင်ကို တခြား ဗားရှင်းက ရေးထားတာ (format $format)" },
     backupOtherHome = { file, here -> "ဒီဖိုင်က $file နဲ့ တွက်ထားတယ်။ ဒီဖုန်းက $here နဲ့ တွက်တယ်။" },
+    backupCountsIn = { code, place -> "$code နဲ့ တွက်ထားတယ်၊ $place နေ့စွဲ" },
     backupUnknownValue = { field, value -> "ဖိုင်ထဲမှာ မသိတဲ့ $field ပါတယ်: $value" },
     everyWeekday = { weekday -> "${weekday}တိုင်း" },
     everyOtherWeekday = { weekday -> "တစ်ပတ်ခြား $weekday" },
@@ -132,6 +135,7 @@ val ThaiPhrases = PhrasesCopy(
     backupNotReadable = "แอปนี้อ่านไฟล์นี้ไม่ได้",
     backupOtherVersion = { format -> "ไฟล์นี้มาจากแอปเวอร์ชันอื่น (รูปแบบ $format)" },
     backupOtherHome = { file, here -> "ไฟล์นี้นับเป็น $file แต่โทรศัพท์นี้นับเป็น $here" },
+    backupCountsIn = { code, place -> "นับเป็น $code วันตามเวลา$place" },
     backupUnknownValue = { field, value -> "ในไฟล์มี $field ที่ไม่รู้จัก: $value" },
     everyWeekday = { weekday -> "ทุก$weekday" },
     everyOtherWeekday = { weekday -> "ทุก$weekday เว้นสัปดาห์" },

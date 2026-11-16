@@ -168,3 +168,6 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | A {code} slip needs a rate | {code} စလစ်အတွက် ငွေလဲနှုန်း လိုတယ် | `CurrencyCopy` rateNeeded |
 | Rate needed | နှုန်း လိုတယ် | `CurrencyCopy` reasonRate |
 | one needs a rate / {n} need a rate | နှုန်းလိုတာ {n} ခု | `CurrencyCopy` slipsNeedRate |
+| The Add sheet opens on this currency. Totals still count in {home}. | ထည့်တဲ့ စာမျက်နှာက ဒီငွေနဲ့ စမယ်။ စုစုပေါင်းကတော့ {home} နဲ့ပဲ တွက်တယ်။ | `CurrencyCopy` startsInIntro (was "ဘတ်", now the home code) |
+| Saved as {home} | {home} အဖြစ် သိမ်းမယ် | `CurrencyCopy` savedAs (was inBaht) |
+| Every total counts in this currency. Days start at midnight, {zone} time. | (unchanged) {zone} is now the place, "ရန်ကုန်", not "Asia/Yangon" | `CurrencyCopy` homeIntro |

@@ -16,7 +16,8 @@ data class SlipDebt(
 /**
  * Every debt I owe of exactly [amount], as Who pays whom shows it. The amount decides; the [payee]
  * a slip printed only orders the list, because a K PLUS name is often a full legal name or a shop.
- * #48: only groups counting in the slip's [currency], since K29,500 is not ฿29,500.
+ * #48: only groups counting in the slip's [currency], since K29,500 is not ฿29,500. The caller
+ * passes the slip's currency; the home is only a stand-in for a call that has none.
  */
 fun SharedSnapshot.debtsPaidBy(amount: Satang, payee: String?, currency: String = Home.money.code): List<SlipDebt> {
     val slipWords = payee.words()

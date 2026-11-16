@@ -16,7 +16,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -28,13 +27,7 @@ import kotlin.test.assertTrue
 private val Half = Satang.ofMinorUnits(24_000)
 private val Whole = Satang.ofMinorUnits(48_000)
 
-// Joined here because the pre-commit and pre-push guards refuse a 10-digit run in test data (NFR-5).
-private const val AYE_PROMPT_PAY = "081" + "2345678"
-
 class RecordPaymentViewModelTest : ViewModelTest() {
-
-    @AfterTest
-    fun backToBaht() = Home.use(HomeChoice.Default)
 
     /** #6: the second tap lands while the first payment is still writing. */
     @Test
@@ -115,7 +108,7 @@ class RecordPaymentViewModelTest : ViewModelTest() {
     /** PromptPay moves baht only, so a kyat debt gets no QR to scan. */
     @Test
     fun `paying into a kyat group offers no PromptPay QR`() = runTest {
-        val kyat = flat12.copy(currency = "MMK", members = flat12.members.map { if (it.id == "aye") it.copy(promptPayId = AYE_PROMPT_PAY) else it })
+        val kyat = flat12.copy(currency = "MMK", members = flat12.members.map { if (it.id == "aye") it.copy(promptPayId = "081-234-5678") else it })
         val ready = viewModel(dinner(paidBy = "aye", currency = "MMK"), from = "me", to = "aye", group = kyat).ready()
 
         assertNull(ready.promptPayQr)

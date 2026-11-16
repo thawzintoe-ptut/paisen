@@ -26,11 +26,9 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.formatParts
-import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.Member
 import com.ptut.expense.domain.shared.SharedGroup
-import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.spoken
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LocalCopy
@@ -81,10 +79,6 @@ fun SharedGroup.displayName(memberId: String): String =
     if (isMe(memberId)) AppText.copy.common.you else member(memberId)?.name ?: AppText.copy.shared.someone
 
 fun Member.initial(): String = name.trim().firstOrNull()?.uppercase() ?: "?"
-
-/** #48: the one money every group in [groupIds] counts in. Groups in different money fall back to the home's. */
-internal fun SharedSnapshot.moneyOf(groupIds: Collection<String>): HomeMoney =
-    groupIds.mapNotNull { group(it)?.currency }.distinct().singleOrNull()?.let { Currencies.of(it).toHomeMoney() } ?: Home.money
 
 /** A member as p26–p31 draw them: an initial on pale sky, or "You" on ink. */
 @Composable

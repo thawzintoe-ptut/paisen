@@ -35,6 +35,6 @@ class HomeMoneyFormatTest {
     @Test
     fun bahtIsWrittenAsBefore() {
         assertEquals("฿1,250.00", Satang.ofMinorUnits(125_000).format())
-        assertEquals("1,250 baht", Satang.ofMinorUnits(125_000).spoken().replace(".00", ""))
+        assertEquals("1,250.00 baht", Satang.ofMinorUnits(125_000).spoken())
     }
 }

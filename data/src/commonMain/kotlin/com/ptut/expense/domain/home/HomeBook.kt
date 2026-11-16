@@ -22,6 +22,12 @@ interface HomeBook {
     suspend fun choose(choice: HomeChoice): Boolean
 
     /**
+     * #46: records [choice] as the home of rows already written in its money — a restored file's,
+     * merged into a ledger that was empty. The caller proved the ledger empty before the merge.
+     */
+    suspend fun adopt(choice: HomeChoice)
+
+    /**
      * #47: moves a ledger with rows to [choice], converting every amount at [rate] (the new home per
      * one of the old). Each row keeps what it was before, as a record in other money. False when
      * the conversion could not be written, and then nothing changed.

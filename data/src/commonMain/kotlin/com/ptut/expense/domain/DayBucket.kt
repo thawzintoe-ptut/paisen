@@ -19,7 +19,7 @@ val HomeTime: TimeZone get() = Home.zone
 val BangkokTime: TimeZone = TimeZone.of("Asia/Bangkok")
 
 /**
- * Midnight in [zone] as a UTC instant. F2 — this is the only way a Bangkok day becomes a
+ * Midnight in [zone] as a UTC instant. F2 — this is the only way a home day becomes a
  * database bound, because SQLite's own date functions read the device zone.
  */
 fun LocalDate.startOfDayEpochMillis(zone: TimeZone = HomeTime): Long =

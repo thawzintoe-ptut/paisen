@@ -415,7 +415,7 @@ class GroupDetailViewModel(
             },
             balance = net.magnitude(),
             tone = net.tone(),
-            spendLine = text.detail.spendLine(group.type == GroupType.Trip, totalSpend(group.id).formatCompact(money)),
+            spendLine = text.detail.spendLine(group.type == GroupType.Trip, totalSpend(group.id).formatCompact(money), group.currency),
             money = money,
             settled = balances.values.all { it == Satang.Zero },
             settleWith = settlement.transfers.firstOrNull { it.fromMemberId == me || it.toMemberId == me }

@@ -44,10 +44,10 @@ service cloud.firestore {
       allow get: if isMember(gid) || joined(gid);
       // A member finds their own groups again after signing in: a query on memberUids holding their uid.
       allow list: if signedIn() && request.auth.uid in resource.data.memberUids;
-      // #48: a group's money is set when it is made, as a three-letter code, and no update may change it.
+      // #48: a group's money is set when it is made, as an ISO code, and no update may change it.
       function groupCurrencyOk() {
         return !('currency' in request.resource.data)
-          || (request.resource.data.currency is string && request.resource.data.currency.size() == 3);
+          || (request.resource.data.currency is string && request.resource.data.currency.matches('[A-Z]{3}'));
       }
       allow create: if signedIn()
         && request.resource.data.creatorUid == request.auth.uid
@@ -124,14 +124,17 @@ service cloud.firestore {
             || (author != null && exists(memberPath(gid, author)) && get(memberPath(gid, author)).data.claimedByUid == request.auth.uid);
         }
         // #48: the amount in the group's own money. A baht group writes amountSatang, which every
-        // build reads; any other group writes amountGroup, so older builds skip it rather than misread it.
-        function groupAmount() {
-          return entry().get('amountSatang', entry().get('amountGroup', null));
-        }
+        // build reads; any other group writes amountGroup, so older builds skip it rather than misread
+        // it. The key is the group's, never the writer's choice: a build from before #48 that still
+        // writes amountSatang into a kyat group is refused, so its baht never reads as kyat.
+        function amountKey() { return groupData(gid).get('currency', 'THB') == 'THB' ? 'amountSatang' : 'amountGroup'; }
+        function otherKey() { return amountKey() == 'amountSatang' ? 'amountGroup' : 'amountSatang'; }
+        function groupAmount() { return entry().get(amountKey(), null); }
+        function keyedToGroup() { return amountKey() in entry() && !(otherKey() in entry()); }
         // Values every build can read, so no member can store one that stops the others' apps.
         function validVersion() {
           return entry().splitMode in ['Equally', 'Exact', 'Percent', 'Shares']
-            && entry().amountMinor is int && groupAmount() is int
+            && entry().amountMinor is int && keyedToGroup() && groupAmount() is int
             && entry().shares is list && entry().shares.size() > 0 && entry().shares.size() <= 50
             && (entry().get('rateUnscaled', null) == null
               || (entry().rateUnscaled is int && entry().rateUnscaled > 0
@@ -139,7 +142,7 @@ service cloud.firestore {
         }
         function validPayment() {
           return entry().method in ['BankTransfer', 'Cash', 'PromptPay', 'OtherApp']
-            && groupAmount() is int && groupAmount() > 0
+            && keyedToGroup() && groupAmount() is int && groupAmount() > 0
             && entry().fromMemberId != entry().toMemberId;
         }
         allow read: if isMember(gid);

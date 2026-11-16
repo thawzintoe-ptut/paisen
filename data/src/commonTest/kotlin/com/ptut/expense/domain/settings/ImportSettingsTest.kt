@@ -76,4 +76,16 @@ class ImportSettingsTest {
         settings.setHome("MMK", "Asia/Yangon")
         assertEquals(null, settings.choices.value.weeklyTarget)
     }
+
+    @Test
+    fun `a converted target travels with the new home in one write`() {
+        val store = FakeImportSettingsStore(ImportChoices(homeCurrency = "THB", weeklyTarget = WeeklyTarget("food", Satang(200_000))))
+        val settings = ImportSettings(store)
+
+        settings.setHome("MMK", "Asia/Yangon", converted = WeeklyTarget("food", Satang(250_000)))
+
+        assertEquals(Satang(250_000), settings.choices.value.weeklyTarget?.amount)
+        assertEquals("MMK", store.read().homeCurrency)
+        assertEquals(Satang(250_000), store.read().weeklyTarget?.amount)
+    }
 }

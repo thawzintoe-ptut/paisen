@@ -2,10 +2,12 @@ package com.ptut.expense.agent
 
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.shared.SharedGroup
+import com.ptut.expense.domain.shared.money
 
 /**
  * #206: what Siri and the Shortcuts app hand over. Their arguments are words, so
@@ -49,11 +51,13 @@ class AgentEntry(
         val all = groups()
         val match = all.firstOrNull { it.name.equals(name, ignoreCase = true) }
             ?: all.firstOrNull { name.isNotEmpty() && it.name.contains(name, ignoreCase = true) }
+        val digits = match?.money?.digits ?: Home.money.digits
         AgentInbox.offer(
             ProposedAction.AddGroupExpense(
                 groupId = match?.id,
-                amount = amount?.let(grammar::amountOf),
+                amount = amount?.let { grammar.amountOf(it, digits) },
                 description = description?.let(text::normalise)?.ifEmpty { null },
+                amountDigits = digits,
             ),
         )
     }

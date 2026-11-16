@@ -8,6 +8,7 @@ import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.shared.SharedGroup
+import com.ptut.expense.domain.shared.money
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.toInstant
@@ -32,8 +33,8 @@ sealed interface CheckedCall {
 
 /**
  * #207: a model's reply is a guess until this says otherwise. Every id must name something the
- * reader has, every amount must be [Satang] with at most two decimals, and a date may not be later
- * than today. Nothing here writes.
+ * reader has, every amount must be [Satang] with at most its money's decimals, and a date may not
+ * be later than today. Nothing here writes.
  */
 class ToolCallCheck(private val grammar: CommandGrammar = CommandGrammar()) {
 
@@ -58,8 +59,10 @@ class ToolCallCheck(private val grammar: CommandGrammar = CommandGrammar()) {
             AgentTool.DeleteTransaction -> withRow(args, context) { CheckedCall.Valid(ProposedAction.DeleteTransaction(it)) }
 
             AgentTool.AddGroupExpense -> withGroup(args, context) { group ->
-                val amount = strictAmount(args["amount"], GROUP_DIGITS) ?: return@withGroup badAmount(args["amount"])
-                CheckedCall.Valid(ProposedAction.AddGroupExpense(group.id, amount, args["description"]?.trim()?.ifEmpty { null }))
+                // #48: the amount is in the group's money, whatever this ledger counts in.
+                val digits = group.money.digits
+                val amount = strictAmount(args["amount"], digits) ?: return@withGroup badAmount(args["amount"], digits)
+                CheckedCall.Valid(ProposedAction.AddGroupExpense(group.id, amount, args["description"]?.trim()?.ifEmpty { null }, amountDigits = digits))
             }
 
             AgentTool.RecordPayment -> withGroup(args, context) { group ->
@@ -152,13 +155,11 @@ class ToolCallCheck(private val grammar: CommandGrammar = CommandGrammar()) {
     private fun unknownCategory(name: String?, offered: List<Category>) =
         invalid("No category is called $name. The categories are: ${offered.joinToString { it.name }}.")
 
-    private fun badAmount(text: String?) = invalid("amount $text is not money with at most ${Home.money.digits} decimals.")
+    private fun badAmount(text: String?, digits: Int = Home.money.digits) = invalid("amount $text is not money with at most $digits decimals.")
 
     private fun invalid(error: String) = CheckedCall.Invalid(error)
 
     private companion object {
-        /** Shared groups count in baht until #48. */
-        const val GROUP_DIGITS = 2
         val STRICT_AMOUNT = Regex("""\d+(\.\d{1,2})?""")
     }
 }

@@ -24,6 +24,9 @@ data class Currency(val code: String, val symbol: String, val digits: Int, val r
     fun toHomeMoney(): HomeMoney = HomeMoney(code, symbol, digits)
 }
 
+/** "MMK  K": one row in every currency picker. */
+val Currency.pickerLabel: String get() = "$code  $symbol"
+
 object Currencies {
     val Thb = Currency("THB", "฿", 2)
 
@@ -107,12 +110,6 @@ private fun decimalsOf(unit: Long): Int {
     }
     return count
 }
-
-/**
- * The one rule from an amount in [currency] to baht: amount × rate, rounded half away from zero
- * to the satang. THB needs no rate. Every shared-group screen and balance goes through here (#181).
- */
-fun toSatang(amountMinor: Long, currency: Currency, rate: Rate?): Satang = convert(amountMinor, currency, rate, Currencies.Thb)
 
 /**
  * #44: an amount in [from] as [to], at [rate] ([to] per one [from]), rounded half away from zero to

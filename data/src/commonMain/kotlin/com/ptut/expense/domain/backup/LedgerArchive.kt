@@ -1,5 +1,7 @@
 package com.ptut.expense.domain.backup
 
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayAndMonth
@@ -51,8 +53,13 @@ fun BackupPreview.phrase(): String {
     val rows = oldestEpochMillis?.let { oldest ->
         text.holding(transactions, oldest.dateIn(HomeTime).dayAndMonth())
     } ?: text.fileHoldsNoTransactions
+    // #46: said only when the file's home is not this phone's, which is when a restore would take it.
+    val fileHome = HomeChoice.of(Home.money.copy(code = homeCurrency), homeZone ?: HomeChoice.BANGKOK)
+    val home = fileHome.takeIf { it.money.code != Home.money.code || it.zoneId != Home.choice.value.zoneId }
+        ?.let { AppText.copy.phrases.backupCountsIn(it.money.code, text.zonePlace(it.zoneId)) }
     return listOfNotNull(
         rows,
+        home,
         groups.takeIf { it > 0 }?.let(AppText.copy.phrases.restoreGroups),
         categories.takeIf { it > 0 }?.let { text.categoryCounts(it, subCategories) },
         shopRules.takeIf { it > 0 }?.let(text.shopRuleCount),

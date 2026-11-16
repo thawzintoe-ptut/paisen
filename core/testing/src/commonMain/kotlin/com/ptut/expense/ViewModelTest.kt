@@ -1,5 +1,7 @@
 package com.ptut.expense
 
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -28,5 +30,12 @@ abstract class ViewModelTest {
     @AfterTest
     fun unbindMain() {
         Dispatchers.resetMain()
+    }
+
+    /** #41: a test that moved the home, or failed before it could move it back, leaves baht for the next. */
+    @AfterTest
+    fun backToBaht() {
+        Home.use(HomeChoice.Default)
+        Home.settingsReopened()
     }
 }

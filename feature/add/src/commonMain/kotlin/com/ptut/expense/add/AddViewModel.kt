@@ -84,22 +84,22 @@ data class AddUiState(
     val askingOnline: SpeechLanguage? = null,
     /** True once SAVE was tapped before the row could be written, so [missing] is said as a warning. */
     val triedSave: Boolean = false,
-    /** The amount's currency. Anything but baht asks for a rate and saves its baht. */
+    /** The amount's currency. Anything but the home asks for a rate and saves its home amount. */
     val currency: Currency = Currencies.of(Home.money.code),
     /** The currency switch, in builds that offer it. */
     val offersCurrencies: Boolean = false,
-    /** Baht for one [Currency.rateUnit], as typed; opens on the last rate saved. */
+    /** Home money for one [Currency.rateUnit], as typed; opens on the last rate saved. */
     val rateText: String = "",
     /** The typed amount at the typed rate, or null while either is not a number. */
     val foreign: ForeignAmount? = null,
     /** "Saved as ฿241.90" under the rate. */
-    val bahtLine: String? = null,
+    val homeLine: String? = null,
     /** True while the rate sheet is open over this one. */
     val editingRate: Boolean = false,
 ) {
     /**
      * The one line under a foreign amount, and the way into the rate: "฿417.50 · ฿33.4 per $", or
-     * "Set the rate for USD" while there is none. Null in baht.
+     * "Set the rate for USD" while there is none. Null in the home money.
      */
     val rateLine: String?
         get() {
@@ -116,8 +116,8 @@ data class AddUiState(
     /** "1,000 K": what one rate is typed for. */
     val rateUnit: String get() = currency.rateUnitLabel()
 
-    /** What the row will hold in baht: the typed amount, or the foreign amount at its rate. */
-    private val baht: Satang get() = foreign?.inHome ?: entry.toSatang()
+    /** What the row will hold in the home money: the typed amount, or the foreign amount at its rate. */
+    private val inHome: Satang get() = foreign?.inHome ?: entry.toSatang()
 
     /**
      * What still stops a save, amount first, or null once the row can be written. FR-14: both kinds
@@ -134,7 +134,7 @@ data class AddUiState(
 
     /** "Save ฿60" once the row can be written, so the key says what it will write. */
     val saveLabel: String
-        get() = if (missing == null) AppText.copy.add.saveAmount(baht.formatCompact()) else AppText.copy.common.save
+        get() = if (missing == null) AppText.copy.add.saveAmount(inHome.formatCompact()) else AppText.copy.common.save
 
     /** #214: something typed or picked that closing the sheet would lose, so closing asks first. */
     val changed: Boolean
@@ -239,7 +239,7 @@ class AddViewModel(
         loadRate(currency, askIfNone = true)
     }
 
-    fun typeRate(text: String) = state.update { it.copy(rateText = text.filter { c -> c.isDigit() || c == '.' }).priced() }
+    fun typeRate(text: String) = state.update { it.copy(rateText = text).priced() }
 
     /** The rate typed in its sheet shows live; Cancel puts back the one there was. */
     fun openRate() {
@@ -268,11 +268,11 @@ class AddViewModel(
     }
 
     private fun AddUiState.priced(): AddUiState {
-        if (currency.isHome) return copy(foreign = null, bahtLine = null)
+        if (currency.isHome) return copy(foreign = null, homeLine = null)
         val rate = Rate.parse(rateText, currency.rateUnit)
         val minor = parseMinor(entry.typed, currency)?.takeIf { it > 0 }
         val priced = if (rate != null && minor != null) ForeignAmount(currency.code, minor, rate) else null
-        return copy(foreign = priced, bahtLine = priced?.let { currencyCopy().inBaht(it.inHome.format()) })
+        return copy(foreign = priced, homeLine = priced?.let { currencyCopy().savedAs(it.inHome.format()) })
     }
 
     /**

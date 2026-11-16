@@ -4,6 +4,9 @@ import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.ReviewReason
@@ -612,7 +615,7 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         runCurrent()
 
         viewModel.typeRate("8.2")
-        assertEquals("Saved as ฿241.90", viewModel.uiState.value.bahtLine)
+        assertEquals("Saved as ฿241.90", viewModel.uiState.value.homeLine)
         viewModel.choose(food)
         viewModel.save()
         runCurrent()
@@ -631,7 +634,33 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         runCurrent()
 
         assertEquals("8.2", viewModel.uiState.value.rateText)
-        assertEquals("Saved as ฿241.90", viewModel.uiState.value.bahtLine)
+        assertEquals("Saved as ฿241.90", viewModel.uiState.value.homeLine)
+    }
+
+    /** #44: foreign is anything but the home, so a baht slip in a kyat ledger asks for kyat per baht. */
+    @Test
+    fun `a baht slip in a kyat ledger is foreign and saves its kyat at the typed rate`() = runTest {
+        Home.use(HomeChoice(HomeMoney("MMK", "K", 0), "Asia/Yangon"))
+        val store = InMemoryImportStore()
+        val viewModel = viewModel(slip(amount = Satang(29_500)).copy(reason = ReviewReason.RateNeeded), store = store)
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.asksRate)
+        assertEquals("฿", state.currencySymbol)
+        assertEquals("฿", state.rateUnit)
+        assertEquals("295.00", state.entry.display)
+
+        viewModel.typeRate("125")
+        assertEquals("Saved as K36,875", viewModel.uiState.value.homeLine)
+        viewModel.choose(food)
+        viewModel.save()
+        runCurrent()
+
+        val confirmed = store.confirmed.single()
+        assertEquals(Satang.ofMinorUnits(36_875), confirmed.amount)
+        assertEquals("THB", confirmed.foreign?.currency)
+        assertEquals(29_500L, confirmed.foreign?.originalMinor)
     }
 
     private companion object {

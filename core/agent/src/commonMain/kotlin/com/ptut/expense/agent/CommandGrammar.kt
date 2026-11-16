@@ -7,7 +7,9 @@ import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.forDirection
+import com.ptut.expense.domain.pow10
 import com.ptut.expense.domain.shared.SharedGroup
+import com.ptut.expense.domain.shared.money
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.minus
 import kotlin.time.Instant
@@ -44,8 +46,7 @@ class CommandGrammar(private val words: GrammarWords = GrammarWords) {
         if (amount == null && words.howMuch.any { text.has(it) }) {
             return GrammarReading.Full(ReadCall.SpendSummary(windowIn(text) ?: SpendWindow.Today))
         }
-        // Shared groups count in baht until #48, so a group amount is read with baht's two decimals.
-        if (words.share.any { text.has(it) }) return readGroupExpense(text, amountIn(text, GROUP_DIGITS), groups)
+        if (words.share.any { text.has(it) }) return readGroupExpense(text, groups)
 
         val direction = if (words.income.any { text.has(it) }) Direction.Income else Direction.Expense
         val offered = categories.forDirection(direction)
@@ -96,12 +97,16 @@ class CommandGrammar(private val words: GrammarWords = GrammarWords) {
     /** The amount as Siri or a form typed it, "120" or "1,250.50", in a currency with [digits] decimals. */
     fun amountOf(text: String, digits: Int = Home.money.digits): Satang? = amountIn(text, digits)?.value
 
-    private fun readGroupExpense(text: String, amount: Found?, groups: List<SharedGroup>): GrammarReading {
+    /** #48: the amount is read in the named group's money, so "share 5000 with Trip" is K5,000 in a kyat group. */
+    private fun readGroupExpense(text: String, groups: List<SharedGroup>): GrammarReading {
         val group = groups.firstOrNull { text.names(it.name) }
+        val digits = group?.money?.digits ?: Home.money.digits
+        val amount = amountIn(text, digits)
         val call = ProposedAction.AddGroupExpense(
             groupId = group?.id,
             amount = amount?.value,
             description = noteIn(text, amount?.range, drop = listOfNotNull(group?.name) + words.share),
+            amountDigits = digits,
         )
         val missing = buildSet {
             if (group == null) add("group")
@@ -148,9 +153,7 @@ class CommandGrammar(private val words: GrammarWords = GrammarWords) {
         if (fraction.length > digits) return null
         val wholeValue = whole.toLongOrNull() ?: return null
         val fractionValue = fraction.padEnd(digits, '0').ifEmpty { "0" }.toLongOrNull() ?: return null
-        var perWhole = 1L
-        repeat(digits) { perWhole *= 10 }
-        return Satang.ofMinorUnits(wholeValue * perWhole + fractionValue)
+        return Satang.ofMinorUnits(wholeValue * pow10(digits) + fractionValue)
     }
 
     /**
@@ -222,9 +225,6 @@ class CommandGrammar(private val words: GrammarWords = GrammarWords) {
 
         /** Ten digits of money is more than anyone types, and keeps the minor units inside a Long. */
         const val MAX_WHOLE_DIGITS = 10
-
-        /** Shared groups count in baht until #48. */
-        const val GROUP_DIGITS = 2
         const val MIN_NAME = 2
         const val ASCII_LIMIT = 128
     }

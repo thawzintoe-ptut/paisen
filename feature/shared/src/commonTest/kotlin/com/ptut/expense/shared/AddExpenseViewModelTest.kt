@@ -72,7 +72,7 @@ class AddExpenseViewModelTest : ViewModelTest() {
         val ready = viewModel.ready()
         assertEquals("MMK", ready.form.currency.code)
         assertNull(ready.rateUnitLabel)
-        assertNull(ready.bahtLine)
+        assertNull(ready.groupMoneyLine)
         assertEquals("K4,500 each · you are owed K4,500", ready.resultLine)
     }
 
@@ -87,7 +87,7 @@ class AddExpenseViewModelTest : ViewModelTest() {
 
         val ready = viewModel.ready()
         assertEquals("K per 1 USD", ready.rateUnitLabel)
-        assertEquals("≈ K35,000 at K3500 per $, saved with the expense", ready.bahtLine)
+        assertEquals("≈ K35,000 at K3500 per $, saved with the expense", ready.groupMoneyLine)
         assertEquals("$5.00 each · you are owed K17,500", ready.resultLine)
 
         viewModel.save {}
@@ -97,6 +97,20 @@ class AddExpenseViewModelTest : ViewModelTest() {
         assertEquals("USD", saved.currency)
         assertEquals(1_000L, saved.amountMinor)
         assertEquals(Rate.parse("3500"), saved.rate)
+    }
+
+    /** The rate line names the group's money, since the home's baht is not what the group counts in. */
+    @Test
+    fun `a baht expense in a kyat group asks for the kyat rate and never for baht`() = runTest {
+        val viewModel = viewModel(FakeSharedRepository(flat12.copy(currency = "MMK")))
+        viewModel.setCurrency(Currencies.Thb)
+        viewModel.setAmount("100")
+        runCurrent()
+
+        val ready = viewModel.ready()
+        assertEquals("K per 1 THB", ready.rateUnitLabel)
+        assertEquals("Type the MMK you got for 1 ฿", ready.groupMoneyLine)
+        assertEquals("Type the MMK rate to save", ready.hint)
     }
 
     private fun TestScope.viewModel(repository: FakeSharedRepository): AddExpenseViewModel {

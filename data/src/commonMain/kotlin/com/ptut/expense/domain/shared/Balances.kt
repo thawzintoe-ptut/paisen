@@ -1,5 +1,6 @@
 package com.ptut.expense.domain.shared
 
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.sum
 
@@ -120,11 +121,15 @@ fun SharedSnapshot.withMe(groupId: String): Map<String, Satang> {
     return balance
 }
 
-/** p26's People: one balance per person across every group, matched by person, then by the account that claimed the name, else by name. */
-data class PersonBalance(val key: String, val name: String, val amount: Satang, val groupIds: List<String>)
+/**
+ * p26's People: one balance per person and per money across every group, matched by person, then
+ * by the account that claimed the name, else by name. A kyat group and a baht group with the same
+ * person give two rows, since their amounts cannot be added (#48).
+ */
+data class PersonBalance(val key: String, val name: String, val amount: Satang, val groupIds: List<String>, val currency: String)
 
 fun SharedSnapshot.peopleBalances(): List<PersonBalance> {
-    val rows = mutableMapOf<String, PersonBalance>()
+    val rows = mutableMapOf<Pair<String, String>, PersonBalance>()
     groups.forEach { group ->
         val balances = withMe(group.id)
         group.members.filterNot { group.isMe(it.id) }.forEach { member ->
@@ -132,26 +137,28 @@ fun SharedSnapshot.peopleBalances(): List<PersonBalance> {
             // the same person in every group, where two "Tom"s in two groups may not be.
             val key = member.personId ?: member.claimedByUid?.let { "uid:$it" } ?: "name:${member.name.lowercase()}"
             val amount = balances[member.id] ?: Satang.Zero
-            val row = rows[key]
-            rows[key] = if (row == null) {
-                PersonBalance(key, member.name, amount, listOf(group.id))
+            val row = rows[key to group.currency]
+            rows[key to group.currency] = if (row == null) {
+                PersonBalance(key, member.name, amount, listOf(group.id), group.currency)
             } else {
                 row.copy(amount = row.amount + amount, groupIds = row.groupIds + group.id)
             }
         }
     }
-    return rows.values.sortedWith(compareByDescending<PersonBalance> { it.amount }.thenBy { it.name.lowercase() })
+    return rows.values.sortedWith(compareByDescending<PersonBalance> { it.amount }.thenBy { it.name.lowercase() }.thenBy { it.currency })
 }
 
-/** p26's top: the net, and the two totals it is made of. */
-data class Overall(val net: Satang, val owedToYou: Satang, val youOwe: Satang)
+/** p26's top for one money: the net, and the two totals it is made of. */
+data class Overall(val currency: String, val net: Satang, val owedToYou: Satang, val youOwe: Satang)
 
-fun SharedSnapshot.overall(): Overall {
-    val people = peopleBalances().map { it.amount }
-    val owed = people.filter { it > Satang.Zero }.sum()
-    val owe = -people.filter { it < Satang.Zero }.sum()
-    return Overall(net = owed - owe, owedToYou = owed, youOwe = owe)
-}
+/** One line per money the groups count in, the ledger's home first, then by code; never one sum across two (#48). */
+fun SharedSnapshot.overall(): List<Overall> =
+    peopleBalances().groupBy { it.currency }.map { (currency, rows) ->
+        val amounts = rows.map { it.amount }
+        val owed = amounts.filter { it > Satang.Zero }.sum()
+        val owe = -amounts.filter { it < Satang.Zero }.sum()
+        Overall(currency, net = owed - owe, owedToYou = owed, youOwe = owe)
+    }.sortedWith(compareBy({ it.currency != Home.money.code }, { it.currency }))
 
 /** The currencies a group has used, its own first: "THB, USD, VND" (#48). */
 fun SharedSnapshot.currenciesOf(groupId: String): List<String> {
@@ -159,7 +166,7 @@ fun SharedSnapshot.currenciesOf(groupId: String): List<String> {
     return currentExpenses(groupId).map { it.currency }.distinct().sortedWith(compareBy({ it != own }, { it }))
 }
 
-/** p27's "Total trip spend": every current expense in baht. */
+/** p27's "Total trip spend": every current expense in the group's money. */
 fun SharedSnapshot.totalSpend(groupId: String): Satang = currentExpenses(groupId).map { it.satang }.sum()
 
 /** One line of p32's timeline. */

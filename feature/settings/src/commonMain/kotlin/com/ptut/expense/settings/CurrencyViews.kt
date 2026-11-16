@@ -19,6 +19,7 @@ import com.ptut.expense.design.Sizes
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
+import com.ptut.expense.domain.Home
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
@@ -39,7 +40,7 @@ fun AddCurrencyView(
     modifier: Modifier = Modifier,
 ) {
     val text = currencyCopy()
-    CurrencyListScreen(title = text.startsIn, intro = text.startsInIntro, options = uiState.options, onBack = onBack, onChoose = onChoose, modifier = modifier)
+    CurrencyListScreen(title = text.startsIn, intro = text.startsInIntro(Home.money.code), options = uiState.options, onBack = onBack, onChoose = onChoose, modifier = modifier)
 }
 
 /** #41: the ledger's home currency. [note] says why a choice did not apply straight away. */
@@ -76,7 +77,7 @@ private fun ConvertSheet(converting: ConvertUiModel, onRate: (String) -> Unit, o
         SkyRateRow(
             rateText = converting.rateText,
             unit = converting.unit,
-            bahtLine = converting.example,
+            homeLine = converting.example,
             onRate = onRate,
             focusOnStart = true,
             homeSymbol = converting.newSymbol,

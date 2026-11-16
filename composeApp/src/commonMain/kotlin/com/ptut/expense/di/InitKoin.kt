@@ -30,7 +30,9 @@ fun initKoin(databaseContext: PtutDatabaseContext, build: AppBuild) {
     // #41: from the fast copy before the first frame; the ledger's own row is checked behind it.
     koin.getOrNull<HomeBook>()?.let { book ->
         Home.use(book.atLaunch())
-        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch { book.reconcile() }
+        // On Main like every other writer of the settings copy, so the two cannot cross; Room does its
+        // own reads off the thread. A check that fails must not take the launch down with it.
+        CoroutineScope(SupervisorJob() + Dispatchers.Main).launch { runCatching { book.reconcile() } }
     }
     // Made now rather than when a rules screen first asks: it fills ShopNames, which every row title reads.
     koin.getOrNull<RuleRepository>()

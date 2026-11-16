@@ -2,6 +2,7 @@ package com.ptut.expense.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.phrase
@@ -96,11 +97,14 @@ class LedgerBackupViewModel(
         chosen.value = ChosenFile(text = text, holds = archive.preview(text).phrase())
     }
 
-    /** FR-22 in. A merge, never a replace: the rows already here are not what was asked about. */
+    /**
+     * FR-22 in. A merge, never a replace: the rows already here are not what was asked about.
+     * #46: a file an empty ledger takes its home from rebuilds the shell, which comes back here.
+     */
     fun restore() = whileFree {
         val file = chosen.value ?: return@whileFree
         chosen.value = null
-        toasts.show(ToastMessage(archive.restore(file.text).phrase()))
+        toasts.show(ToastMessage(Home.fromSettings { archive.restore(file.text) }.phrase()))
     }
 
     /** Cancel on the preview: the file is let go and nothing has changed. */
@@ -129,7 +133,7 @@ class LedgerBackupViewModel(
         }
     }
 
-    /** The Bangkok date, so two exports on the same evening in two zones do not disagree. */
+    /** The home date, so two exports on the same evening in two zones do not disagree. */
     private fun fileName(): String {
         val today = clock.now().toLocalDateTime(HomeTime).date
         return "ptut-ledger-$today.json"

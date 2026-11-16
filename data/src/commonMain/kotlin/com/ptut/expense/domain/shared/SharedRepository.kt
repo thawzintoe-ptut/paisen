@@ -15,10 +15,9 @@ interface SharedRepository {
 
     /**
      * Makes a group with this phone's member in it (named "You" until sign-in gives a name, #187)
-     * and [members]. Returns the group's id.
+     * and [members]. Returns the group's id. #48: [currency] is what the group counts in for good;
+     * the maker's home unless they pick another.
      */
-
-    /** #48: [currency] is what the group counts in for good; the maker's home unless they pick another. */
     suspend fun createGroup(name: String, type: GroupType, icon: String, members: List<NewMember>, currency: String = Home.money.code): String
 
     suspend fun addMembers(groupId: String, members: List<NewMember>)
@@ -55,9 +54,9 @@ interface SharedRepository {
     suspend fun removeMember(groupId: String, memberId: String)
 
     /**
-     * Writes a new expense, or the next version of one. When this phone's member paid, the first
-     * version also records your own transaction for the full amount in baht (#32), and later
-     * versions keep that transaction's amount, time and category in step.
+     * Writes a new expense, or the next version of one. When this phone's member paid in a group
+     * counting in the ledger's home, the first version also records your own transaction for the
+     * full amount (#32, #48), and later versions keep that transaction's amount, time and category in step.
      */
     suspend fun saveExpense(draft: ExpenseDraft): String
 
@@ -107,9 +106,7 @@ interface SharedRepository {
      */
     suspend fun addDueRepeats(today: LocalDate): Int
 
-    /** #181: the last rate used for [currency] on this phone, to pre-fill the next one. */
-
-    /** #48: the last rate saved for one [currency] in [into], a group's own money. */
+    /** #181: the last rate saved on this phone for [currency] in [into], a group's own money (#48), to pre-fill the next one. */
     suspend fun lastRate(currency: String, into: String = Currencies.Thb.code): Rate?
 
     /** Research finding 5: the newest row shown while the group is open. Local only, never synced. */

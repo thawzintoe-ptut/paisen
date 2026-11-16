@@ -6,6 +6,7 @@ import com.ptut.expense.domain.settings.ImportChoices
 import com.ptut.expense.domain.settings.ImportSettings
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
+import com.ptut.expense.domain.shared.pickerLabel
 import com.ptut.expense.locale.currencyCopy
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -32,7 +33,7 @@ class AddCurrencyViewModel(
 
     private fun state(choices: ImportChoices): AddCurrencyUiState {
         val follow = CurrencyOptionUiModel(null, currencyCopy().followPhone(phoneCurrency().code), chosen = choices.addCurrency == null)
-        val pinned = Currencies.all.map { CurrencyOptionUiModel(it.code, "${it.code}  ${it.symbol}", chosen = it.code == choices.addCurrency) }
+        val pinned = Currencies.all.map { CurrencyOptionUiModel(it.code, it.pickerLabel, chosen = it.code == choices.addCurrency) }
         return AddCurrencyUiState(listOf(follow) + pinned)
     }
 }

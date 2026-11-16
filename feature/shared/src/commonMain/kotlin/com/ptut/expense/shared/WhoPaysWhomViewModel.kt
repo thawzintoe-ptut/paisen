@@ -90,7 +90,7 @@ class WhoPaysWhomViewModel(private val groupId: String, private val repository: 
             simplifiedCount = settlement.simplifiedCount,
             simplify = group.simplifyDebts,
             cards = cards,
-            currencyNote = foreign.takeIf { it.isNotEmpty() }?.let(text.converted),
+            currencyNote = foreign.takeIf { it.isNotEmpty() }?.let { text.converted(it, group.currency) },
             firstMine = cards.firstOrNull { it.fromIsMe || it.toIsMe },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WhoPaysWhomUiState.Missing)

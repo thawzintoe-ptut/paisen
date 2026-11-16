@@ -112,11 +112,14 @@ class ImportSettings(private val store: ImportSettingsStore) {
     /** Null follows the phone's country again. */
     fun setAddCurrency(code: String?) = update { it.copy(addCurrency = code) }
 
-    /** #41: the weekly target was typed in the old home's money, so a new home clears it. */
-    fun setHome(currency: String, zone: String) = update {
+    /**
+     * #41: the weekly target was typed in the old home's money, so a new home clears it, unless
+     * #47 [converted] it along with the rows. One write, so a death cannot split the two.
+     */
+    fun setHome(currency: String, zone: String, converted: WeeklyTarget? = null) = update {
         // Null is a phone set up before #41, which was baht.
         val moved = (it.homeCurrency ?: HomeMoney.Baht.code) != currency
-        it.copy(homeCurrency = currency, homeZone = zone, weeklyTarget = if (moved) null else it.weeklyTarget)
+        it.copy(homeCurrency = currency, homeZone = zone, weeklyTarget = if (moved) converted else it.weeklyTarget)
     }
 
     fun setSlipOwner(name: String?) = update { it.copy(slipOwner = SlipOwner(name = name?.trim()?.takeIf(String::isNotEmpty))) }

@@ -204,19 +204,22 @@ private fun Balances(
                 if (searching) {
                     SkySearchField(query = state.query, onSearch = onSearch, placeholder = text.home.search)
                 }
-                SharedHero(
-                    label = state.overallLabel,
-                    amount = state.overall,
-                    tint = state.tone.ink(),
-                    money = state.money,
-                    modifier = Modifier.padding(top = Spacing.sm),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
-                ) {
-                    TotalCard(label = text.home.totalOwed, amount = state.owedToYou, tone = BalanceTone.Owed, modifier = Modifier.weight(1f))
-                    TotalCard(label = text.home.totalOwe, amount = state.youOwe, tone = BalanceTone.Owe, filled = true, modifier = Modifier.weight(1f))
+                // #48: a second money gets its own figure and halves under the first, never one sum.
+                state.overall.forEachIndexed { index, line ->
+                    SharedHero(
+                        label = line.label,
+                        amount = line.amount,
+                        tint = line.tone.ink(),
+                        money = line.money,
+                        modifier = Modifier.padding(top = if (index == 0) Spacing.sm else Spacing.md),
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
+                    ) {
+                        TotalCard(label = text.home.totalOwed, amount = line.owedToYou, tone = BalanceTone.Owed, modifier = Modifier.weight(1f))
+                        TotalCard(label = text.home.totalOwe, amount = line.youOwe, tone = BalanceTone.Owe, filled = true, modifier = Modifier.weight(1f))
+                    }
                 }
                 // #196: one quiet line while a change waits; nothing when all is sent.
                 SkyChange(target = state.syncLine) { line ->

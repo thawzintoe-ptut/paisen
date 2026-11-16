@@ -120,11 +120,16 @@ data class BackupPreview(
     val categories: Int,
     val subCategories: Int,
     val shopRules: Int,
+    /** #46: what the file counts in, which an empty ledger takes as its own. */
+    val homeCurrency: String = HomeMoney.Baht.code,
+    val homeZone: String? = null,
 )
 
 fun LedgerBackup.preview(): BackupPreview = BackupPreview(
     transactions = transactions.size,
     oldestEpochMillis = transactions.minOfOrNull { it.occurredAtEpochMillis },
+    homeCurrency = homeCode,
+    homeZone = homeZone,
     groups = shared?.groups?.size ?: 0,
     categories = categories.size,
     subCategories = subCategories.size,

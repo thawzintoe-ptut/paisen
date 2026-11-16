@@ -18,7 +18,7 @@ enum class AgentTool(
         writes = true,
         description = "Record money spent or received",
         parameters = listOf(
-            ToolParameter("amount", "number", "Baht, up to two decimals", required = true),
+            ToolParameter("amount", "number", "In the group's currency", required = true),
             ToolParameter("direction", "string", "expense or income"),
             ToolParameter("category", "string", "A category name"),
             ToolParameter("note", "string", "What it was for"),
@@ -62,7 +62,7 @@ enum class AgentTool(
         description = "Add an expense to a shared group",
         parameters = listOf(
             ToolParameter("group", "string", "The group's name", required = true),
-            ToolParameter("amount", "number", "Baht, up to two decimals", required = true),
+            ToolParameter("amount", "number", "In the group's currency", required = true),
             ToolParameter("description", "string", "What it was for"),
         ),
     ),

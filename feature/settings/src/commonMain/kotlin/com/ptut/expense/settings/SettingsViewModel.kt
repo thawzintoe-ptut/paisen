@@ -12,6 +12,7 @@ import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.retentionPhrase
 import com.ptut.expense.domain.settings.ImportChoices
 import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.NoteTone
 import com.ptut.expense.locale.SettingsCopy
@@ -88,7 +89,7 @@ class SettingsViewModel(
     /** The Add sheet's starting currency, in builds that offer other currencies there. */
     private val showAddCurrency: Boolean = false,
     /** What the phone's country maps to, for the row's value when nothing is pinned. */
-    private val phoneCurrency: () -> String = { "THB" },
+    private val phoneCurrency: () -> String = { Currencies.Thb.code },
 ) : ViewModel() {
 
     fun setMoodByTimeOfDay(on: Boolean) = settings.setMoodByTimeOfDay(on)

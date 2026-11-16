@@ -43,6 +43,7 @@ import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
+import com.ptut.expense.domain.shared.pickerLabel
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.sky.SkyBottomSheet
@@ -82,7 +83,7 @@ fun OnboardingView(
     if (choosingHome && home != null) {
         SkyChoiceSheet(
             title = currencyCopy().yourMoney,
-            options = Currencies.all.map { SkyChoice(it.code, "${it.code}  ${it.symbol}") },
+            options = Currencies.all.map { SkyChoice(it.code, it.pickerLabel) },
             chosen = home.money.code,
             onPick = { code ->
                 onChooseHome(Currencies.of(code))

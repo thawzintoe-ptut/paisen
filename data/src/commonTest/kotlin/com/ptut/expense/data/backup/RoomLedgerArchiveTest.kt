@@ -13,6 +13,7 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.backup.BackupUnreadable
 import com.ptut.expense.domain.backup.LedgerBackup
+import com.ptut.expense.domain.backup.phrase
 import com.ptut.expense.domain.home.FakeHomeBook
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,9 +69,38 @@ class RoomLedgerArchiveTest {
     fun `a file from a kyat phone is refused by a baht ledger that has rows`() = runTest {
         val kyatFile = archive(holding = listOf(satangExact)).export().replace("\"homeCurrency\": \"THB\"", "\"homeCurrency\": \"MMK\"")
 
-        val failure = assertFailsWith<BackupUnreadable> { archive(table = FakeLedgerTable(byHand)).restore(kyatFile) }
+        val failure = assertFailsWith<BackupUnreadable> { archive(table = FakeLedgerTable(byHand), homeBook = FakeHomeBook(rows = 1)).restore(kyatFile) }
 
         assertEquals("This file counts in MMK. This phone counts in THB.", failure.message)
+    }
+
+    @Test
+    fun `the preview of a kyat file is refused by a baht ledger that has rows and names the home to an empty one`() = runTest {
+        val kyatFile = archive(holding = listOf(satangExact)).export()
+            .replace("\"homeCurrency\": \"THB\"", "\"homeCurrency\": \"MMK\"")
+            .replace("\"homeZone\": \"Asia/Bangkok\"", "\"homeZone\": \"Asia/Yangon\"")
+
+        assertFailsWith<BackupUnreadable> { archive(homeBook = FakeHomeBook(rows = 1)).preview(kyatFile) }
+
+        val phrase = archive(homeBook = FakeHomeBook()).preview(kyatFile).phrase()
+        assertTrue(phrase.contains("counts in MMK, Yangon days"), phrase)
+    }
+
+    @Test
+    fun `a baht file from another zone gives an empty ledger its days and leaves a ledger with rows alone`() = runTest {
+        val yangonFile = archive(holding = listOf(satangExact)).export().replace("\"homeZone\": \"Asia/Bangkok\"", "\"homeZone\": \"Asia/Yangon\"")
+        val empty = FakeHomeBook()
+        val full = FakeHomeBook(rows = 1)
+
+        try {
+            archive(table = FakeLedgerTable(), homeBook = empty).restore(yangonFile)
+            archive(table = FakeLedgerTable(byHand), homeBook = full).restore(yangonFile)
+
+            assertEquals("Asia/Yangon", empty.chosen.single().zoneId)
+            assertEquals(emptyList(), full.chosen)
+        } finally {
+            Home.use(HomeChoice.Default)
+        }
     }
 
     @Test

@@ -6,6 +6,8 @@ import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
+import com.ptut.expense.domain.shared.GroupType
+import com.ptut.expense.domain.shared.SharedGroup
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -92,4 +94,37 @@ class CommandGrammarTest {
         assertEquals("coffee 60", TextNormaliser(zawgyi = null).normalise("coffee 60 kyat").trim())
         assertEquals("ကော်ဖီ 60", TextNormaliser(zawgyi = null).normalise("ကော်ဖီ 60 ကျပ်").trim())
     }
+
+    // #48
+
+    private fun shared(text: String, group: SharedGroup) =
+        assertIs<GrammarReading.Full>(grammar.read(text, Category.seed(), listOf(group), now)).call as ProposedAction.AddGroupExpense
+
+    @Test
+    fun aGroupAmountIsReadInTheGroupsMoneyNotTheLedgers() = inKyat {
+        val call = shared("share 5000 with Trip", group("Trip", "MMK"))
+
+        assertEquals(Satang.ofMinorUnits(5_000), call.amount)
+        assertEquals(0, call.amountDigits)
+    }
+
+    @Test
+    fun aBahtGroupInAKyatLedgerKeepsItsTwoDecimals() = inKyat {
+        val call = shared("share 60.50 with Trip", group("Trip", "THB"))
+
+        assertEquals(Satang.ofMinorUnits(6_050), call.amount)
+        assertEquals(2, call.amountDigits)
+    }
+
+    private fun group(name: String, currency: String) = SharedGroup(
+        id = name.lowercase(),
+        name = name,
+        type = GroupType.Trip,
+        icon = "trip",
+        simplifyDebts = true,
+        createdAtEpochMillis = 0,
+        meMemberId = null,
+        members = emptyList(),
+        currency = currency,
+    )
 }

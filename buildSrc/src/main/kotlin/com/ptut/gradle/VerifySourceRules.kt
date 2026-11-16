@@ -52,7 +52,7 @@ abstract class VerifySourceRules : DefaultTask() {
         ),
         Rule(
             // #42: every amount is written in the home currency. A typed ฿ shows baht to a kyat ledger.
-            pattern = Regex("""^(?!\s*(\*|//|/\*)).*"[^"]*฿"""),
+            pattern = Regex("""^(?!\s*(\*|//|/\*)).*("[^"]*|')฿"""),
             why = "typed ฿ — #42: write money with format() or Home.money.symbol",
             // The currency table, Quick add reading what people type, and the debug catalog.
             allowedIn = listOf("/domain/Home.kt", "/domain/shared/", "/agent/", "/debug/"),

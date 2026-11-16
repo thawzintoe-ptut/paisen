@@ -1,6 +1,10 @@
 package com.ptut.expense.settings
 
+import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.BangkokTime
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.domain.HomeMoney
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
@@ -9,7 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.time.Clock
 import kotlin.time.Instant
 
-class TimezoneViewModelTest {
+class TimezoneViewModelTest : ViewModelTest() {
 
     @Test
     fun `the window runs midnight to midnight on the Bangkok day`() {
@@ -27,6 +31,14 @@ class TimezoneViewModelTest {
 
         assertEquals("Tue 25 Aug", state.today)
         assertEquals("25 Aug 00:00 → 26 Aug 00:00", state.window)
+    }
+
+    /** #43: the screen names the ledger's own zone, never the phone's. */
+    @Test
+    fun `the zone is the home's`() {
+        Home.use(HomeChoice(HomeMoney.Baht, "Asia/Yangon"))
+
+        assertEquals("Asia/Yangon", TimezoneViewModel(at(2026, 8, 24, hour = 19)).uiState.zone)
     }
 
     @Test

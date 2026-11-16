@@ -70,14 +70,14 @@ data class ConfirmSlipUiState(
     val debtPaidNote: String? = null,
     /** #33: the home symbol, or the slip's own ("K") for a slip in another currency, typed in that currency. */
     val currencySymbol: String = Home.money.symbol,
-    /** #33: a kyat slip asks for baht per 1,000 K, opened on the last rate saved. */
+    /** #33: a slip in another money asks for the home money per its rate unit, opened on the last rate saved. */
     val asksRate: Boolean = false,
     val rateText: String = "",
     /** "1,000 K": what one rate is typed for. */
     val rateUnit: String = "",
-    /** "Saved as ฿236.00" once the kyat and the rate both read. */
-    val bahtLine: String? = null,
-    /** Confirm was pressed on a kyat slip with no rate. Cleared by typing one. */
+    /** "Saved as ฿236.00" once the foreign amount and the rate both read. */
+    val homeLine: String? = null,
+    /** Confirm was pressed on a foreign slip with no rate. Cleared by typing one. */
     val askForRate: Boolean = false,
 ) {
     /**

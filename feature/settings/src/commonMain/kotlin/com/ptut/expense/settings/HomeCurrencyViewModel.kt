@@ -5,12 +5,15 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.home.HomeBook
+import com.ptut.expense.domain.minorPerWhole
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.shared.convert
 import com.ptut.expense.domain.shared.formatMinor
+import com.ptut.expense.domain.shared.pickerLabel
 import com.ptut.expense.domain.shared.rateUnitLabel
+import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.currencyCopy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,11 +46,7 @@ data class ConvertUiModel(
  * #41: the ledger's home currency. On an empty ledger a choice applies at once, the shell is rebuilt
  * in it and opens on Settings again. With rows, every amount converts at a typed rate first (#47).
  */
-class HomeCurrencyViewModel(
-    private val book: HomeBook,
-    /** The zone a new home starts its days in: the phone's own, where the person is now. */
-    private val phoneZone: () -> String = { Home.choice.value.zoneId },
-) : ViewModel() {
+class HomeCurrencyViewModel(private val book: HomeBook) : ViewModel() {
 
     private val state = MutableStateFlow(stateFor(Home.money.code))
     val uiState: StateFlow<HomeCurrencyUiState> = state.asStateFlow()
@@ -62,8 +61,8 @@ class HomeCurrencyViewModel(
         if (code == null || code == Home.money.code) return
         viewModelScope.launch {
             if (book.isEmpty()) {
-                Home.reopenSettingsAfterChange()
-                if (!book.choose(choiceOf(code))) Home.settingsReopened()
+                // A slip filed between the two calls makes the book refuse, and the screen says why.
+                if (!Home.fromSettings { book.choose(choiceOf(code)) }) state.update { it.copy(note = currencyCopy().homeHasRows) }
             } else {
                 val new = Currencies.of(code)
                 state.update {
@@ -75,13 +74,15 @@ class HomeCurrencyViewModel(
 
     fun typeRate(text: String) = state.update { current ->
         val converting = current.converting ?: return@update current
-        val typed = text.filter { it.isDigit() || it == '.' }
-        current.copy(converting = converting.copy(rateText = typed, example = exampleAt(typed, converting.code), problem = null))
+        current.copy(converting = converting.copy(rateText = text, example = exampleAt(text, converting.code), problem = null))
     }
 
     fun cancelConvert() = state.update { it.copy(converting = null) }
 
-    /** One transaction in the book; the rebuilt shell opens on Settings in the new money. */
+    /**
+     * One transaction in the book; the rebuilt shell opens on Settings in the new money. The zone
+     * stays the ledger's own: a currency change does not move its days.
+     */
     fun confirmConvert() {
         val converting = state.value.converting ?: return
         if (converting.working) return
@@ -90,31 +91,25 @@ class HomeCurrencyViewModel(
         }
         state.update { it.copy(converting = converting.copy(working = true)) }
         viewModelScope.launch {
-            Home.reopenSettingsAfterChange()
-            if (!book.convert(choiceOf(converting.code), rate)) {
-                Home.settingsReopened()
-                state.update { it.copy(converting = converting.copy(working = false, problem = currencyCopy().convertFailed)) }
+            if (!Home.fromSettings { book.convert(choiceOf(converting.code), rate) }) {
+                state.update {
+                    if (it.converting?.code == converting.code) it.copy(converting = converting.copy(working = false, problem = currencyCopy().convertFailed)) else it
+                }
             }
         }
     }
 
     private fun old(): Currency = Currencies.of(Home.money.code)
 
-    private fun choiceOf(code: String) = HomeChoice(Currencies.of(code).toHomeMoney(), phoneZone())
+    private fun choiceOf(code: String) = HomeChoice(Currencies.of(code).toHomeMoney(), Home.choice.value.zoneId)
 
     /** "฿100.00 becomes K12,500", from 100 of the old money's rate unit, or null while the rate is not a number. */
     private fun exampleAt(rateText: String, code: String): String? {
         val old = old()
         val rate = Rate.parse(rateText, old.rateUnit) ?: return null
-        val sample = EXAMPLE_UNITS * old.rateUnit * pow10(old.digits)
+        val sample = EXAMPLE_UNITS * old.rateUnit * minorPerWhole(Home.money)
         val new = Currencies.of(code)
         return currencyCopy().convertExample(formatMinor(sample, old), formatMinor(convert(sample, old, rate, new).toMinorUnits(), new))
-    }
-
-    private fun pow10(exponent: Int): Long {
-        var result = 1L
-        repeat(exponent) { result *= 10 }
-        return result
     }
 
     private companion object {
@@ -122,7 +117,7 @@ class HomeCurrencyViewModel(
     }
 
     private fun stateFor(chosen: String) = HomeCurrencyUiState(
-        options = Currencies.all.map { CurrencyOptionUiModel(it.code, "${it.code}  ${it.symbol}", chosen = it.code == chosen) },
-        intro = currencyCopy().homeIntro(Home.choice.value.zoneId),
+        options = Currencies.all.map { CurrencyOptionUiModel(it.code, it.pickerLabel, chosen = it.code == chosen) },
+        intro = currencyCopy().homeIntro(AppText.copy.settings.zonePlace(Home.choice.value.zoneId)),
     )
 }

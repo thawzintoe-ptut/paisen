@@ -234,7 +234,7 @@ class AddViewModelTest : ViewModelTest() {
         viewModel.type(entryOf("12.50"))
         viewModel.typeRate("33.4")
         viewModel.choose(Food)
-        assertEquals("Saved as ฿417.50", viewModel.uiState.value.bahtLine)
+        assertEquals("Saved as ฿417.50", viewModel.uiState.value.homeLine)
         viewModel.save()
         runCurrent()
 
@@ -324,6 +324,25 @@ class AddViewModelTest : ViewModelTest() {
 
         assertTrue(ledger.recorded.isEmpty())
         assertTrue(viewModel.uiState.value.editingRate)
+    }
+
+    @Test
+    fun anotherCurrencyTakesTheTypedAmountInItsOwnDecimalsAndHomeTakesItBack() = runTest {
+        val viewModel = inCurrencies(rates = mutableMapOf("MMK" to Rate.parse("8.2", 1_000)!!))
+        viewModel.type(entryOf("12.50"))
+
+        viewModel.chooseCurrency(Currencies.of("MMK"))
+        runCurrent()
+
+        assertEquals(AmountEntry("12", digits = 0), viewModel.uiState.value.entry)
+        assertNotNull(viewModel.uiState.value.foreign)
+
+        viewModel.chooseCurrency(Currencies.Thb)
+
+        assertEquals(AmountEntry("12", digits = 2), viewModel.uiState.value.entry)
+        assertNull(viewModel.uiState.value.foreign)
+        assertNull(viewModel.uiState.value.homeLine)
+        assertNull(viewModel.uiState.value.rateLine)
     }
 
     @Test

@@ -69,32 +69,51 @@ class VerifySourceRulesTest {
         ).verify()
     }
 
+    @Test
+    fun `a baht sign typed on a screen is refused`() {
+        val failure = assertFailsWith<GradleException> {
+            scan("edit/EditView.kt" to "Text(\"฿ \", style = heroSymbol)").verify()
+        }
+        assertContains(failure.message.orEmpty(), "Home.money.symbol")
+    }
+
+    @Test
+    fun `a baht sign as a character is refused too`() {
+        assertFailsWith<GradleException> { scan("edit/EditView.kt" to "val symbol = '฿'").verify() }
+    }
+
+    @Test
+    fun `a baht sign in a comment or the currency table is left alone`() {
+        scan("home/HomeViewModel.kt" to "/** \"฿180 less than a usual Friday\" (#119). */").verify()
+        scan("domain/shared/Currency.kt" to "Currency(\"THB\", \"฿\", 2)").verify()
+    }
+
+    @Test
+    fun `a ledger screen counting Bangkok days is refused`() {
+        val failure = assertFailsWith<GradleException> {
+            scan("home/HomeViewModel.kt" to "val today = now.dateIn(BangkokTime)").verify()
+        }
+        assertContains(failure.message.orEmpty(), "HomeTime")
+    }
+
+    @Test
+    fun `a slip reader and the shared calendar keep Bangkok`() {
+        scan("domain/slip/KPlusSlip.kt" to ".toInstant(BangkokTime)").verify()
+        scan("shared/GroupDetailViewModel.kt" to "clock.now().toLocalDateTime(BangkokTime)").verify()
+    }
+
+    @Test
+    fun `the phone zone is read where a new home is suggested and nowhere else`() {
+        scan("di/PlatformSettings.kt" to "TimeZone.currentSystemDefault().id").verify()
+        assertFailsWith<GradleException> { scan("home/HomeViewModel.kt" to "TimeZone.currentSystemDefault()").verify() }
+    }
+
     /**
      * A Flow subscription timeout is a duration and is not motion. Flagging it would push a number
      * with nothing to do with the design into the design tokens, which is worse than leaving it.
      */
 
     /** #191: shared groups sync, and nothing else may call out. */
-    @Test
-    fun `a baht sign typed on a screen is refused and one in a comment is not`() {
-        val failure = assertFailsWith<GradleException> {
-            scan("edit/EditView.kt" to "Text(\"฿ \", style = heroSymbol)").verify()
-        }
-        assertContains(failure.message.orEmpty(), "Home.money.symbol")
-
-        scan("home/HomeViewModel.kt" to "/** \"฿180 less than a usual Friday\" (#119). */").verify()
-    }
-
-    @Test
-    fun `a ledger screen counting Bangkok days is refused and a slip reader is not`() {
-        val failure = assertFailsWith<GradleException> {
-            scan("home/HomeViewModel.kt" to "val today = now.dateIn(BangkokTime)").verify()
-        }
-        assertContains(failure.message.orEmpty(), "HomeTime")
-
-        scan("domain/slip/KPlusSlip.kt" to ".toInstant(BangkokTime)").verify()
-    }
-
     @Test
     fun `a network client imported outside sync is refused`() {
         val failure = assertFailsWith<GradleException> {
