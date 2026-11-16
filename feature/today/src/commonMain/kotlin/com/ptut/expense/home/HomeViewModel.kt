@@ -77,6 +77,9 @@ sealed interface ImportStatusUiModel {
 
     /** The newest scan failed. A success an hour ago says nothing about the scans since (US-8). */
     data object Failing : ImportStatusUiModel
+
+    /** Android's "Select photos": scans succeed, but a new slip stays hidden until it is picked. */
+    data object OnlyPicked : ImportStatusUiModel
 }
 
 /** Home's three spans (#157, p05). The ranges are Reports' own, on Asia/Bangkok. */
@@ -179,6 +182,8 @@ class HomeViewModel(
     moodByTimeOfDay: Flow<Boolean> = flowOf(false),
     /** #219: slips waiting out their Undo, already gone from Review, so not counted here either. */
     pendingDiscards: Flow<Set<String>> = flowOf(emptySet()),
+    /** Asked again each time Today comes back, since the reader changes it in the system's pages. */
+    private val onlyPickedPhotos: () -> Boolean = { false },
 ) : ViewModel() {
 
     private val period = MutableStateFlow(HomePeriod.Today)
@@ -207,6 +212,7 @@ class HomeViewModel(
                 is LedgerSnapshot.Rows -> snapshot.transactions
             }
             val now = clock.now()
+            val picked = onlyPickedPhotos()
             val today = now.toLocalDateTime(BangkokTime).date
             val history = ledgerRows.rowsOrNone()
             val saved = history.savedOn(today)
@@ -223,10 +229,14 @@ class HomeViewModel(
                 heroLabel = "${chosen.spent()} · ${if (chosen == HomePeriod.Today) today.dayLabel() else range.label()}",
                 summary = transactions.summarise(),
                 transactions = transactions.map { it.asRow(categories, subCategories) },
-                importStatus = if (failed) ImportStatusUiModel.Failing else sinceLastImportMillis.asImportStatus(),
+                importStatus = when {
+                    failed -> ImportStatusUiModel.Failing
+                    picked -> ImportStatusUiModel.OnlyPicked
+                    else -> sinceLastImportMillis.asImportStatus()
+                },
                 watchLine = folders.watchLine(sinceLastImportMillis),
                 isScanning = scanning,
-                importFix = if (failed) ImportFix.AllowAllPhotos else importFix(sinceLastImportMillis),
+                importFix = if (failed || picked) ImportFix.AllowAllPhotos else importFix(sinceLastImportMillis),
                 review = queued.asReviewCard(),
                 savedToday = saved.take(SAVED_TODAY_SHOWN).map { it.asSavedRow(categories, subCategories) },
                 savedTodayMore = (saved.size - SAVED_TODAY_SHOWN).coerceAtLeast(0),

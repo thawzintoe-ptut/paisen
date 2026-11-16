@@ -81,10 +81,12 @@ These Burmese strings are not in the PaiSen Sky Screens MY design. A native read
 | Every folder on this phone holding a picture is listed above. | ပုံပါတဲ့ ဖိုဒါ အားလုံးကို အပေါ်မှာ ပြထားတယ်။ | FoldersCopy.kt:50 |
 | Android is not letting this app see your folders yet. | Android က ဒီအက်ပ်ကို ဖိုဒါတွေ ကြည့်ခွင့် မပေးသေးဘူး။ | FoldersCopy.kt:52 |
 | Share another album | အယ်လ်ဘမ် နောက်တစ်ခု ခွင့်ပြုမယ် | FoldersCopy.kt:53 |
+| Pick more photos | ပုံ ထပ်ရွေးမယ် | FoldersCopy.kt:58 |
+| Only folders holding photos you picked are listed. A new slip shows up once you pick it, or once you allow all photos. | ရွေးထားတဲ့ ပုံတွေ ပါတဲ့ ဖိုဒါတွေကိုပဲ ပြထားတယ်။ စလစ်အသစ်ကို ရွေးပေးမှ ဒါမှမဟုတ် ဓာတ်ပုံအားလုံး ခွင့်ပြုမှ ဒီမှာ ပေါ်မယ်။ | FoldersCopy.kt:59 |
 | Albums you have not shared with this app stay invisible to it. | ခွင့်မပြုထားတဲ့ အယ်လ်ဘမ်တွေကို ဒီအက်ပ်က မမြင်ရဘူး။ | FoldersCopy.kt:54 |
 | Album you made | သင်လုပ်ထားတဲ့ အယ်လ်ဘမ် | FoldersCopy.kt:55 |
 | Album iOS keeps for you | iOS က လုပ်ပေးထားတဲ့ အယ်လ်ဘမ် | FoldersCopy.kt:56 |
-| Photo access is off, so no folder can be read. Allow access to all photos in Android's app settings — selected photos only is not enough. | ဓာတ်ပုံ ခွင့် ပိတ်ထားလို့ ဘယ်ဖိုဒါမှ ဖတ်လို့ မရဘူး။ Android ရဲ့ အက်ပ်ဆက်တင်ထဲမှာ ဓာတ်ပုံအားလုံး ကြည့်ခွင့် ပေးပါ — ရွေးထားတဲ့ ပုံတွေလောက်နဲ့ မလုံလောက်ဘူး။ | FoldersCopy.kt:57 |
+| Photo access is off, so no folder can be read. Allow access to photos in Android's app settings. (Select photos now counts, 16 Nov) | ဓာတ်ပုံ ခွင့် ပိတ်ထားလို့ ဘယ်ဖိုဒါမှ ဖတ်လို့ မရဘူး။ Android ရဲ့ အက်ပ်ဆက်တင်ထဲမှာ ဓာတ်ပုံ ကြည့်ခွင့် ပေးပါ။ | FoldersCopy.kt:68 |
 | Photo access is off, so no album can be scanned. Allow photo access in iOS Settings. | ဓာတ်ပုံ ခွင့် ပိတ်ထားလို့ ဘယ်အယ်လ်ဘမ်မှ စစ်လို့ မရဘူး။ iOS ဆက်တင်ထဲမှာ ဓာတ်ပုံ ကြည့်ခွင့် ပေးပါ။ | FoldersCopy.kt (iosAccessDenied) |
 | The photo library did not answer, so no slip was scanned | ဓာတ်ပုံတွေဆီက အဖြေ မရလို့ ဘယ်စလစ်မှ မစစ်ရဘူး | FoldersCopy.kt:61 |
 | That file could not be opened for writing | ဒီဖိုင်ကို ရေးဖို့ ဖွင့်လို့ မရဘူး | FoldersCopy.kt:62 |

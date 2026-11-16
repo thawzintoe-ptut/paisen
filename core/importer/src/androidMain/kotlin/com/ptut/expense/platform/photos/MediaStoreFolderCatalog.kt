@@ -23,7 +23,8 @@ class MediaStoreFolderCatalog(context: Context) : FolderCatalog {
     private val context = context.applicationContext
 
     override suspend fun available(): List<DeviceFolder> = withContext(Dispatchers.IO) {
-        if (!context.hasPhotoAccess()) return@withContext emptyList()
+        // Under "Select photos" MediaStore answers with the picks alone, so the list is their folders.
+        if (context.photoAccessLevel() == PhotoAccessLevel.None) return@withContext emptyList()
 
         val cursor = context.contentResolver.query(
             imageCollection,

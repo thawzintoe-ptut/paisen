@@ -8,7 +8,7 @@
         errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/AndroidManifest.xml"
-            line="129"
+            line="131"
             column="27"/>
     </issue>
 
@@ -36,19 +36,8 @@
         errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/AndroidManifest.xml"
-            line="62"
+            line="64"
             column="9"/>
-    </issue>
-
-    <issue
-        id="SelectedPhotoAccess"
-        message="Your app is currently not handling Selected Photos Access introduced in Android 14+"
-        errorLine1="    &lt;uses-permission android:name=&quot;android.permission.READ_MEDIA_IMAGES&quot; />"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/AndroidManifest.xml"
-            line="22"
-            column="5"/>
     </issue>
 
     <issue
@@ -58,7 +47,7 @@
         errorLine2="    ^">
         <location
             file="src/main/AndroidManifest.xml"
-            line="55"
+            line="57"
             column="5"/>
     </issue>
 

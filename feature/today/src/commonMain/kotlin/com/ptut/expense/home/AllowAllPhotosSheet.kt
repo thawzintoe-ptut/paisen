@@ -14,10 +14,16 @@ import com.ptut.expense.ui.sky.SkyButtonKind
 
 /**
  * Today's Fix when scans fail: what went wrong, and the exact choice to make on the system page
- * before it opens, because the app cannot open the Photos row itself.
+ * before it opens, because the app cannot open the Photos row itself. [onPickPhotos] is set under
+ * Android's "Select photos", where picking a few more is the lighter answer.
  */
 @Composable
-fun AllowAllPhotosSheet(steps: String, onOpenSettings: () -> Unit, onDismiss: () -> Unit) {
+fun AllowAllPhotosSheet(
+    steps: String,
+    onOpenSettings: () -> Unit,
+    onDismiss: () -> Unit,
+    onPickPhotos: (() -> Unit)? = null,
+) {
     val text = LocalCopy.current.home
     SkyBottomSheet(onDismissRequest = onDismiss) {
         Text(
@@ -39,6 +45,9 @@ fun AllowAllPhotosSheet(steps: String, onOpenSettings: () -> Unit, onDismiss: ()
             modifier = Modifier.padding(top = Spacing.s12),
         )
         SkyButton(text.openSettings, onClick = onOpenSettings, modifier = Modifier.fillMaxWidth().padding(top = Spacing.lg))
+        if (onPickPhotos != null) {
+            SkyButton(text.pickPhotos, onClick = onPickPhotos, kind = SkyButtonKind.Outline, modifier = Modifier.fillMaxWidth().padding(top = Spacing.s12))
+        }
         SkyButton(text.notNow, onClick = onDismiss, kind = SkyButtonKind.Outline, modifier = Modifier.fillMaxWidth().padding(top = Spacing.s12))
     }
 }

@@ -12,6 +12,8 @@ The first public version.
 
 - Reading K PLUS payment slips from your photos on the phone, with ML Kit on Android and Apple
   Vision on iOS.
+- On Android 14 and later, *Select photos* works: the photos you pick are read, and Today and
+  *Photo folders* say that new slips stay hidden until you pick them or allow all photos.
 - A *To check* queue for slips the app cannot read, with the slip's picture.
 - Shop rules: a shop's category is remembered, and the record shows which rule filed it.
 - Today, week and month totals, top categories, and a comparison with a usual day.

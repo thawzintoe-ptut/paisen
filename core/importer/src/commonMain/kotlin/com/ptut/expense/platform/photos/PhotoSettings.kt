@@ -11,5 +11,8 @@ interface PhotoSettings {
     /** What to tap once the page is open, in the app's language as it is now. */
     val steps: String
 
+    /** True while the reader shared only the photos they picked, so new slips stay hidden. Android only. */
+    val onlyPickedPhotos: Boolean get() = false
+
     fun open()
 }

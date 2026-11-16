@@ -37,6 +37,9 @@ private val PROJECTION = arrayOf(
 
 private const val OLDEST_FIRST = "${MediaStore.Images.Media.DATE_ADDED} ASC"
 
+private const val PICKS_FILE = "picked_photos"
+private const val FINISHED = "finished"
+
 /**
  * Thrown rather than answered with an empty list. US-8 counts a scan that found no slips as a
  * success, so a silent empty answer would leave the banner green while nothing was being watched.
@@ -51,11 +54,17 @@ class PhotoAccessDenied : IllegalStateException(AppText.copy.folders.androidAcce
  * folder — a folder added afterwards has every picture already in it sitting below a shared floor,
  * so it would be watched and never read, and nothing on screen would say why.
  *
- * [delete] does nothing. Scoped storage will not let this app remove a picture a banking app
+ * [delete] removes nothing. Scoped storage will not let this app remove a picture a banking app
  * wrote, and below Android 10 it holds no write permission either, so the gallery photo always
  * stays and the app says so (#219). NFR-4's promise holds for the copies this app makes and for
  * anything it owns. A slip that survives is recognised by its hash on the next scan and never
  * read twice.
+ *
+ * Under Android 14's "Select photos" the floors stay put. A photo picked later can be older than
+ * one already read, and a floor raised over the picks would hide every unpicked slip below it once
+ * the reader allows all photos. So each pick carries its own floor instead: once a scan has listed
+ * it, the next scan marks it finished, as it settles a floor, and a read that failed holds it back.
+ * [delete] marks one at once, so a discard holds even when the process dies before the next scan.
  */
 class MediaStoreSlipSource(
     context: Context,
@@ -74,8 +83,15 @@ class MediaStoreSlipSource(
     /** Listed-through per folder, held until the next scan settles it. */
     private var pending = mutableMapOf<String, Long>()
 
+    /** Picks listed by the previous run, finished when the next scan settles them. */
+    private var pendingPicks = mutableSetOf<String>()
+
+    /** Picks no scan reads again. Android only, so it lives here and not in the ledger. */
+    private val finishedPicks by lazy { context.getSharedPreferences(PICKS_FILE, Context.MODE_PRIVATE) }
+
     override suspend fun candidates(): List<SlipCandidate> = withContext(Dispatchers.IO) {
-        if (!context.hasPhotoAccess()) throw PhotoAccessDenied()
+        val level = context.photoAccessLevel()
+        if (level == PhotoAccessLevel.None) throw PhotoAccessDenied()
 
         settlePreviousBatch()
 
@@ -90,10 +106,12 @@ class MediaStoreSlipSource(
         val found = mutableListOf<SlipCandidate>()
         val addedAt = mutableMapOf<String, Long>()
         val owner = mutableMapOf<String, String>()
+        // Skipped at every level: floors left low by "Select photos" would list these again after "Allow all".
+        val finished = finishedPicks()
 
         for (folder in watched) {
             val floor = folders.scannedThroughSeconds(folder.id)
-            val rows = queryFolder(folder.id, after = floor, cap = share)
+            val rows = queryFolder(folder.id, after = floor, cap = share, skip = finished)
 
             rows.forEach { row ->
                 val id = row.id.toString()
@@ -101,7 +119,7 @@ class MediaStoreSlipSource(
                 owner[id] = folder.id
                 found += SlipCandidate(id, row.capturedAtEpochMillis, folder.id, folder.name)
             }
-            rows.maxOfOrNull { it.addedAtSeconds }?.let { pending[folder.id] = it }
+            if (level == PhotoAccessLevel.All) rows.maxOfOrNull { it.addedAtSeconds }?.let { pending[folder.id] = it }
 
             // Stamped as looked-at now, at the floor it already had. That is what tells a folder
             // holding nothing apart from one nothing has ever looked in.
@@ -110,6 +128,7 @@ class MediaStoreSlipSource(
 
         batch = addedAt
         folderOf = owner
+        if (level == PhotoAccessLevel.Picked) pendingPicks = addedAt.keys.toMutableSet()
         // Oldest first across the whole run, so a run that stops early has still made progress
         // in order rather than part-way through each folder at once.
         found.sortedBy { it.capturedAtEpochMillis }
@@ -123,6 +142,10 @@ class MediaStoreSlipSource(
             // The reader deleted it between the scan and now. The row goes with it, so there is
             // nothing to come back for.
             null
+        } catch (unpicked: SecurityException) {
+            // Under "Select photos" the reader can untick a picture after it was read. For this app
+            // it is as gone as a deleted one, and To check shows the slip without it.
+            null
         } catch (unreadable: IOException) {
             // Still there, just not readable this minute. Holding the floor is what turns that
             // into a retry on the next scan instead of a slip stepped over for good.
@@ -132,7 +155,16 @@ class MediaStoreSlipSource(
     }
 
     /** See the class note: the gallery photo is the reader's, and it stays. */
-    override suspend fun delete(id: String) = Unit
+    override suspend fun delete(id: String) {
+        if (context.photoAccessLevel() == PhotoAccessLevel.Picked) finish(setOf(id))
+    }
+
+    private fun finish(ids: Set<String>) = synchronized(this) {
+        finishedPicks.edit().putStringSet(FINISHED, finishedPicks() + ids).apply()
+    }
+
+    /** A copy: the set SharedPreferences hands out must not be changed in place. */
+    private fun finishedPicks(): Set<String> = finishedPicks.getStringSet(FINISHED, null)?.toSet().orEmpty()
 
     /**
      * Commits the floors handed out by the previous run. Nothing is written while a batch is in
@@ -140,6 +172,10 @@ class MediaStoreSlipSource(
      * and the hash journal recognises whatever did land the first time.
      */
     private suspend fun settlePreviousBatch() {
+        if (pendingPicks.isNotEmpty()) {
+            finish(pendingPicks)
+            pendingPicks = mutableSetOf()
+        }
         if (pending.isEmpty()) return
         val settling = pending
         pending = mutableMapOf()
@@ -148,6 +184,7 @@ class MediaStoreSlipSource(
     }
 
     private fun holdBelow(id: String) {
+        pendingPicks.remove(id)
         val folderId = folderOf[id] ?: return
         val seconds = batch[id] ?: return
         val listed = pending[folderId] ?: return
@@ -158,7 +195,7 @@ class MediaStoreSlipSource(
      * Below Android 10 a folder is a directory and the column holds a whole file path, so the
      * match is a prefix and not an equality. Above it the bucket is a value in its own right.
      */
-    private fun queryFolder(folderId: String, after: Long, cap: Int): List<Row> {
+    private fun queryFolder(folderId: String, after: Long, cap: Int, skip: Set<String>): List<Row> {
         val modern = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
         val match = if (modern) "$folderColumn = ?" else "$folderColumn LIKE ?"
         val wanted = if (modern) folderId else "$folderId/%"
@@ -171,18 +208,19 @@ class MediaStoreSlipSource(
             OLDEST_FIRST,
         ) ?: throw IllegalStateException(AppText.copy.folders.libraryNoAnswer)
 
-        return cursor.use { it.readRows(cap) }
+        return cursor.use { it.readRows(cap, skip) }
     }
 
-    /** Stops at [cap] rather than reading the whole folder and dropping the tail. */
-    private fun Cursor.readRows(cap: Int): List<Row> {
+    /** Stops at [cap] rather than reading the whole folder and dropping the tail; [skip] does not count. */
+    private fun Cursor.readRows(cap: Int, skip: Set<String>): List<Row> {
         val id = getColumnIndexOrThrow(MediaStore.Images.Media._ID)
         val addedAt = getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
         val takenAt = getColumnIndexOrThrow(MediaStore.Images.Media.DATE_TAKEN)
 
         return buildList {
             while (size < cap && moveToNext()) {
-                add(Row(getLong(id), getLong(addedAt), getLong(takenAt)))
+                val row = Row(getLong(id), getLong(addedAt), getLong(takenAt))
+                if (row.id.toString() !in skip) add(row)
             }
         }
     }

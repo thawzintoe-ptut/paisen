@@ -328,6 +328,14 @@ private fun ImportStatus(
             onAction = fix?.let { { onFixImport(it) } },
             modifier = modifier,
         )
+
+        ImportStatusUiModel.OnlyPicked -> SkyWarningBanner(
+            title = text.onlyPickedRead,
+            body = text.onlyPickedBody,
+            actionLabel = fix?.let { text.fix },
+            onAction = fix?.let { { onFixImport(it) } },
+            modifier = modifier,
+        )
     }
 }
 

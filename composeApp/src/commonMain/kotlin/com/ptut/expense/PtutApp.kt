@@ -53,6 +53,7 @@ import com.ptut.expense.di.AppBuild
 import com.ptut.expense.domain.DayPart
 import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.dayPartAt
+import com.ptut.expense.domain.folders.FolderChooser
 import com.ptut.expense.domain.settings.ImportSettings
 import com.ptut.expense.domain.slip.SlipPictures
 import com.ptut.expense.edit.EditTransactionView
@@ -357,6 +358,7 @@ private fun LedgerShell() {
                 val viewModel = koinViewModel<HomeViewModel>()
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val photoSettings = koinInject<PhotoSettings>()
+                val pickScope = rememberCoroutineScope()
                 var askingAllowAll by remember { mutableStateOf(false) }
                 HomeView(
                     uiState = state,
@@ -376,6 +378,8 @@ private fun LedgerShell() {
                     onOpenReceipt = { navController.navigate(PtutRoute.DayReceipt(it)) },
                 )
                 if (askingAllowAll) {
+                    // Asked for only under "Select photos", the one case that offers Android's picker.
+                    val chooser = if (photoSettings.onlyPickedPhotos) koinInject<FolderChooser>() else null
                     AllowAllPhotosSheet(
                         steps = photoSettings.steps,
                         onOpenSettings = {
@@ -383,6 +387,12 @@ private fun LedgerShell() {
                             photoSettings.open()
                         },
                         onDismiss = { askingAllowAll = false },
+                        onPickPhotos = chooser?.let { picker ->
+                            {
+                                askingAllowAll = false
+                                pickScope.launch { picker.chooseMore() }
+                            }
+                        },
                     )
                 }
                 // The morning card leaves at noon: the clock is read again whenever Home comes back.

@@ -164,6 +164,63 @@ class HomeViewModelTest : ViewModelTest() {
         }
     }
 
+    @Test
+    fun onlyPickedPhotosWarnsThatNewSlipsStayHiddenAndOffersTheFix() = runTest {
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            sinceLastImportMillis = FIVE_MINUTES,
+            runs = listOf(scan(ImportOutcome.Success)),
+            onlyPickedPhotos = { true },
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            val state = awaitItem() as HomeUiState.Success
+            assertEquals(ImportStatusUiModel.OnlyPicked, state.importStatus)
+            assertEquals(ImportFix.AllowAllPhotos, state.importFix)
+        }
+    }
+
+    @Test
+    fun aFailedScanOutranksOnlyPickedPhotos() = runTest {
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            sinceLastImportMillis = FIVE_MINUTES,
+            runs = listOf(scan(ImportOutcome.Failure)),
+            onlyPickedPhotos = { true },
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            assertEquals(ImportStatusUiModel.Failing, (awaitItem() as HomeUiState.Success).importStatus)
+        }
+    }
+
+    @Test
+    fun allowingAllPhotosClearsThePickedWarningWhenTodayComesBack() = runTest {
+        var picked = true
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            sinceLastImportMillis = FIVE_MINUTES,
+            runs = listOf(scan(ImportOutcome.Success)),
+            onlyPickedPhotos = { picked },
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+            assertEquals(ImportStatusUiModel.OnlyPicked, (awaitItem() as HomeUiState.Success).importStatus)
+
+            picked = false
+            viewModel.refreshClock()
+
+            val state = awaitItem() as HomeUiState.Success
+            assertEquals(ImportStatusUiModel.Fresh("5 min"), state.importStatus)
+            assertNull(state.importFix)
+        }
+    }
+
     private fun scan(outcome: ImportOutcome) = ImportRun(
         id = outcome.name,
         startedAtEpochMillis = 0L,
@@ -408,9 +465,11 @@ class HomeViewModelTest : ViewModelTest() {
         now: Instant = LocalDateTime(2026, 8, 14, 12, 0).toInstant(BangkokTime),
         subCategories: Flow<List<SubCategory>> = flowOf(emptyList()),
         runs: List<ImportRun> = emptyList(),
+        onlyPickedPhotos: () -> Boolean = { false },
     ) = HomeViewModel(
         ledger = FakeLedger(transactions, sinceLastImportMillis, queued, all = transactions + saved, runs = runs),
         subCategoryUpdates = subCategories,
+        onlyPickedPhotos = onlyPickedPhotos,
         clock = object : Clock {
             override fun now(): Instant = now
         },

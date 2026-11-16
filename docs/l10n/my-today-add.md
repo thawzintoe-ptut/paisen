@@ -13,6 +13,9 @@ Burmese for Today, the Add sheet and the day receipt that the Sky MY design does
 | On the next screen tap Photos → Full Access. | နောက်စာမျက်နှာမှာ Photos → Full Access ကို ရွေးပါ။ | locale/HomeCopy.kt:81 |
 | Open settings | ဆက်တင် ဖွင့်မယ် | locale/HomeCopy.kt:82 |
 | Not now | နောက်မှ | locale/HomeCopy.kt:83 |
+| Only photos you picked are read | ရွေးထားတဲ့ ပုံတွေကိုပဲ ဖတ်တယ် | locale/HomeCopy.kt:81 |
+| New slips stay hidden until you pick them or allow all photos. | စလစ်အသစ်တွေကို ရွေးပေးမှ ဒါမှမဟုတ် ဓာတ်ပုံအားလုံး ခွင့်ပြုမှ မြင်ရမယ်။ | locale/HomeCopy.kt:82 |
+| Pick photos | ပုံရွေးမယ် | locale/HomeCopy.kt:83 |
 | Net | အသားတင် | locale/HomeCopy.kt:71 |
 | A quiet week so far. | ဒီအပတ် ဘာမှ မသုံးရသေးဘူး။ | locale/HomeCopy.kt:73 |
 | A quiet month so far. | ဒီလ ဘာမှ မသုံးရသေးဘူး။ | locale/HomeCopy.kt:74 |

@@ -17,11 +17,13 @@ import com.ptut.expense.onboarding.Onboarding
 import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.platform.files.SafLedgerFileStore
 import com.ptut.expense.platform.photos.LauncherPhotoAccessRequest
+import com.ptut.expense.platform.photos.PhotoAccessLevel
 import com.ptut.expense.platform.photos.PhotoAccessRequest
-import com.ptut.expense.platform.photos.hasPhotoAccess
-import com.ptut.expense.platform.photos.photoPermission
+import com.ptut.expense.platform.photos.photoAccessLevel
+import com.ptut.expense.platform.photos.photoPermissions
 import com.ptut.expense.platform.share.SharedSlipReceiver
 import com.ptut.expense.platform.work.scanForSlipsNow
+import com.ptut.expense.platform.work.stopSlipImport
 import com.ptut.expense.platform.work.watchForSlips
 import org.koin.compose.koinInject
 import org.koin.core.context.GlobalContext
@@ -56,11 +58,11 @@ private fun PhotoAccessDialog() {
     val request = koinInject<PhotoAccessRequest>() as? LauncherPhotoAccessRequest ?: return
 
     val ask = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
+        ActivityResultContracts.RequestMultiplePermissions(),
     ) { request.settle() }
 
     LaunchedEffect(request) {
-        request.asks.collect { ask.launch(photoPermission) }
+        request.asks.collect { ask.launch(photoPermissions) }
     }
 }
 
@@ -92,6 +94,9 @@ private fun MicrophoneDialog() {
  * What it does not do is schedule the fifteen-minute job, which would only fail every fifteen
  * minutes for as long as the app is installed.
  *
+ * "Select photos" cancels the job: nothing new appears while the app is closed, so each run would
+ * only read the same picks again. A pick happens in the app, and coming back scans it.
+ *
  * FR-3's switch is read here rather than only where it is thrown. An opened app always scans —
  * that is not background work and turning the schedule off never meant turning importing off — but
  * a schedule the reader cancelled must not come back on the next launch.
@@ -104,7 +109,11 @@ private fun SlipImportOnOpen() {
 
     LaunchedEffect(firstRunAnswered) {
         if (!firstRunAnswered) return@LaunchedEffect
-        if (context.hasPhotoAccess() && settings.choices.value.backgroundImport) context.watchForSlips()
+        when (context.photoAccessLevel()) {
+            PhotoAccessLevel.All -> if (settings.choices.value.backgroundImport) context.watchForSlips()
+            PhotoAccessLevel.Picked -> context.stopSlipImport()
+            PhotoAccessLevel.None -> Unit
+        }
     }
     LifecycleResumeEffect(firstRunAnswered) {
         if (firstRunAnswered) context.scanForSlipsNow()

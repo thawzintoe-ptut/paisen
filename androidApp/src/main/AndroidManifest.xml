@@ -17,9 +17,11 @@
       FR-2: the K PLUS folder is read through MediaStore, which needs the reader's say-so.
       Android 13 split the old storage permission by media type and stopped granting it at all,
       so this is genuinely two permissions and not one with a fallback. maxSdkVersion keeps the
-      old one off Play's radar on the versions that ignore it.
+      old one off Play's radar on the versions that ignore it. Android 14's "Select photos" is
+      the third: the picked photos are read, and Today says new slips need picking too.
     -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />

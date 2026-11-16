@@ -64,6 +64,7 @@ import com.ptut.expense.platform.ocr.SlipTextReader
 import com.ptut.expense.platform.photos.CompositeSlipSource
 import com.ptut.expense.platform.photos.InMemorySlipSource
 import com.ptut.expense.platform.photos.PhotoAccessRequest
+import com.ptut.expense.platform.photos.PhotoSettings
 import com.ptut.expense.platform.photos.SlipSource
 import com.ptut.expense.platform.work.BackgroundImport
 import com.ptut.expense.receipt.DayReceiptViewModel
@@ -197,6 +198,7 @@ val viewModelModule: Module = module {
     // table rather than the compiled-in seed. Read at construction, which is when a screen is
     // built — a rename shows the next time the screen is opened, not while it is on top.
     viewModel {
+        val photos = getOrNull<PhotoSettings>()
         HomeViewModel(
             ledger = get(),
             // The fact the freshness chip needs, taken off the one object that knows it.
@@ -207,6 +209,7 @@ val viewModelModule: Module = module {
             watchedFolders = getOrNull<WatchedFolderRepository>()?.folders ?: flowOf(emptyList()),
             moodByTimeOfDay = getOrNull<ImportSettings>()?.choices?.map { it.moodByTimeOfDay } ?: flowOf(false),
             pendingDiscards = get<SlipDiscards>().pending,
+            onlyPickedPhotos = { photos?.onlyPickedPhotos == true },
         )
     }
     // #220: Reports passes the slice it opened; Home's History passes nothing and gets the whole table.
@@ -565,7 +568,7 @@ fun dataModule(databaseContext: PtutDatabaseContext): Module = module {
      * factory, so each Photo folders screen reads the permission and the language as they are now.
      */
     factory { folderAccess(databaseContext) }
-    single { folderChooser(databaseContext) }
+    single { folderChooser(databaseContext, get()) }
     single { photoSettings(databaseContext) }
 }
 

@@ -11,27 +11,30 @@ import com.ptut.expense.locale.AppText
 /**
  * With access to all photos, MediaStore already lists every folder holding an image — so the list
  * is the whole answer and a chooser would open a picker with nothing in it the screen does not
- * have. Without that access there is exactly one thing worth offering, and it is not in this app.
+ * have. Under "Select photos" it lists only the picks, and Android's own picker adds more. Without
+ * access there is exactly one thing worth offering, and it is not in this app.
  */
-fun androidFolderAccess(context: Context): FolderAccess =
-    if (context.hasPhotoAccess()) {
-        FolderAccess(
-            action = null,
-            explanation = AppText.copy.folders.allFoldersListed,
-        )
-    } else {
-        FolderAccess(
-            action = AppText.copy.folders.allowAccess,
-            explanation = AppText.copy.folders.androidNotAllowed,
-        )
+fun androidFolderAccess(context: Context): FolderAccess {
+    val text = AppText.copy.folders
+    return when (context.photoAccessLevel()) {
+        PhotoAccessLevel.All -> FolderAccess(action = null, explanation = text.allFoldersListed)
+        PhotoAccessLevel.Picked -> FolderAccess(action = text.pickMorePhotos, explanation = text.androidOnlyPicked)
+        PhotoAccessLevel.None -> FolderAccess(action = text.allowAccess, explanation = text.androidNotAllowed)
     }
+}
 
-/** Opens this app's own settings page, which is where the photo permission actually lives. */
-class SettingsFolderChooser(context: Context) : FolderChooser {
+/**
+ * The action [androidFolderAccess] named. Under "Select photos" asking again opens Android's picker,
+ * which also offers "Allow all". Otherwise this app's own settings page, where the permission lives.
+ */
+class SettingsFolderChooser(context: Context, private val request: PhotoAccessRequest) : FolderChooser {
 
     private val context = context.applicationContext
 
-    override suspend fun chooseMore() = context.openAppInfo()
+    override suspend fun chooseMore() = when (context.photoAccessLevel()) {
+        PhotoAccessLevel.Picked -> request.ask()
+        PhotoAccessLevel.All, PhotoAccessLevel.None -> context.openAppInfo()
+    }
 }
 
 /** App info is as deep as Android lets an app link; the Photos row is two taps further in. */
@@ -40,6 +43,8 @@ class AppInfoPhotoSettings(context: Context) : PhotoSettings {
     private val context = context.applicationContext
 
     override val steps: String get() = AppText.copy.home.allowAllAndroidSteps
+
+    override val onlyPickedPhotos: Boolean get() = context.photoAccessLevel() == PhotoAccessLevel.Picked
 
     override fun open() = context.openAppInfo()
 }

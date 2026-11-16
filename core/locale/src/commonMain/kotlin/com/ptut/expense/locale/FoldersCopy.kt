@@ -18,6 +18,9 @@ data class FoldersCopy(
     val allFoldersListed: String = "Every folder on this phone holding a picture is listed above.",
     val allowAccess: String = "Allow photo access",
     val androidNotAllowed: String = "Android is not letting this app see your folders yet.",
+    val pickMorePhotos: String = "Pick more photos",
+    val androidOnlyPicked: String = "Only folders holding photos you picked are listed. A new slip shows up once you " +
+        "pick it, or once you allow all photos.",
     val shareAnotherAlbum: String = "Share another album",
     val openSettings: String = "Open Settings",
     val iosNotAsked: String = "Allow access, then choose the albums your bank app saves slips to.",
@@ -25,8 +28,7 @@ data class FoldersCopy(
     val albumsNotShared: String = "Albums you have not shared with this app stay invisible to it.",
     val albumYouMade: String = "Album you made",
     val albumIosKeeps: String = "Album iOS keeps for you",
-    val androidAccessDenied: String = "Photo access is off, so no folder can be read. Allow access to all photos in Android's app " +
-        "settings — selected photos only is not enough.",
+    val androidAccessDenied: String = "Photo access is off, so no folder can be read. Allow access to photos in Android's app settings.",
     val iosAccessDenied: String = "Photo access is off, so no album can be scanned. Allow photo access in iOS Settings.",
     val libraryNoAnswer: String = "The photo library did not answer, so no slip was scanned",
     val fileNotOpenedForWriting: String = "That file could not be opened for writing. Choose another place to save it.",
@@ -53,6 +55,9 @@ val BurmeseFolders = FoldersCopy(
     allFoldersListed = "ပုံပါတဲ့ ဖိုဒါ အားလုံးကို အပေါ်မှာ ပြထားတယ်။",
     allowAccess = "ဓာတ်ပုံ ခွင့်ပြုမယ်",
     androidNotAllowed = "Android က ဒီအက်ပ်ကို ဖိုဒါတွေ ကြည့်ခွင့် မပေးသေးဘူး။",
+    pickMorePhotos = "ပုံ ထပ်ရွေးမယ်",
+    androidOnlyPicked = "ရွေးထားတဲ့ ပုံတွေ ပါတဲ့ ဖိုဒါတွေကိုပဲ ပြထားတယ်။ စလစ်အသစ်ကို ရွေးပေးမှ ဒါမှမဟုတ် " +
+        "ဓာတ်ပုံအားလုံး ခွင့်ပြုမှ ဒီမှာ ပေါ်မယ်။",
     shareAnotherAlbum = "အယ်လ်ဘမ် နောက်တစ်ခု ခွင့်ပြုမယ်",
     openSettings = "ဆက်တင် ဖွင့်မယ်",
     iosNotAsked = "ခွင့်ပြုပြီးရင် ဘဏ်အက်ပ်က စလစ်သိမ်းတဲ့ အယ်လ်ဘမ်တွေကို ရွေးပါ။",
@@ -60,8 +65,7 @@ val BurmeseFolders = FoldersCopy(
     albumsNotShared = "ခွင့်မပြုထားတဲ့ အယ်လ်ဘမ်တွေကို ဒီအက်ပ်က မမြင်ရဘူး။",
     albumYouMade = "သင်လုပ်ထားတဲ့ အယ်လ်ဘမ်",
     albumIosKeeps = "iOS က လုပ်ပေးထားတဲ့ အယ်လ်ဘမ်",
-    androidAccessDenied = "ဓာတ်ပုံ ခွင့် ပိတ်ထားလို့ ဘယ်ဖိုဒါမှ ဖတ်လို့ မရဘူး။ Android ရဲ့ အက်ပ်ဆက်တင်ထဲမှာ ဓာတ်ပုံအားလုံး " +
-        "ကြည့်ခွင့် ပေးပါ — ရွေးထားတဲ့ ပုံတွေလောက်နဲ့ မလုံလောက်ဘူး။",
+    androidAccessDenied = "ဓာတ်ပုံ ခွင့် ပိတ်ထားလို့ ဘယ်ဖိုဒါမှ ဖတ်လို့ မရဘူး။ Android ရဲ့ အက်ပ်ဆက်တင်ထဲမှာ ဓာတ်ပုံ ကြည့်ခွင့် ပေးပါ။",
     iosAccessDenied = "ဓာတ်ပုံ ခွင့် ပိတ်ထားလို့ ဘယ်အယ်လ်ဘမ်မှ စစ်လို့ မရဘူး။ iOS ဆက်တင်ထဲမှာ ဓာတ်ပုံ ကြည့်ခွင့် ပေးပါ။",
     libraryNoAnswer = "ဓာတ်ပုံတွေဆီက အဖြေ မရလို့ ဘယ်စလစ်မှ မစစ်ရဘူး",
     fileNotOpenedForWriting = "ဒီဖိုင်ကို ရေးဖို့ ဖွင့်လို့ မရဘူး။ တခြားနေရာ ရွေးပြီး သိမ်းပါ။",
