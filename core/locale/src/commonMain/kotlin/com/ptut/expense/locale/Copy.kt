@@ -53,5 +53,8 @@ val ThaiCopy = Copy(
     shell = ThaiShell,
     calendar = ThaiCalendar,
     language = ThaiLanguage,
+    home = ThaiHome,
+    add = ThaiAdd,
+    receipt = ThaiReceipt,
     phrases = ThaiPhrases,
 )

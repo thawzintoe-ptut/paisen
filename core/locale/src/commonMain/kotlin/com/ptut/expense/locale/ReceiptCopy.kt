@@ -16,3 +16,11 @@ val BurmeseReceipt = ReceiptCopy(
     total = "စုစုပေါင်း",
     keptOnPhone = "ဒီဖုန်းထဲမှာပဲ သိမ်းထားတယ်။ ဘယ်ကိုမှ မပို့ထားဘူး။",
 )
+
+val ThaiReceipt = ReceiptCopy(
+    city = "กรุงเทพฯ",
+    other = "อื่น ๆ",
+    nothingSpent = "ไม่มีรายจ่ายในวันนี้",
+    total = "รวม",
+    keptOnPhone = "เก็บไว้ในโทรศัพท์เครื่องนี้ ไม่ได้ส่งไปที่ไหนเลย",
+)

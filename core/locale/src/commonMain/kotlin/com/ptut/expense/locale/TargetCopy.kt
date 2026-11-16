@@ -36,8 +36,20 @@ val BurmeseTarget = TargetCopy(
     ofTarget = { target -> "ပန်းတိုင် $target" },
 )
 
+val ThaiTarget = TargetCopy(
+    fieldLabel = "เป้าหมายรายสัปดาห์",
+    fieldHint = "ใช้จ่ายให้น้อยกว่านี้ในหนึ่งสัปดาห์ เว้นว่างไว้ถ้าไม่ต้องการเป้าหมาย",
+    usualWeek = { amount -> "สัปดาห์ปกติของหมวดนี้: $amount" },
+    replaces = { amount, category -> "การบันทึกจะแทนที่เป้าหมาย $amount ของ $category ตั้งเป้าหมายได้ครั้งละหนึ่งรายการ" },
+    weekLine = { category, spent, target -> "$category: สัปดาห์นี้ $spent จาก $target" },
+    stayedUnder = { category, target -> "$category อยู่ต่ำกว่าเป้าหมาย $target" },
+    wentPast = { category, over, target -> "$category เกินเป้าหมาย $target ไป $over" },
+    ofTarget = { target -> "จากเป้าหมาย $target" },
+)
+
 /** The target's words in the chosen language. */
 fun targetCopy(): TargetCopy = when (AppText.language.value) {
     Language.Burmese -> BurmeseTarget
+    Language.Thai -> ThaiTarget
     else -> TargetCopy()
 }

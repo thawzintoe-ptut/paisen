@@ -91,3 +91,44 @@ val BurmeseAdd = AddCopy(
     spentThisMonth = { amount -> "ဒီလ $amount သုံးထားတယ်" },
     rowsMatch = { n -> "ကိုက်တာ ${n.inMyanmarDigits()} ခု ရှိတယ်" },
 )
+
+/** [language] arrives as the language's own name ("English", "ไทย"), so it keeps a space on each side. */
+val ThaiAdd = AddCopy(
+    pickCategoryHint = "เลือกหมวดหมู่เพื่อบันทึก",
+    typeAmountHint = "ใส่จำนวนเงินเพื่อบันทึก",
+    askPlaceholder = "พิมพ์เลย: กาแฟ 60",
+    listening = "กำลังฟัง…",
+    sayIt = "พูด",
+    stopListening = "หยุดฟัง",
+    voiceLanguageTitle = "ภาษาที่พูด",
+    voiceLanguageLabel = { language -> "ภาษาที่พูด: $language" },
+    voiceOnPhone = "อยู่ในโทรศัพท์ ใช้ได้แม้ไม่มีอินเทอร์เน็ต",
+    onlineAskTitle = { language -> "เสียงพูด $language ฟังผ่านออนไลน์" },
+    listenOnline = "ฟัง",
+    typeInstead = "พิมพ์แทน",
+    saveAmount = { amount -> "บันทึก $amount" },
+    voiceUnavailable = { language -> "โทรศัพท์เครื่องนี้ใช้เสียงพูด $language ไม่ได้ พิมพ์แทนได้เลย" },
+    voiceOnline = { language -> "Google ฟังเสียงพูด $language ทางออนไลน์ เสียงของคุณจึงถูกส่งไปที่ Google" },
+    voiceDownloadable = { language ->
+        "โทรศัพท์เครื่องนี้ยังไม่มีเสียงพูด $language ดาวน์โหลดครั้งเดียว แล้วใช้ได้แม้ไม่มีอินเทอร์เน็ต"
+    },
+    downloadVoice = { language -> "ดาวน์โหลด $language" },
+    voiceDownloading = { language -> "กำลังดาวน์โหลด $language ไมค์จะแสดงเมื่อพร้อม" },
+    voiceDownloadFailed = { language -> "โทรศัพท์ดาวน์โหลด $language ไม่ได้ ลองอีกครั้งผ่าน Wi-Fi หรือพิมพ์แทน" },
+    couldNotRead = "อ่านไม่ออก กรอกด้านล่างได้เลย",
+    notRead = { amount, category ->
+        when {
+            amount && category -> "อ่านจำนวนเงินและหมวดหมู่ไม่ออก กรอกด้านล่างได้เลย"
+            amount -> "อ่านจำนวนเงินไม่ออก พิมพ์ด้านล่างได้เลย"
+            else -> "อ่านหมวดหมู่ไม่ออก เลือกด้านล่างได้เลย"
+        }
+    },
+    didNotCatch = "ฟังไม่ทัน ลองอีกครั้งหรือพิมพ์แทน",
+    send = "ส่ง",
+    allowMicrophone = "อนุญาตไมโครโฟนในการตั้งค่าเพื่อพูด ยังพิมพ์ได้ตามปกติ",
+    saved = { amount, category -> "บันทึก $amount แล้ว · $category" },
+    spentToday = { amount -> "วันนี้ใช้ไป $amount" },
+    spentThisWeek = { amount -> "สัปดาห์นี้ใช้ไป $amount" },
+    spentThisMonth = { amount -> "เดือนนี้ใช้ไป $amount" },
+    rowsMatch = { n -> "ตรงกัน $n รายการ" },
+)
