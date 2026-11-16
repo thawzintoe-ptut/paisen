@@ -49,6 +49,9 @@ val BurmeseCopy = Copy(
 
 /** An area not listed here shows English until its Thai is written. */
 val ThaiCopy = Copy(
+    common = ThaiCommon,
+    shell = ThaiShell,
     calendar = ThaiCalendar,
     language = ThaiLanguage,
+    phrases = ThaiPhrases,
 )
