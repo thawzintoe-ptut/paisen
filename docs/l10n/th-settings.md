@@ -197,3 +197,23 @@ Choices to check in this area:
 | As K PLUS prints you as the sender, like MR. THAW Z. A slip that names you as the recipient is filed as money in. Leave it empty and PaiSeN learns it again from your own slips. | ตามที่ K PLUS พิมพ์ชื่อคุณเป็นผู้โอน เช่น MR. THAW Z สลิปที่ระบุคุณเป็นผู้รับจะบันทึกเป็นเงินเข้า เว้นว่างไว้ PaiSeN จะเรียนรู้ชื่อใหม่จากสลิปของคุณเอง | IncomeSlipCopy.kt `ownerHint` |
 | Save | บันทึก | IncomeSlipCopy.kt `save` |
 | Cancel | ยกเลิก | IncomeSlipCopy.kt `cancel` |
+
+## Home currency and home time zone (16 Nov, not yet checked)
+
+| English | Thai | Where |
+|---|---|---|
+| Your money | สกุลเงินของคุณ | `CurrencyCopy` yourMoney |
+| Change | เปลี่ยน | `CurrencyCopy` change |
+| Home currency | สกุลเงินหลัก | `CurrencyCopy` homeTitle |
+| Every total counts in this currency. Days start at midnight, {zone} time. | ยอดรวมทั้งหมดนับเป็นสกุลนี้ วันเริ่มตอนเที่ยงคืนตามเวลา {zone} | `CurrencyCopy` homeIntro |
+| Your ledger already has entries, so changing this converts every amount. | มีรายการอยู่แล้ว การเปลี่ยนจะแปลงทุกจำนวนเงิน | `CurrencyCopy` homeHasRows |
+| Change to {code}? | เปลี่ยนเป็น {code} ไหม | `CurrencyCopy` convertTitle |
+| Every amount converts at this rate. Each entry keeps its old amount and the rate beside it. | ทุกจำนวนเงินจะแปลงตามอัตรานี้ แต่ละรายการเก็บจำนวนเดิมและอัตราไว้ข้างๆ | `CurrencyCopy` convertBody |
+| {from} becomes {to} | {from} เป็น {to} | `CurrencyCopy` convertExample |
+| Export a backup first | สำรองข้อมูลก่อน | `CurrencyCopy` backupFirst |
+| Nothing changed. The entries could not be converted. | ไม่มีอะไรเปลี่ยน แปลงรายการไม่ได้ | `CurrencyCopy` convertFailed |
+| This file counts in {file}. This phone counts in {here}. | ไฟล์นี้นับเป็น {file} แต่โทรศัพท์นี้นับเป็น {here} | `PhrasesCopy` backupOtherHome |
+| Timezone screen: "Bangkok" is now the home zone's place | กรุงเทพฯ / ย่างกุ้ง | `SettingsCopy` zonePlace |
+| A {code} slip needs a rate | สลิป {code} ต้องใส่อัตราแลกเปลี่ยน | `CurrencyCopy` rateNeeded |
+| Rate needed | ต้องใส่อัตรา | `CurrencyCopy` reasonRate |
+| one needs a rate / {n} need a rate | ต้องใส่อัตรา {n} ใบ | `CurrencyCopy` slipsNeedRate |

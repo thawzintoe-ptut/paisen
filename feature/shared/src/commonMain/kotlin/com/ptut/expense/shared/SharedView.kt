@@ -34,6 +34,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -44,10 +45,13 @@ import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
 import com.ptut.expense.design.tappable
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.NewMember
 import com.ptut.expense.domain.shared.Person
 import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.sync.InviteLinks
 import com.ptut.expense.ui.sky.SkyBarIconAction
 import com.ptut.expense.ui.sky.SkyBottomSheet
@@ -55,7 +59,10 @@ import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyChange
 import com.ptut.expense.ui.sky.SkyChip
+import com.ptut.expense.ui.sky.SkyChoice
+import com.ptut.expense.ui.sky.SkyChoiceSheet
 import com.ptut.expense.ui.sky.SkyHairline
+import com.ptut.expense.ui.sky.SkyKeyValueRow
 import com.ptut.expense.ui.sky.SkyPageSheet
 import com.ptut.expense.ui.sky.SkySearchField
 import com.ptut.expense.ui.sky.SkySectionHeader
@@ -68,7 +75,7 @@ import com.ptut.expense.ui.sky.skyItem
 fun SharedView(
     uiState: SharedUiState,
     onSearch: (String) -> Unit,
-    onCreateGroup: (name: String, type: GroupType, icon: String, members: List<NewMember>) -> Unit,
+    onCreateGroup: (name: String, type: GroupType, icon: String, members: List<NewMember>, currency: String) -> Unit,
     onAddPerson: (name: String, personId: String?) -> Unit,
     onOpenGroup: (String) -> Unit,
     onOpenActivity: () -> Unit,
@@ -123,9 +130,9 @@ fun SharedView(
         SHEET_GROUP -> NewGroupSheet(
             startType = startType,
             people = people,
-            onCreate = { name, type, icon, members ->
+            onCreate = { name, type, icon, members, currency ->
                 sheet = null
-                onCreateGroup(name, type, icon, members)
+                onCreateGroup(name, type, icon, members, currency)
             },
             onDismiss = { sheet = null },
         )
@@ -201,6 +208,7 @@ private fun Balances(
                     label = state.overallLabel,
                     amount = state.overall,
                     tint = state.tone.ink(),
+                    money = state.money,
                     modifier = Modifier.padding(top = Spacing.sm),
                 )
                 Row(
@@ -444,19 +452,22 @@ private fun JoinCodeSheet(onJoin: (String) -> Unit, onDismiss: () -> Unit) {
 
 /**
  * #57: name (required) and type, then the people in it. Nothing is stored until Create, and
- * closing the sheet stores nothing.
+ * closing the sheet stores nothing. #48: the currency starts on the home's and cannot change later.
  */
 @Composable
 private fun NewGroupSheet(
     startType: GroupType,
     people: List<Person>,
-    onCreate: (String, GroupType, String, List<NewMember>) -> Unit,
+    onCreate: (String, GroupType, String, List<NewMember>, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val text = LocalCopy.current.shared
     var type by rememberSaveable { mutableStateOf(startType) }
     var name by rememberSaveable { mutableStateOf(startType.label().takeIf { startType != GroupType.Other }.orEmpty()) }
     var typed by rememberSaveable { mutableStateOf("") }
+    var currency by rememberSaveable { mutableStateOf(Home.money.code) }
+    var choosingCurrency by rememberSaveable { mutableStateOf(false) }
+    val money = Currencies.of(currency)
     val chosen = remember { mutableStateListOf<NewMember>() }
 
     SkyBottomSheet(onDismissRequest = onDismiss) {
@@ -479,15 +490,33 @@ private fun NewGroupSheet(
             }
         }
         SharedTextField(value = name, onValueChange = { name = it }, label = text.groupName, modifier = Modifier.padding(top = Spacing.md))
+        SkyKeyValueRow(
+            label = currencyCopy().currencyTitle,
+            value = "${money.code}  ${money.symbol}",
+            modifier = Modifier.padding(top = Spacing.xs).tappable(RectangleShape, Role.Button) { choosingCurrency = true },
+        )
 
         Text(text.people, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.md))
         PeoplePicker(people = people, chosen = chosen, typed = typed, onTyped = { typed = it })
         SkyButton(
             text.home.create,
             // #218: a name typed but not added with Add still joins the group.
-            onClick = { onCreate(name.trim(), type, type.defaultIcon(), chosen.withTyped(typed)) },
+            onClick = { onCreate(name.trim(), type, type.defaultIcon(), chosen.withTyped(typed), currency) },
             enabled = name.isNotBlank(),
             modifier = Modifier.fillMaxWidth().padding(top = Spacing.lg),
+        )
+    }
+    // After the sheet, so it opens on top of it.
+    if (choosingCurrency) {
+        SkyChoiceSheet(
+            title = currencyCopy().currencyTitle,
+            options = Currencies.all.map { SkyChoice(it.code, "${it.code}  ${it.symbol}") },
+            chosen = currency,
+            onPick = { code ->
+                currency = code
+                choosingCurrency = false
+            },
+            onDismiss = { choosingCurrency = false },
         )
     }
 }

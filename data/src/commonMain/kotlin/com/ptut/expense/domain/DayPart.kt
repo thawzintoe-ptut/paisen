@@ -8,7 +8,7 @@ import kotlin.time.Instant
 enum class DayPart { Morning, Day, Evening }
 
 /** On Bangkok's clock (FR-19). Evening runs to midnight, where the next morning starts (#121, #122). */
-fun dayPartAt(now: Instant, zone: TimeZone = BangkokTime): DayPart {
+fun dayPartAt(now: Instant, zone: TimeZone = HomeTime): DayPart {
     val hour = now.toLocalDateTime(zone).hour
     return when {
         hour < NOON -> DayPart.Morning

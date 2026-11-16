@@ -2,6 +2,8 @@ package com.ptut.expense.domain.settings
 
 import app.cash.turbine.test
 import com.ptut.expense.domain.EvidenceRetention
+import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.WeeklyTarget
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -61,5 +63,17 @@ class ImportSettingsTest {
     @Test
     fun `every retention on offer has an end`() {
         assertEquals(listOf(3L, 7L, 14L, 30L), RetentionChoices.map { it.inWholeDays })
+    }
+
+    @Test
+    fun `a new home clears the weekly target typed in the old money and the same home keeps it`() {
+        val target = WeeklyTarget("food", Satang(200_000))
+        val settings = ImportSettings(FakeImportSettingsStore(ImportChoices(weeklyTarget = target, homeCurrency = "THB")))
+
+        settings.setHome("THB", "Asia/Bangkok")
+        assertEquals(target, settings.choices.value.weeklyTarget)
+
+        settings.setHome("MMK", "Asia/Yangon")
+        assertEquals(null, settings.choices.value.weeklyTarget)
     }
 }

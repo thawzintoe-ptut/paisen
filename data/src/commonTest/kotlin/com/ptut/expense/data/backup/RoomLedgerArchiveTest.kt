@@ -9,7 +9,11 @@ import com.ptut.expense.data.local.entity.RuleEntity
 import com.ptut.expense.data.local.entity.SubCategoryEntity
 import com.ptut.expense.data.local.entity.TransactionEntity
 import com.ptut.expense.data.repository.RoomLedgerArchive
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.backup.BackupUnreadable
+import com.ptut.expense.domain.backup.LedgerBackup
+import com.ptut.expense.domain.home.FakeHomeBook
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -61,6 +65,44 @@ class RoomLedgerArchiveTest {
     }
 
     @Test
+    fun `a file from a kyat phone is refused by a baht ledger that has rows`() = runTest {
+        val kyatFile = archive(holding = listOf(satangExact)).export().replace("\"homeCurrency\": \"THB\"", "\"homeCurrency\": \"MMK\"")
+
+        val failure = assertFailsWith<BackupUnreadable> { archive(table = FakeLedgerTable(byHand)).restore(kyatFile) }
+
+        assertEquals("This file counts in MMK. This phone counts in THB.", failure.message)
+    }
+
+    @Test
+    fun `an empty ledger takes a kyat file's home and its rows come back in kyat`() = runTest {
+        val kyatFile = archive(holding = listOf(satangExact)).export()
+            .replace("\"homeCurrency\": \"THB\"", "\"homeCurrency\": \"MMK\"")
+            .replace("\"homeZone\": \"Asia/Bangkok\"", "\"homeZone\": \"Asia/Yangon\"")
+        val book = FakeHomeBook()
+        val empty = FakeLedgerTable()
+
+        try {
+            archive(table = empty, homeBook = book).restore(kyatFile)
+
+            assertEquals("MMK", book.chosen.single().money.code)
+            assertEquals("Asia/Yangon", book.chosen.single().zoneId)
+            assertEquals("MMK", empty.rows.single().currency)
+        } finally {
+            Home.use(HomeChoice.Default)
+        }
+    }
+
+    @Test
+    fun `a file from before home is read as baht`() = runTest {
+        val old = archive(holding = listOf(satangExact)).export().replace(Regex(""",\s*"homeCurrency": "THB",\s*"homeZone": "Asia/Bangkok""""), "")
+        val empty = FakeLedgerTable()
+
+        archive(table = empty).restore(old)
+
+        assertEquals("THB", empty.rows.single().currency)
+    }
+
+    @Test
     fun `importing the same file twice adds no rows`() = runTest {
         val file = archive(holding = listOf(satangExact, byHand)).export()
 
@@ -101,11 +143,12 @@ class RoomLedgerArchiveTest {
 
     @Test
     fun `a file written by a newer format is refused by version rather than read as far as it goes`() = runTest {
-        val newer = archive(holding = listOf(satangExact)).export().replace("\"format\": 3", "\"format\": 4")
+        val later = LedgerBackup.FORMAT + 1
+        val newer = archive(holding = listOf(satangExact)).export().replace("\"format\": ${LedgerBackup.FORMAT}", "\"format\": $later")
 
         val failure = assertFailsWith<BackupUnreadable> { archive().restore(newer) }
 
-        assertTrue(failure.message!!.contains("format 4"), failure.message!!)
+        assertTrue(failure.message!!.contains("format $later"), failure.message!!)
     }
 
     @Test
@@ -223,11 +266,13 @@ class RoomLedgerArchiveTest {
         holding: List<TransactionEntity> = emptyList(),
         table: FakeLedgerTable = FakeLedgerTable(),
         catalog: FakeCatalog? = null,
+        homeBook: FakeHomeBook? = null,
     ) = RoomLedgerArchive(
         transactionDao = TransactionsOnDisk(holding) { mapOf("coffee" to "food") + catalog?.parents().orEmpty() },
         categoryDao = SeededCategories(setOf("food", "transport")),
         mergeDao = table,
         catalogDao = catalog,
+        homeBook = homeBook,
     )
 
     private fun row(
@@ -289,6 +334,8 @@ private class TransactionsOnDisk(
 
     override suspend fun all(): List<TransactionEntity> = rows
 
+    override suspend fun count(): Int = rows.size
+
     override suspend fun setPlanned(id: String, planned: Boolean) = error("an archive never marks a row")
 
     override fun observeBetween(
@@ -314,6 +361,7 @@ private class TransactionsOnDisk(
         memo: String?,
         occurredAtEpochMillis: Long?,
         editedAtEpochMillis: Long,
+        home: String,
     ) = never<Unit>()
 
     override suspend fun subCategoryUnder(subCategoryId: String, categoryId: String): String? =

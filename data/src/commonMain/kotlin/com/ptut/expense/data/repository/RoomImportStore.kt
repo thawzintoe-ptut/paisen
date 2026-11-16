@@ -17,6 +17,7 @@ import com.ptut.expense.data.local.entity.RuleEntity
 import com.ptut.expense.data.local.entity.TransactionEntity
 import com.ptut.expense.data.local.entity.asColumn
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.ReviewReason
@@ -44,7 +45,7 @@ class RoomImportStore(
 ) : ImportStore {
 
     override suspend fun rateFor(currency: String): Rate? =
-        sharedDao?.rate(currency)?.let { Rate(it.rateUnscaled, it.rateScale) }
+        sharedDao?.rate(currency, Home.money.code)?.let { Rate(it.rateUnscaled, it.rateScale) }
 
     override suspend fun rules(): List<MerchantRule> =
         ruleDao.all().map {
@@ -94,7 +95,7 @@ class RoomImportStore(
     ).also {
         // #33: the rate typed on Check slip becomes the next kyat slip's, in a group or here.
         slip.foreign?.let { foreign ->
-            sharedDao?.upsertRate(CurrencyRateEntity(foreign.currency, foreign.rate.unscaled, foreign.rate.scale, slip.confirmedAtEpochMillis))
+            sharedDao?.upsertRate(CurrencyRateEntity(foreign.currency, foreign.rate.unscaled, foreign.rate.scale, slip.confirmedAtEpochMillis, Home.money.code))
         }
     }
 
@@ -113,7 +114,7 @@ class RoomImportStore(
         filedAt = confirmedAtEpochMillis,
         sourceFolder = folder,
         planned = planned,
-        currency = foreign?.currency ?: "THB",
+        currency = foreign?.currency ?: Home.money.code,
         originalMinor = foreign?.originalMinor,
         rateUnscaled = foreign?.rate?.unscaled,
         rateScale = foreign?.rate?.scale,
@@ -140,7 +141,7 @@ class RoomImportStore(
     private fun FiledSlip.toEntity() = TransactionEntity(
         id = id,
         occurredAtEpochMillis = read.occurredAtEpochMillis,
-        amountMinor = (foreign?.baht ?: read.amount).toMinorUnits(),
+        amountMinor = (foreign?.inHome ?: read.amount).toMinorUnits(),
         direction = direction.name,
         categoryId = categoryId,
         counterparty = read.counterparty,
@@ -148,11 +149,11 @@ class RoomImportStore(
         reference = read.reference,
         // A slip filed without asking was filed at exactly what the parser read, so the two agree
         // today. They stop agreeing the moment screen 11c corrects one, which is the point.
-        slipAmountMinor = (foreign?.baht ?: read.amount).toMinorUnits(),
+        slipAmountMinor = (foreign?.inHome ?: read.amount).toMinorUnits(),
         filedAt = filedAtEpochMillis,
         sourceFolder = folder,
         ruleId = ruleId,
-        currency = foreign?.currency ?: "THB",
+        currency = foreign?.currency ?: Home.money.code,
         originalMinor = foreign?.originalMinor,
         rateUnscaled = foreign?.rate?.unscaled,
         rateScale = foreign?.rate?.scale,

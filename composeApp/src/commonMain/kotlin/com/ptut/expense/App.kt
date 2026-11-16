@@ -5,6 +5,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import com.ptut.expense.domain.Home
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LocalCopy
 
@@ -18,7 +19,9 @@ import com.ptut.expense.locale.LocalCopy
 @Composable
 fun App() {
     val language by AppText.language.collectAsState()
-    key(language) {
+    // #41: a new home rewrites every amount and every day, so it rebuilds the shell as a language does.
+    val home by Home.choice.collectAsState()
+    key(language, home) {
         CompositionLocalProvider(LocalCopy provides language.copy) { PtutApp() }
     }
 }

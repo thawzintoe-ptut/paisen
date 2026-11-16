@@ -44,7 +44,7 @@ data class CategoryRise(val categoryId: String, val difference: Satang, val shop
  * Last week, Monday to Sunday on [zone] days, seen from [today]. Null on a week with no spending,
  * so a quiet week draws no card at all.
  */
-fun List<Transaction>.weeklyCheckIn(today: LocalDate, zone: TimeZone = BangkokTime): WeeklyCheckIn? {
+fun List<Transaction>.weeklyCheckIn(today: LocalDate, zone: TimeZone = HomeTime): WeeklyCheckIn? {
     val thisMonday = today.mondayOfWeek()
     val from = thisMonday.minus(DAYS_IN_WEEK, DateTimeUnit.DAY)
     val expenses = filter { it.direction == Direction.Expense }

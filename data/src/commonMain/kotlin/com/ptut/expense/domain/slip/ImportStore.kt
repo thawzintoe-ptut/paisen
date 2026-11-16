@@ -22,7 +22,7 @@ data class FiledSlip(
     val ruleId: String? = null,
     /** #26: money in when the slip names you as the recipient. */
     val direction: Direction = Direction.Expense,
-    /** #33: a kyat slip's kyat and rate; the record's amount is then [ForeignAmount.baht]. */
+    /** #33: a kyat slip's kyat and rate; the record's amount is then [ForeignAmount.inHome]. */
     val foreign: ForeignAmount? = null,
 )
 

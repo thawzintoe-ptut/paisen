@@ -2,12 +2,11 @@ package com.ptut.expense.shared
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.domain.formatCompact
-import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.RepeatEnd
 import com.ptut.expense.domain.shared.RepeatFrequency
 import com.ptut.expense.domain.shared.RepeatKind
@@ -17,6 +16,8 @@ import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SplitMode
 import com.ptut.expense.domain.shared.anchorLine
 import com.ptut.expense.domain.shared.formatMinor
+import com.ptut.expense.domain.shared.money
+import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.next
 import com.ptut.expense.domain.shared.parseMinor
 import com.ptut.expense.domain.shared.shares
@@ -69,6 +70,8 @@ sealed interface RepeatExpenseUiState {
         val active: Boolean,
         /** "Rent · Ari flat" (p33). */
         val title: String,
+        /** #48: the group's own money, drawn before the amount. */
+        val symbol: String,
         val amountShown: String,
         /** "You paid · split 50 / 50 with Mint". */
         val payLine: String,
@@ -131,7 +134,7 @@ class RepeatExpenseViewModel(
             RepeatForm(
                 kind = rule.kind,
                 description = rule.description,
-                amountText = formatMinor(rule.amountMinor, Currencies.Thb).filter { it.isDigit() || it == '.' },
+                amountText = formatMinor(rule.amountMinor, group.money).filter { it.isDigit() || it == '.' },
                 frequency = rule.frequency,
                 start = rule.start,
                 end = rule.end,
@@ -183,8 +186,8 @@ class RepeatExpenseViewModel(
                     lastAdded = null,
                     description = form.description.trim(),
                     categoryId = form.kind.categoryIn(categories),
-                    currency = Currencies.Thb.code,
-                    amountMinor = parseMinor(form.amountText, Currencies.Thb) ?: return@launch,
+                    currency = group.currency,
+                    amountMinor = parseMinor(form.amountText, group.money) ?: return@launch,
                     rate = null,
                     payerMemberId = form.payerMemberId ?: group.meMemberId ?: return@launch,
                     splitMode = SplitMode.Equally,
@@ -213,17 +216,17 @@ class RepeatExpenseViewModel(
 
     private fun ready(group: SharedGroup, form: RepeatForm, active: Boolean): RepeatExpenseUiState.Ready {
         val members = group.splitMembers().filter { group.member(it.id)?.archived != true }
-        val amount = parseMinor(form.amountText, Currencies.Thb)
+        val amount = parseMinor(form.amountText, group.money)
         val payer = form.payerMemberId ?: group.meMemberId
         val preview = form.start?.let { start ->
             RepeatRule(
                 id = "", groupId = groupId, kind = form.kind, frequency = form.frequency, start = start, end = form.end,
                 remind = form.remind, active = true, lastAdded = null, description = form.description, categoryId = null,
-                currency = Currencies.Thb.code, amountMinor = amount ?: 0L, rate = null, payerMemberId = payer.orEmpty(),
+                currency = group.currency, amountMinor = amount ?: 0L, rate = null, payerMemberId = payer.orEmpty(),
                 splitMode = SplitMode.Equally, weights = members.associate { it.id to 1L }, createdAtEpochMillis = 0L,
             )
         }
-        val today = clock.now().toLocalDateTime(BangkokTime).date
+        val today = clock.now().toLocalDateTime(HomeTime).date
         val text = AppText.copy.shared
         val you = AppText.copy.common.you
         return RepeatExpenseUiState.Ready(
@@ -231,6 +234,7 @@ class RepeatExpenseViewModel(
             isEdit = ruleId != null,
             active = active,
             title = "${form.description.ifBlank { form.kind.label() }} · ${group.name}",
+            symbol = group.money.symbol,
             amountShown = form.amountText.ifEmpty { "0" },
             payLine = buildString {
                 append(if (payer == null || group.isMe(payer)) text.repeat.youPaid else text.repeat.paid(group.displayName(payer)))
@@ -270,15 +274,16 @@ class RepeatExpenseViewModel(
         val mine = parts.firstOrNull { it.memberId == me }?.satang ?: Satang.Zero
         val others = members.filterNot { it.isMe }
         val text = AppText.copy.shared.repeat
+        val money = group.moneyFormat()
         return when {
-            group.isMe(rule.payerMemberId) && others.size == 1 -> text.owesYou(others.single().name, (Satang.ofMinorUnits(amount) - mine).formatCompact())
-            group.isMe(rule.payerMemberId) -> text.youAreOwed((Satang.ofMinorUnits(amount) - mine).formatCompact())
-            else -> text.youOwe(group.displayName(rule.payerMemberId), mine.formatCompact())
+            group.isMe(rule.payerMemberId) && others.size == 1 -> text.owesYou(others.single().name, (Satang.ofMinorUnits(amount) - mine).formatCompact(money))
+            group.isMe(rule.payerMemberId) -> text.youAreOwed((Satang.ofMinorUnits(amount) - mine).formatCompact(money))
+            else -> text.youOwe(group.displayName(rule.payerMemberId), mine.formatCompact(money))
         }
     }
 
     private fun firstOfNextMonth(): LocalDate {
-        val today = clock.now().toLocalDateTime(BangkokTime).date
+        val today = clock.now().toLocalDateTime(HomeTime).date
         return LocalDate(today.year, today.month, 1).plus(DatePeriod(months = 1))
     }
 }

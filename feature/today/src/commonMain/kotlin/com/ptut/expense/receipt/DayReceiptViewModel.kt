@@ -2,9 +2,9 @@ package com.ptut.expense.receipt
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
@@ -13,6 +13,7 @@ import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.domain.differencePhrase
 import com.ptut.expense.domain.displayName
 import com.ptut.expense.domain.format
+import com.ptut.expense.domain.formatDigits
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.spoken
@@ -80,14 +81,14 @@ class DayReceiptViewModel(
     private fun receiptOf(rows: List<Transaction>): DayReceiptUiState.Loaded {
         val text = AppText.copy.receipt
         val spending = rows
-            .filter { it.direction == Direction.Expense && it.occurredAtEpochMillis.dateIn(BangkokTime) == day }
+            .filter { it.direction == Direction.Expense && it.occurredAtEpochMillis.dateIn(HomeTime) == day }
             .sortedBy { it.occurredAtEpochMillis }
         val total = spending.fold(Satang.Zero) { sum, row -> sum + row.amount }
         return DayReceiptUiState.Loaded(
             title = title(),
             heading = "${day.dayLabel()} ${day.yearLabel()}".uppercase() + " · ${text.city}",
             lines = spending.map { row ->
-                val time = row.occurredAtEpochMillis.timeOfDayIn(BangkokTime)
+                val time = row.occurredAtEpochMillis.timeOfDayIn(HomeTime)
                 val name = row.displayName(categories, subCategories)
                 ReceiptLineUiModel(
                     time = time,
@@ -108,7 +109,7 @@ class DayReceiptViewModel(
     }
 
     private fun title(): String {
-        val today = clock.now().dateIn(BangkokTime)
+        val today = clock.now().dateIn(HomeTime)
         val common = AppText.copy.common
         return when (day) {
             today -> common.today
@@ -117,6 +118,6 @@ class DayReceiptViewModel(
         }
     }
 
-    /** The receipt's lines carry no baht sign; only TOTAL does (p09). */
-    private fun Satang.digits(): String = format().removePrefix("฿")
+    /** The receipt's lines carry no currency sign; only TOTAL does (p09). */
+    private fun Satang.digits(): String = formatDigits()
 }

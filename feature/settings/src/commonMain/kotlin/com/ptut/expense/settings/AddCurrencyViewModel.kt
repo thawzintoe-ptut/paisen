@@ -13,9 +13,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 /** One row: null [code] follows the phone's country. */
-data class AddCurrencyOptionUiModel(val code: String?, val label: String, val chosen: Boolean)
+data class CurrencyOptionUiModel(val code: String?, val label: String, val chosen: Boolean)
 
-data class AddCurrencyUiState(val options: List<AddCurrencyOptionUiModel>)
+data class AddCurrencyUiState(val options: List<CurrencyOptionUiModel>)
 
 /** Which currency the Add sheet opens on. The first row follows the phone; the rest pin one. */
 class AddCurrencyViewModel(
@@ -31,8 +31,8 @@ class AddCurrencyViewModel(
     fun choose(code: String?) = settings.setAddCurrency(code)
 
     private fun state(choices: ImportChoices): AddCurrencyUiState {
-        val follow = AddCurrencyOptionUiModel(null, currencyCopy().followPhone(phoneCurrency().code), chosen = choices.addCurrency == null)
-        val pinned = Currencies.all.map { AddCurrencyOptionUiModel(it.code, "${it.code}  ${it.symbol}", chosen = it.code == choices.addCurrency) }
+        val follow = CurrencyOptionUiModel(null, currencyCopy().followPhone(phoneCurrency().code), chosen = choices.addCurrency == null)
+        val pinned = Currencies.all.map { CurrencyOptionUiModel(it.code, "${it.code}  ${it.symbol}", chosen = it.code == choices.addCurrency) }
         return AddCurrencyUiState(listOf(follow) + pinned)
     }
 }

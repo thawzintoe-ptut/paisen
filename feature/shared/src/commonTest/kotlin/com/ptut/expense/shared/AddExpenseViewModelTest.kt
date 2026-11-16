@@ -3,6 +3,8 @@ package com.ptut.expense.shared
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.inAppLanguage
+import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.Language
 import kotlinx.coroutines.launch
@@ -12,6 +14,8 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 class AddExpenseViewModelTest : ViewModelTest() {
 
@@ -57,6 +61,52 @@ class AddExpenseViewModelTest : ViewModelTest() {
 
         assertEquals("Lunch out", titleSavedWithNoDescription(renamed))
     }
+
+    /** #48: the home stays baht here, and the group's kyat writes every amount. */
+    @Test
+    fun `a new expense in a kyat group starts in kyat with no rate`() = runTest {
+        val viewModel = viewModel(FakeSharedRepository(flat12.copy(currency = "MMK")))
+        viewModel.setAmount("9000")
+        runCurrent()
+
+        val ready = viewModel.ready()
+        assertEquals("MMK", ready.form.currency.code)
+        assertNull(ready.rateUnitLabel)
+        assertNull(ready.bahtLine)
+        assertEquals("K4,500 each · you are owed K4,500", ready.resultLine)
+    }
+
+    @Test
+    fun `a dollar expense in a kyat group converts into kyat`() = runTest {
+        val repository = FakeSharedRepository(flat12.copy(currency = "MMK"))
+        val viewModel = viewModel(repository)
+        viewModel.setCurrency(Currencies.of("USD"))
+        viewModel.setAmount("10")
+        viewModel.setRate("3500")
+        runCurrent()
+
+        val ready = viewModel.ready()
+        assertEquals("K per 1 USD", ready.rateUnitLabel)
+        assertEquals("≈ K35,000 at K3500 per $, saved with the expense", ready.bahtLine)
+        assertEquals("$5.00 each · you are owed K17,500", ready.resultLine)
+
+        viewModel.save {}
+        repository.gate.complete(Unit)
+        runCurrent()
+        val saved = repository.expenses.single()
+        assertEquals("USD", saved.currency)
+        assertEquals(1_000L, saved.amountMinor)
+        assertEquals(Rate.parse("3500"), saved.rate)
+    }
+
+    private fun TestScope.viewModel(repository: FakeSharedRepository): AddExpenseViewModel {
+        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed())
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        return viewModel
+    }
+
+    private fun AddExpenseViewModel.ready() = assertIs<AddExpenseUiState.Ready>(uiState.value)
 
     /** The categories go in as the app hands them over: installed names already in the app's language. */
     private fun TestScope.titleSavedWithNoDescription(stored: List<Category>): String {

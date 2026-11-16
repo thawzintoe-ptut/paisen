@@ -2,8 +2,9 @@ package com.ptut.expense.shared
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
+import com.ptut.expense.domain.HomeMoney
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayLabel
@@ -20,14 +21,16 @@ import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.anchorLine
+import com.ptut.expense.domain.shared.convert
 import com.ptut.expense.domain.shared.currentExpenses
 import com.ptut.expense.domain.shared.formatMinor
+import com.ptut.expense.domain.shared.money
+import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.myNet
 import com.ptut.expense.domain.shared.nets
 import com.ptut.expense.domain.shared.newestRowAt
 import com.ptut.expense.domain.shared.paymentsIn
 import com.ptut.expense.domain.shared.running
-import com.ptut.expense.domain.shared.toSatang
 import com.ptut.expense.domain.shared.totalSpend
 import com.ptut.expense.domain.shared.whoPaysWhom
 import com.ptut.expense.domain.sum
@@ -108,6 +111,8 @@ sealed interface GroupDetailUiState {
         val balance: Satang,
         val tone: BalanceTone,
         val spendLine: String,
+        /** #48: what [balance] and every row count in. */
+        val money: HomeMoney,
         val settled: Boolean,
         /** Where SETTLE UP goes: the first payment that involves you, or null to show Who pays whom. */
         val settleWith: Pair<String, String>?,
@@ -166,9 +171,9 @@ data class InviteUiModel(val code: String, val link: String, val active: Boolean
 data class InviteActionState(val working: Boolean = false, val error: String? = null)
 
 /**
- * #137: one group. The sky field holds the members, your balance and the spend in THB; the feed
- * lists expenses and payments by day, each in the currency it was paid in and what it means for
- * you in THB (p27).
+ * #137: one group. The sky field holds the members, your balance and the spend in the group's
+ * money (#48); the feed lists expenses and payments by day, each in the currency it was paid in and
+ * what it means for you in the group's money (p27).
  */
 class GroupDetailViewModel(
     private val groupId: String,
@@ -374,8 +379,9 @@ class GroupDetailViewModel(
         val you = AppText.copy.common.you
         val net = myNet(group.id)
         val me = group.meMemberId
+        val money = group.moneyFormat()
         val settlement = whoPaysWhom(group.id)
-        val today = clock.now().toLocalDateTime(BangkokTime).date
+        val today = clock.now().toLocalDateTime(HomeTime).date
         val balances = nets(group.id)
         val expenseRows = currentExpenses(group.id).map { it.occurredAtEpochMillis to it.row(group, seen) }
         val paymentRows = paymentsIn(group.id).map { payment ->
@@ -384,7 +390,7 @@ class GroupDetailViewModel(
                 id_ = payment.id,
                 title = text.detail.paid(group.displayName(payment.fromMemberId), group.displayName(payment.toMemberId)),
                 detail = text.detail.settlement(payment.method.label()),
-                amount = payment.amount.format(),
+                amount = payment.amount.format(money),
                 occurred = payment.occurredAtEpochMillis.dayAndTime(),
                 recorded = text.log.recordedBy(author, payment.createdAtEpochMillis.dayAndTime()),
                 isNew = isNewTo(group, seen, payment.authorMemberId, payment.createdAtEpochMillis),
@@ -392,7 +398,7 @@ class GroupDetailViewModel(
         }
         val days = (expenseRows + paymentRows)
             .sortedByDescending { it.first }
-            .groupBy { (at, _) -> Instant.fromEpochMilliseconds(at).dateIn(BangkokTime) }
+            .groupBy { (at, _) -> Instant.fromEpochMilliseconds(at).dateIn(HomeTime) }
             .map { (date, rows) -> GroupDay(if (date == today) AppText.copy.common.today.uppercase() else date.dayLabel().uppercase(), rows.map { it.second }) }
 
         return GroupDetailUiState.Loaded(
@@ -409,7 +415,8 @@ class GroupDetailViewModel(
             },
             balance = net.magnitude(),
             tone = net.tone(),
-            spendLine = text.detail.spendLine(group.type == GroupType.Trip, totalSpend(group.id).formatCompact()),
+            spendLine = text.detail.spendLine(group.type == GroupType.Trip, totalSpend(group.id).formatCompact(money)),
+            money = money,
             settled = balances.values.all { it == Satang.Zero },
             settleWith = settlement.transfers.firstOrNull { it.fromMemberId == me || it.toMemberId == me }
                 ?.let { it.fromMemberId to it.toMemberId },
@@ -421,7 +428,7 @@ class GroupDetailViewModel(
                 RepeatRowUiModel(
                     id = rule.id,
                     name = rule.description,
-                    line = "${rule.anchorLine()} · ${toSatang(rule.amountMinor, Currencies.of(rule.currency), rule.rate).formatCompact()}",
+                    line = "${rule.anchorLine()} · ${convert(rule.amountMinor, Currencies.of(rule.currency), rule.rate, group.money).formatCompact(money)}",
                 )
             },
             others = group.activeMembers.filterNot { group.isMe(it.id) }.map { member ->
@@ -431,7 +438,7 @@ class GroupDetailViewModel(
         )
     }
 
-    /** "Tom paid ₫1,850,000", then what it means for you in THB: you owe, you lent, or not involved. */
+    /** "Tom paid ₫1,850,000", then what it means for you in the group's money: you owe, you lent, or not involved. */
     private fun SharedExpense.row(group: SharedGroup, seen: Long?): GroupFeedRow.Expense {
         val text = AppText.copy.shared
         val me = group.meMemberId
@@ -449,7 +456,7 @@ class GroupDetailViewModel(
                 effect < Satang.Zero -> text.youOwe
                 else -> text.detail.yourShare
             },
-            amount = (if (effect == Satang.Zero) mine else effect.magnitude()).format(),
+            amount = (if (effect == Satang.Zero) mine else effect.magnitude()).format(group.moneyFormat()),
             tone = if (involved) effect.tone() else BalanceTone.Settled,
             isNew = isNewTo(group, seen, authorMemberId, createdAtEpochMillis),
         )
@@ -487,4 +494,4 @@ private fun List<String>.joinedLine(): String? {
 }
 
 /** "Fri 14 Aug · 18:20", in Bangkok time. */
-private fun Long.dayAndTime(): String = "${dateIn(BangkokTime).dayLabel()} · ${timeOfDayIn(BangkokTime)}"
+private fun Long.dayAndTime(): String = "${dateIn(HomeTime).dayLabel()} · ${timeOfDayIn(HomeTime)}"

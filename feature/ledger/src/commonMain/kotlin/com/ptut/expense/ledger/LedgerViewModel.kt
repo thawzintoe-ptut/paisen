@@ -2,10 +2,10 @@ package com.ptut.expense.ledger
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.DateRange
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.LedgerFilter
 import com.ptut.expense.domain.MetaParts
 import com.ptut.expense.domain.SubCategory
@@ -135,7 +135,7 @@ class LedgerViewModel(
             }
             val inScope = scope?.let { slice -> transactions.filter { slice.holds(it, categories) } } ?: transactions
             val visible = inScope.filter { filter.accepts(it) && it.matches(text) }
-            val today = clock.now().toLocalDateTime(BangkokTime).date
+            val today = clock.now().toLocalDateTime(HomeTime).date
 
             LedgerUiState.Success(
                 query = text,
@@ -180,7 +180,7 @@ class LedgerViewModel(
 }
 
 private fun LedgerScope.holds(transaction: Transaction, categories: List<Category>): Boolean {
-    if (transaction.occurredAtEpochMillis.dateIn(BangkokTime) !in DateRange(from, to)) return false
+    if (transaction.occurredAtEpochMillis.dateIn(HomeTime) !in DateRange(from, to)) return false
     val wanted = categoryId ?: return true
     val filed = categories.firstOrNull { it.id == transaction.categoryId } ?: UnknownCategory
     return transaction.direction == Direction.Expense && filed.id == wanted

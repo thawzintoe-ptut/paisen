@@ -1,8 +1,9 @@
 package com.ptut.expense.agent
 
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.forDirection
@@ -43,7 +44,8 @@ class CommandGrammar(private val words: GrammarWords = GrammarWords) {
         if (amount == null && words.howMuch.any { text.has(it) }) {
             return GrammarReading.Full(ReadCall.SpendSummary(windowIn(text) ?: SpendWindow.Today))
         }
-        if (words.share.any { text.has(it) }) return readGroupExpense(text, amount, groups)
+        // Shared groups count in baht until #48, so a group amount is read with baht's two decimals.
+        if (words.share.any { text.has(it) }) return readGroupExpense(text, amountIn(text, GROUP_DIGITS), groups)
 
         val direction = if (words.income.any { text.has(it) }) Direction.Income else Direction.Expense
         val offered = categories.forDirection(direction)
@@ -58,7 +60,7 @@ class CommandGrammar(private val words: GrammarWords = GrammarWords) {
             categoryId = category?.id,
             subCategoryId = choice?.subCategory?.id,
             memo = noteIn(text, amount?.range, drop = listOfNotNull(category?.name, choice?.subCategory?.name)),
-            occurredAtEpochMillis = daysBack(text)?.let { now.minus(it, DateTimeUnit.DAY, BangkokTime).toEpochMilliseconds() },
+            occurredAtEpochMillis = daysBack(text)?.let { now.minus(it, DateTimeUnit.DAY, HomeTime).toEpochMilliseconds() },
         )
         val missing = buildSet {
             if (amount == null) add("amount")
@@ -91,8 +93,8 @@ class CommandGrammar(private val words: GrammarWords = GrammarWords) {
         return CategoryChoice(category, subCategory)
     }
 
-    /** The amount as Siri or a form typed it, "120" or "1,250.50". */
-    fun amountOf(text: String): Satang? = amountIn(text)?.value
+    /** The amount as Siri or a form typed it, "120" or "1,250.50", in a currency with [digits] decimals. */
+    fun amountOf(text: String, digits: Int = Home.money.digits): Satang? = amountIn(text, digits)?.value
 
     private fun readGroupExpense(text: String, amount: Found?, groups: List<SharedGroup>): GrammarReading {
         val group = groups.firstOrNull { text.names(it.name) }
@@ -126,22 +128,29 @@ class CommandGrammar(private val words: GrammarWords = GrammarWords) {
      * When a sentence holds two numbers the larger is the amount: "2 coffees 120" is ฿120, not ฿2.
      * Digits inside a shop's name, 7-11, are not a number.
      */
-    private fun amountIn(text: String): Found? {
+    private fun amountIn(text: String, digits: Int = Home.money.digits): Found? {
         var searched = text
         words.numberedNames.forEach { name -> searched = searched.replace(name, " ".repeat(name.length), ignoreCase = true) }
         return NUMBER.findAll(searched)
-            .mapNotNull { match -> satangOf(match.value)?.let { Found(it, match.range) } }
+            .mapNotNull { match -> minorOf(match.value, digits)?.let { Found(it, match.range) } }
             .filter { it.value > Satang.Zero }
             .maxByOrNull { it.value }
     }
 
-    private fun satangOf(number: String): Satang? {
-        val baht = number.substringBefore('.').replace(",", "")
-        if (baht.length > MAX_BAHT_DIGITS) return null
-        val satang = number.substringAfter('.', "").padEnd(2, '0')
-        val bahtValue = baht.toLongOrNull() ?: return null
-        val satangValue = satang.toLongOrNull() ?: return null
-        return Satang.ofMinorUnits(bahtValue * SATANG_PER_BAHT + satangValue)
+    /**
+     * #45: "60" is ฿60 in a baht ledger and K60 in a kyat one, never K6,000. A fraction the currency
+     * does not have ("60.5" in kyat) is not an amount, so it is refused rather than misread.
+     */
+    private fun minorOf(number: String, digits: Int): Satang? {
+        val whole = number.substringBefore('.').replace(",", "")
+        if (whole.length > MAX_WHOLE_DIGITS) return null
+        val fraction = number.substringAfter('.', "")
+        if (fraction.length > digits) return null
+        val wholeValue = whole.toLongOrNull() ?: return null
+        val fractionValue = fraction.padEnd(digits, '0').ifEmpty { "0" }.toLongOrNull() ?: return null
+        var perWhole = 1L
+        repeat(digits) { perWhole *= 10 }
+        return Satang.ofMinorUnits(wholeValue * perWhole + fractionValue)
     }
 
     /**
@@ -211,9 +220,11 @@ class CommandGrammar(private val words: GrammarWords = GrammarWords) {
     private companion object {
         val NUMBER = Regex("""\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?""")
 
-        /** Ten digits of baht is more than anyone types, and keeps the satang inside a Long. */
-        const val MAX_BAHT_DIGITS = 10
-        const val SATANG_PER_BAHT = 100L
+        /** Ten digits of money is more than anyone types, and keeps the minor units inside a Long. */
+        const val MAX_WHOLE_DIGITS = 10
+
+        /** Shared groups count in baht until #48. */
+        const val GROUP_DIGITS = 2
         const val MIN_NAME = 2
         const val ASCII_LIMIT = 128
     }

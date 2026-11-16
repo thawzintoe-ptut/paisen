@@ -29,7 +29,7 @@ data class SettingsCopy(
     val unlock: String = "Unlock",
     val unlockReason: String = "Unlock PaiSeN",
     val timezone: String = "Timezone",
-    val timezoneValue: String = "Asia/Bangkok · day ends midnight",
+    val timezoneValue: (zone: String) -> String = { zone -> "$zone · day ends midnight" },
     val exportLedger: String = "Export",
     val exportValue: String = "Backup file",
     val importLedger: String = "Import",
@@ -104,13 +104,19 @@ data class SettingsCopy(
     val holding: (Int, String) -> String = { count, oldest ->
         "$count ${if (count == 1) "transaction" else "transactions"}, back to $oldest"
     },
-    val timezoneIntro: String = "A day in this app runs midnight to midnight in Bangkok. It does not follow " +
-        "your phone, so travelling never moves a payment onto another day.",
+    /** #43: the city of the home zone, as this language names it: "Bangkok", "Yangon". */
+    val zonePlace: (zone: String) -> String = { zone -> zone.substringAfterLast('/').replace('_', ' ') },
+    val timezoneIntro: (place: String) -> String = { place ->
+        "A day in this app runs midnight to midnight in $place. It does not follow " +
+            "your phone, so travelling never moves a payment onto another day."
+    },
     val timezoneFixed: String = "Fixed. Changing it would move history between days, and a total that " +
         "quietly changes is the one thing this app must not do.",
     val dayYouAreIn: String = "The day you are in",
-    val timezoneFootnote: String = "Reports count into the same days, so a week here is seven Bangkok days " +
-        "however many timezones you crossed inside it.",
+    val timezoneFootnote: (place: String) -> String = { place ->
+        "Reports count into the same days, so a week here is seven $place days " +
+            "however many timezones you crossed inside it."
+    },
     val assistantIntro: String = "Type a sentence in Burmese, Thai or English, and the Add sheet fills itself. " +
         "You still check it and tap Save.",
     val assistantPrivacy: String = "It runs on this phone. What you type never leaves it, and the model " +
@@ -156,7 +162,8 @@ val BurmeseSettings = SettingsCopy(
     unlock = "သော့ဖွင့်မယ်",
     unlockReason = "PaiSeN ကို သော့ဖွင့်မယ်",
     timezone = "အချိန်ဇုန်",
-    timezoneValue = "Asia/Bangkok · သန်းခေါင်မှာ နေ့ကုန်",
+    timezoneValue = { zone -> "$zone · သန်းခေါင်မှာ နေ့ကုန်" },
+    zonePlace = { zone -> placeIn(zone, bangkok = "ဘန်ကောက်", yangon = "ရန်ကုန်") },
     exportLedger = "ထုတ်မယ်",
     exportValue = "backup ဖိုင်",
     importLedger = "သွင်းမယ်",
@@ -228,13 +235,17 @@ val BurmeseSettings = SettingsCopy(
     counting = "ရှိတာတွေ ရေတွက်နေတယ်…",
     nothingToExport = "ထုတ်စရာ မရှိသေးဘူး",
     holding = { count, oldest -> "${count.inMyanmarDigits()} ကြိမ်၊ $oldest ကစပြီး" },
-    timezoneIntro = "ဒီအက်ပ်မှာ တစ်ရက်ဆိုတာ ဘန်ကောက်အချိန် သန်းခေါင်ကနေ သန်းခေါင်အထိပဲ။ ဖုန်းအချိန်ကို မလိုက်ဘူး၊ " +
-        "ဒါကြောင့် ခရီးသွားလည်း ငွေပေးချေမှုတစ်ခုကို တခြားနေ့ မရွှေ့ဘူး။",
+    timezoneIntro = { place ->
+        "ဒီအက်ပ်မှာ တစ်ရက်ဆိုတာ ${place}အချိန် သန်းခေါင်ကနေ သန်းခေါင်အထိပဲ။ ဖုန်းအချိန်ကို မလိုက်ဘူး၊ " +
+            "ဒါကြောင့် ခရီးသွားလည်း ငွေပေးချေမှုတစ်ခုကို တခြားနေ့ မရွှေ့ဘူး။"
+    },
     timezoneFixed = "ပြောင်းလို့ မရဘူး။ ပြောင်းရင် မှတ်တမ်းတွေ နေ့တစ်နေ့ကနေ တခြားနေ့ကို ရွှေ့သွားမယ်၊ " +
         "စုစုပေါင်း တိတ်တိတ်လေး ပြောင်းသွားတာက ဒီအက်ပ် လုံးဝ မဖြစ်စေရမယ့်အရာပဲ။",
     dayYouAreIn = "သင်ရောက်နေတဲ့ နေ့",
-    timezoneFootnote = "အစီရင်ခံစာတွေလည်း ဒီနေ့တွေအတိုင်း တွက်တယ်၊ ဒါကြောင့် အချိန်ဇုန် ဘယ်နှစ်ခု ဖြတ်ခဲ့ခဲ့ " +
-        "ဒီမှာ တစ်ပတ်ဆိုတာ ဘန်ကောက် ၇ ရက်ပဲ။",
+    timezoneFootnote = { place ->
+        "အစီရင်ခံစာတွေလည်း ဒီနေ့တွေအတိုင်း တွက်တယ်၊ ဒါကြောင့် အချိန်ဇုန် ဘယ်နှစ်ခု ဖြတ်ခဲ့ခဲ့ " +
+            "ဒီမှာ တစ်ပတ်ဆိုတာ $place ၇ ရက်ပဲ။"
+    },
     assistantIntro = "မြန်မာ၊ ထိုင်း ဒါမှမဟုတ် အင်္ဂလိပ်လို စာတစ်ကြောင်း ရိုက်ပါ၊ စရိတ်အသစ် စာမျက်နှာက သူ့ဘာသာ ဖြည့်မယ်။ " +
         "သင် စစ်ပြီး သိမ်းမယ် ကို နှိပ်ရတုန်းပဲ။",
     assistantPrivacy = "ဒီဖုန်းပေါ်မှာပဲ အလုပ်လုပ်တယ်။ သင်ရိုက်တာ ဒီဖုန်းထဲမှာ လုံခြုံပါတယ်၊ model ကို " +
@@ -280,7 +291,8 @@ val ThaiSettings = SettingsCopy(
     unlock = "ปลดล็อก",
     unlockReason = "ปลดล็อก PaiSeN",
     timezone = "เขตเวลา",
-    timezoneValue = "Asia/Bangkok · วันสิ้นสุดตอนเที่ยงคืน",
+    timezoneValue = { zone -> "$zone · วันสิ้นสุดตอนเที่ยงคืน" },
+    zonePlace = { zone -> placeIn(zone, bangkok = "กรุงเทพฯ", yangon = "ย่างกุ้ง") },
     exportLedger = "ส่งออก",
     exportValue = "ไฟล์สำรอง",
     importLedger = "นำเข้า",
@@ -349,11 +361,13 @@ val ThaiSettings = SettingsCopy(
     counting = "กำลังนับสิ่งที่คุณมี…",
     nothingToExport = "ยังไม่มีอะไรให้ส่งออก",
     holding = { count, oldest -> "$count รายการ ย้อนไปถึง $oldest" },
-    timezoneIntro = "วันในแอปนี้เริ่มและจบตอนเที่ยงคืนตามเวลากรุงเทพฯ ไม่ได้ตามเวลาของโทรศัพท์ " +
-        "การเดินทางจึงไม่ย้ายรายการไปอยู่วันอื่น",
+    timezoneIntro = { place ->
+        "วันในแอปนี้เริ่มและจบตอนเที่ยงคืนตามเวลา$place ไม่ได้ตามเวลาของโทรศัพท์ " +
+            "การเดินทางจึงไม่ย้ายรายการไปอยู่วันอื่น"
+    },
     timezoneFixed = "ตั้งตายตัว การเปลี่ยนจะย้ายประวัติข้ามวัน และยอดรวมที่เปลี่ยนเองโดยไม่บอกคือสิ่งเดียวที่แอปนี้ต้องไม่ทำ",
     dayYouAreIn = "วันที่คุณอยู่ตอนนี้",
-    timezoneFootnote = "รายงานนับตามวันเดียวกัน หนึ่งสัปดาห์ที่นี่จึงเป็นเจ็ดวันตามเวลากรุงเทพฯ ไม่ว่าคุณจะข้ามเขตเวลากี่เขต",
+    timezoneFootnote = { place -> "รายงานนับตามวันเดียวกัน หนึ่งสัปดาห์ที่นี่จึงเป็นเจ็ดวันตามเวลา$place ไม่ว่าคุณจะข้ามเขตเวลากี่เขต" },
     assistantIntro = "พิมพ์ประโยคเป็นภาษาพม่า ไทย หรืออังกฤษ แล้วหน้าเพิ่มรายการจะกรอกให้เอง คุณยังต้องตรวจและแตะบันทึก",
     assistantPrivacy = "ผู้ช่วยทำงานในโทรศัพท์เครื่องนี้ สิ่งที่คุณพิมพ์ไม่ออกไปไหน " +
         "และโมเดลจะดาวน์โหลดจากสโตร์แอปผ่าน Wi-Fi เมื่อคุณขอเท่านั้น",
@@ -371,3 +385,10 @@ val ThaiSettings = SettingsCopy(
     coversZawgyi = "การอ่านภาษาพม่าที่พิมพ์ด้วย Zawgyi",
     coversModel = "โมเดลของผู้ช่วยในเครื่อง",
 )
+
+/** The two homes this app names in Burmese and Thai; any other zone keeps its English city. */
+private fun placeIn(zone: String, bangkok: String, yangon: String): String = when (zone) {
+    "Asia/Bangkok" -> bangkok
+    "Asia/Yangon", "Asia/Rangoon" -> yangon
+    else -> zone.substringAfterLast('/').replace('_', ' ')
+}

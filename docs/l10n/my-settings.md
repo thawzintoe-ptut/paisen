@@ -148,3 +148,23 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | As K PLUS prints you as the sender, like MR. THAW Z. A slip that names you as the recipient is filed as money in. Leave it empty and PaiSeN learns it again from your own slips. | K PLUS က ပေးပို့သူအဖြစ် ထုတ်တဲ့အတိုင်း၊ ဥပမာ MR. THAW Z။ သင့်ကို လက်ခံသူအဖြစ် ဖော်ပြထားတဲ့ စလစ်ကို ဝင်ငွေအဖြစ် သိမ်းမယ်။ ဗလာထားရင် သင့်ကိုယ်ပိုင် စလစ်တွေကနေ PaiSeN ပြန်သင်ယူမယ်။ | locale/IncomeSlipCopy.kt `ownerHint` |
 | Save | သိမ်းမယ် | locale/IncomeSlipCopy.kt `save` |
 | Cancel | မလုပ်တော့ဘူး | locale/IncomeSlipCopy.kt `cancel` |
+
+## Home currency and home time zone (16 Nov, not yet checked)
+
+| English | Burmese | Where |
+|---|---|---|
+| Your money | သင့်ငွေ | `CurrencyCopy` yourMoney |
+| Change | ပြောင်းမယ် | `CurrencyCopy` change |
+| Home currency | အဓိက ငွေကြေး | `CurrencyCopy` homeTitle |
+| Every total counts in this currency. Days start at midnight, {zone} time. | စုစုပေါင်းတွေ အားလုံးကို ဒီငွေနဲ့ တွက်တယ်။ နေ့တစ်နေ့က {zone} အချိန် သန်းခေါင်မှာ စတယ်။ | `CurrencyCopy` homeIntro |
+| Your ledger already has entries, so changing this converts every amount. | မှတ်တမ်းတွေ ရှိနေပြီမို့ ဒါကို ပြောင်းရင် ပမာဏ အားလုံးကို ပြောင်းတွက်ရမယ်။ | `CurrencyCopy` homeHasRows |
+| Change to {code}? | {code} ကို ပြောင်းမလား | `CurrencyCopy` convertTitle |
+| Every amount converts at this rate. Each entry keeps its old amount and the rate beside it. | ပမာဏ အားလုံးကို ဒီနှုန်းနဲ့ ပြောင်းတွက်မယ်။ မှတ်တမ်းတိုင်းမှာ အရင်ပမာဏနဲ့ နှုန်းကို ဘေးမှာ ထားမယ်။ | `CurrencyCopy` convertBody |
+| {from} becomes {to} | {from} က {to} ဖြစ်မယ် | `CurrencyCopy` convertExample |
+| Export a backup first | အရင် backup ထုတ်မယ် | `CurrencyCopy` backupFirst |
+| Nothing changed. The entries could not be converted. | ဘာမှ မပြောင်းဘူး။ မှတ်တမ်းတွေကို ပြောင်းတွက်လို့ မရဘူး။ | `CurrencyCopy` convertFailed |
+| This file counts in {file}. This phone counts in {here}. | ဒီဖိုင်က {file} နဲ့ တွက်ထားတယ်။ ဒီဖုန်းက {here} နဲ့ တွက်တယ်။ | `PhrasesCopy` backupOtherHome |
+| Timezone screen: "Bangkok" is now the home zone's place | ဘန်ကောက် / ရန်ကုန် | `SettingsCopy` zonePlace |
+| A {code} slip needs a rate | {code} စလစ်အတွက် ငွေလဲနှုန်း လိုတယ် | `CurrencyCopy` rateNeeded |
+| Rate needed | နှုန်း လိုတယ် | `CurrencyCopy` reasonRate |
+| one needs a rate / {n} need a rate | နှုန်းလိုတာ {n} ခု | `CurrencyCopy` slipsNeedRate |

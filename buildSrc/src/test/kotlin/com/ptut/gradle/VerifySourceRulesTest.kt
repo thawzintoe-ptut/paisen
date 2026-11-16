@@ -76,6 +76,26 @@ class VerifySourceRulesTest {
 
     /** #191: shared groups sync, and nothing else may call out. */
     @Test
+    fun `a baht sign typed on a screen is refused and one in a comment is not`() {
+        val failure = assertFailsWith<GradleException> {
+            scan("edit/EditView.kt" to "Text(\"฿ \", style = heroSymbol)").verify()
+        }
+        assertContains(failure.message.orEmpty(), "Home.money.symbol")
+
+        scan("home/HomeViewModel.kt" to "/** \"฿180 less than a usual Friday\" (#119). */").verify()
+    }
+
+    @Test
+    fun `a ledger screen counting Bangkok days is refused and a slip reader is not`() {
+        val failure = assertFailsWith<GradleException> {
+            scan("home/HomeViewModel.kt" to "val today = now.dateIn(BangkokTime)").verify()
+        }
+        assertContains(failure.message.orEmpty(), "HomeTime")
+
+        scan("domain/slip/KPlusSlip.kt" to ".toInstant(BangkokTime)").verify()
+    }
+
+    @Test
     fun `a network client imported outside sync is refused`() {
         val failure = assertFailsWith<GradleException> {
             scan("home/HomeViewModel.kt" to "import io.ktor.client.HttpClient").verify()

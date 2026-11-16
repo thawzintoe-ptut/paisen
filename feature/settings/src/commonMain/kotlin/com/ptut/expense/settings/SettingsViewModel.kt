@@ -3,6 +3,7 @@ package com.ptut.expense.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.agent.ModelState
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.elapsedPhrase
 import com.ptut.expense.domain.folders.WatchedFolder
 import com.ptut.expense.domain.folders.watched
@@ -25,7 +26,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 
 /** Which row. It is the row's identity as well as the destination it opens. */
-enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, AddCurrency, Assistant, Feedback, Licences }
+enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, HomeCurrency, AddCurrency, Assistant, Feedback, Licences }
 
 /** Where Send feedback writes to. The same address PRIVACY.md and SECURITY.md give. */
 const val FEEDBACK_ADDRESS = "developer.ptut@gmail.com"
@@ -224,10 +225,17 @@ class SettingsViewModel(
         SettingsRowUiModel(
             id = SettingsAction.Timezone,
             name = text.timezone,
-            value = text.timezoneValue,
+            value = text.timezoneValue(Home.choice.value.zoneId),
             icon = "schedule",
             group = 2,
         ),
+        SettingsRowUiModel(
+            id = SettingsAction.HomeCurrency,
+            name = currencyCopy().homeTitle,
+            value = Home.choice.value.let { currencyCopy().homeRowValue(it.money.code, it.zoneId) },
+            icon = "payments",
+            group = 2,
+        ).takeIf { showAddCurrency },
         SettingsRowUiModel(
             id = SettingsAction.AddCurrency,
             name = currencyCopy().startsIn,

@@ -35,6 +35,7 @@ import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptutIcon
 import com.ptut.expense.design.ptutType
 import com.ptut.expense.domain.Category
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.locale.Copy
 import com.ptut.expense.locale.LocalCopy
@@ -220,7 +221,7 @@ private fun UnderlinedAmount(state: EditTransactionUiState.Loaded, onType: (Amou
                 .padding(vertical = Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("฿ ", style = MaterialTheme.ptutType.heroSymbol, color = ink)
+            Text("${Home.money.symbol} ", style = MaterialTheme.ptutType.heroSymbol, color = ink)
             KeyboardAmountField(
                 entry = state.entry,
                 onType = onType,

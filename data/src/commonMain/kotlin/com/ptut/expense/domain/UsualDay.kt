@@ -26,7 +26,7 @@ data class UsualDay(
  * median, not the mean, so one big shop does not move "a usual Friday". A weekday with no spending
  * counts as ฿0, but only from the ledger's first row on. Null below [USUAL_DAY_MIN_SAMPLES].
  */
-fun List<Transaction>.usualDay(day: LocalDate, zone: TimeZone = BangkokTime): UsualDay? {
+fun List<Transaction>.usualDay(day: LocalDate, zone: TimeZone = HomeTime): UsualDay? {
     val first = minOfOrNull { it.occurredAtEpochMillis }?.dateIn(zone) ?: return null
     val spentOn = bucketByDay(zone).associate { it.date to it.summary.expense }
     val samples = (1..USUAL_DAY_WEEKS)

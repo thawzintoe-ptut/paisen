@@ -2,7 +2,7 @@ package com.ptut.expense.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.phrase
 import com.ptut.expense.domain.dateIn
@@ -131,7 +131,7 @@ class LedgerBackupViewModel(
 
     /** The Bangkok date, so two exports on the same evening in two zones do not disagree. */
     private fun fileName(): String {
-        val today = clock.now().toLocalDateTime(BangkokTime).date
+        val today = clock.now().toLocalDateTime(HomeTime).date
         return "ptut-ledger-$today.json"
     }
 
@@ -155,7 +155,7 @@ class LedgerBackupViewModel(
 
             else -> {
                 val oldest = transactions.minOf { it.occurredAtEpochMillis }
-                    .dateIn(BangkokTime)
+                    .dateIn(HomeTime)
                     .dayAndMonth()
                 AppText.copy.settings.holding(transactions.size, oldest)
             }

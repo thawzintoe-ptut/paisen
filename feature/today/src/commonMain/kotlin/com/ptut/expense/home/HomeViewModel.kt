@@ -2,11 +2,11 @@ package com.ptut.expense.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.DateRange
 import com.ptut.expense.domain.DayPart
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.ImportFreshness
 import com.ptut.expense.domain.ImportOutcome
@@ -234,7 +234,7 @@ class HomeViewModel(
     private val clockTicks = MutableStateFlow(0)
 
     /** #22: no note for this week; next Monday shows its own. */
-    fun hideNoteWeek() = hideNoteFor(clock.now().toLocalDateTime(BangkokTime).date.toString())
+    fun hideNoteWeek() = hideNoteFor(clock.now().toLocalDateTime(HomeTime).date.toString())
 
     fun refreshClock() {
         clockTicks.value += 1
@@ -258,7 +258,7 @@ class HomeViewModel(
             }
             val now = clock.now()
             val picked = onlyPickedPhotos()
-            val today = now.toLocalDateTime(BangkokTime).date
+            val today = now.toLocalDateTime(HomeTime).date
             val history = ledgerRows.rowsOrNone()
             val saved = history.savedOn(today)
             // Week and month come off the whole ledger, which can answer after today's query.
@@ -267,7 +267,7 @@ class HomeViewModel(
                 todays
             } else {
                 ledgerRows.rowsOrNone()
-                    .filter { it.occurredAtEpochMillis.dateIn(BangkokTime) in range }
+                    .filter { it.occurredAtEpochMillis.dateIn(HomeTime) in range }
                     .sortedByDescending { it.occurredAtEpochMillis }
             }
             HomeUiState.Success(
@@ -396,7 +396,7 @@ private fun Transaction.asRow(categories: List<Category>, subCategories: List<Su
 /** The day leads, because the day is what keeps this row out of today's total. The category follows unless it is the name. */
 private fun Transaction.asSavedRow(categories: List<Category>, subCategories: List<SubCategory>) =
     asRow(categories, subCategories).let { row ->
-        row.copy(meta = listOfNotNull(occurredAtEpochMillis.dateIn(BangkokTime).dayLabel(), row.parts.category).joinToString(" · "))
+        row.copy(meta = listOfNotNull(occurredAtEpochMillis.dateIn(HomeTime).dayLabel(), row.parts.category).joinToString(" · "))
     }
 
 private data class Extras(
@@ -446,7 +446,7 @@ private fun List<Transaction>.moodCard(part: DayPart, today: LocalDate): MoodCar
 }
 
 private fun List<Transaction>.spendingOn(day: LocalDate): List<Transaction> =
-    filter { it.direction == Direction.Expense && it.occurredAtEpochMillis.dateIn(BangkokTime) == day }
+    filter { it.direction == Direction.Expense && it.occurredAtEpochMillis.dateIn(HomeTime) == day }
 
 /** #20: last week beside a usual one, then the category that rose most. Never red, never "over". */
 private fun List<Transaction>.weeklyCard(

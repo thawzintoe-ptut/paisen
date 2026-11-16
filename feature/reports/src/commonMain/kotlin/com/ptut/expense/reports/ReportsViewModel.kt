@@ -2,11 +2,11 @@ package com.ptut.expense.reports
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.BucketSize
 import com.ptut.expense.domain.BucketSpend
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.DateRange
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.ReportPeriod
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
@@ -199,7 +199,7 @@ class ReportsViewModel(
         subCategories: List<SubCategory>,
         target: WeeklyTarget? = null,
     ): ReportsUiState.Success {
-        val today = clock.now().dateIn(BangkokTime)
+        val today = clock.now().dateIn(HomeTime)
         val range = chosen.rangeContaining(today)
         val previous = chosen.previousRangeBefore(today)
         val inRange = transactions.inside(range)
@@ -271,7 +271,7 @@ class ReportsViewModel(
 }
 
 private fun List<Transaction>.inside(range: DateRange): List<Transaction> =
-    filter { it.occurredAtEpochMillis.dateIn(BangkokTime) in range }
+    filter { it.occurredAtEpochMillis.dateIn(HomeTime) in range }
 
 /** The period in the words p14 uses over the total. */
 private fun ReportPeriod.title(): String = when (this) {

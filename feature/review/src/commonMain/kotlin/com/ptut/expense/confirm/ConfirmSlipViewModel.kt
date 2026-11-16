@@ -2,10 +2,11 @@ package com.ptut.expense.confirm
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.ForeignAmount
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
@@ -136,7 +137,7 @@ class ConfirmSlipViewModel(
     }
 
     /** What the typed kyat at the typed rate saves as, or null while either is not a number. */
-    private fun ConfirmSlipUiState.withBaht(): ConfirmSlipUiState = copy(bahtLine = foreignOf(this)?.let { currencyCopy().inBaht(it.baht.format()) })
+    private fun ConfirmSlipUiState.withBaht(): ConfirmSlipUiState = copy(bahtLine = foreignOf(this)?.let { currencyCopy().inBaht(it.inHome.format()) })
 
     private fun foreignOf(current: ConfirmSlipUiState): ForeignAmount? {
         val slip = slip?.takeIf { it.isForeign } ?: return null
@@ -197,7 +198,7 @@ class ConfirmSlipViewModel(
             state.update { it.copy(askForRate = true) }
             return
         }
-        val amount = foreign?.baht ?: current.entry.toSatang()
+        val amount = foreign?.inHome ?: current.entry.toSatang()
         val typed = current.shopName.trim()
         // A read shop stays the rule's key, so its next slip still matches; a name typed over it is
         // what rows show. A slip that read no shop takes the typed name as its shop.
@@ -218,7 +219,7 @@ class ConfirmSlipViewModel(
                     confirmedAtEpochMillis = clock.now().toEpochMilliseconds(),
                     // What the parser read, not what the reader typed over it. FR-7 kept this
                     // null when the figure did not read, and null is what screen 11c wants too.
-                    readAmount = if (foreign == null) slip.amount else slip.amount?.let { ForeignAmount(slip.currency, it.toMinorUnits(), foreign.rate).baht },
+                    readAmount = if (foreign == null) slip.amount else slip.amount?.let { ForeignAmount(slip.currency, it.toMinorUnits(), foreign.rate).inHome },
                     folder = slip.sourceFolder,
                     displayName = typed.takeIf { current.shopRead && it.isNotEmpty() && it != slip.merchant },
                     direction = slip.direction,
@@ -311,8 +312,8 @@ class ConfirmSlipViewModel(
         reference = this?.note.orEmpty(),
         // An amount the parser lifted off the slip is what the reader is here to check. One it
         // could not read arrives null, and the pad stays empty rather than offering a figure.
-        entry = this?.amount?.let { if (isForeign) AmountEntry(it.toMinorUnits().toString(), pending = true) else AmountEntry.of(it) } ?: AmountEntry(),
-        currencySymbol = this?.let { Currencies.of(it.currency).symbol } ?: Currencies.Thb.symbol,
+        entry = this?.amount?.let { if (isForeign) AmountEntry.of(it, Currencies.of(currency).digits) else AmountEntry.of(it) } ?: AmountEntry(),
+        currencySymbol = this?.let { Currencies.of(it.currency).symbol } ?: Home.money.symbol,
         asksRate = this?.isForeign == true,
         rateUnit = this?.let { Currencies.of(it.currency).rateUnitLabel() }.orEmpty(),
         lowConfidence = this?.lowConfidence.orEmpty(),
@@ -328,23 +329,23 @@ class ConfirmSlipViewModel(
         shopName = this?.merchant?.takeUnless { it.isReaderNoise() }?.let { ShopNames.of(it) ?: it }.orEmpty(),
         slipId = this?.id.orEmpty(),
         pictureCaption = this?.let {
-            listOfNotNull(it.sourceFolder, it.occurredAtEpochMillis.dateIn(BangkokTime).dayAndMonth()).joinToString(" · ")
+            listOfNotNull(it.sourceFolder, it.occurredAtEpochMillis.dateIn(HomeTime).dayAndMonth()).joinToString(" · ")
         }.orEmpty(),
     )
 
     /** FR-19: the slip's own Bangkok day and time, never the device's: "Fri 14 Aug, 18:30" (p13). */
     private fun Long.slipDate(): String {
-        val at = Instant.fromEpochMilliseconds(this).toLocalDateTime(BangkokTime)
+        val at = Instant.fromEpochMilliseconds(this).toLocalDateTime(HomeTime)
         return AppText.copy.slips.slipWhen(at.date.dayLabel(), "${at.hour.toString().padStart(2, '0')}:${at.minute.toString().padStart(2, '0')}")
     }
 
     /** Today lists only today (FR-16), so a slip from another day says where it went. */
     private fun Long.filedDay(): String {
-        val day = Instant.fromEpochMilliseconds(this).toLocalDateTime(BangkokTime).date
-        return if (day == clock.now().toLocalDateTime(BangkokTime).date) AppText.copy.slips.savedToday else day.dayLabel()
+        val day = Instant.fromEpochMilliseconds(this).toLocalDateTime(HomeTime).date
+        return if (day == clock.now().toLocalDateTime(HomeTime).date) AppText.copy.slips.savedToday else day.dayLabel()
     }
 
-    private val QueuedSlip.isForeign: Boolean get() = currency != Currencies.Thb.code
+    private val QueuedSlip.isForeign: Boolean get() = currency != Home.money.code
 
     private companion object {
         /** Long enough for a cold Room start, and not final: a slip that turns up after it shows. */

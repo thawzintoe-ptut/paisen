@@ -9,7 +9,7 @@ import kotlinx.datetime.TimeZone
  * A row dated [day] is left out because Today's list already draws it, and one row is drawn once.
  * A row with no [Transaction.filedAt] was written before schema 9, and nothing is guessed for it.
  */
-fun List<Transaction>.savedOn(day: LocalDate, zone: TimeZone = BangkokTime): List<Transaction> =
+fun List<Transaction>.savedOn(day: LocalDate, zone: TimeZone = HomeTime): List<Transaction> =
     filter { row ->
         val filedAt = row.filedAt ?: return@filter false
         filedAt.dateIn(zone) == day && row.occurredAtEpochMillis.dateIn(zone) != day

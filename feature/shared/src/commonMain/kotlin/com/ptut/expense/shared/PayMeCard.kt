@@ -22,9 +22,11 @@ import com.ptut.expense.design.QrPaper
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.domain.format
+import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.PromptPay
 import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.Transfer
+import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.SharedSettleCopy
@@ -42,13 +44,16 @@ data class PayMeCard(
     val shareText: String,
 )
 
-/** Null unless [transfer] is owed to me and my PromptPay ID is saved: the QR is the card. */
+/**
+ * Null unless [transfer] is owed to me and my PromptPay ID is saved: the QR is the card. PromptPay
+ * moves baht only, so a group in another money has no card (#48).
+ */
 fun payMeCard(group: SharedGroup, transfer: Transfer, text: SharedSettleCopy = AppText.copy.shared.settle): PayMeCard? {
-    if (!group.isMe(transfer.toMemberId)) return null
+    if (!group.isMe(transfer.toMemberId) || group.currency != Currencies.Thb.code) return null
     val myId = group.member(transfer.toMemberId)?.promptPayId ?: return null
     val qr = PromptPay.payload(myId, transfer.amount) ?: return null
     val payer = group.displayName(transfer.fromMemberId)
-    val amount = transfer.amount.format()
+    val amount = transfer.amount.format(group.moneyFormat())
     val link = group.inviteCode?.takeIf { group.inviteActive }?.let(InviteLinks::link)
     return PayMeCard(
         payerName = payer,

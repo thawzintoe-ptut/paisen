@@ -19,7 +19,7 @@ data class DaySpend(val date: LocalDate, val spent: Satang)
  * same rows read twice, and a chart that disagrees with its own hero is the aggregation being
  * wrong somewhere the reader cannot see.
  */
-fun List<Transaction>.spendPerDay(range: DateRange, zone: TimeZone = BangkokTime): List<DaySpend> {
+fun List<Transaction>.spendPerDay(range: DateRange, zone: TimeZone = HomeTime): List<DaySpend> {
     val spentOn = filter { it.direction == Direction.Expense }
         .groupBy { it.occurredAtEpochMillis.dateIn(zone) }
 

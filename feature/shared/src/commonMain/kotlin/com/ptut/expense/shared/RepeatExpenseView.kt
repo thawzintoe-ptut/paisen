@@ -114,7 +114,7 @@ fun RepeatExpenseView(uiState: RepeatExpenseUiState, actions: RepeatExpenseActio
         ) {
             Text(state.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
             Row(modifier = Modifier.padding(top = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-                Text("฿", style = MaterialTheme.ptutType.heroSymbol, color = MaterialTheme.colorScheme.onSurface)
+                Text(state.symbol, style = MaterialTheme.ptutType.heroSymbol, color = MaterialTheme.colorScheme.onSurface)
                 BasicTextField(
                     value = form.amountText,
                     onValueChange = actions.onAmount,

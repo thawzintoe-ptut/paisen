@@ -60,6 +60,7 @@ import com.ptut.expense.design.ptutIcon
 import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.Home
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.targetCopy
 import com.ptut.expense.ui.sky.AskBeforeLeaving
@@ -501,7 +502,7 @@ private fun TargetField(typed: String, hint: String, note: String?, onType: (Str
             horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("฿", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(Home.money.symbol, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             BasicTextField(
                 value = typed,
                 onValueChange = onType,

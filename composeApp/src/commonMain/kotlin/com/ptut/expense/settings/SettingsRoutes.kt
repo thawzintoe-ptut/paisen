@@ -38,6 +38,8 @@ fun SettingsAction.destination(): PtutRoute? = when (this) {
 
     SettingsAction.AddCurrency -> PtutRoute.AddCurrency
 
+    SettingsAction.HomeCurrency -> PtutRoute.HomeCurrency
+
     SettingsAction.Language -> PtutRoute.Language
 
     SettingsAction.Assistant -> PtutRoute.AssistantModel

@@ -2,8 +2,9 @@ package com.ptut.expense.activity
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.DateRange
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.QueuedSlip
@@ -188,8 +189,8 @@ class ActivityViewModel(
      */
     private fun List<Transaction>.weeklyWraps(): List<Dated> {
         val first = minOfOrNull { it.occurredAtEpochMillis } ?: return emptyList()
-        val thisWeek = ReportPeriod.Week.rangeContaining(clock.now().dateIn(BangkokTime))
-        var week = ReportPeriod.Week.rangeContaining(first.dateIn(BangkokTime))
+        val thisWeek = ReportPeriod.Week.rangeContaining(clock.now().dateIn(HomeTime))
+        var week = ReportPeriod.Week.rangeContaining(first.dateIn(HomeTime))
         val wraps = mutableListOf<Dated>()
         val text = AppText.copy.slips
         while (week.start < thisWeek.start) {
@@ -214,14 +215,14 @@ class ActivityViewModel(
     }
 
     private fun List<Transaction>.spentIn(week: DateRange): Satang =
-        filter { it.occurredAtEpochMillis.dateIn(BangkokTime) in week }.summarise().expense
+        filter { it.occurredAtEpochMillis.dateIn(HomeTime) in week }.summarise().expense
 
     private fun DateRange.shiftedWeeks(weeks: Int) =
         DateRange(start.plus(weeks, DateTimeUnit.WEEK), endInclusive.plus(weeks, DateTimeUnit.WEEK))
 
     /** #33: a kyat slip shows its kyat, "K29,500"; it has no baht until it has a rate. */
     private fun QueuedSlip.shownAmount(): String? =
-        amount?.let { if (currency == Currencies.Thb.code) it.formatCompact() else formatMinor(it.toMinorUnits(), Currencies.of(currency)) }
+        amount?.let { if (currency == Home.money.code) it.formatCompact() else formatMinor(it.toMinorUnits(), Currencies.of(currency)) }
 
     private fun QueuedSlip.asEntry(text: SlipsCopy = AppText.copy.slips) = Dated(
         sortKey = capturedAtEpochMillis,
@@ -231,7 +232,7 @@ class ActivityViewModel(
                 ReviewReason.NewMerchant -> text.needsCategory
                 ReviewReason.AmountUnclear -> text.needsAmount
                 ReviewReason.Unreadable -> text.imageUnread
-                ReviewReason.RateNeeded -> currencyCopy().rateNeeded
+                ReviewReason.RateNeeded -> currencyCopy().rateNeeded(currency)
             },
             body = when (reason) {
                 ReviewReason.NewMerchant -> text.addedToCheck(shownShop(merchant, text.unknownShop), shownAmount() ?: text.notCounted)
@@ -257,8 +258,8 @@ class ActivityViewModel(
     private fun Long.stamp(): String {
         val now = clock.now()
         val minutes = (now.toEpochMilliseconds() - this) / MILLIS_PER_MINUTE
-        val at = Instant.fromEpochMilliseconds(this).toLocalDateTime(BangkokTime)
-        val today = now.toLocalDateTime(BangkokTime).date
+        val at = Instant.fromEpochMilliseconds(this).toLocalDateTime(HomeTime)
+        val today = now.toLocalDateTime(HomeTime).date
         return when {
             minutes < 1 -> AppText.copy.slips.justNow
             minutes < MINUTES_PER_HOUR && at.date == today -> AppText.copy.slips.minutesAgo(minutes)

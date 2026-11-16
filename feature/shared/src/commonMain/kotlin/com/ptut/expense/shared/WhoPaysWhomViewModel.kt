@@ -3,10 +3,10 @@ package com.ptut.expense.shared
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.format
-import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.PromptPay
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.currenciesOf
+import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.whoPaysWhom
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.flow.SharingStarted
@@ -41,7 +41,7 @@ sealed interface WhoPaysWhomUiState {
         val simplifiedCount: Int,
         val simplify: Boolean,
         val cards: List<PaymentCardUiModel>,
-        /** p30's note, when the group used more than baht. */
+        /** p30's note, when the group used more than its own money. */
         val currencyNote: String?,
         /** SETTLE A PAYMENT opens the first card that involves you. */
         val firstMine: PaymentCardUiModel?,
@@ -56,6 +56,7 @@ class WhoPaysWhomViewModel(private val groupId: String, private val repository: 
         val settlement = snapshot.whoPaysWhom(groupId)
         val text = AppText.copy.shared.settle
         val you = AppText.copy.common.you
+        val money = group.moneyFormat()
         val cards = settlement.transfers.map { transfer ->
             val from = group.displayName(transfer.fromMemberId)
             val to = group.displayName(transfer.toMemberId)
@@ -71,7 +72,7 @@ class WhoPaysWhomViewModel(private val groupId: String, private val repository: 
                     group.isMe(transfer.fromMemberId) -> text.youPay(to)
                     else -> text.pays(from, to)
                 },
-                amount = transfer.amount.format(),
+                amount = transfer.amount.format(money),
                 fromName = from,
                 payMe = payMeCard(group, transfer),
                 tone = when {
@@ -81,7 +82,7 @@ class WhoPaysWhomViewModel(private val groupId: String, private val repository: 
                 },
             )
         }
-        val foreign = snapshot.currenciesOf(groupId).filter { it != Currencies.Thb.code }
+        val foreign = snapshot.currenciesOf(groupId).filter { it != group.currency }
         WhoPaysWhomUiState.Loaded(
             groupName = group.name,
             headline = if (cards.isEmpty()) text.allSettled else text.payments(cards.size),

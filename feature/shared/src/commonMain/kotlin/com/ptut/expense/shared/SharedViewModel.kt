@@ -2,7 +2,8 @@ package com.ptut.expense.shared
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
+import com.ptut.expense.domain.HomeMoney
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.shared.GroupType
@@ -13,6 +14,7 @@ import com.ptut.expense.domain.shared.RepeatRule
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.currenciesOf
+import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.myNet
 import com.ptut.expense.domain.shared.newFromOthers
 import com.ptut.expense.domain.shared.ordinal
@@ -57,6 +59,8 @@ sealed interface SharedUiState {
     data class Ready(
         val overallLabel: String,
         val overall: Satang,
+        /** #48: what [overall] and the two totals count in. */
+        val money: HomeMoney,
         val tone: BalanceTone,
         val owedToYou: String,
         val youOwe: String,
@@ -113,9 +117,9 @@ class SharedViewModel(
         query.value = text
     }
 
-    /** #141: a group, then its detail. [onCreated] gets the new group's id. */
-    fun createGroup(name: String, type: GroupType, icon: String, members: List<NewMember>, onCreated: (String) -> Unit) {
-        viewModelScope.launch { onCreated(repository.createGroup(name, type, icon, members)) }
+    /** #141: a group, then its detail. [onCreated] gets the new group's id. #48: [currency] stays the group's for good. */
+    fun createGroup(name: String, type: GroupType, icon: String, members: List<NewMember>, currency: String, onCreated: (String) -> Unit) {
+        viewModelScope.launch { onCreated(repository.createGroup(name, type, icon, members, currency)) }
     }
 
     /** #141: a one-off bill with one person is a group of two behind the scenes, named after them. */
@@ -128,8 +132,9 @@ class SharedViewModel(
     private fun SharedSnapshot.ready(query: String): SharedUiState.Ready {
         val text = AppText.copy.shared
         val totals = overall()
+        val totalsMoney = moneyOf(groups.map { it.id })
         val match = query.trim().lowercase()
-        val today = clock.now().toLocalDateTime(BangkokTime).date
+        val today = clock.now().toLocalDateTime(HomeTime).date
         val groupRows = groups.map { group ->
             val net = myNet(group.id)
             val others = group.activeMembers.filterNot { group.isMe(it.id) }
@@ -150,7 +155,7 @@ class SharedViewModel(
                     BalanceTone.Owe -> text.youOwe
                     BalanceTone.Settled -> text.settledUp
                 },
-                amount = net.magnitude().format(),
+                amount = net.magnitude().format(group.moneyFormat()),
                 tone = net.tone(),
                 news = newFromOthers(group).takeIf { it.isNotEmpty() }?.let { authors ->
                     authors.distinct().singleOrNull()?.let { text.home.addedSince(group.displayName(it), authors.size) }
@@ -168,7 +173,7 @@ class SharedViewModel(
                     BalanceTone.Owe -> text.youOwe
                     BalanceTone.Settled -> text.settledUp
                 },
-                amount = person.amount.magnitude().format(),
+                amount = person.amount.magnitude().format(moneyOf(person.groupIds)),
                 tone = person.amount.tone(),
             )
         }.filter { match.isEmpty() || it.name.lowercase().contains(match) }
@@ -179,9 +184,10 @@ class SharedViewModel(
                 BalanceTone.Settled -> text.home.allSettledUp
             },
             overall = totals.net.magnitude(),
+            money = totalsMoney,
             tone = totals.net.tone(),
-            owedToYou = totals.owedToYou.format(),
-            youOwe = totals.youOwe.format(),
+            owedToYou = totals.owedToYou.format(totalsMoney),
+            youOwe = totals.youOwe.format(totalsMoney),
             groups = groupRows,
             people = peopleRows,
             knownPeople = people.filterNot { it.archived },

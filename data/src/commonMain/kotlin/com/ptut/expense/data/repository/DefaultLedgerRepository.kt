@@ -9,7 +9,8 @@ import com.ptut.expense.data.local.entity.QueuedSlipEntity
 import com.ptut.expense.data.local.entity.TransactionEntity
 import com.ptut.expense.data.local.entity.toDomain
 import com.ptut.expense.data.local.entity.toEntity
-import com.ptut.expense.domain.BangkokTime
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.Transaction
@@ -54,7 +55,7 @@ class DefaultLedgerRepository(
     private val newId: () -> String = { Uuid.random().toString() },
 ) : LedgerRepository {
 
-    private val today: LocalDate = clock.now().toLocalDateTime(BangkokTime).date
+    private val today: LocalDate = clock.now().toLocalDateTime(HomeTime).date
 
     override val todaysTransactions: StateFlow<LedgerSnapshot> =
         transactionDao.observeBetween(
@@ -115,6 +116,7 @@ class DefaultLedgerRepository(
             memo = edit.memo,
             occurredAtEpochMillis = edit.occurredAtEpochMillis,
             editedAtEpochMillis = clock.now().toEpochMilliseconds(),
+            home = Home.money.code,
         )
     }
 

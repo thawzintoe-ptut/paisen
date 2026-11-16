@@ -1,6 +1,7 @@
 package com.ptut.expense.domain.backup
 
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.TransactionSource
 import com.ptut.expense.locale.AppText
 import kotlinx.serialization.Serializable
@@ -29,11 +30,20 @@ data class LedgerBackup(
     val categories: List<BackupCategory> = emptyList(),
     val subCategories: List<BackupSubCategory> = emptyList(),
     val shopRules: List<BackupShopRule> = emptyList(),
+    /**
+     * Format 4 (#46): the money and the day zone every amount and date was counted in. Absent in
+     * formats 1 to 3, which were all baht and Bangkok.
+     */
+    val homeCurrency: String? = null,
+    val homeZone: String? = null,
 ) {
-    companion object {
-        const val FORMAT: Int = 3
+    /** The code every row without its own currency is in. */
+    val homeCode: String get() = homeCurrency ?: HomeMoney.Baht.code
 
-        /** Formats 1 and 2 are format 3 with fewer lists, so all three still import. */
+    companion object {
+        const val FORMAT: Int = 4
+
+        /** Formats 1 to 3 are format 4 with fewer fields, so all four still import. */
         val READABLE: IntRange = 1..FORMAT
 
         /**
@@ -151,6 +161,8 @@ data class BackupGroup(
     val simplifyDebts: Boolean,
     val createdAtEpochMillis: Long,
     val meMemberId: String? = null,
+    /** Format 4 (#48): the group's own money. Absent before, when every group was baht. */
+    val currency: String? = null,
 )
 
 @Serializable

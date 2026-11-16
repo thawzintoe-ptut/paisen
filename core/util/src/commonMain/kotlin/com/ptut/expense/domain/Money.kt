@@ -1,6 +1,7 @@
 package com.ptut.expense.domain
 
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.currencyCopy
 import kotlin.jvm.JvmInline
 
 /**
@@ -57,16 +58,16 @@ private fun Direction.sign(): String = when (this) {
     Direction.Expense -> "−"
 }
 
-fun Satang.formatSigned(direction: Direction): String = "${direction.sign()}${format()}"
+fun Satang.formatSigned(direction: Direction, money: HomeMoney = Home.money): String = "${direction.sign()}${format(money)}"
 
 /**
  * For a net, where the sign comes from the value itself. Never use [format] for a net: it
  * is magnitude-only, so a loss would render identically to a gain.
  */
-fun Satang.formatNet(): String = when {
-    raw < 0 -> "−${format()}"
-    raw > 0 -> "+${format()}"
-    else -> format()
+fun Satang.formatNet(money: HomeMoney = Home.money): String = when {
+    raw < 0 -> "−${format(money)}"
+    raw > 0 -> "+${format(money)}"
+    else -> format(money)
 }
 
 /**
@@ -80,21 +81,22 @@ data class MoneyParts(val symbol: String, val whole: String, val fraction: Strin
  * [formatSigned] split the way [formatParts] splits an unsigned one. The sign rides on the
  * symbol rather than becoming a fourth span, so a hero still sets three sizes and not four.
  */
-fun Satang.formatSignedParts(direction: Direction): MoneyParts =
-    formatParts().let { it.copy(symbol = "${direction.sign()}${it.symbol}") }
+fun Satang.formatSignedParts(direction: Direction, money: HomeMoney = Home.money): MoneyParts =
+    formatParts(money).let { it.copy(symbol = "${direction.sign()}${it.symbol}") }
 
 /**
  * [formatParts] with no sign and the satang only when there are some: "฿642" or "฿642.50". The
  * record screen draws the direction in colour, ruby for spending and green for income.
  */
-fun Satang.formatCompactParts(): MoneyParts = formatParts().let { if (it.fraction == ".00") it.copy(fraction = "") else it }
+fun Satang.formatCompactParts(money: HomeMoney = Home.money): MoneyParts = formatParts(money).let { if (it.fraction.trimEnd('0') == ".") it.copy(fraction = "") else it }
 
-fun Satang.formatParts(): MoneyParts {
-    val formatted = format()
+/** #42: the symbol is the home's own, one character or several ("HK$"), and kyat has no fraction. */
+fun Satang.formatParts(money: HomeMoney = Home.money): MoneyParts {
+    val digits = formatDigits(money)
     return MoneyParts(
-        symbol = formatted.take(1),
-        whole = formatted.drop(1).substringBefore('.'),
-        fraction = ".${formatted.substringAfter('.')}",
+        symbol = money.symbol,
+        whole = digits.substringBefore('.'),
+        fraction = if ('.' in digits) ".${digits.substringAfter('.')}" else "",
     )
 }
 
@@ -102,14 +104,16 @@ fun Satang.formatParts(): MoneyParts {
  * For contentDescription. TalkBack reads "฿" as nothing useful and "−" as "dash", so an
  * amount is spelled out instead of handed over symbolic.
  */
-fun Satang.spoken(): String = AppText.copy.phrases.spokenBaht(format().drop(1))
+fun Satang.spoken(money: HomeMoney = Home.money): String =
+    if (money.code == HomeMoney.Baht.code) AppText.copy.phrases.spokenBaht(formatDigits(money)) else currencyCopy().spoken(formatDigits(money), money.code)
 
 /**
  * For a sentence, where `฿485.00` reads as machine output. The satang show up only when there
  * are some, so `฿485` and `฿485.50` are both honest. Never use it in a column: without a fixed
  * fraction the digits stop aligning.
  */
-fun Satang.formatCompact(): String = format().removeSuffix(".00")
+fun Satang.formatCompact(money: HomeMoney = Home.money): String =
+    if (money.digits == 0) format(money) else format(money).removeSuffix("." + "0".repeat(money.digits))
 
 /**
  * For a label under a chart bar, where a four-digit baht figure is wider than the bar it sits
@@ -120,18 +124,32 @@ fun Satang.formatCompact(): String = format().removeSuffix(".00")
  * of these across a week would be seven copies of the same fact.
  */
 fun Satang.abbreviated(): String {
-    val baht = (if (raw < 0) -raw else raw) / 100
-    if (baht < 1_000) return baht.toString()
-    val thousands = baht / 100 / 10.0
-    return if (baht % 1_000 < 50) "${baht / 1_000}k" else "${thousands}k"
+    val whole = (if (raw < 0) -raw else raw) / minorPerWhole()
+    if (whole < 1_000) return whole.toString()
+    val thousands = whole / 100 / 10.0
+    return if (whole % 1_000 < 50) "${whole / 1_000}k" else "${thousands}k"
 }
 
-/** Magnitude only — the sign is applied by the caller that knows the direction. */
-fun Satang.format(): String {
+/**
+ * Magnitude only — the sign is applied by the caller that knows the direction. #42: in the home's
+ * money; #48: a shared group passes its own.
+ */
+fun Satang.format(money: HomeMoney = Home.money): String = "${money.symbol}${formatDigits(money)}"
+
+/** [format] without the symbol: "1,250.00", or "29,500" for kyat. */
+fun Satang.formatDigits(money: HomeMoney = Home.money): String {
+    val digits = money.digits
     val absolute = if (raw < 0) -raw else raw
-    val baht = absolute / 100
-    val satang = absolute % 100
-    return "฿${groupThousands(baht)}.${satang.toString().padStart(2, '0')}"
+    val unit = minorPerWhole(money)
+    val whole = groupThousands(absolute / unit)
+    return if (digits == 0) whole else "$whole.${(absolute % unit).toString().padStart(digits, '0')}"
+}
+
+/** 100 for baht, 1 for kyat: how many minor units one whole home unit holds. */
+fun minorPerWhole(money: HomeMoney = Home.money): Long {
+    var unit = 1L
+    repeat(money.digits) { unit *= 10 }
+    return unit
 }
 
 private fun groupThousands(value: Long): String {

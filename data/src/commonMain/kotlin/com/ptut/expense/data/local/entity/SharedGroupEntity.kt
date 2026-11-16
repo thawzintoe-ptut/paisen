@@ -26,4 +26,6 @@ data class SharedGroupEntity(
     val lastSyncedAtEpochMillis: Long? = null,
     /** Schema 18: when this phone last opened the group, for the dot on rows others added since. Never synced. */
     val lastSeenAtEpochMillis: Long? = null,
+    /** #48: what the group counts in, set when it is made and never changed. Every group before #48 is baht. */
+    @ColumnInfo(defaultValue = "THB") val currency: String = "THB",
 )

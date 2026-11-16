@@ -52,6 +52,7 @@ import com.ptut.expense.detail.TransactionDetailView
 import com.ptut.expense.detail.TransactionDetailViewModel
 import com.ptut.expense.di.AppBuild
 import com.ptut.expense.domain.DayPart
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.dayPartAt
 import com.ptut.expense.domain.folders.FolderChooser
@@ -100,6 +101,8 @@ import com.ptut.expense.settings.BackgroundImportView
 import com.ptut.expense.settings.BackgroundImportViewModel
 import com.ptut.expense.settings.ExportDataView
 import com.ptut.expense.settings.FEEDBACK_ADDRESS
+import com.ptut.expense.settings.HomeCurrencyView
+import com.ptut.expense.settings.HomeCurrencyViewModel
 import com.ptut.expense.settings.ImportDataView
 import com.ptut.expense.settings.KeepFailedSlipsView
 import com.ptut.expense.settings.KeepFailedSlipsViewModel
@@ -205,6 +208,7 @@ private fun FirstRun() {
     val restoring by viewModel.isRestoring.collectAsStateWithLifecycle()
     val problem by viewModel.restoreProblem.collectAsStateWithLifecycle()
     val preview by viewModel.restorePreview.collectAsStateWithLifecycle()
+    val home by viewModel.homeChoice.collectAsStateWithLifecycle()
     OnboardingView(
         onAllowPhotoAccess = viewModel::requestPhotoAccess,
         onSkip = viewModel::skip,
@@ -214,6 +218,8 @@ private fun FirstRun() {
         restorePreview = preview,
         onConfirmRestore = viewModel::confirmRestore,
         onCancelRestore = viewModel::cancelRestore,
+        home = home,
+        onChooseHome = viewModel::chooseHome,
     )
 }
 
@@ -230,10 +236,11 @@ private fun FirstRun() {
 private fun LedgerShell() {
     val navController = rememberNavController()
 
-    // A new language rebuilt the shell from Settings' Language screen, so go back to Settings.
+    // A new language or home (#41) rebuilt the shell from a Settings screen, so go back to Settings.
     LaunchedEffect(Unit) {
-        if (AppText.reopenSettings) {
+        if (AppText.reopenSettings || Home.reopenSettings) {
             AppText.settingsReopened()
+            Home.settingsReopened()
             navController.switchTab(PtutRoute.Settings())
         }
     }
@@ -462,8 +469,8 @@ private fun LedgerShell() {
                 SharedView(
                     uiState = state,
                     onSearch = shared::search,
-                    onCreateGroup = { name, type, icon, members ->
-                        shared.createGroup(name, type, icon, members) { navController.navigate(PtutRoute.SharedGroup(it, invite = true)) }
+                    onCreateGroup = { name, type, icon, members, currency ->
+                        shared.createGroup(name, type, icon, members, currency) { navController.navigate(PtutRoute.SharedGroup(it, invite = true)) }
                     },
                     onAddPerson = { name, personId ->
                         shared.addPerson(name, personId) { navController.navigate(PtutRoute.SharedGroup(it, invite = true)) }
@@ -794,6 +801,20 @@ private fun LedgerShell() {
                     uiState = state,
                     onBack = { navController.popBackStack() },
                     onChoose = currency::choose,
+                )
+            }
+
+            composable<PtutRoute.HomeCurrency> {
+                val homeCurrency = koinViewModel<HomeCurrencyViewModel>()
+                val state by homeCurrency.uiState.collectAsStateWithLifecycle()
+                HomeCurrencyView(
+                    uiState = state,
+                    onBack = { navController.popBackStack() },
+                    onChoose = homeCurrency::choose,
+                    onRate = homeCurrency::typeRate,
+                    onConfirmConvert = homeCurrency::confirmConvert,
+                    onCancelConvert = homeCurrency::cancelConvert,
+                    onExport = { navController.navigate(PtutRoute.ExportData) },
                 )
             }
 

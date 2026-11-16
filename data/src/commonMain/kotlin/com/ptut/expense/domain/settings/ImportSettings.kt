@@ -1,6 +1,7 @@
 package com.ptut.expense.domain.settings
 
 import com.ptut.expense.domain.EvidenceRetention
+import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.slip.SlipOwner
 import com.ptut.expense.locale.NoteTone
@@ -38,6 +39,12 @@ data class ImportChoices(
     val hiddenNoteWeek: String? = null,
     /** The currency the Add sheet opens on, or null to follow the phone's country. */
     val addCurrency: String? = null,
+    /**
+     * #41: a copy of the ledger's home currency and zone, read at launch before the database is
+     * open. Null on every phone set up before #41, which is baht and Bangkok.
+     */
+    val homeCurrency: String? = null,
+    val homeZone: String? = null,
 )
 
 /**
@@ -104,6 +111,13 @@ class ImportSettings(private val store: ImportSettingsStore) {
 
     /** Null follows the phone's country again. */
     fun setAddCurrency(code: String?) = update { it.copy(addCurrency = code) }
+
+    /** #41: the weekly target was typed in the old home's money, so a new home clears it. */
+    fun setHome(currency: String, zone: String) = update {
+        // Null is a phone set up before #41, which was baht.
+        val moved = (it.homeCurrency ?: HomeMoney.Baht.code) != currency
+        it.copy(homeCurrency = currency, homeZone = zone, weeklyTarget = if (moved) null else it.weeklyTarget)
+    }
 
     fun setSlipOwner(name: String?) = update { it.copy(slipOwner = SlipOwner(name = name?.trim()?.takeIf(String::isNotEmpty))) }
 

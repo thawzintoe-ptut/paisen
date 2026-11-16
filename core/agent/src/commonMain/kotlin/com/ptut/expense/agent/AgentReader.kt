@@ -1,7 +1,7 @@
 package com.ptut.expense.agent
 
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.ReportPeriod
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Transaction
@@ -51,7 +51,7 @@ class AgentReader(
         (ledger.recentTransactions.first { it is LedgerSnapshot.Rows } as LedgerSnapshot.Rows).transactions
 
     private fun startOf(window: SpendWindow): Long {
-        val today = clock.now().toLocalDateTime(BangkokTime).date
+        val today = clock.now().toLocalDateTime(HomeTime).date
         val start = when (window) {
             SpendWindow.Today -> today
             SpendWindow.Week -> ReportPeriod.Week.rangeContaining(today).start

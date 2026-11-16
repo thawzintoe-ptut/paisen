@@ -3,6 +3,7 @@ package com.ptut.expense.shared
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.inTableLanguage
@@ -20,14 +21,16 @@ import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.SplitCheck
 import com.ptut.expense.domain.shared.SplitMember
 import com.ptut.expense.domain.shared.SplitMode
+import com.ptut.expense.domain.shared.convert
 import com.ptut.expense.domain.shared.formatMinor
 import com.ptut.expense.domain.shared.inOddUnitOrder
 import com.ptut.expense.domain.shared.membersToSplit
+import com.ptut.expense.domain.shared.money
+import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.parseMinor
 import com.ptut.expense.domain.shared.quickSplitOf
 import com.ptut.expense.domain.shared.quickSplitWeights
 import com.ptut.expense.domain.shared.split
-import com.ptut.expense.domain.shared.toSatang
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastAction
@@ -119,7 +122,7 @@ sealed interface AddExpenseUiState {
         val groupLine: String,
         val currencies: List<Currency>,
         val amountShown: String,
-        /** "≈ ฿2,560 at ฿1.38 per 1,000 ₫, saved with the expense", or null for THB. */
+        /** "≈ ฿2,560 at ฿1.38 per 1,000 ₫, saved with the expense", or null in the group's own money (#48). */
         val bahtLine: String?,
         val rateUnitLabel: String?,
         val categories: List<Category>,
@@ -188,8 +191,11 @@ class AddExpenseViewModel(
         val existing = latestOf(snapshot)
         val seed = transactionId?.let { repository.transactionSeed(it) }
         if (existing == null && seed != null) {
+            // History counts in the ledger's home money, which a rate turns into the group's (#48).
+            val home = Currencies.of(Home.money.code)
             form.value = ExpenseForm(
-                amountText = formatMinor(seed.amount.toMinorUnits(), Currencies.Thb).filter { it.isDigit() || it == '.' },
+                currency = home,
+                amountText = formatMinor(seed.amount.toMinorUnits(), home).filter { it.isDigit() || it == '.' },
                 description = seed.description,
                 occurredAtEpochMillis = seed.occurredAtEpochMillis,
                 categoryId = seed.categoryId ?: categories.firstOrNull()?.id,
@@ -198,11 +204,13 @@ class AddExpenseViewModel(
                 locked = true,
                 loaded = true,
             )
+            if (home.code != group.currency) prefillRate(home, group)
             return
         }
         if (existing == null) {
             form.update {
                 it.copy(
+                    currency = group.money,
                     payerMemberId = group.meMemberId,
                     categoryId = categories.firstOrNull()?.id,
                     amountText = prefillAmount ?: it.amountText,
@@ -254,9 +262,15 @@ class AddExpenseViewModel(
                 weightTexts = if (it.splitMode == SplitMode.Exact) emptyMap() else it.weightTexts,
             )
         }
-        if (currency.isBaht) return
+        val group = repository.snapshot.value.group(groupId) ?: return
+        if (currency.code == group.currency) return
+        prefillRate(currency, group)
+    }
+
+    /** The last rate saved from [currency] into this group's money, while the field is still empty. */
+    private fun prefillRate(currency: Currency, group: SharedGroup) {
         viewModelScope.launch {
-            val last = repository.lastRate(currency.code) ?: return@launch
+            val last = repository.lastRate(currency.code, into = group.currency) ?: return@launch
             form.update { if (it.currency == currency && it.rateText.isEmpty()) it.copy(rateText = last.typedFor(currency.rateUnit)) else it }
         }
     }
@@ -354,7 +368,7 @@ class AddExpenseViewModel(
                         note = form.note,
                         currency = form.currency.code,
                         amountMinor = amount,
-                        rate = rateOf(form),
+                        rate = rateOf(group, form),
                         payerMemberId = payer,
                         splitMode = form.splitMode,
                         weights = weightsOf(group, form),
@@ -417,13 +431,14 @@ class AddExpenseViewModel(
         val text = AppText.copy.shared.expense
         val you = AppText.copy.common.you
         val amount = amountOf(form)
-        val rate = rateOf(form)
-        val baht = amount?.takeIf { form.currency.isBaht || rate != null }?.let { toSatang(it, form.currency, rate) }
+        val inGroup = inGroupMoney(group, form)
+        val own = form.currency.code == group.currency
+        val symbol = group.money.symbol
         val check = check(group, form, members)
         val payerId = form.payerMemberId ?: group.meMemberId
         val category = categories.firstOrNull { it.id == form.categoryId }
         val unit = form.currency.rateUnit
-        val missing = missingFor(form, amount, baht, check)
+        val missing = missingFor(form, amount, inGroup, check)
 
         return AddExpenseUiState.Ready(
             form = form,
@@ -431,21 +446,21 @@ class AddExpenseViewModel(
             groupLine = text.groupLine(group.name, members.size),
             currencies = Currencies.all,
             amountShown = form.amountText.ifEmpty { "0" },
-            bahtLine = if (form.currency.isBaht) {
+            bahtLine = if (own) {
                 null
-            } else if (baht == null) {
+            } else if (inGroup == null) {
                 text.typeBaht(if (unit == 1L) "1" else formatUnit(unit), form.currency.symbol)
             } else {
-                text.bahtAtRate(baht.formatCompact(), form.rateText, if (unit == 1L) form.currency.symbol else "${formatUnit(unit)} ${form.currency.symbol}")
+                text.bahtAtRate(inGroup.formatCompact(group.moneyFormat()), symbol, form.rateText, if (unit == 1L) form.currency.symbol else "${formatUnit(unit)} ${form.currency.symbol}")
             },
-            rateUnitLabel = if (form.currency.isBaht) null else text.ratePer(if (unit == 1L) "1" else formatUnit(unit), form.currency.code),
+            rateUnitLabel = if (own) null else text.ratePer(symbol, if (unit == 1L) "1" else formatUnit(unit), form.currency.code),
             categories = categories,
             categoryName = category?.name,
             categoryIcon = category?.icon,
             payers = members.map { SplitRowUiModel(it.id, if (it.isMe) you else it.name, it.isMe, "", "") },
             payerName = payerId?.let { group.displayName(it) } ?: you,
             splitLabel = text.splitLabel(form.splitMode.label(), members.size),
-            resultLine = resultLine(group, form, check, baht),
+            resultLine = resultLine(group, form, check, inGroup),
             split = splitModel(group, form, members, check, amount),
             quick = quickModel(group, form, members),
             canSave = form.loaded && !form.saving && missing == null,
@@ -455,11 +470,11 @@ class AddExpenseViewModel(
     }
 
     /** #216: the first thing Save still needs, in the order the form asks for it; null when nothing. */
-    private fun missingFor(form: ExpenseForm, amount: Long?, baht: Satang?, check: SplitCheck?): String? {
+    private fun missingFor(form: ExpenseForm, amount: Long?, inGroup: Satang?, check: SplitCheck?): String? {
         val text = AppText.copy.shared.expense
         return when {
             amount == null || amount <= 0 -> text.hintAmount
-            baht == null -> text.hintRate
+            inGroup == null -> text.hintRate
             form.categoryId == null -> text.hintCategory
             check?.complete != true -> text.hintSplit
             else -> null
@@ -467,23 +482,24 @@ class AddExpenseViewModel(
     }
 
     /** "₫462,500 each · you owe Tom ฿640" (p28): the split, and what it means for you. */
-    private fun resultLine(group: SharedGroup, form: ExpenseForm, check: SplitCheck?, baht: Satang?): String? {
-        if (check == null || !check.complete || baht == null) return null
+    private fun resultLine(group: SharedGroup, form: ExpenseForm, check: SplitCheck?, inGroup: Satang?): String? {
+        if (check == null || !check.complete || inGroup == null) return null
         val each = check.parts.values.takeIf { it.size > 1 }?.distinct()?.singleOrNull()?.let { AppText.copy.shared.expense.each(formatMinor(it, form.currency)) }
-        return listOfNotNull(each, meaning(group, form, check, baht)?.first).joinToString(" · ")
+        return listOfNotNull(each, meaning(group, form, check, inGroup)?.first).joinToString(" · ")
     }
 
     /** What a complete split means for this phone's member, and whether it is money they owe. */
-    private fun meaning(group: SharedGroup, form: ExpenseForm, check: SplitCheck, baht: Satang): Pair<String, Boolean>? {
+    private fun meaning(group: SharedGroup, form: ExpenseForm, check: SplitCheck, inGroup: Satang): Pair<String, Boolean>? {
         val me = group.meMemberId ?: return null
         val amount = amountOf(form) ?: return null
         val text = AppText.copy.shared
         val payer = form.payerMemberId ?: me
+        val money = group.moneyFormat()
         val myShareMinor = check.parts[me] ?: 0L
-        val myShareBaht = if (amount == 0L) Satang.Zero else toSatang(myShareMinor, form.currency, rateOf(form))
+        val myShare = if (amount == 0L) Satang.Zero else convert(myShareMinor, form.currency, rateOf(group, form), group.money)
         return when {
-            payer == me && myShareMinor < amount -> text.expense.owedAmount((baht - myShareBaht).formatCompact()) to false
-            payer != me && myShareMinor > 0 -> text.expense.oweTo(group.displayName(payer), myShareBaht.formatCompact()) to true
+            payer == me && myShareMinor < amount -> text.expense.owedAmount((inGroup - myShare).formatCompact(money)) to false
+            payer != me && myShareMinor > 0 -> text.expense.oweTo(group.displayName(payer), myShare.formatCompact(money)) to true
             payer != me -> text.expense.notInThis to false
             else -> text.allYours to false
         }
@@ -512,8 +528,8 @@ class AddExpenseViewModel(
         fun row(payer: SplitMember, choice: QuickSplit): QuickRowUiModel {
             val tried = form.withQuick(payer.id, choice, members)
             val check = check(group, tried, members)?.takeIf { it.complete }
-            val baht = amountOf(tried)?.takeIf { tried.currency.isBaht || rateOf(tried) != null }?.let { toSatang(it, tried.currency, rateOf(tried)) }
-            val meaning = if (check != null && baht != null) meaning(group, tried, check, baht) else null
+            val inGroup = inGroupMoney(group, tried)
+            val meaning = if (check != null && inGroup != null) meaning(group, tried, check, inGroup) else null
             return QuickRowUiModel(
                 payerId = payer.id,
                 choice = choice,
@@ -562,7 +578,7 @@ class AddExpenseViewModel(
                     isMe = member.isMe,
                     text = form.weightTexts[member.id].orEmpty(),
                     part = check?.parts?.get(member.id)?.let { formatMinor(it, form.currency) } ?: formatMinor(0, form.currency),
-                    detail = weightDetail(form, form.weightTexts[member.id].orEmpty(), check?.parts?.get(member.id) ?: 0L).takeIf { amount != null },
+                    detail = weightDetail(group, form, form.weightTexts[member.id].orEmpty(), check?.parts?.get(member.id) ?: 0L).takeIf { amount != null },
                 )
             },
             leftTitle = if (!showCheck) {
@@ -593,12 +609,11 @@ class AddExpenseViewModel(
      * #218: under a Percent or Shares field, what that person pays ("฿320", or "$12.00 · ≈ ฿410"),
      * and "1.5 counts as 1" when Shares drops a decimal.
      */
-    private fun weightDetail(form: ExpenseForm, typed: String, partMinor: Long): String? {
+    private fun weightDetail(group: SharedGroup, form: ExpenseForm, typed: String, partMinor: Long): String? {
         if (form.splitMode != SplitMode.Percent && form.splitMode != SplitMode.Shares) return null
-        val rate = rateOf(form)
         val pays = listOfNotNull(
             formatMinor(partMinor, form.currency),
-            rate?.takeIf { !form.currency.isBaht }?.let { "≈ ${toSatang(partMinor, form.currency, it).formatCompact()}" },
+            rateOf(group, form)?.let { "≈ ${convert(partMinor, form.currency, it, group.money).formatCompact(group.moneyFormat())}" },
         ).joinToString(" · ")
         val dropped = form.splitMode == SplitMode.Shares && typed.substringAfter('.', "").any { it != '0' }
         val whole = (typed.substringBefore('.').toLongOrNull() ?: 0L).toString()
@@ -638,8 +653,15 @@ class AddExpenseViewModel(
 
     private fun amountOf(form: ExpenseForm): Long? = parseMinor(form.amountText, form.currency)
 
-    private fun rateOf(form: ExpenseForm): Rate? =
-        if (form.currency.isBaht) null else Rate.parse(form.rateText, form.currency.rateUnit)
+    /** No rate in the group's own money; another currency needs one to count (#48). */
+    private fun rateOf(group: SharedGroup, form: ExpenseForm): Rate? =
+        if (form.currency.code == group.currency) null else Rate.parse(form.rateText, form.currency.rateUnit)
+
+    /** The amount in the group's money, or null until another currency has its rate. */
+    private fun inGroupMoney(group: SharedGroup, form: ExpenseForm): Satang? {
+        val rate = rateOf(group, form)
+        return amountOf(form)?.takeIf { form.currency.code == group.currency || rate != null }?.let { convert(it, form.currency, rate, group.money) }
+    }
 }
 
 /** D11: two decimals, as basis points. "33.33" is 3,333. */

@@ -276,6 +276,8 @@ private class FakeTransactionDao(
 
     private val all = MutableStateFlow(rows)
 
+    override suspend fun count(): Int = all.value.size
+
     override suspend fun setPlanned(id: String, planned: Boolean) {
         all.value = all.value.map { if (it.id == id) it.copy(planned = planned) else it }
     }
@@ -325,6 +327,7 @@ private class FakeTransactionDao(
         memo: String?,
         occurredAtEpochMillis: Long?,
         editedAtEpochMillis: Long,
+        home: String,
     ) = all.update { rows ->
         rows.map { row ->
             if (row.id != id) {

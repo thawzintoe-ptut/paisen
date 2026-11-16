@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
+import com.ptut.expense.domain.formatDigits
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.PaymentDraft
 import com.ptut.expense.domain.shared.PaymentMethod
@@ -12,6 +13,8 @@ import com.ptut.expense.domain.shared.PromptPay
 import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
+import com.ptut.expense.domain.shared.money
+import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.parseMinor
 import com.ptut.expense.domain.shared.whoPaysWhom
 import com.ptut.expense.locale.AppText
@@ -56,6 +59,8 @@ sealed interface RecordPaymentUiState {
         val toLabel: String,
         val toIsMe: Boolean,
         val groupName: String,
+        /** #48: the group's own money, drawn before the amount. */
+        val symbol: String,
         val fullBalanceLine: String,
         val afterThis: String,
         val buttonLabel: String,
@@ -91,8 +96,9 @@ class RecordPaymentViewModel(
     init {
         viewModelScope.launch {
             val snapshot = repository.snapshot.first { it.group(groupId) != null }
+            val group = snapshot.group(groupId) ?: return@launch
             val owed = owedBetween(snapshot)
-            form.update { it.copy(amountText = if (owed > Satang.Zero) plain(owed) else "", loaded = true) }
+            form.update { it.copy(amountText = if (owed > Satang.Zero) plain(owed, group) else "", loaded = true) }
             opened.value = form.value.content
         }
     }
@@ -100,10 +106,11 @@ class RecordPaymentViewModel(
     val uiState: StateFlow<RecordPaymentUiState> = combine(repository.snapshot, form, opened) { snapshot, form, opened ->
         val group = snapshot.group(groupId) ?: return@combine RecordPaymentUiState.Missing
         val owed = owedBetween(snapshot)
-        val paying = amountOf(form)
+        val paying = amountOf(form, group)
         val fromName = group.displayName(fromMemberId)
         val toName = group.displayName(toMemberId)
         val left = owed - (paying ?: Satang.Zero)
+        val money = group.moneyFormat()
         val text = AppText.copy.shared.payment
         RecordPaymentUiState.Ready(
             form = form,
@@ -114,13 +121,14 @@ class RecordPaymentViewModel(
             toLabel = group.member(toMemberId)?.initial().orEmpty(),
             toIsMe = group.isMe(toMemberId),
             groupName = group.name,
+            symbol = money.symbol,
             fullBalanceLine = if (owed > Satang.Zero) text.fullBalance else text.nothingOwed,
             afterThis = when {
                 left == Satang.Zero -> if (group.isMe(fromMemberId)) text.youAreSettled else text.isSettled(fromName)
-                left > Satang.Zero -> text.stillOwes(fromName, toName, left.formatCompact())
-                else -> text.owes(toName, fromName, (-left).formatCompact())
+                left > Satang.Zero -> text.stillOwes(fromName, toName, left.formatCompact(money))
+                else -> text.owes(toName, fromName, (-left).formatCompact(money))
             },
-            buttonLabel = text.record((paying ?: Satang.Zero).formatCompact()),
+            buttonLabel = text.record((paying ?: Satang.Zero).formatCompact(money)),
             canSave = form.loaded && !form.saving && paying != null && paying > Satang.Zero,
             promptPayQr = payeePromptPay(group)?.takeIf { paying != null && paying > Satang.Zero }?.let { PromptPay.payload(it, paying ?: Satang.Zero) },
             promptPayLine = payeePromptPay(group)?.let { text.payBy(toName, PromptPay.masked(it)) },
@@ -139,7 +147,8 @@ class RecordPaymentViewModel(
         val state = uiState.value as? RecordPaymentUiState.Ready ?: return
         // The form, not uiState: uiState catches up a frame later, and the second tap comes sooner.
         if (!state.canSave || form.value.saving) return
-        val amount = amountOf(state.form) ?: return
+        val group = repository.snapshot.value.group(groupId) ?: return
+        val amount = amountOf(state.form, group) ?: return
         val repository = repository
         form.update { it.copy(saving = true) }
         viewModelScope.launch {
@@ -164,16 +173,16 @@ class RecordPaymentViewModel(
         }
     }
 
-    /** #199: only when you are the one paying; a QR to pay yourself would be no use. */
+    /** #199: only when you are the one paying; a QR to pay yourself would be no use. PromptPay moves baht only (#48). */
     private fun payeePromptPay(group: SharedGroup): String? =
-        group.member(toMemberId)?.promptPayId?.takeIf { group.isMe(fromMemberId) }
+        group.member(toMemberId)?.promptPayId?.takeIf { group.isMe(fromMemberId) && group.currency == Currencies.Thb.code }
 
     /** Only when the money comes to you and something is still owed. The PromptPay ID goes in full, so they can pay from the chat. */
     private fun askToPay(group: SharedGroup, owed: Satang, fromName: String): AskToPayUiModel? {
         if (!group.isMe(toMemberId) || owed <= Satang.Zero) return null
         val text = AppText.copy.shared.payment
         val promptPay = group.member(toMemberId)?.promptPayId?.let { "\n" + text.askPromptPay(it) }.orEmpty()
-        return AskToPayUiModel(label = text.askToPay(fromName), message = text.askMessage(group.name, fromName, owed.format()) + promptPay)
+        return AskToPayUiModel(label = text.askToPay(fromName), message = text.askMessage(group.name, fromName, owed.format(group.moneyFormat())) + promptPay)
     }
 
     /** What [fromMemberId] owes [toMemberId] in the payments the group would settle with (#135). */
@@ -182,7 +191,7 @@ class RecordPaymentViewModel(
             .filter { it.fromMemberId == fromMemberId && it.toMemberId == toMemberId }
             .fold(Satang.Zero) { total, transfer -> total + transfer.amount }
 
-    private fun amountOf(form: PaymentForm): Satang? = parseMinor(form.amountText, Currencies.Thb)?.let { Satang.ofMinorUnits(it) }
+    private fun amountOf(form: PaymentForm, group: SharedGroup): Satang? = parseMinor(form.amountText, group.money)?.let { Satang.ofMinorUnits(it) }
 
-    private fun plain(amount: Satang): String = amount.format().drop(1).replace(",", "")
+    private fun plain(amount: Satang, group: SharedGroup): String = amount.formatDigits(group.moneyFormat()).replace(",", "")
 }

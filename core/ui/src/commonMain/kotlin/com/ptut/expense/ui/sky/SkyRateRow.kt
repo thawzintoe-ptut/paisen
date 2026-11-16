@@ -26,6 +26,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
+import com.ptut.expense.domain.Home
 import com.ptut.expense.locale.currencyCopy
 
 /**
@@ -44,9 +45,12 @@ fun SkyRateRow(
     showLabel: Boolean = true,
     /** On in a sheet opened to type the rate, so the keyboard comes up with it. */
     focusOnStart: Boolean = false,
+    /** The money the rate turns into: the home's, or the new home's while #47 converts. */
+    homeSymbol: String = Home.money.symbol,
+    note: String? = currencyCopy().rateNote,
 ) {
     val words = currencyCopy()
-    val perUnit = words.perUnit(unit)
+    val perUnit = words.perUnit(homeSymbol, unit)
     val focus = remember { FocusRequester() }
     if (focusOnStart) LaunchedEffect(Unit) { focus.requestFocus() }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
@@ -71,7 +75,7 @@ fun SkyRateRow(
             Text(perUnit, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         bahtLine?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        Text(words.rateNote, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         onTodaysRate?.let { SkyTextAction(label = words.todaysRate, onClick = it, enabled = true) }
     }
 }

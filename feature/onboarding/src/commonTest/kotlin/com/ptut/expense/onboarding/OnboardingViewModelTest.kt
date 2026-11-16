@@ -1,6 +1,10 @@
 package com.ptut.expense.onboarding
 
 import com.ptut.expense.ViewModelTest
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.domain.home.FakeHomeBook
+import com.ptut.expense.domain.shared.Currencies
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -24,6 +28,36 @@ class OnboardingViewModelTest : ViewModelTest() {
 
         assertTrue(onboarding.isFinished.value)
         assertEquals(0, photoAccess.asks, "skipping raised the photo dialog anyway")
+    }
+
+    // #41
+
+    private val kyat = HomeChoice(Currencies.of("MMK").toHomeMoney(), "Asia/Yangon")
+
+    @Test
+    fun `first run offers the phone's home and sets it on the way out`() = runTest {
+        val book = FakeHomeBook()
+        val viewModel = OnboardingViewModel(onboarding, photoAccess, homeBook = book, suggestedHome = kyat)
+        assertEquals(kyat, viewModel.homeChoice.value)
+
+        viewModel.chooseHome(Currencies.of("USD"))
+        viewModel.skip()
+        runCurrent()
+
+        assertEquals(listOf(HomeChoice(Currencies.of("USD").toHomeMoney(), "Asia/Yangon")), book.chosen)
+        assertTrue(onboarding.isFinished.value)
+        Home.use(HomeChoice.Default)
+    }
+
+    @Test
+    fun `a build with no home to offer shows no line and sets nothing`() = runTest {
+        val book = FakeHomeBook()
+        val viewModel = OnboardingViewModel(onboarding, photoAccess, homeBook = book)
+
+        viewModel.skip()
+
+        assertEquals(null, viewModel.homeChoice.value)
+        assertTrue(book.chosen.isEmpty())
     }
 
     /**

@@ -20,7 +20,7 @@ data class BucketSpend(val start: LocalDate, val endInclusive: LocalDate, val sp
 fun List<Transaction>.spendPerBucket(
     range: DateRange,
     size: BucketSize,
-    zone: TimeZone = BangkokTime,
+    zone: TimeZone = HomeTime,
 ): List<BucketSpend> {
     val spentOn = filter { it.direction == Direction.Expense }
         .groupBy { it.occurredAtEpochMillis.dateIn(zone) }

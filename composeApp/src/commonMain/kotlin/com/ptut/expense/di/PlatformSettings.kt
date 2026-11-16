@@ -4,6 +4,7 @@ import com.ptut.expense.data.local.PtutDatabaseContext
 import com.ptut.expense.domain.settings.ImportSettingsStore
 import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.StartingCurrency
+import kotlinx.datetime.TimeZone
 
 /**
  * Where the reader's import choices survive, which is the same split first run's flag is:
@@ -24,3 +25,6 @@ expect fun phoneCountry(context: PtutDatabaseContext): String?
 class PhoneCurrency(private val country: () -> String?) {
     fun current(): Currency = StartingCurrency.forCountry(country())
 }
+
+/** #41: the zone a new home starts its days in, the phone's own where the person is now. */
+fun phoneZone(): String = TimeZone.currentSystemDefault().id

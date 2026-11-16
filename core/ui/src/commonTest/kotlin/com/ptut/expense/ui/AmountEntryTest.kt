@@ -1,5 +1,6 @@
 package com.ptut.expense.ui
 
+import com.ptut.expense.domain.Satang
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -64,5 +65,25 @@ class AmountEntryTest {
             com.ptut.expense.domain.Satang(64_250),
             AmountEntry.of(com.ptut.expense.domain.Satang(64_250)).toSatang(),
         )
+    }
+
+    // #42
+
+    @Test
+    fun aCurrencyWithNoDecimalsHasNoPointAndCountsWholeUnits() {
+        val entry = AmountEntry(digits = 0).digit('2').digit('9').decimal().digit('5')
+
+        assertEquals("295", entry.typed)
+        assertEquals(Satang.ofMinorUnits(295), entry.toSatang())
+        assertEquals(null, AmountEntry.ofText("12.5", digits = 0))
+        assertEquals("29500", AmountEntry.of(Satang.ofMinorUnits(29_500), digits = 0).typed)
+    }
+
+    @Test
+    fun switchingToACurrencyWithFewerDecimalsDropsTheExtraOnes() {
+        val dollars = AmountEntry("12.50", digits = 2)
+
+        assertEquals(AmountEntry("12", digits = 0), dollars.withDigits(0))
+        assertEquals(dollars, dollars.withDigits(2))
     }
 }

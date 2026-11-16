@@ -9,6 +9,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TransactionDao {
+
+    /** #41: home can change with nothing to convert only while this is 0. */
+    @Query("SELECT COUNT(*) FROM transactions")
+    suspend fun count(): Int
+
     /**
      * Half-open, not `BETWEEN`: `BETWEEN` is closed at both ends, so a day boundary would need
      * a minus-one-millisecond bound and one forgotten `-1` silently double-counts midnight.
@@ -97,7 +102,7 @@ interface TransactionDao {
         """
         UPDATE transactions
         SET amountMinor = :amountMinor,
-            currency = CASE WHEN amountMinor = :amountMinor THEN currency ELSE 'THB' END,
+            currency = CASE WHEN amountMinor = :amountMinor THEN currency ELSE :home END,
             originalMinor = CASE WHEN amountMinor = :amountMinor THEN originalMinor END,
             rateUnscaled = CASE WHEN amountMinor = :amountMinor THEN rateUnscaled END,
             rateScale = CASE WHEN amountMinor = :amountMinor THEN rateScale END,
@@ -119,6 +124,7 @@ interface TransactionDao {
         memo: String?,
         occurredAtEpochMillis: Long?,
         editedAtEpochMillis: Long,
+        home: String,
     )
 
     // #22: only the flag; the row keeps its editedAt.

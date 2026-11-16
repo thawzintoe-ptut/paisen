@@ -1,5 +1,6 @@
 package com.ptut.expense.domain.shared
 
+import com.ptut.expense.domain.Home
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.datetime.LocalDate
 
@@ -16,7 +17,9 @@ interface SharedRepository {
      * Makes a group with this phone's member in it (named "You" until sign-in gives a name, #187)
      * and [members]. Returns the group's id.
      */
-    suspend fun createGroup(name: String, type: GroupType, icon: String, members: List<NewMember>): String
+
+    /** #48: [currency] is what the group counts in for good; the maker's home unless they pick another. */
+    suspend fun createGroup(name: String, type: GroupType, icon: String, members: List<NewMember>, currency: String = Home.money.code): String
 
     suspend fun addMembers(groupId: String, members: List<NewMember>)
 
@@ -105,7 +108,9 @@ interface SharedRepository {
     suspend fun addDueRepeats(today: LocalDate): Int
 
     /** #181: the last rate used for [currency] on this phone, to pre-fill the next one. */
-    suspend fun lastRate(currency: String): Rate?
+
+    /** #48: the last rate saved for one [currency] in [into], a group's own money. */
+    suspend fun lastRate(currency: String, into: String = Currencies.Thb.code): Rate?
 
     /** Research finding 5: the newest row shown while the group is open. Local only, never synced. */
     suspend fun markSeen(groupId: String, atEpochMillis: Long)

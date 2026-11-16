@@ -2,9 +2,10 @@ package com.ptut.expense.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionSource
@@ -85,7 +86,7 @@ class TransactionDetailViewModel(
     /** #22: debug builds only until the weekly note has been tried. */
     private val offersPlanned: Boolean = false,
     /** FR-19: the transaction's own Bangkok day and time, never the device's. */
-    private val zone: TimeZone = BangkokTime,
+    private val zone: TimeZone = HomeTime,
     /** Only to ask what today is. Which totals a delete moves depends on the day it happens. */
     private val clock: Clock = Clock.System,
     /** #114: a haptic on every save and delete, played by the shell. */
@@ -244,7 +245,7 @@ class TransactionDetailViewModel(
         // #33: what was paid in kyat and the rate that made it baht.
         foreign?.let { paid ->
             val currency = Currencies.of(paid.currency)
-            TransactionMetaRow("PAID", currencyCopy().atRate(formatMinor(paid.originalMinor, currency), paid.rate.typedFor(currency.rateUnit), currency.rateUnitLabel()), icon = MetaGlyph.Tag)
+            TransactionMetaRow("PAID", currencyCopy().atRate(formatMinor(paid.originalMinor, currency), Home.money.symbol, paid.rate.typedFor(currency.rateUnit), currency.rateUnitLabel()), icon = MetaGlyph.Tag)
         },
         // In full here: a row's name is only the note's first line, cut to fit (#210).
         memo?.let { TransactionMetaRow("NOTE", it, icon = MetaGlyph.Note) },

@@ -591,12 +591,12 @@ class SharedSync internal constructor(
 
             // The server stamps each entry, so every phone pulls only what came after its last pull.
             KIND_VERSION -> dao.version(row.rowId)?.let { it.toDomain(dao.sharesOf(it.versionId)) }?.let { version ->
-                val created = firestore.createStamped("groups/${group.id}/entries", version.versionId, version.fields(uid), SYNCED_AT)
+                val created = firestore.createStamped("groups/${group.id}/entries", version.versionId, version.fields(uid, group.currency), SYNCED_AT)
                 notices?.takeIf { created }?.expense(version, dao.versionsOf(version.id).mapNotNull { it.toDomain(emptyList()) })
             }
 
             KIND_PAYMENT -> dao.payment(row.rowId)?.toDomain()?.let { payment ->
-                val created = firestore.createStamped("groups/${group.id}/entries", payment.id, payment.fields(uid), SYNCED_AT)
+                val created = firestore.createStamped("groups/${group.id}/entries", payment.id, payment.fields(uid, group.currency), SYNCED_AT)
                 notices?.takeIf { created }?.payment(payment)
             }
 
@@ -672,6 +672,8 @@ class SharedSync internal constructor(
                 lastSyncedAtEpochMillis = local?.lastSyncedAtEpochMillis,
                 // This phone's own mark, never on the server: a pull must not reset it.
                 lastSeenAtEpochMillis = local?.lastSeenAtEpochMillis,
+                // #48: set when the group was made and never changed; a group from before #48 is baht.
+                currency = fields.string("currency") ?: local?.currency ?: BAHT,
             ),
         )
         val known = dao.membersOf(groupId).associateBy { it.id }
@@ -778,7 +780,7 @@ class SharedSync internal constructor(
                     amountMinor = f.long("amountMinor") ?: return,
                     rateUnscaled = f.long("rateUnscaled"),
                     rateScale = f.int("rateScale"),
-                    amountSatang = f.long("amountSatang") ?: return,
+                    amountSatang = f.long("amountSatang") ?: f.long("amountGroup") ?: return,
                     payerMemberId = f.string("payerMemberId") ?: return,
                     splitMode = f.string("splitMode") ?: return,
                     authorMemberId = f.string("authorMemberId"),
@@ -793,7 +795,7 @@ class SharedSync internal constructor(
                         memberId = s.string("memberId") ?: return@mapNotNull null,
                         weight = s.long("weight") ?: 0L,
                         amountMinor = s.long("amountMinor") ?: 0L,
-                        amountSatang = s.long("amountSatang") ?: 0L,
+                        amountSatang = s.long("amountSatang") ?: s.long("amountGroup") ?: 0L,
                     )
                 }
                 // A split mode or rate this build cannot read is not taken: stored, it would stop every launch.
@@ -807,7 +809,7 @@ class SharedSync internal constructor(
                     groupId = groupId,
                     fromMemberId = f.string("fromMemberId") ?: return,
                     toMemberId = f.string("toMemberId") ?: return,
-                    amountSatang = f.long("amountSatang") ?: return,
+                    amountSatang = f.long("amountSatang") ?: f.long("amountGroup") ?: return,
                     method = f.string("method") ?: return,
                     occurredAtEpochMillis = f.long("occurredAt") ?: return,
                     authorMemberId = f.string("authorMemberId"),
@@ -897,9 +899,16 @@ private fun SharedGroup.fields(): Fields = mapOf(
     "icon" to icon,
     "simplifyDebts" to simplifyDebts,
     "createdAt" to createdAtEpochMillis,
+    "currency" to currency,
 )
 
-private fun SharedExpense.fields(uid: String): Fields = mapOf(
+/**
+ * #48: a baht group keeps `amountSatang`, which every build reads. Any other group writes
+ * `amountGroup` instead, so a build from before #48 skips the entry rather than read kyat as baht.
+ */
+private fun groupAmountKey(groupCurrency: String): String = if (groupCurrency == BAHT) "amountSatang" else "amountGroup"
+
+private fun SharedExpense.fields(uid: String, groupCurrency: String): Fields = mapOf(
     "kind" to KIND_VERSION,
     "authorUid" to uid,
     "createdAt" to createdAtEpochMillis,
@@ -914,24 +923,24 @@ private fun SharedExpense.fields(uid: String): Fields = mapOf(
     "amountMinor" to amountMinor,
     "rateUnscaled" to rate?.unscaled,
     "rateScale" to rate?.scale?.toLong(),
-    "amountSatang" to satang.toMinorUnits(),
+    groupAmountKey(groupCurrency) to satang.toMinorUnits(),
     "payerMemberId" to payerMemberId,
     "splitMode" to splitMode.name,
     "authorMemberId" to authorMemberId,
     "removed" to removed,
     "cause" to cause,
     "shares" to shares.map {
-        mapOf("memberId" to it.memberId, "weight" to it.weight, "amountMinor" to it.amountMinor, "amountSatang" to it.satang.toMinorUnits())
+        mapOf("memberId" to it.memberId, "weight" to it.weight, "amountMinor" to it.amountMinor, groupAmountKey(groupCurrency) to it.satang.toMinorUnits())
     },
 )
 
-private fun SharedPayment.fields(uid: String): Fields = mapOf(
+private fun SharedPayment.fields(uid: String, groupCurrency: String): Fields = mapOf(
     "kind" to KIND_PAYMENT,
     "authorUid" to uid,
     "createdAt" to createdAtEpochMillis,
     "fromMemberId" to fromMemberId,
     "toMemberId" to toMemberId,
-    "amountSatang" to amount.toMinorUnits(),
+    groupAmountKey(groupCurrency) to amount.toMinorUnits(),
     "method" to method.name,
     "occurredAt" to occurredAtEpochMillis,
     "authorMemberId" to authorMemberId,
@@ -969,3 +978,6 @@ private fun RepeatRule.fields(uid: String): Fields = toEntity().let { rule ->
         "weights" to rule.weights,
     )
 }
+
+/** #48: every group made before groups had their own money. */
+private const val BAHT = "THB"

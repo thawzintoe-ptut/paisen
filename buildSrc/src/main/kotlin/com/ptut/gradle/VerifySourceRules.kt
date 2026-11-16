@@ -45,9 +45,24 @@ abstract class VerifySourceRules : DefaultTask() {
         ),
         Rule(
             pattern = Regex("""TimeZone\.currentSystemDefault\(\)"""),
-            why = "device time zone — FR-19: a Bangkok day is not the traveller's day",
+            why = "device time zone — FR-19: a home day is not the traveller's day",
             // The date and time picker reads the phone's clock by the reader's choice; totals do not.
-            allowedIn = listOf("/ui/sky/SkyDateTimePicker.kt"),
+            // #41: the phone's zone is read once, as the suggestion for a new home.
+            allowedIn = listOf("/ui/sky/SkyDateTimePicker.kt", "/di/PlatformSettings.kt"),
+        ),
+        Rule(
+            // #42: every amount is written in the home currency. A typed ฿ shows baht to a kyat ledger.
+            pattern = Regex("""^(?!\s*(\*|//|/\*)).*"[^"]*฿"""),
+            why = "typed ฿ — #42: write money with format() or Home.money.symbol",
+            // The currency table, Quick add reading what people type, and the debug catalog.
+            allowedIn = listOf("/domain/Home.kt", "/domain/shared/", "/agent/", "/debug/"),
+        ),
+        Rule(
+            // #43: the ledger's days start at the home's midnight, which is Yangon's for a kyat ledger.
+            pattern = Regex("""\bBangkokTime\b"""),
+            why = "Bangkok day — #43: the ledger counts in HomeTime",
+            // Its own definition, the time a K PLUS slip prints, and shared groups' one calendar.
+            allowedIn = listOf("/domain/DayBucket.kt", "/domain/slip/", "/shared/", "/sync/", "/RoomSharedRepository.kt"),
         ),
         Rule(
             pattern = Regex("""\.raw\b"""),

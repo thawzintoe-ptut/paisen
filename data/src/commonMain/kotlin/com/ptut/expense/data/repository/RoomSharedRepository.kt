@@ -17,6 +17,7 @@ import com.ptut.expense.data.local.entity.SyncOutboxEntity
 import com.ptut.expense.data.local.entity.toEntity
 import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
@@ -45,9 +46,11 @@ import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.SplitMode
 import com.ptut.expense.domain.shared.TransactionSeed
+import com.ptut.expense.domain.shared.convert
 import com.ptut.expense.domain.shared.due
 import com.ptut.expense.domain.shared.entryId
 import com.ptut.expense.domain.shared.membersToSplit
+import com.ptut.expense.domain.shared.money
 import com.ptut.expense.domain.shared.rebalancedTo
 import com.ptut.expense.domain.shared.sharedExpenseOf
 import com.ptut.expense.domain.shared.shares
@@ -105,13 +108,13 @@ class RoomSharedRepository(
         )
     }.stateIn(scope, SharingStarted.Eagerly, SharedSnapshot.Empty)
 
-    override suspend fun createGroup(name: String, type: GroupType, icon: String, members: List<NewMember>): String {
+    override suspend fun createGroup(name: String, type: GroupType, icon: String, members: List<NewMember>, currency: String): String {
         val now = clock.now().toEpochMilliseconds()
         val groupId = newId()
         val meId = newId()
         val (people, rows) = membersOf(groupId, members, now)
         dao.createGroup(
-            group = SharedGroupEntity(groupId, name.trim(), type.name, icon, simplifyDebts = true, createdAtEpochMillis = now, meMemberId = meId),
+            group = SharedGroupEntity(groupId, name.trim(), type.name, icon, simplifyDebts = true, createdAtEpochMillis = now, meMemberId = meId, currency = currency),
             people = people,
             members = listOf(GroupMemberEntity(meId, groupId, YOU, personId = null, archived = false, createdAtEpochMillis = now)) + rows,
         )
@@ -183,7 +186,8 @@ class RoomSharedRepository(
         val group = requireNotNull(snapshot.value.group(draft.groupId)) { "No group ${draft.groupId}" }
         val now = clock.now().toEpochMilliseconds()
         val currency = Currencies.of(draft.currency)
-        val satang = toSatang(draft.amountMinor, currency, draft.rate)
+        // #48: [satang] holds the group's own money now, whatever that is; baht for every group before #48.
+        val satang = convert(draft.amountMinor, currency, draft.rate, group.money)
         val latest = draft.expenseId?.let { dao.latestVersion(it) }
         if (latest != null && draft.baseVersionId != null && latest.versionId != draft.baseVersionId) {
             throw ExpenseChanged(latest.versionId, latest.removed)
@@ -246,7 +250,7 @@ class RoomSharedRepository(
                 ),
             )
         }
-        if (draft.rate != null) dao.upsertRate(CurrencyRateEntity(currency.code, draft.rate.unscaled, draft.rate.scale, now))
+        if (draft.rate != null) dao.upsertRate(CurrencyRateEntity(currency.code, draft.rate.unscaled, draft.rate.scale, now, group.currency))
         queueIfShared(draft.groupId, KIND_VERSION, versionId)
         return expenseId
     }
@@ -321,8 +325,9 @@ class RoomSharedRepository(
         val last = dao.latestVersion(expenseId)?.takeUnless { it.removed } ?: return
         val row = dao.transaction(transactionId) ?: return
         val group = snapshot.value.group(last.groupId) ?: return
-        // A foreign-currency expense keeps its own amount: only a baht one can take History's figure.
-        val baht = last.currency == Currencies.Thb.code
+        // A foreign-currency expense keeps its own amount: only one in both the group's money and the
+        // ledger's home can take History's figure (#48).
+        val baht = last.currency == group.currency && last.currency == Home.money.code
         val amountMinor = if (baht) row.amountMinor else last.amountMinor
         if (amountMinor == last.amountMinor && row.occurredAtEpochMillis == last.occurredAtEpochMillis &&
             row.categoryId == last.categoryId && row.subCategoryId == last.subCategoryId
@@ -475,7 +480,7 @@ class RoomSharedRepository(
     private fun repeatEntry(rule: RepeatRule, group: SharedGroup, date: LocalDate): Pair<ExpenseVersionEntity, List<ExpenseShareEntity>> {
         val members = group.membersToSplit()
         val currency = Currencies.of(rule.currency)
-        val satang = toSatang(rule.amountMinor, currency, rule.rate)
+        val satang = convert(rule.amountMinor, currency, rule.rate, group.money)
         val asSaved = split(rule.amountMinor, rule.splitMode, members, rule.weights)
         val mode = if (asSaved.complete) rule.splitMode else SplitMode.Equally
         val check = if (asSaved.complete) asSaved else split(rule.amountMinor, SplitMode.Equally, members, emptyMap())
@@ -513,8 +518,8 @@ class RoomSharedRepository(
 
     override suspend fun markSeen(groupId: String, atEpochMillis: Long) = dao.markSeen(groupId, atEpochMillis)
 
-    override suspend fun lastRate(currency: String): Rate? =
-        dao.rate(currency)?.let { Rate(it.rateUnscaled, it.rateScale) }
+    override suspend fun lastRate(currency: String, into: String): Rate? =
+        dao.rate(currency, into)?.let { Rate(it.rateUnscaled, it.rateScale) }
 
     private companion object {
         /** This phone's own member, until sign-in gives it a name (#187). Screens show "You" for it anyway. */
@@ -546,6 +551,7 @@ fun SharedGroupEntity.toDomain(members: List<GroupMemberEntity>) = SharedGroup(
     inviteActive = inviteActive,
     lastSyncedAtEpochMillis = lastSyncedAtEpochMillis,
     lastSeenAtEpochMillis = lastSeenAtEpochMillis,
+    currency = currency,
 )
 
 /**

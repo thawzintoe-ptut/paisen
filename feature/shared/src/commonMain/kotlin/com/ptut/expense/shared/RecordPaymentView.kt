@@ -92,7 +92,7 @@ fun RecordPaymentView(
                 Person(name = state.toName, label = state.toLabel, isMe = state.toIsMe)
             }
             Row(Modifier.fillMaxWidth().padding(top = Spacing.md), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Text("฿", style = MaterialTheme.ptutType.heroSymbol, color = MaterialTheme.colorScheme.onSurface)
+                Text(state.symbol, style = MaterialTheme.ptutType.heroSymbol, color = MaterialTheme.colorScheme.onSurface)
                 Box {
                     BasicTextField(
                         value = state.form.amountText,

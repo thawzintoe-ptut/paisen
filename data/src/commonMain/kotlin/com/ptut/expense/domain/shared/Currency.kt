@@ -1,5 +1,7 @@
 package com.ptut.expense.domain.shared
 
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.Satang
 
 /**
@@ -14,6 +16,12 @@ import com.ptut.expense.domain.Satang
  */
 data class Currency(val code: String, val symbol: String, val digits: Int, val rateUnit: Long = 1) {
     val isBaht: Boolean get() = code == Currencies.Thb.code
+
+    /** #44: the ledger's own money, which needs no rate. */
+    val isHome: Boolean get() = code == Home.money.code
+
+    /** #41: what the money format needs from this currency when it is the ledger's home. */
+    fun toHomeMoney(): HomeMoney = HomeMoney(code, symbol, digits)
 }
 
 object Currencies {
@@ -102,16 +110,37 @@ private fun decimalsOf(unit: Long): Int {
 
 /**
  * The one rule from an amount in [currency] to baht: amount × rate, rounded half away from zero
- * to the satang. THB needs no rate. Every screen and every balance goes through here (#181).
+ * to the satang. THB needs no rate. Every shared-group screen and balance goes through here (#181).
  */
-fun toSatang(amountMinor: Long, currency: Currency, rate: Rate?): Satang {
-    if (currency.isBaht) return Satang.ofMinorUnits(amountMinor)
-    requireNotNull(rate) { "${currency.code} needs a rate to become baht" }
-    // amount × rate × 100 ÷ 10^(digits + scale): the × 100 comes off the divisor, so a long rate never overflows it.
-    val shift = currency.digits + rate.scale - SATANG_DIGITS
+fun toSatang(amountMinor: Long, currency: Currency, rate: Rate?): Satang = convert(amountMinor, currency, rate, Currencies.Thb)
+
+/**
+ * #44: an amount in [from] as [to], at [rate] ([to] per one [from]), rounded half away from zero to
+ * [to]'s minor unit. The same currency needs no rate. A ledger converts into its home with this.
+ */
+fun convert(amountMinor: Long, from: Currency, rate: Rate?, to: Currency): Satang {
+    if (from.code == to.code) return Satang.ofMinorUnits(amountMinor)
+    requireNotNull(rate) { "${from.code} needs a rate to become ${to.code}" }
+    // amount × rate × 10^to ÷ 10^(from + scale): the × 10^to comes off the divisor, so a long rate never overflows it.
+    val shift = from.digits + rate.scale - to.digits
     val factor = if (shift >= 0) rate.unscaled else rate.unscaled * pow10(-shift)
     val magnitude = mulDivRound(if (amountMinor < 0) -amountMinor else amountMinor, factor, pow10(shift.coerceAtLeast(0)))
     return Satang.ofMinorUnits(if (amountMinor < 0) -magnitude else magnitude)
+}
+
+/**
+ * #47: this rate followed by [next] as one rate, X → old home → new home, rounded to
+ * [Rate.MAX_SCALE] decimals. A product too small to show becomes the smallest rate there is.
+ */
+fun Rate.then(next: Rate): Rate {
+    val excess = (scale + next.scale - Rate.MAX_SCALE).coerceAtLeast(0)
+    var unscaled = mulDivRound(this.unscaled, next.unscaled, pow10(excess)).coerceAtLeast(1)
+    var scale = scale + next.scale - excess
+    while (scale > 0 && unscaled % 10 == 0L) {
+        unscaled /= 10
+        scale--
+    }
+    return Rate(unscaled, scale)
 }
 
 /** a × b ÷ divisor, rounded half up, for a, b ≥ 0. */
@@ -159,8 +188,6 @@ private fun multiplyHigh(x: ULong, y: ULong): ULong {
     return x1 * y1 + (p01 shr HALF_BITS) + (p10 shr HALF_BITS) + (middle shr HALF_BITS)
 }
 
-/** A satang is a hundredth of a baht. */
-private const val SATANG_DIGITS = 2
 private const val PRODUCT_BITS = 128
 private const val HALF_BITS = 32
 private const val LOW_32 = 0xFFFF_FFFFuL

@@ -31,7 +31,7 @@ fun TimezoneView(
 ) {
     val text = LocalCopy.current.settings
     SkyListScreen(title = text.timezone, onBack = onBack, modifier = modifier) {
-        item { SkyIntro(text.timezoneIntro) }
+        item { SkyIntro(text.timezoneIntro(text.zonePlace(uiState.zone))) }
         item {
             SkyNoticeCard(
                 title = uiState.zone,
@@ -60,7 +60,7 @@ fun TimezoneView(
         }
         item {
             Text(
-                text = text.timezoneFootnote,
+                text = text.timezoneFootnote(text.zonePlace(uiState.zone)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = Spacing.md),

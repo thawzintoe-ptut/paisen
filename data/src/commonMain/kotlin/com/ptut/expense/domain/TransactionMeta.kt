@@ -67,7 +67,7 @@ fun MetaParts.categoryAndProvenance(): String = listOfNotNull(category, foreign,
  */
 fun Transaction.metaParts(
     categories: List<Category>,
-    zone: TimeZone = BangkokTime,
+    zone: TimeZone = HomeTime,
     subCategories: List<SubCategory> = emptyList(),
 ): MetaParts = MetaParts(
     category = filedAs(categories, subCategories).takeIf { ownName() != null },
@@ -79,7 +79,7 @@ fun Transaction.metaParts(
 /** The line under a merchant name on a row: [metaParts] joined, "Groceries · 18:30 · auto". */
 fun Transaction.metaLine(
     categories: List<Category>,
-    zone: TimeZone = BangkokTime,
+    zone: TimeZone = HomeTime,
     subCategories: List<SubCategory> = emptyList(),
 ): String = metaParts(categories, zone, subCategories).joined()
 

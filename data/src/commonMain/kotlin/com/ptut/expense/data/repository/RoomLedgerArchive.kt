@@ -19,6 +19,9 @@ import com.ptut.expense.data.local.entity.SharedPaymentEntity
 import com.ptut.expense.data.local.entity.SubCategoryEntity
 import com.ptut.expense.data.local.entity.TransactionEntity
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.backup.BackupCategory
 import com.ptut.expense.domain.backup.BackupExpenseVersion
 import com.ptut.expense.domain.backup.BackupGroup
@@ -26,15 +29,21 @@ import com.ptut.expense.domain.backup.BackupLink
 import com.ptut.expense.domain.backup.BackupMember
 import com.ptut.expense.domain.backup.BackupPayment
 import com.ptut.expense.domain.backup.BackupPerson
+import com.ptut.expense.domain.backup.BackupPreview
 import com.ptut.expense.domain.backup.BackupRepeat
 import com.ptut.expense.domain.backup.BackupShare
 import com.ptut.expense.domain.backup.BackupShared
 import com.ptut.expense.domain.backup.BackupShopRule
 import com.ptut.expense.domain.backup.BackupSubCategory
 import com.ptut.expense.domain.backup.BackupTransaction
+import com.ptut.expense.domain.backup.BackupUnreadable
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.LedgerBackup
 import com.ptut.expense.domain.backup.MergeReport
+import com.ptut.expense.domain.backup.preview
+import com.ptut.expense.domain.home.HomeBook
+import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.locale.AppText
 import kotlin.time.Clock
 
 /**
@@ -51,6 +60,8 @@ class RoomLedgerArchive(
     /** #215. Null for the same reason: categories, sub-categories and shop rules. */
     private val catalogDao: CatalogBackupDao? = null,
     private val clock: Clock = Clock.System,
+    /** #46: an empty ledger takes a file's home through it. Null where a test binds none. */
+    private val homeBook: HomeBook? = null,
 ) : LedgerArchive {
 
     override suspend fun export(): String = LedgerBackup.encode(
@@ -62,11 +73,20 @@ class RoomLedgerArchive(
             categories = catalogDao?.categories().orEmpty().map(CategoryEntity::toBackup),
             subCategories = catalogDao?.subCategories().orEmpty().map { BackupSubCategory(it.id, it.categoryId, it.name) },
             shopRules = catalogDao?.rules().orEmpty().map { BackupShopRule(it.id, it.counterparty, it.categoryId, it.createdAtEpochMillis, it.displayName) },
+            homeCurrency = Home.money.code,
+            homeZone = Home.choice.value.zoneId,
         ),
     )
 
+    override suspend fun preview(json: String): BackupPreview {
+        val backup = LedgerBackup.decode(json)
+        refuseOtherHome(backup)
+        return backup.preview()
+    }
+
     override suspend fun restore(json: String): MergeReport {
         val backup = LedgerBackup.decode(json)
+        takeFileHome(backup)
         // Categories before rows, so a row filed under one the reader made keeps it (#215).
         val known = catalogDao?.restore(
             categories = backup.categories.map(BackupCategory::toEntity),
@@ -78,7 +98,7 @@ class RoomLedgerArchive(
                 RuleEntity(it.id, it.counterparty, it.categoryId, it.createdAtEpochMillis, displayName = it.displayName, direction = direction)
             },
         ) ?: categoryDao.ids().toSet()
-        val rows = backup.transactions.map { transactionDao.withCheckedSubCategory(it.toEntity(known)) }
+        val rows = backup.transactions.map { transactionDao.withCheckedSubCategory(it.toEntity(known, backup.homeCode)) }
         val lost = backup.transactions.filter { it.categoryId != null && it.categoryId !in known }.map { it.id }.toSet()
         val added = mergeDao.merge(rows)
         // After the transactions, so a link finds the row it points at.
@@ -91,12 +111,24 @@ class RoomLedgerArchive(
         )
     }
 
+    /** #46: amounts in other money cannot join a ledger with rows; only an empty one can change home. */
+    private suspend fun refuseOtherHome(backup: LedgerBackup) {
+        if (backup.homeCode == Home.money.code) return
+        if (homeBook?.isEmpty() != true) throw BackupUnreadable(AppText.copy.phrases.backupOtherHome(backup.homeCode, Home.money.code))
+    }
+
+    private suspend fun takeFileHome(backup: LedgerBackup) {
+        if (backup.homeCode == Home.money.code) return
+        val fileHome = HomeChoice(Currencies.of(backup.homeCode).toHomeMoney(), backup.homeZone ?: HomeChoice.BANGKOK)
+        if (homeBook?.choose(fileHome) != true) throw BackupUnreadable(AppText.copy.phrases.backupOtherHome(backup.homeCode, Home.money.code))
+    }
+
     private suspend fun exportShared(dao: SharedDao): BackupShared {
         val groups = dao.localGroups()
         val ids = groups.map { it.id }
         return BackupShared(
             people = dao.people().map { BackupPerson(it.id, it.name, it.archived) },
-            groups = groups.map { BackupGroup(it.id, it.name, it.type, it.icon, it.simplifyDebts, it.createdAtEpochMillis, it.meMemberId) },
+            groups = groups.map { BackupGroup(it.id, it.name, it.type, it.icon, it.simplifyDebts, it.createdAtEpochMillis, it.meMemberId, it.currency) },
             members = dao.membersIn(ids).map { BackupMember(it.id, it.groupId, it.name, it.personId, it.archived, it.createdAtEpochMillis, it.promptPayId) },
             versions = dao.versionsIn(ids).map(ExpenseVersionEntity::toBackup),
             shares = dao.sharesIn(ids).map { BackupShare(it.versionId, it.memberId, it.weight, it.amountMinor, it.amountSatang) },
@@ -114,7 +146,7 @@ class RoomLedgerArchive(
 
     private suspend fun restoreShared(dao: SharedDao, shared: BackupShared, knownCategories: Set<String>): Int = dao.restoreShared(
         people = shared.people.map { PersonEntity(it.id, it.name, it.archived) },
-        groups = shared.groups.map { SharedGroupEntity(it.id, it.name, it.type, it.icon, it.simplifyDebts, it.createdAtEpochMillis, it.meMemberId) },
+        groups = shared.groups.map { SharedGroupEntity(it.id, it.name, it.type, it.icon, it.simplifyDebts, it.createdAtEpochMillis, it.meMemberId, currency = it.currency ?: HomeMoney.Baht.code) },
         members = shared.members.map { GroupMemberEntity(it.id, it.groupId, it.name, it.personId, it.archived, it.createdAtEpochMillis, promptPayId = it.promptPayId) },
         versions = shared.versions.map { it.toEntity(knownCategories) },
         shares = shared.shares.map { ExpenseShareEntity(it.versionId, it.memberId, it.weight, it.amountMinor, it.amountSatang) },
@@ -136,7 +168,7 @@ class RoomLedgerArchive(
      * [restore] does the same for a sub-category, through the DAO's check. [LedgerBackup.decode]
      * has already refused a file with an unknown direction or source.
      */
-    private fun BackupTransaction.toEntity(knownCategories: Set<String>) = TransactionEntity(
+    private fun BackupTransaction.toEntity(knownCategories: Set<String>, homeCode: String) = TransactionEntity(
         id = id,
         occurredAtEpochMillis = occurredAtEpochMillis,
         amountMinor = amountMinor,
@@ -151,7 +183,7 @@ class RoomLedgerArchive(
         sourceFolder = sourceFolder,
         ruleId = ruleId,
         planned = planned,
-        currency = currency ?: "THB",
+        currency = currency ?: homeCode,
         originalMinor = originalMinor,
         rateUnscaled = rateUnscaled,
         rateScale = rateScale,
@@ -191,7 +223,8 @@ private fun TransactionEntity.toBackup() = BackupTransaction(
     memo = memo,
     ruleId = ruleId,
     planned = planned,
-    currency = currency.takeUnless { it == "THB" },
+    // #46: only a row in other money names its currency; the file's home covers the rest.
+    currency = currency.takeIf { originalMinor != null },
     originalMinor = originalMinor,
     rateUnscaled = rateUnscaled,
     rateScale = rateScale,

@@ -2,7 +2,7 @@ package com.ptut.expense.shared
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayLabel
@@ -16,6 +16,7 @@ import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.events
 import com.ptut.expense.domain.shared.formatMinor
+import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.sum
 import com.ptut.expense.domain.timeOfDayIn
 import com.ptut.expense.locale.AppText
@@ -62,7 +63,7 @@ class SharedActivityViewModel(
     private val filter = MutableStateFlow(ActivityFilter.All)
 
     val uiState: StateFlow<SharedActivityUiState> = combine(repository.snapshot, filter) { snapshot, filter ->
-        val today = clock.now().toLocalDateTime(BangkokTime).date
+        val today = clock.now().toLocalDateTime(HomeTime).date
         val text = AppText.copy.shared
         val entries = snapshot.events(groupId)
             .filter { event ->
@@ -78,7 +79,7 @@ class SharedActivityViewModel(
             title = groupId?.let { snapshot.group(it)?.name?.let(text.log.groupTitle) } ?: text.activity,
             filter = filter,
             days = entries
-                .groupBy { (event, _) -> Instant.fromEpochMilliseconds(event.atEpochMillis).dateIn(BangkokTime) }
+                .groupBy { (event, _) -> Instant.fromEpochMilliseconds(event.atEpochMillis).dateIn(HomeTime) }
                 .map { (date, rows) ->
                     SharedActivityDay(
                         label = if (date == today) AppText.copy.common.today.uppercase() else date.dayLabel().uppercase(),
@@ -95,7 +96,7 @@ class SharedActivityViewModel(
     private fun SharedEvent.entry(group: SharedGroup): SharedEntryUiModel {
         val text = AppText.copy.shared.log
         val author = authorMemberId?.let { group.displayName(it) } ?: AppText.copy.shared.someone
-        val time = atEpochMillis.timeOfDayIn(BangkokTime)
+        val time = atEpochMillis.timeOfDayIn(HomeTime)
         return when (this) {
             is SharedEvent.ExpenseAdded -> {
                 val (said, tone) = expense.forMe(group)
@@ -162,7 +163,7 @@ class SharedActivityViewModel(
                     id = payment.id,
                     kind = SharedEntryKind.Payment,
                     icon = "cash",
-                    title = text.paid(from, to, payment.amount.formatCompact(), payment.method.inSentence()),
+                    title = text.paid(from, to, payment.amount.formatCompact(group.moneyFormat()), payment.method.inSentence()),
                     before = null,
                     after = null,
                     line = text.recordedBy(author, time),
@@ -181,7 +182,7 @@ class SharedActivityViewModel(
                 line = text.whichPayment(
                     group.displayName(payment.fromMemberId),
                     group.displayName(payment.toMemberId),
-                    payment.amount.formatCompact(),
+                    payment.amount.formatCompact(group.moneyFormat()),
                     time,
                 ),
                 tone = BalanceTone.Settled,
@@ -189,15 +190,16 @@ class SharedActivityViewModel(
         }
     }
 
-    /** What an expense means for you, with the amount in baht, or null when you are not in it; and its tone. */
+    /** What an expense means for you, in the group's money, or null when you are not in it; and its tone. */
     private fun SharedExpense.forMe(group: SharedGroup): Pair<String?, BalanceTone> {
         val me = group.meMemberId
         val mine = shares.filter { it.memberId == me }.map { it.satang }.sum()
         val effect = (if (payerMemberId == me) satang else Satang.Zero) - mine
         val text = AppText.copy.shared.log
+        val money = group.moneyFormat()
         return when {
-            effect < Satang.Zero -> text.youOwePayer(group.displayName(payerMemberId), effect.magnitude().formatCompact()) to BalanceTone.Owe
-            effect > Satang.Zero -> text.youLent(effect.formatCompact()) to BalanceTone.Owed
+            effect < Satang.Zero -> text.youOwePayer(group.displayName(payerMemberId), effect.magnitude().formatCompact(money)) to BalanceTone.Owe
+            effect > Satang.Zero -> text.youLent(effect.formatCompact(money)) to BalanceTone.Owed
             else -> null to BalanceTone.Settled
         }
     }

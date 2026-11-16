@@ -173,11 +173,19 @@ class PtutAppTest {
     fun aRowOnTodayOpensTheWholeRecord() = runComposeUiTest {
         setContent { TestApp() }
 
-        onNodeWithText("Foodland Rama IV").performClick()
+        openFirstRow()
 
         onNodeWithText("Purchase").assertIsDisplayed()
         onNodeWithText("From").assertIsDisplayed()
         onNodeWithContentDescription("Delete").assertIsDisplayed()
+    }
+
+    /**
+     * The row's own click, not a tap: after 18:00 the evening card lands the first row under the
+     * pill on this 768px window, and a tap there opened the add sheet instead.
+     */
+    private fun ComposeUiTest.openFirstRow() {
+        onNodeWithText("Foodland Rama IV").performSemanticsAction(SemanticsActions.OnClick)
     }
 
     /** #155: a record is a task, so the pill steps aside for it and comes back on the list. */
@@ -185,7 +193,7 @@ class PtutAppTest {
     fun thePillLeavesARecordAndComesBackOnTheList() = runComposeUiTest {
         setContent { TestApp() }
 
-        onNodeWithText("Foodland Rama IV").performClick()
+        openFirstRow()
         onNode(pillSlot("Today")).assertDoesNotExist()
         onNodeWithContentDescription("Add an expense by hand").assertDoesNotExist()
 

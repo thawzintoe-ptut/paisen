@@ -1,5 +1,6 @@
 package com.ptut.expense.domain.shared
 
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.Satang
 
 /** A debt this phone's member owes in one group, which a slip for the same amount may have paid. */
@@ -15,10 +16,11 @@ data class SlipDebt(
 /**
  * Every debt I owe of exactly [amount], as Who pays whom shows it. The amount decides; the [payee]
  * a slip printed only orders the list, because a K PLUS name is often a full legal name or a shop.
+ * #48: only groups counting in the slip's [currency], since K29,500 is not ฿29,500.
  */
-fun SharedSnapshot.debtsPaidBy(amount: Satang, payee: String?): List<SlipDebt> {
+fun SharedSnapshot.debtsPaidBy(amount: Satang, payee: String?, currency: String = Home.money.code): List<SlipDebt> {
     val slipWords = payee.words()
-    return groups.flatMap { group ->
+    return groups.filter { it.currency == currency }.flatMap { group ->
         val me = group.meMemberId ?: return@flatMap emptyList()
         whoPaysWhom(group.id).transfers
             .filter { it.fromMemberId == me && it.amount == amount }

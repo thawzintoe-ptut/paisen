@@ -123,6 +123,10 @@ sealed interface PtutRoute {
     @Serializable
     data object Timezone : PtutRoute
 
+    /** #41: the ledger's home currency, beside Timezone in Settings. */
+    @Serializable
+    data object HomeCurrency : PtutRoute
+
     /** The currency the Add sheet opens on, beside Timezone in Settings. */
     @Serializable
     data object AddCurrency : PtutRoute

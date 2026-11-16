@@ -6,14 +6,23 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
-/** FR-19: a day is a Bangkok day. Never the device's local midnight. */
+/**
+ * FR-19: a day is a home day (#43), Bangkok for a baht ledger and Yangon for a kyat one, never the
+ * device's local midnight, so a trip does not move yesterday's spending.
+ */
+val HomeTime: TimeZone get() = Home.zone
+
+/**
+ * Bangkok itself, for what is not the ledger's: the time a K PLUS slip prints, and shared groups,
+ * whose members' phones must agree on one calendar.
+ */
 val BangkokTime: TimeZone = TimeZone.of("Asia/Bangkok")
 
 /**
  * Midnight in [zone] as a UTC instant. F2 — this is the only way a Bangkok day becomes a
  * database bound, because SQLite's own date functions read the device zone.
  */
-fun LocalDate.startOfDayEpochMillis(zone: TimeZone = BangkokTime): Long =
+fun LocalDate.startOfDayEpochMillis(zone: TimeZone = HomeTime): Long =
     atStartOfDayIn(zone).toEpochMilliseconds()
 
 data class DayBucket(
@@ -28,7 +37,7 @@ data class DayBucket(
  * unchanged.
  */
 fun List<Transaction>.bucketByDay(
-    zone: TimeZone = BangkokTime,
+    zone: TimeZone = HomeTime,
     newestFirst: Boolean = false,
 ): List<DayBucket> =
     groupBy { transaction ->

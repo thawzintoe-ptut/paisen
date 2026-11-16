@@ -2,9 +2,9 @@ package com.ptut.expense.categories
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.WeeklyTarget
@@ -13,6 +13,7 @@ import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.minorPerWhole
 import com.ptut.expense.domain.settings.ImportSettings
 import com.ptut.expense.domain.suggestedTarget
 import com.ptut.expense.locale.AppText
@@ -52,7 +53,7 @@ class EditCategoryViewModel(
     private val newId: () -> String = { Uuid.random().toString() },
     /** #21: where the one weekly target lives. Null in a graph with no settings: the field is not drawn. */
     private val settings: ImportSettings? = null,
-    private val today: () -> LocalDate = { Clock.System.now().toEpochMilliseconds().dateIn(BangkokTime) },
+    private val today: () -> LocalDate = { Clock.System.now().toEpochMilliseconds().dateIn(HomeTime) },
 ) : ViewModel() {
 
     /** Null until the reader types. Absent means "as stored", which is not the same as blank. */
@@ -64,7 +65,7 @@ class EditCategoryViewModel(
     private val movedCount = MutableStateFlow(0)
     private val rulesMoved = MutableStateFlow(0)
 
-    /** Whole baht as typed, held until Save like the name. Null means "as stored". */
+    /** Whole home units as typed (baht, kyat), held until Save like the name. Null means "as stored". */
     private val typedTarget = MutableStateFlow<String?>(null)
 
     private val closed = MutableStateFlow(false)
@@ -122,7 +123,7 @@ class EditCategoryViewModel(
         chosenColor.value = color
     }
 
-    /** #21: digits only, at most seven, so the field can hold nothing that is not whole baht. */
+    /** #21: digits only, at most seven, so the field can hold nothing that is not a whole amount. */
     fun typeTarget(typed: String) {
         typedTarget.value = typed.filter(Char::isDigit).take(MAX_TARGET_DIGITS)
     }
@@ -159,7 +160,7 @@ class EditCategoryViewModel(
         val store = settings ?: return
         val baht = typed.toLongOrNull()
         when {
-            baht != null && baht > 0 -> store.setWeeklyTarget(WeeklyTarget(categoryId, Satang.ofMinorUnits(baht * SATANG_PER_BAHT)))
+            baht != null && baht > 0 -> store.setWeeklyTarget(WeeklyTarget(categoryId, Satang.ofMinorUnits(baht * minorPerWhole())))
             store.choices.value.weeklyTarget?.categoryId == categoryId -> store.setWeeklyTarget(null)
         }
         typedTarget.value = null
@@ -313,6 +314,5 @@ private data class SubCategoryEdits(
 private data class Counts(val moved: Int, val rules: Int, val target: WeeklyTarget?, val typedTarget: String?)
 
 private const val MAX_TARGET_DIGITS = 7
-private const val SATANG_PER_BAHT = 100L
 
-private fun Satang.wholeBaht(): Long = toMinorUnits() / SATANG_PER_BAHT
+private fun Satang.wholeBaht(): Long = toMinorUnits() / minorPerWhole()

@@ -61,13 +61,14 @@ fun KeyboardAmountField(
             // Follows the entry if it changed under the field, so the two never disagree.
             value = if (field.text == entry.typed) field else TextFieldValue(entry.typed, entry.selection()),
             onValueChange = { next ->
-                val typed = AmountEntry.ofText(next.text) ?: return@BasicTextField
+                val typed = AmountEntry.ofText(next.text, entry.digits) ?: return@BasicTextField
                 field = next.copy(text = typed.typed)
                 if (typed.typed != entry.typed) onType(typed)
             },
             singleLine = true,
             textStyle = MaterialTheme.ptutType.sheet.copy(color = color),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            // #42: kyat and the other no-decimal currencies get the keyboard with no point on it.
+            keyboardOptions = KeyboardOptions(keyboardType = if (entry.digits == 0) KeyboardType.Number else KeyboardType.Decimal),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             modifier = Modifier
                 .fillMaxWidth()

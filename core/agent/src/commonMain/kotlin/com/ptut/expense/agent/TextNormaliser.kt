@@ -41,8 +41,8 @@ class TextNormaliser(private val zawgyi: ZawgyiDetector?) {
         const val THAI_ZERO = '๐'
         const val THAI_NINE = '๙'
 
-        // ဘတ် not followed by စ်, because ဘတ်စ်ကား is a bus.
-        val CURRENCY = Regex("""฿|บาท|ဘတ်(?!စ်)|\bbaht\b""", RegexOption.IGNORE_CASE)
+        // ဘတ် not followed by စ်, because ဘတ်စ်ကား is a bus. #45: kyat words too, for a kyat ledger.
+        val CURRENCY = Regex("""฿|บาท|ဘတ်(?!စ်)|\bbaht\b|ကျပ်|\bkyats?\b|\bKs\b|\bMMK\b""", RegexOption.IGNORE_CASE)
         val INVISIBLE = Regex("[​‌‍﻿]")
         val BURMESE_PUNCTUATION = Regex("[၊။]")
         val SPACES = Regex("\\s+")

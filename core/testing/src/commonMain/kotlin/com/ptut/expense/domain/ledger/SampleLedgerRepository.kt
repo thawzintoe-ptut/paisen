@@ -1,7 +1,7 @@
 package com.ptut.expense.domain.ledger
 
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.ReviewReason
@@ -37,7 +37,7 @@ class SampleLedgerRepository(
     sinceLastImport: Long? = 2 * 60 * 1000L,
 ) : LedgerRepository {
 
-    private val today = clock.now().toLocalDateTime(BangkokTime).date
+    private val today = clock.now().toLocalDateTime(HomeTime).date
 
     private val history = listOf(
         spend(0, 18, 30, "Foodland Rama IV", 64_250, "groceries"),
@@ -122,7 +122,7 @@ class SampleLedgerRepository(
     override suspend fun restore(transaction: Transaction) {
         all.add(transaction)
         recent.add(transaction)
-        if (transaction.occurredAtEpochMillis.dateIn(BangkokTime) == today) today_.add(transaction)
+        if (transaction.occurredAtEpochMillis.dateIn(HomeTime) == today) today_.add(transaction)
     }
 
     /** The three fields screen 11c owns, and the stamp. Everything else stays where it was. */
@@ -192,6 +192,6 @@ class SampleLedgerRepository(
 
     private fun at(daysAgo: Int, hour: Int, minute: Int): Long =
         LocalDateTime(today.minus(daysAgo, DateTimeUnit.DAY), LocalTime(hour, minute))
-            .toInstant(BangkokTime)
+            .toInstant(HomeTime)
             .toEpochMilliseconds()
 }

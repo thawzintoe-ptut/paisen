@@ -46,6 +46,6 @@ data class QueuedSlip(
 )
 
 /** "14 Aug 19:41 · ref 0142K9" — enough for the reader to match the row to a paper slip. */
-fun QueuedSlip.metaLine(zone: TimeZone = BangkokTime): String =
+fun QueuedSlip.metaLine(zone: TimeZone = HomeTime): String =
     "${occurredAtEpochMillis.dateIn(zone).dayAndMonth()} ${occurredAtEpochMillis.timeOfDayIn(zone)}" +
         note.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()

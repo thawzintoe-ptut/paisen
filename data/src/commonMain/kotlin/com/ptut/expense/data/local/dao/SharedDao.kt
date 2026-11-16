@@ -407,8 +407,9 @@ interface SharedDao {
         return added
     }
 
-    @Query("SELECT * FROM currency_rate WHERE currency = :currency")
-    suspend fun rate(currency: String): CurrencyRateEntity?
+    /** #44: [home] per one [currency]. Shared groups ask against their own currency (THB until #48). */
+    @Query("SELECT * FROM currency_rate WHERE currency = :currency AND home = :home")
+    suspend fun rate(currency: String, home: String): CurrencyRateEntity?
 
     @Upsert
     suspend fun upsertRate(rate: CurrencyRateEntity)

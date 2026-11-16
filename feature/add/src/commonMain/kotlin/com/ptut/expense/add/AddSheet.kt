@@ -51,6 +51,7 @@ import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
@@ -66,6 +67,8 @@ import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyChip
+import com.ptut.expense.ui.sky.SkyChoice
+import com.ptut.expense.ui.sky.SkyChoiceSheet
 import com.ptut.expense.ui.sky.SkyDateTimePicker
 import com.ptut.expense.ui.sky.SkyGroupedCard
 import com.ptut.expense.ui.sky.SkyRateRow
@@ -121,10 +124,16 @@ fun AddSheet(
     var choosingCurrency by rememberSaveable { mutableStateOf(false) }
     if (uiState.editingRate) RateSheet(uiState = uiState, onRate = onRate, onClose = onCloseRate)
     if (choosingCurrency) {
-        CurrencySheet(chosen = uiState.currency, onPick = {
-            onCurrency(it)
-            choosingCurrency = false
-        }, onDismiss = { choosingCurrency = false })
+        SkyChoiceSheet(
+            title = currencyCopy().currencyTitle,
+            options = Currencies.all.map { SkyChoice(it.code, "${it.code}  ${it.symbol}") },
+            chosen = uiState.currency.code,
+            onPick = { code ->
+                onCurrency(Currencies.of(code))
+                choosingCurrency = false
+            },
+            onDismiss = { choosingCurrency = false },
+        )
     }
     Column(
         modifier = modifier
@@ -481,7 +490,7 @@ private fun DraftAmount(
     entry: AmountEntry,
     kind: Direction,
     onType: (AmountEntry) -> Unit,
-    symbol: String = "฿",
+    symbol: String = Home.money.symbol,
     onSymbol: (() -> Unit)? = null,
 ) {
     val common = LocalCopy.current.common
@@ -507,35 +516,6 @@ private fun DraftAmount(
                 ),
         )
         KeyboardAmountField(entry = entry, onType = onType, label = common.amount, openOnStart = true, color = ink)
-    }
-}
-
-/** Every currency the app can turn into baht, as the shared groups offer them. */
-@Composable
-private fun CurrencySheet(chosen: Currency, onPick: (Currency) -> Unit, onDismiss: () -> Unit) {
-    SkyBottomSheet(onDismissRequest = onDismiss) {
-        Text(
-            currencyCopy().currencyTitle,
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = Spacing.sm),
-        )
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(top = Spacing.sm)) {
-            Currencies.all.forEach { currency ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = SkySizes.transactionRow)
-                        .tappable(PtutRadii.r12, Role.Button) { onPick(currency) },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("${currency.code}  ${currency.symbol}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-                    if (currency == chosen) {
-                        Icon(PtutIcon.Check.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.cardGlyph))
-                    }
-                }
-            }
-        }
     }
 }
 

@@ -74,6 +74,7 @@ class SettingsViewModelTest : ViewModelTest() {
                 PtutRoute.ExportData,
                 PtutRoute.ImportData,
                 PtutRoute.Timezone,
+                PtutRoute.HomeCurrency,
                 PtutRoute.AddCurrency,
                 PtutRoute.AssistantModel,
                 // Opens the phone's mail app, not a screen.

@@ -1,6 +1,6 @@
 package com.ptut.expense.domain.backup
 
-import com.ptut.expense.domain.BangkokTime
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayAndMonth
 import com.ptut.expense.locale.AppText
@@ -49,7 +49,7 @@ fun MergeReport.phrase(): String {
 fun BackupPreview.phrase(): String {
     val text = AppText.copy.settings
     val rows = oldestEpochMillis?.let { oldest ->
-        text.holding(transactions, oldest.dateIn(BangkokTime).dayAndMonth())
+        text.holding(transactions, oldest.dateIn(HomeTime).dayAndMonth())
     } ?: text.fileHoldsNoTransactions
     return listOfNotNull(
         rows,

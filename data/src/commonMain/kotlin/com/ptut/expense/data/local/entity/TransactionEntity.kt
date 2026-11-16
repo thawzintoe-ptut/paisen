@@ -7,6 +7,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.ForeignAmount
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionDraft
@@ -139,7 +140,7 @@ fun TransactionDraft.toEntity(
     reference = null,
     memo = memo,
     filedAt = filedAt,
-    currency = foreign?.currency ?: "THB",
+    currency = foreign?.currency ?: Home.money.code,
     originalMinor = foreign?.originalMinor,
     rateUnscaled = foreign?.rate?.unscaled,
     rateScale = foreign?.rate?.scale,
@@ -167,15 +168,17 @@ fun Transaction.toEntity() = TransactionEntity(
     sourceFolder = sourceFolder,
     ruleId = ruleId,
     planned = planned,
-    currency = foreign?.currency ?: "THB",
+    currency = foreign?.currency ?: Home.money.code,
     originalMinor = foreign?.originalMinor,
     rateUnscaled = foreign?.rate?.unscaled,
     rateScale = foreign?.rate?.scale,
 )
 
-/** All three columns or none: a row missing one is read as baht rather than guessed. */
+/**
+ * All three columns or none: a row missing one is read as home money rather than guessed. #44: a
+ * home row names the home's code in [TransactionEntity.currency] and carries no original amount.
+ */
 internal fun TransactionEntity.foreignAmount(): ForeignAmount? {
-    if (currency == "THB") return null
     val original = originalMinor ?: return null
     val unscaled = rateUnscaled ?: return null
     val scale = rateScale ?: return null

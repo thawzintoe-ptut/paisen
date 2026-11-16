@@ -1,5 +1,6 @@
 package com.ptut.expense.domain.shared
 
+import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.Satang
 
 /**
@@ -52,6 +53,8 @@ data class SharedGroup(
     val lastSyncedAtEpochMillis: Long? = null,
     /** Research finding 5: the newest row this phone showed, so rows others add after it get a dot. */
     val lastSeenAtEpochMillis: Long? = null,
+    /** #48: what the group counts in, for every member, whatever each one's home is. */
+    val currency: String = "THB",
 ) {
     val activeMembers: List<Member> get() = members.filterNot { it.archived }
 
@@ -205,3 +208,8 @@ fun SharedSnapshot.sharedExpenseOf(transactionId: String): SharedExpense? {
     val expenseId = links.entries.firstOrNull { it.value == transactionId }?.key ?: return null
     return expenseVersions.lastOrNull { it.id == expenseId }?.takeUnless { it.removed }
 }
+
+/** #48: the group's money, as the money format needs it. */
+val SharedGroup.money: Currency get() = Currencies.of(currency)
+
+fun SharedGroup.moneyFormat(): HomeMoney = money.toHomeMoney()

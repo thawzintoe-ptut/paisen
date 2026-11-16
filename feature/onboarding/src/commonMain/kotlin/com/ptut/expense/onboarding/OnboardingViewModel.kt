@@ -2,8 +2,11 @@ package com.ptut.expense.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.phrase
+import com.ptut.expense.domain.home.HomeBook
+import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.platform.photos.PhotoAccessRequest
@@ -12,6 +15,7 @@ import com.ptut.expense.ui.ToastMessages
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -32,7 +36,24 @@ class OnboardingViewModel(
     private val archive: LedgerArchive? = null,
     private val files: LedgerFileStore? = null,
     private val toasts: ToastMessages? = null,
+    /** #41: where home is kept. Null where a test binds none; first run then sets nothing. */
+    private val homeBook: HomeBook? = null,
+    /** #41: what this phone suggests (its country's currency, its zone), or null where the build does not offer a home. */
+    suggestedHome: HomeChoice? = null,
 ) : ViewModel() {
+
+    private val home = MutableStateFlow(suggestedHome)
+
+    /** #41: the home first run will set, shown as one line; null hides the line. */
+    val homeChoice: StateFlow<HomeChoice?> = home.asStateFlow()
+
+    /** The zone stays the phone's own; only the money changes. */
+    fun chooseHome(currency: Currency) = home.update { it?.copy(money = currency.toHomeMoney()) }
+
+    /** Written before first run ends, while the ledger is still empty. */
+    private suspend fun commitHome() {
+        home.value?.let { homeBook?.choose(it) }
+    }
 
     private val restoring = MutableStateFlow(false)
 
@@ -61,12 +82,22 @@ class OnboardingViewModel(
         viewModelScope.launch {
             photoAccess.ask()
             asking = false
+            commitHome()
             onboarding.finish()
         }
     }
 
     /** NFR-2's path for a reader who would rather type. The folder simply stays unread. */
-    fun skip() = onboarding.finish()
+    fun skip() {
+        if (home.value == null || homeBook == null) {
+            onboarding.finish()
+            return
+        }
+        viewModelScope.launch {
+            commitHome()
+            onboarding.finish()
+        }
+    }
 
     private var chosenText: String? = null
     private val preview = MutableStateFlow<String?>(null)
@@ -97,6 +128,7 @@ class OnboardingViewModel(
         val text = chosenText ?: return
         whileRestoring {
             letGo()
+            commitHome()
             toasts?.show(ToastMessage(archive.restore(text).phrase()))
             onboarding.finish()
         }

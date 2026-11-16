@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,22 +21,35 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import com.ptut.expense.design.PtutBrandMark
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
+import com.ptut.expense.design.Sizes
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.SlipFlightArt
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
 import com.ptut.expense.design.ptutType
+import com.ptut.expense.design.tappable
+import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
+import com.ptut.expense.ui.sky.SkyChoice
+import com.ptut.expense.ui.sky.SkyChoiceSheet
 import com.ptut.expense.ui.sky.SkyNoticeCard
 import com.ptut.expense.ui.sky.SkyTextAction
 
@@ -59,8 +73,24 @@ fun OnboardingView(
     restorePreview: String? = null,
     onConfirmRestore: () -> Unit = {},
     onCancelRestore: () -> Unit = {},
+    /** #41: the home first run will set; null hides the line (release builds). */
+    home: HomeChoice? = null,
+    onChooseHome: (Currency) -> Unit = {},
 ) {
     val text = LocalCopy.current.onboarding
+    var choosingHome by rememberSaveable { mutableStateOf(false) }
+    if (choosingHome && home != null) {
+        SkyChoiceSheet(
+            title = currencyCopy().yourMoney,
+            options = Currencies.all.map { SkyChoice(it.code, "${it.code}  ${it.symbol}") },
+            chosen = home.money.code,
+            onPick = { code ->
+                onChooseHome(Currencies.of(code))
+                choosingHome = false
+            },
+            onDismiss = { choosingHome = false },
+        )
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -104,6 +134,7 @@ fun OnboardingView(
                 icon = PtutIcon.Translate.image,
                 modifier = Modifier.padding(top = Spacing.md),
             )
+            home?.let { HomeLine(it, onChange = { choosingHome = true }) }
             restoreProblem?.let { problem ->
                 Text(
                     text = problem,
@@ -130,6 +161,25 @@ fun OnboardingView(
         )
     }
     restorePreview?.let { holds -> RestorePreviewSheet(holds, working = restoring, onImport = onConfirmRestore, onCancel = onCancelRestore) }
+}
+
+/** #41: "Your money  MMK (K)  Change", a 44 tap target that opens the currency list. */
+@Composable
+private fun HomeLine(home: HomeChoice, onChange: () -> Unit) {
+    val words = currencyCopy()
+    Row(
+        modifier = Modifier
+            .padding(top = Spacing.md)
+            .fillMaxWidth()
+            .heightIn(min = Sizes.minTouchTarget)
+            .tappable(PtutRadii.r12, Role.Button, onClick = onChange),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+    ) {
+        Text(words.yourMoney, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        Text(words.homeValue(home.money.code, home.money.symbol), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+        Text(words.change, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+    }
 }
 
 /** #220: the same question Import my data asks, with its words, before a first-run restore merges. */

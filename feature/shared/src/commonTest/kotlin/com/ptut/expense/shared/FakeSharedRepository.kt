@@ -65,11 +65,11 @@ internal class FakeSharedRepository(group: SharedGroup = flat12) : SharedReposit
 
     override suspend fun transactionSeed(transactionId: String): TransactionSeed? = null
 
-    override suspend fun lastRate(currency: String): Rate? = null
+    override suspend fun lastRate(currency: String, into: String): Rate? = null
 
     override suspend fun markSeen(groupId: String, atEpochMillis: Long) = Unit
 
-    override suspend fun createGroup(name: String, type: GroupType, icon: String, members: List<NewMember>): String = notThisTest()
+    override suspend fun createGroup(name: String, type: GroupType, icon: String, members: List<NewMember>, currency: String): String = notThisTest()
 
     override suspend fun addMembers(groupId: String, members: List<NewMember>) = notThisTest<Unit>()
 

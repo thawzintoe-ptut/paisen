@@ -185,6 +185,23 @@ await check('4.14 member name of 60 characters', 'allow', {}, () => setDoc(doc(a
 await check('4.15 rename to 61 characters', 'deny', {}, () => updateDoc(doc(as('bob'), 'groups/g1/members/mCara'), { name: 'x'.repeat(61) }));
 await check('4.16 new group with an unknown type', 'deny', {}, () => setDoc(doc(as('carol'), 'groups/g2'), { name: 'Home', type: 'Castle', icon: 'group', simplifyDebts: true, createdAt: 1, creatorUid: 'carol', memberUids: ['carol'], inviteCode: null, inviteActive: false }));
 await check('4.17 new group as the app shares it', 'allow', {}, () => setDoc(doc(as('carol'), 'groups/g2'), { name: 'Home', type: 'Flat', icon: 'group', simplifyDebts: true, createdAt: 1, creatorUid: 'carol', memberUids: ['carol'], inviteCode: null, inviteActive: false }));
+// #48: a group's own money, and its amounts as amountGroup instead of amountSatang.
+const kyatGroup = (currency) => ({ name: 'Home', type: 'Flat', icon: 'group', simplifyDebts: true, createdAt: 1, creatorUid: 'carol', memberUids: ['carol'], inviteCode: null, inviteActive: false, currency });
+await check('4.18 new group in kyat', 'allow', {}, () => setDoc(doc(as('carol'), 'groups/g3'), kyatGroup('MMK')));
+await check('4.19 new group with a currency that is not a code', 'deny', {}, () => setDoc(doc(as('carol'), 'groups/g4'), kyatGroup('KYAT')));
+await check('4.20 a member changes the group money', 'deny', {}, () => updateDoc(doc(as('bob'), 'groups/g1'), { currency: 'MMK' }));
+await check('4.21 expense with amountGroup and no amountSatang', 'allow', {}, () => {
+  const { amountSatang, shares: _s, ...rest } = version();
+  return entry('groups/g1/entries/e2', 'bob', { ...rest, amountGroup: 29500, shares: [{ memberId: 'mBob', weight: 1, amountMinor: 29500, amountGroup: 29500 }] });
+});
+await check('4.22 expense with neither amount', 'deny', {}, () => {
+  const { amountSatang, ...rest } = version();
+  return entry('groups/g1/entries/e3', 'bob', rest);
+});
+await check('4.23 payment with amountGroup', 'allow', {}, () => {
+  const { amountSatang, ...rest } = payment();
+  return entry('groups/g1/entries/p2', 'bob', { ...rest, amountGroup: 29500 });
+});
 
 // 5. Devices, sessions, deleted groups
 await check('5.1 someone else rewrites a phone\'s device document', 'deny', {}, () => setDoc(doc(as('bob'), 'devices/devA'), { uid: 'bob', platform: 'ios', language: 'en', updatedAt: 2 }));

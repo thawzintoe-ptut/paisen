@@ -153,9 +153,11 @@ fun SharedSnapshot.overall(): Overall {
     return Overall(net = owed - owe, owedToYou = owed, youOwe = owe)
 }
 
-/** The currencies a group has used, baht first: "THB, USD, VND". */
-fun SharedSnapshot.currenciesOf(groupId: String): List<String> =
-    currentExpenses(groupId).map { it.currency }.distinct().sortedWith(compareBy({ it != Currencies.Thb.code }, { it }))
+/** The currencies a group has used, its own first: "THB, USD, VND" (#48). */
+fun SharedSnapshot.currenciesOf(groupId: String): List<String> {
+    val own = group(groupId)?.currency ?: Currencies.Thb.code
+    return currentExpenses(groupId).map { it.currency }.distinct().sortedWith(compareBy({ it != own }, { it }))
+}
 
 /** p27's "Total trip spend": every current expense in baht. */
 fun SharedSnapshot.totalSpend(groupId: String): Satang = currentExpenses(groupId).map { it.satang }.sum()

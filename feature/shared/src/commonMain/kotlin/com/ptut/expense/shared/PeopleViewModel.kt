@@ -78,7 +78,7 @@ class PeopleViewModel(private val repository: SharedRepository) : ViewModel() {
                 initial = balance.name.initial(),
                 detail = if (archived) text.person.archived else balance.groupIds.mapNotNull { group(it)?.name }.distinct().joinToString(", "),
                 word = balance.amount.word(),
-                amount = balance.amount.magnitude().format(),
+                amount = balance.amount.magnitude().format(moneyOf(balance.groupIds)),
                 tone = balance.amount.tone(),
                 archived = archived,
             )

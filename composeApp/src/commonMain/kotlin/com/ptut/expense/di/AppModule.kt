@@ -18,6 +18,7 @@ import com.ptut.expense.data.local.ptutDatabaseBuilder
 import com.ptut.expense.data.repository.DefaultLedgerRepository
 import com.ptut.expense.data.repository.DefaultRuleRepository
 import com.ptut.expense.data.repository.RoomCategoryRepository
+import com.ptut.expense.data.repository.RoomHomeBook
 import com.ptut.expense.data.repository.RoomImportStore
 import com.ptut.expense.data.repository.RoomLedgerArchive
 import com.ptut.expense.data.repository.RoomSharedRepository
@@ -27,6 +28,8 @@ import com.ptut.expense.design.PtutMotion
 import com.ptut.expense.detail.TransactionDetailViewModel
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.categories.CategoryRepository
@@ -35,6 +38,7 @@ import com.ptut.expense.domain.folders.FolderCatalog
 import com.ptut.expense.domain.folders.FolderReadTally
 import com.ptut.expense.domain.folders.WatchedFolderRepository
 import com.ptut.expense.domain.forDirection
+import com.ptut.expense.domain.home.HomeBook
 import com.ptut.expense.domain.inAppLanguage
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.rules.RuleRepository
@@ -81,6 +85,7 @@ import com.ptut.expense.review.ReviewViewModel
 import com.ptut.expense.settings.AddCurrencyViewModel
 import com.ptut.expense.settings.AssistantModelViewModel
 import com.ptut.expense.settings.BackgroundImportViewModel
+import com.ptut.expense.settings.HomeCurrencyViewModel
 import com.ptut.expense.settings.KeepFailedSlipsViewModel
 import com.ptut.expense.settings.LanguageViewModel
 import com.ptut.expense.settings.LedgerBackupViewModel
@@ -114,6 +119,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.datetime.TimeZone
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.scope.Scope
@@ -424,11 +430,12 @@ val viewModelModule: Module = module {
             startingCurrency = { get<ImportSettings>().choices.value.addCurrency?.let(Currencies::of) ?: (getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb) },
             lastRate = { code -> getOrNull<ImportStore>()?.rateFor(code) },
             saveRate = { code, rate ->
-                getOrNull<PtutDatabase>()?.sharedDao()?.upsertRate(CurrencyRateEntity(code, rate.unscaled, rate.scale, Clock.System.now().toEpochMilliseconds()))
+                getOrNull<PtutDatabase>()?.sharedDao()?.upsertRate(CurrencyRateEntity(code, rate.unscaled, rate.scale, Clock.System.now().toEpochMilliseconds(), Home.money.code))
             },
         )
     }
 
+    viewModel { HomeCurrencyViewModel(book = get(), phoneZone = { phoneZone() }) }
     viewModel { AddCurrencyViewModel(settings = get(), phoneCurrency = { (getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb) }) }
 
     viewModel { (shop: String) ->
@@ -442,6 +449,13 @@ val viewModelModule: Module = module {
             archive = getOrNull(),
             files = getOrNull(),
             toasts = get(),
+            homeBook = getOrNull(),
+            // #41: debug builds first; release stays baht and Bangkok.
+            suggestedHome = if (getOrNull<AppBuild>()?.debug == true) {
+                HomeChoice((getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb).toHomeMoney(), phoneZone())
+            } else {
+                null
+            },
         )
     }
 }
@@ -492,6 +506,7 @@ val ledgerModule: Module = module {
      * keep deleting on the old schedule until the process restarted.
      */
     single { ImportSettings(store = get()) }
+    single<HomeBook> { get<PtutDatabase>().let { database -> RoomHomeBook(database.ledgerMetaDao(), database.transactionDao(), get(), database.sharedDao()) } }
 
     single {
         val settings = get<ImportSettings>()
@@ -518,6 +533,7 @@ val ledgerModule: Module = module {
             mergeDao = database.ledgerMergeDao(),
             sharedDao = database.sharedDao(),
             catalogDao = database.catalogBackupDao(),
+            homeBook = getOrNull(),
         )
     }
 

@@ -193,6 +193,7 @@ private fun Loaded(
                             amount = state.balance,
                             tint = MaterialTheme.ptut.heroOn,
                             labelColor = MaterialTheme.ptut.heroOn,
+                            money = state.money,
                             modifier = Modifier.padding(top = Spacing.md),
                         )
                         Text(

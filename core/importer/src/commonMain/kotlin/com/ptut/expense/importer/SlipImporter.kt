@@ -3,6 +3,7 @@ package com.ptut.expense.importer
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.EvidenceRetention
 import com.ptut.expense.domain.ForeignAmount
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.ReviewReason
@@ -288,8 +289,9 @@ class SlipImporter(
             // it is filed without asking, because by then the reader has answered.
             ?: return queue(candidate, hash, read, ReviewReason.NewMerchant, direction)
 
-        // #33: kyat needs a rate before it becomes baht. The first slip asks; later ones use the last.
-        val foreign = if (read.currency == BAHT) {
+        // #33, #44: a slip in another currency needs a rate before it becomes home money. The first
+        // asks; later ones use the last. A K PLUS slip in a kyat ledger is such a slip.
+        val foreign = if (read.currency == Home.money.code) {
             null
         } else {
             val rate = store.rateFor(read.currency) ?: return queue(candidate, hash, read, ReviewReason.RateNeeded, direction)
@@ -455,8 +457,6 @@ interface SlipOwnerBook {
 private fun SlipCandidate.isBankFolder(): Boolean = folderName?.contains(BANK_FOLDER, ignoreCase = true) == true
 
 private const val BANK_FOLDER = "K PLUS"
-
-private const val BAHT = "THB"
 
 /**
  * #26: money in is filed under who sent it. The parser's counterparty is the recipient, which on a

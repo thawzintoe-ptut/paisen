@@ -18,11 +18,17 @@ import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.Sizes
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
+import com.ptut.expense.design.ptut
 import com.ptut.expense.locale.currencyCopy
+import com.ptut.expense.ui.sky.SkyBottomSheet
+import com.ptut.expense.ui.sky.SkyButton
+import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyGroupTitle
 import com.ptut.expense.ui.sky.SkyGroupedCard
 import com.ptut.expense.ui.sky.SkyIntro
 import com.ptut.expense.ui.sky.SkyListScreen
+import com.ptut.expense.ui.sky.SkyNoticeCard
+import com.ptut.expense.ui.sky.SkyRateRow
 
 /** The currency the Add sheet opens on, laid out like the language list. */
 @Composable
@@ -33,12 +39,76 @@ fun AddCurrencyView(
     modifier: Modifier = Modifier,
 ) {
     val text = currencyCopy()
-    SkyListScreen(title = text.startsIn, onBack = onBack, modifier = modifier) {
-        item { SkyIntro(text.startsInIntro) }
-        item { SkyGroupTitle(text.currencyTitle) }
+    CurrencyListScreen(title = text.startsIn, intro = text.startsInIntro, options = uiState.options, onBack = onBack, onChoose = onChoose, modifier = modifier)
+}
+
+/** #41: the ledger's home currency. [note] says why a choice did not apply straight away. */
+@Composable
+fun HomeCurrencyView(
+    uiState: HomeCurrencyUiState,
+    onBack: () -> Unit,
+    onChoose: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+    onRate: (String) -> Unit = {},
+    onConfirmConvert: () -> Unit = {},
+    onCancelConvert: () -> Unit = {},
+    onExport: () -> Unit = {},
+) {
+    uiState.converting?.let { ConvertSheet(it, onRate, onConfirmConvert, onCancelConvert, onExport) }
+    CurrencyListScreen(
+        title = currencyCopy().homeTitle,
+        intro = uiState.intro,
+        options = uiState.options,
+        onBack = onBack,
+        onChoose = onChoose,
+        modifier = modifier,
+        note = uiState.note,
+    )
+}
+
+/** #47: the rate a ledger with rows converts at, and a way to keep a copy before it does. */
+@Composable
+private fun ConvertSheet(converting: ConvertUiModel, onRate: (String) -> Unit, onConfirm: () -> Unit, onCancel: () -> Unit, onExport: () -> Unit) {
+    val words = currencyCopy()
+    SkyBottomSheet(onDismissRequest = onCancel) {
+        Text(converting.title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.md))
+        Text(words.convertBody, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
+        SkyRateRow(
+            rateText = converting.rateText,
+            unit = converting.unit,
+            bahtLine = converting.example,
+            onRate = onRate,
+            focusOnStart = true,
+            homeSymbol = converting.newSymbol,
+            note = null,
+            modifier = Modifier.padding(top = Spacing.s12),
+        )
+        converting.problem?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.ptut.warnInk, modifier = Modifier.padding(top = Spacing.xs)) }
+        Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.md), horizontalArrangement = Arrangement.spacedBy(Spacing.s12)) {
+            SkyButton(label = words.backupFirst, onClick = onExport, kind = SkyButtonKind.Outline, enabled = !converting.working, modifier = Modifier.weight(1f))
+            SkyButton(label = words.convertAction, onClick = onConfirm, enabled = !converting.working, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+/** A currency list with one row ticked, shared by Add starts in and Home currency. */
+@Composable
+private fun CurrencyListScreen(
+    title: String,
+    intro: String,
+    options: List<CurrencyOptionUiModel>,
+    onBack: () -> Unit,
+    onChoose: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+    note: String? = null,
+) {
+    SkyListScreen(title = title, onBack = onBack, modifier = modifier) {
+        item { SkyIntro(intro) }
+        note?.let { item { SkyNoticeCard(text = it, icon = PtutIcon.Info.image, modifier = Modifier.padding(horizontal = Spacing.sm)) } }
+        item { SkyGroupTitle(currencyCopy().currencyTitle) }
         item {
             SkyGroupedCard(
-                rows = uiState.options.map<AddCurrencyOptionUiModel, @Composable () -> Unit> { option ->
+                rows = options.map<CurrencyOptionUiModel, @Composable () -> Unit> { option ->
                     {
                         Row(
                             modifier = Modifier

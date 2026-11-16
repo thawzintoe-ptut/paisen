@@ -1,8 +1,9 @@
 package com.ptut.expense.agent
 
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.forDirection
@@ -57,7 +58,7 @@ class ToolCallCheck(private val grammar: CommandGrammar = CommandGrammar()) {
             AgentTool.DeleteTransaction -> withRow(args, context) { CheckedCall.Valid(ProposedAction.DeleteTransaction(it)) }
 
             AgentTool.AddGroupExpense -> withGroup(args, context) { group ->
-                val amount = strictAmount(args["amount"]) ?: return@withGroup badAmount(args["amount"])
+                val amount = strictAmount(args["amount"], GROUP_DIGITS) ?: return@withGroup badAmount(args["amount"])
                 CheckedCall.Valid(ProposedAction.AddGroupExpense(group.id, amount, args["description"]?.trim()?.ifEmpty { null }))
             }
 
@@ -87,10 +88,10 @@ class ToolCallCheck(private val grammar: CommandGrammar = CommandGrammar()) {
         val category = named?.let { category(it, offered) ?: return unknownCategory(it, offered) }
         val occurredAt = args["date"]?.takeIf { it.isNotBlank() }?.let { text ->
             val date = runCatching { LocalDate.parse(text.trim()) }.getOrNull() ?: return invalid("date must be yyyy-MM-dd.")
-            val now = context.now.toLocalDateTime(BangkokTime)
+            val now = context.now.toLocalDateTime(HomeTime)
             if (date > now.date) return invalid("date $text is after today.")
             // Today's own date is "now", which is what a row with no time already means.
-            if (date == now.date) null else LocalDateTime(date, now.time).toInstant(BangkokTime).toEpochMilliseconds()
+            if (date == now.date) null else LocalDateTime(date, now.time).toInstant(HomeTime).toEpochMilliseconds()
         }
         return CheckedCall.Valid(
             ProposedAction.AddTransaction(
@@ -135,10 +136,10 @@ class ToolCallCheck(private val grammar: CommandGrammar = CommandGrammar()) {
     }
 
     /** The whole argument must be the number: "60.555" is refused, not read as ฿60.55. */
-    private fun strictAmount(text: String?): Satang? {
+    private fun strictAmount(text: String?, digits: Int = Home.money.digits): Satang? {
         val number = text?.trim()?.replace(",", "") ?: return null
         if (!STRICT_AMOUNT.matches(number)) return null
-        return grammar.amountOf(number)
+        return grammar.amountOf(number, digits)
     }
 
     private fun window(text: String?): SpendWindow? = when (text?.trim()?.lowercase()) {
@@ -151,11 +152,13 @@ class ToolCallCheck(private val grammar: CommandGrammar = CommandGrammar()) {
     private fun unknownCategory(name: String?, offered: List<Category>) =
         invalid("No category is called $name. The categories are: ${offered.joinToString { it.name }}.")
 
-    private fun badAmount(text: String?) = invalid("amount $text is not baht with at most two decimals.")
+    private fun badAmount(text: String?) = invalid("amount $text is not money with at most ${Home.money.digits} decimals.")
 
     private fun invalid(error: String) = CheckedCall.Invalid(error)
 
     private companion object {
+        /** Shared groups count in baht until #48. */
+        const val GROUP_DIGITS = 2
         val STRICT_AMOUNT = Regex("""\d+(\.\d{1,2})?""")
     }
 }

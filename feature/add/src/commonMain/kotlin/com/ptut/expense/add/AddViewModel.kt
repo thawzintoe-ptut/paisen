@@ -17,6 +17,7 @@ import com.ptut.expense.agent.VoiceLanguages
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.ForeignAmount
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.TransactionDraft
@@ -84,7 +85,7 @@ data class AddUiState(
     /** True once SAVE was tapped before the row could be written, so [missing] is said as a warning. */
     val triedSave: Boolean = false,
     /** The amount's currency. Anything but baht asks for a rate and saves its baht. */
-    val currency: Currency = Currencies.Thb,
+    val currency: Currency = Currencies.of(Home.money.code),
     /** The currency switch, in builds that offer it. */
     val offersCurrencies: Boolean = false,
     /** Baht for one [Currency.rateUnit], as typed; opens on the last rate saved. */
@@ -102,21 +103,21 @@ data class AddUiState(
      */
     val rateLine: String?
         get() {
-            if (currency.isBaht) return null
+            if (currency.isHome) return null
             val words = currencyCopy()
             val rate = Rate.parse(rateText, currency.rateUnit) ?: return words.setRate(currency.code)
             val typed = rate.typedFor(currency.rateUnit)
-            return foreign?.let { words.converted(it.baht.format(), typed, rateUnit) } ?: words.rateOnly(typed, rateUnit)
+            return foreign?.let { words.converted(it.inHome.format(), Home.money.symbol, typed, rateUnit) } ?: words.rateOnly(Home.money.symbol, typed, rateUnit)
         }
 
     /** No rate yet, so the line under the amount asks rather than reports. */
-    val needsRate: Boolean get() = !currency.isBaht && Rate.parse(rateText, currency.rateUnit) == null
+    val needsRate: Boolean get() = !currency.isHome && Rate.parse(rateText, currency.rateUnit) == null
 
     /** "1,000 K": what one rate is typed for. */
     val rateUnit: String get() = currency.rateUnitLabel()
 
     /** What the row will hold in baht: the typed amount, or the foreign amount at its rate. */
-    private val baht: Satang get() = foreign?.baht ?: entry.toSatang()
+    private val baht: Satang get() = foreign?.inHome ?: entry.toSatang()
 
     /**
      * What still stops a save, amount first, or null once the row can be written. FR-14: both kinds
@@ -125,9 +126,9 @@ data class AddUiState(
     val missing: String?
         get() = when {
             entry.isEmpty -> AppText.copy.add.typeAmountHint
-            !currency.isBaht && parseMinor(entry.typed, currency) == null -> AppText.copy.add.typeAmountHint
+            !currency.isHome && parseMinor(entry.typed, currency) == null -> AppText.copy.add.typeAmountHint
             category == null -> AppText.copy.add.pickCategoryHint
-            !currency.isBaht && foreign == null -> currencyCopy().askRate
+            !currency.isHome && foreign == null -> currencyCopy().askRate
             else -> null
         }
 
@@ -210,7 +211,7 @@ class AddViewModel(
     /** Debug builds first: the amount can be typed in any of [Currencies.all]. */
     private val offersCurrencies: Boolean = false,
     /** The currency a fresh sheet opens on: the Settings choice, or the phone's country. */
-    private val startingCurrency: () -> Currency = { Currencies.Thb },
+    private val startingCurrency: () -> Currency = { Currencies.of(Home.money.code) },
     /** The last rate saved for a currency, shared with slips and groups. */
     private val lastRate: suspend (String) -> Rate? = { null },
     private val saveRate: suspend (String, Rate) -> Unit = { _, _ -> },
@@ -234,7 +235,7 @@ class AddViewModel(
      */
     fun chooseCurrency(currency: Currency) {
         if (!offersCurrencies || currency == state.value.currency) return
-        state.update { it.copy(currency = currency, rateText = "", editingRate = false).priced() }
+        state.update { it.copy(currency = currency, entry = it.entry.withDigits(currency.digits), rateText = "", editingRate = false).priced() }
         loadRate(currency, askIfNone = true)
     }
 
@@ -242,7 +243,7 @@ class AddViewModel(
 
     /** The rate typed in its sheet shows live; Cancel puts back the one there was. */
     fun openRate() {
-        if (state.value.currency.isBaht) return
+        if (state.value.currency.isHome) return
         rateBefore = state.value.rateText
         state.update { it.copy(editingRate = true) }
     }
@@ -255,7 +256,7 @@ class AddViewModel(
     private var rateBefore: String = ""
 
     private fun loadRate(currency: Currency, askIfNone: Boolean = false) {
-        if (currency.isBaht) return
+        if (currency.isHome) return
         viewModelScope.launch {
             val last = lastRate(currency.code)
             if (last == null) {
@@ -267,11 +268,11 @@ class AddViewModel(
     }
 
     private fun AddUiState.priced(): AddUiState {
-        if (currency.isBaht) return copy(foreign = null, bahtLine = null)
+        if (currency.isHome) return copy(foreign = null, bahtLine = null)
         val rate = Rate.parse(rateText, currency.rateUnit)
         val minor = parseMinor(entry.typed, currency)?.takeIf { it > 0 }
         val priced = if (rate != null && minor != null) ForeignAmount(currency.code, minor, rate) else null
-        return copy(foreign = priced, bahtLine = priced?.let { currencyCopy().inBaht(it.baht.format()) })
+        return copy(foreign = priced, bahtLine = priced?.let { currencyCopy().inBaht(it.inHome.format()) })
     }
 
     /**
@@ -293,9 +294,15 @@ class AddViewModel(
         categories = categories(Direction.Expense),
         quickAdd = agent != null,
         voice = voice?.copy(listening = false),
-        currency = if (offersCurrencies) startingCurrency() else Currencies.Thb,
+        currency = start(),
+        entry = AmountEntry(digits = start().digits),
         offersCurrencies = offersCurrencies,
     )
+
+    /** The Settings choice or the phone's, in builds that offer currencies; the home's everywhere else. */
+    private fun start(): Currency = if (offersCurrencies) startingCurrency() else home()
+
+    private fun home(): Currency = Currencies.of(Home.money.code)
 
     /**
      * #205: the sheet as Siri or a Shortcut filled it, from a cleared sheet. The amount arrives
@@ -320,8 +327,8 @@ class AddViewModel(
         val underCategory = subCategories().under(category?.id)
         current.copy(
             entry = action.amount?.let(AmountEntry::of) ?: current.entry,
-            // A sentence's amount is read as baht, so a heard figure puts the sheet back in baht.
-            currency = if (action.amount != null) Currencies.Thb else current.currency,
+            // A sentence's amount is read as home money (#45), so a heard figure puts the sheet back in home.
+            currency = if (action.amount != null) home() else current.currency,
             kind = kind,
             categories = offered,
             category = category,
@@ -535,8 +542,8 @@ class AddViewModel(
             return
         }
 
-        val foreign = current.foreign?.takeUnless { current.currency.isBaht }
-        val amount = foreign?.baht ?: current.entry.toSatang()
+        val foreign = current.foreign?.takeUnless { current.currency.isHome }
+        val amount = foreign?.inHome ?: current.entry.toSatang()
         state.update { it.copy(saving = true) }
         viewModelScope.launch {
             ledger.record(

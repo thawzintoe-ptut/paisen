@@ -10,6 +10,7 @@ import com.ptut.expense.data.local.dao.CategoryDao
 import com.ptut.expense.data.local.dao.ImportRunDao
 import com.ptut.expense.data.local.dao.ImportedSlipDao
 import com.ptut.expense.data.local.dao.LedgerMergeDao
+import com.ptut.expense.data.local.dao.LedgerMetaDao
 import com.ptut.expense.data.local.dao.QueuedSlipDao
 import com.ptut.expense.data.local.dao.RuleDao
 import com.ptut.expense.data.local.dao.SharedDao
@@ -26,6 +27,7 @@ import com.ptut.expense.data.local.entity.ExpenseVersionEntity
 import com.ptut.expense.data.local.entity.GroupMemberEntity
 import com.ptut.expense.data.local.entity.ImportRunEntity
 import com.ptut.expense.data.local.entity.ImportedSlipEntity
+import com.ptut.expense.data.local.entity.LedgerMetaEntity
 import com.ptut.expense.data.local.entity.PaymentRemovalEntity
 import com.ptut.expense.data.local.entity.PersonEntity
 import com.ptut.expense.data.local.entity.QueuedSlipEntity
@@ -67,8 +69,9 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         RepeatRuleEntity::class,
         DeletedBuiltInEntity::class,
         PaymentRemovalEntity::class,
+        LedgerMetaEntity::class,
     ],
-    version = 21,
+    version = 22,
     // Schema 2 adds the nullable transactions.editedAt, and schema 4 the nullable memo and
     // slipAmountMinor beside it. Schema 5 adds the watched_folder table whole. A nullable column
     // with no default, and a new table, are the shapes Room migrates on its own. Schema 6 is
@@ -102,6 +105,9 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         AutoMigration(from = 18, to = 19),
         AutoMigration(from = 19, to = 20),
         AutoMigration(from = 20, to = 21),
+        // #41 adds ledger_meta whole; #44 keys currency_rate by (currency, home), and every rate
+        // already saved was baht per unit, which the column's default says.
+        AutoMigration(from = 21, to = 22),
     ],
     exportSchema = true,
 )
@@ -130,6 +136,8 @@ abstract class PtutDatabase : RoomDatabase() {
     abstract fun sharedDao(): SharedDao
 
     abstract fun catalogBackupDao(): CatalogBackupDao
+
+    abstract fun ledgerMetaDao(): LedgerMetaDao
 }
 
 /** KSP writes the actual for each target; there is nothing to implement by hand. */

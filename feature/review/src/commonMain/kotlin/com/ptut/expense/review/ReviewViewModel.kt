@@ -3,6 +3,7 @@ package com.ptut.expense.review
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.EvidenceRetention
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.evidenceDaysRemaining
@@ -89,7 +90,7 @@ class ReviewViewModel(
                 meta = slip.metaLine(),
                 amount = DisplayAmount.of(slip.amount),
                 reason = slip.reason,
-                foreignAmount = slip.amount?.takeIf { slip.currency != Currencies.Thb.code }
+                foreignAmount = slip.amount?.takeIf { slip.currency != Home.money.code }
                     ?.let { formatMinor(it.toMinorUnits(), Currencies.of(slip.currency)) },
             )
         },

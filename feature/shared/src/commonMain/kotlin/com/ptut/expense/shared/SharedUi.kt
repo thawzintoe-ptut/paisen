@@ -22,11 +22,15 @@ import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.formatParts
+import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.Member
 import com.ptut.expense.domain.shared.SharedGroup
+import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.spoken
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LocalCopy
@@ -78,6 +82,10 @@ fun SharedGroup.displayName(memberId: String): String =
 
 fun Member.initial(): String = name.trim().firstOrNull()?.uppercase() ?: "?"
 
+/** #48: the one money every group in [groupIds] counts in. Groups in different money fall back to the home's. */
+internal fun SharedSnapshot.moneyOf(groupIds: Collection<String>): HomeMoney =
+    groupIds.mapNotNull { group(it)?.currency }.distinct().singleOrNull()?.let { Currencies.of(it).toHomeMoney() } ?: Home.money
+
 /** A member as p26–p31 draw them: an initial on pale sky, or "You" on ink. */
 @Composable
 fun MemberAvatar(label: String, isMe: Boolean, modifier: Modifier = Modifier, size: Dp = SkySizes.rowCircle) {
@@ -119,8 +127,9 @@ fun GroupTile(icon: String, ink: Boolean, modifier: Modifier = Modifier, size: D
 }
 
 /**
- * p26 and p27's big figure: the baht sign and the satang smaller, in the balance's colour. On the
- * group's sky hero the label takes [labelColor] = heroOn, since grey there is 3.81:1.
+ * p26 and p27's big figure: the symbol and the fraction smaller, in the balance's colour. On the
+ * group's sky hero the label takes [labelColor] = heroOn, since grey there is 3.81:1. [money] is
+ * what the groups count in, not the home's (#48).
  */
 @Composable
 fun SharedHero(
@@ -129,9 +138,10 @@ fun SharedHero(
     tint: Color,
     modifier: Modifier = Modifier,
     labelColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    money: HomeMoney = Home.money,
 ) {
-    val parts = amount.formatParts()
-    Column(modifier = modifier.semantics(mergeDescendants = true) { contentDescription = "$label, ${amount.spoken()}" }) {
+    val parts = amount.formatParts(money)
+    Column(modifier = modifier.semantics(mergeDescendants = true) { contentDescription = "$label, ${amount.spoken(money)}" }) {
         Text(label, style = MaterialTheme.typography.bodyLarge, color = labelColor)
         // #200: a new balance rolls to its figure, so the change is seen as well as read.
         SkyRollingAmount(

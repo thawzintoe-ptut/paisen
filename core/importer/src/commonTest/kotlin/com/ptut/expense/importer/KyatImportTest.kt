@@ -1,5 +1,8 @@
 package com.ptut.expense.importer
 
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.rules.MerchantRule
@@ -69,7 +72,7 @@ class KyatImportTest {
 
         val foreign = store.filed.single().foreign!!
         assertEquals(29_500L, foreign.originalMinor)
-        assertEquals(Satang(24_190), foreign.baht)
+        assertEquals(Satang(24_190), foreign.inHome)
     }
 
     @Test
@@ -80,5 +83,57 @@ class KyatImportTest {
         importer(source, store, readsWallets = false).run()
 
         assertTrue(store.queued.isEmpty() && store.filed.isEmpty())
+    }
+
+    // #44: a kyat ledger
+
+    private val kplus = listOf(
+        "Payment Completed",
+        "15 Aug 26  9:25 AM",
+        "MR. SOMCHAI J",
+        "KBank",
+        "xxx-x-xxxxx-x",
+        "LAWSON108_P3793 THE LIVIN",
+        "Transaction ID:",
+        "016200000007AQR00007",
+        "Amount:",
+        "72.00 Baht",
+        "Fee:",
+        "0.00 Baht",
+    ).joinToString("\n")
+
+    private fun inKyat(test: suspend () -> Unit) = runTest {
+        Home.use(HomeChoice(HomeMoney("MMK", "K", 0), "Asia/Yangon"))
+        try {
+            test()
+        } finally {
+            Home.use(HomeChoice.Default)
+        }
+    }
+
+    @Test
+    fun `in a kyat ledger a K PLUS slip waits for a rate and a KBZPay slip files as it is`() = inKyat {
+        val source = FakeSlipSource().apply {
+            add("a.jpg", kplus, now.toEpochMilliseconds())
+            add("b.jpg", receipt, now.toEpochMilliseconds())
+        }
+        val store = InMemoryImportStore(listOf(MerchantRule("LAWSON108_P3793 THE LIVIN", "groceries"), MerchantRule(SHOP, "shopping")))
+
+        importer(source, store).run()
+
+        assertEquals(ReviewReason.RateNeeded, store.queued.single().reason)
+        assertEquals("THB", store.queued.single().currency)
+        assertEquals(null, store.filed.single().foreign)
+        assertEquals(Satang.ofMinorUnits(29_500), store.filed.single().read.amount)
+    }
+
+    @Test
+    fun `in a kyat ledger a K PLUS slip with a saved rate files as kyat`() = inKyat {
+        val source = FakeSlipSource().apply { add("a.jpg", kplus, now.toEpochMilliseconds()) }
+        val store = InMemoryImportStore(listOf(MerchantRule("LAWSON108_P3793 THE LIVIN", "groceries"))).apply { rates["THB"] = Rate.parse("125")!! }
+
+        importer(source, store).run()
+
+        assertEquals(Satang.ofMinorUnits(9_000), store.filed.single().foreign?.inHome)
     }
 }

@@ -1,6 +1,7 @@
 package com.ptut.expense.confirm
 
 import com.ptut.expense.domain.Category
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.locale.AppText
@@ -67,8 +68,8 @@ data class ConfirmSlipUiState(
     val debtMatch: DebtMatchUiModel? = null,
     /** Said once the payment is recorded and the slip stays to be filed as my own spending. */
     val debtPaidNote: String? = null,
-    /** #33: "฿", or "K" for a kyat slip, whose amount is typed in kyat. */
-    val currencySymbol: String = "฿",
+    /** #33: the home symbol, or the slip's own ("K") for a slip in another currency, typed in that currency. */
+    val currencySymbol: String = Home.money.symbol,
     /** #33: a kyat slip asks for baht per 1,000 K, opened on the last rate saved. */
     val asksRate: Boolean = false,
     val rateText: String = "",

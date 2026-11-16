@@ -1,6 +1,6 @@
 package com.ptut.expense.importer
 
-import com.ptut.expense.domain.BangkokTime
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.locale.AppText
@@ -82,6 +82,6 @@ private fun SlipLanding.sharedMessage(clock: Clock): ToastMessage {
 
 /** Today lists only today (FR-16), so a slip from another day names the day it went to. */
 private fun Long.filedDay(clock: Clock): String {
-    val day = dateIn(BangkokTime)
-    return if (day == clock.now().toEpochMilliseconds().dateIn(BangkokTime)) AppText.copy.slips.savedToday else day.dayLabel()
+    val day = dateIn(HomeTime)
+    return if (day == clock.now().toEpochMilliseconds().dateIn(HomeTime)) AppText.copy.slips.savedToday else day.dayLabel()
 }

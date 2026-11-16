@@ -2,9 +2,9 @@ package com.ptut.expense.categories
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
@@ -137,7 +137,7 @@ class CategoriesViewModel(
 
     /** FR-19: months break on the Bangkok calendar, like every other bucket in the app. */
     private fun startOfThisMonth(): Long {
-        val today = clock.now().toLocalDateTime(BangkokTime).date
+        val today = clock.now().toLocalDateTime(HomeTime).date
         return LocalDate(today.year, today.month, 1).startOfDayEpochMillis()
     }
 }
