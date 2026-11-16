@@ -3,7 +3,8 @@ import type { Device } from './firestore';
 export interface Notice {
   groupId: string;
   title: string;
-  body: { en: string; my: string };
+  /** No `th` from an app built before Thai; a Thai phone then gets `en`. */
+  body: { en: string; my: string; th?: string };
 }
 
 export type SendResult = 'sent' | 'dead' | 'failed';
@@ -57,7 +58,7 @@ function targetOf(device: Device): Record<string, string> {
 }
 
 function messageFor(device: Device, notice: Notice): Record<string, unknown> {
-  const body = notice.body[device.language];
+  const body = notice.body[device.language] ?? notice.body.en;
   if (device.platform === 'android') {
     return {
       ...targetOf(device),

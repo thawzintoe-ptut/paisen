@@ -12,11 +12,12 @@ Firestore and FCM are called over REST.
 Request: `Authorization: Bearer <Firebase ID token>` and a JSON body
 
 ```json
-{ "groupId": "…", "title": "Trip", "body": { "en": "Mali added Dinner · ฿320", "my": "…" } }
+{ "groupId": "…", "title": "Trip", "body": { "en": "Mali added Dinner · ฿320", "my": "…", "th": "…" } }
 ```
 
 The notice's title is the group's name as Firestore stores it; the phone's `title` is used only when
-the group has no name. The sentences in `body` come from the member's phone.
+the group has no name. The sentences in `body` come from the member's phone. `th` is optional: apps
+built before Thai send only `en` and `my`, and a phone set to Thai then gets `en`.
 
 Reply: `{ "sent": n }`. Status 401 for a bad or missing token, 403 when the caller is not a member,
 400 for a bad body, 404 when the group does not exist, 405 for any method but POST.

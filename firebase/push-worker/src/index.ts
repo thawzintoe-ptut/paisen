@@ -85,8 +85,11 @@ function parseNotice(body: unknown): Notice {
   const title = text(fields?.title, MAX_TITLE_LENGTH);
   const en = text(sentences?.en, MAX_BODY_LENGTH);
   const my = text(sentences?.my, MAX_BODY_LENGTH);
-  if (!groupId || groupId.includes('/') || !title || !en || !my) throw new HttpError(400, 'bad body');
-  return { groupId, title, body: { en: clip(en), my: clip(my) } };
+  // Optional, since apps built before Thai never send it. When sent, it is checked like the others.
+  const th = text(sentences?.th, MAX_BODY_LENGTH);
+  const badTh = sentences?.th !== undefined && !th;
+  if (!groupId || groupId.includes('/') || !title || !en || !my || badTh) throw new HttpError(400, 'bad body');
+  return { groupId, title, body: { en: clip(en), my: clip(my), th: th === undefined ? undefined : clip(th) } };
 }
 
 /** A long description still sends, cut to what a banner shows. */

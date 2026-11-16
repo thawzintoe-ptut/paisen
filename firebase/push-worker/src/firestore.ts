@@ -4,7 +4,7 @@ export interface Device {
   token: string;
   uid: string;
   platform: 'android' | 'ios';
-  language: 'en' | 'my';
+  language: 'en' | 'my' | 'th';
   /** When the phone last registered, in epoch millis; 0 when the document has none. */
   updatedAt: number;
 }
@@ -104,12 +104,13 @@ function toDevice(document: FirestoreDocument): Device | undefined {
   const fields = document.fields ?? {};
   const uid = fields.uid?.stringValue;
   const platform = fields.platform?.stringValue;
+  const language = fields.language?.stringValue;
   if (!uid || (platform !== 'android' && platform !== 'ios')) return undefined;
   return {
     token: document.name.slice(document.name.lastIndexOf('/') + 1),
     uid,
     platform,
-    language: fields.language?.stringValue === 'my' ? 'my' : 'en',
+    language: language === 'my' || language === 'th' ? language : 'en',
     updatedAt: Number(fields.updatedAt?.integerValue ?? 0) || 0,
   };
 }

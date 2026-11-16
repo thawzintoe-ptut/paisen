@@ -201,6 +201,8 @@ await check('5.10 deleted group: member lets their name go', 'allow', { group: {
 await check('5.12 share: creator adds their own claimed name', 'allow', {}, () => setDoc(doc(as('alice'), 'groups/g1/members/mNew'), { name: 'Alice', claimedByUid: 'alice', archived: false, createdAt: 1 }));
 await check('5.13 member sets up a repeat', 'allow', {}, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), { authorUid: 'bob', createdAt: 1, syncedAt: serverTimestamp(), kind: 'Expense', active: true }));
 await check('5.14 deleted group: member sets up a repeat', 'deny', { group: { deleted: true } }, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), { authorUid: 'bob', createdAt: 1, syncedAt: serverTimestamp(), kind: 'Expense', active: true }));
+await check('5.15 a phone set to Thai registers', 'allow', {}, () => setDoc(doc(as('bob'), 'devices/devB'), { uid: 'bob', platform: 'android', language: 'th', updatedAt: 2 }));
+await check('5.16 a phone registers in a language no notice carries', 'deny', {}, () => setDoc(doc(as('bob'), 'devices/devB'), { uid: 'bob', platform: 'android', language: 'xx', updatedAt: 2 }));
 await check('5.11 app delete-for-everyone', 'allow', {}, () => {
   const db = as('alice');
   const batch = writeBatch(db);

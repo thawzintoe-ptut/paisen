@@ -185,7 +185,7 @@ service cloud.firestore {
       function validDevice() {
         return request.resource.data.uid == request.auth.uid
           && request.resource.data.platform in ['android', 'ios']
-          && request.resource.data.language in ['en', 'my']
+          && request.resource.data.language in ['en', 'my', 'th']
           && request.resource.data.updatedAt is int;
       }
       allow get, list, delete: if signedIn() && resource.data.uid == request.auth.uid;
