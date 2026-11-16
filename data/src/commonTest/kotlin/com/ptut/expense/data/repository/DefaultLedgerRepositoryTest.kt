@@ -276,6 +276,10 @@ private class FakeTransactionDao(
 
     private val all = MutableStateFlow(rows)
 
+    override suspend fun setPlanned(id: String, planned: Boolean) {
+        all.value = all.value.map { if (it.id == id) it.copy(planned = planned) else it }
+    }
+
     val rows: List<TransactionEntity> get() = all.value
 
     var lastWindow: Pair<Long, Long>? = null

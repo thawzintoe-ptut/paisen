@@ -44,6 +44,7 @@ import com.ptut.expense.design.ptutMotion
 import com.ptut.expense.design.tappable
 import com.ptut.expense.locale.Copy
 import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.locale.noteCopy
 import com.ptut.expense.ui.rememberScreenReader
 import com.ptut.expense.ui.sky.SkyBarIconAction
 import com.ptut.expense.ui.sky.SkyBottomSheet
@@ -55,6 +56,7 @@ import com.ptut.expense.ui.sky.SkyHairline
 import com.ptut.expense.ui.sky.SkyKeyValueRow
 import com.ptut.expense.ui.sky.SkyNoticeCard
 import com.ptut.expense.ui.sky.SkyRollingAmount
+import com.ptut.expense.ui.sky.SkySwitchRow
 import com.ptut.expense.ui.sky.SkyTopBar
 
 /**
@@ -79,6 +81,7 @@ fun TransactionDetailView(
     onShare: (groupId: String) -> Unit = {},
     onOpenSharedGroup: (groupId: String) -> Unit = {},
     onSetAlsoRemove: (Boolean) -> Unit = {},
+    onSetPlanned: (Boolean) -> Unit = {},
 ) {
     val text = LocalCopy.current.record
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer)) {
@@ -98,7 +101,7 @@ fun TransactionDetailView(
 
             is TransactionDetailUiState.Loaded -> {
                 var picking by rememberSaveable { mutableStateOf(false) }
-                Record(uiState, onBack, onEdit, onAskToDelete, onOpenShopRule, onShare = { picking = true }, onOpenSharedGroup = onOpenSharedGroup)
+                Record(uiState, onBack, onEdit, onAskToDelete, onOpenShopRule, onShare = { picking = true }, onOpenSharedGroup = onOpenSharedGroup, onSetPlanned = onSetPlanned)
                 if (uiState.confirmingDelete) {
                     DeleteSheet(state = uiState, onKeepIt = onKeepIt, onConfirmDelete = onConfirmDelete, onSetAlsoRemove = onSetAlsoRemove)
                 }
@@ -126,6 +129,7 @@ private fun Record(
     onOpenShopRule: (String) -> Unit,
     onShare: () -> Unit,
     onOpenSharedGroup: (String) -> Unit,
+    onSetPlanned: (Boolean) -> Unit = {},
 ) {
     val copy = LocalCopy.current
     val text = copy.record
@@ -161,6 +165,10 @@ private fun Record(
             Column(modifier = Modifier.fillMaxWidth().padding(top = Spacing.md)) {
                 SkyHairline()
                 state.rows.forEach { row -> SkyKeyValueRow(label = row.label.skyLabel(copy), value = row.value) }
+                if (state.offersPlanned) {
+                    val words = noteCopy()
+                    SkySwitchRow(label = words.planned, hint = words.plannedHint, checked = state.planned, onCheckedChange = onSetPlanned)
+                }
             }
 
             // #186 (D5): a purchase already in History goes to a group from here, once.

@@ -20,6 +20,7 @@ import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.UsualDay
+import com.ptut.expense.domain.WeeklyCheckIn
 import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.colorName
 import com.ptut.expense.domain.dateIn
@@ -53,6 +54,8 @@ import com.ptut.expense.domain.thisWeek
 import com.ptut.expense.domain.usualDay
 import com.ptut.expense.domain.weeklyCheckIn
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.NoteTone
+import com.ptut.expense.locale.noteCopy
 import com.ptut.expense.locale.targetCopy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -175,7 +178,19 @@ data class MoodCardUiModel(val lead: String, val line: String, val glyph: String
 /** #21: "Food: ฿1,900 of ฿2,500 this week" and how far along the bar is, full at the target. */
 data class TargetUiModel(val line: String, val fraction: Float)
 
-data class WeeklyCardUiModel(val lead: String, val line: String, val glyph: String, val from: String, val to: String, val categoryId: String?)
+data class WeeklyCardUiModel(
+    val lead: String,
+    val line: String,
+    val glyph: String,
+    val from: String,
+    val to: String,
+    val categoryId: String?,
+    /** #22: the line carries a note, so "That's not right" sits under it. */
+    val showsNotRight: Boolean = false,
+)
+
+/** #22: whether the weekly note is on in this build, its tone, and the Monday whose note was hidden. */
+data class WeeklyNoteSettings(val on: Boolean = false, val tone: NoteTone = NoteTone.Plain, val hiddenWeek: String? = null)
 
 class HomeViewModel(
     ledger: LedgerRepository,
@@ -202,6 +217,10 @@ class HomeViewModel(
     weeklyCheckIn: Flow<Boolean> = flowOf(false),
     /** #21: the one weekly target, or null with none set. */
     weeklyTarget: Flow<WeeklyTarget?> = flowOf(null),
+    /** #22: the weekly note. Off where nothing binds it, so a test sees the #20 card unchanged. */
+    weeklyNote: Flow<WeeklyNoteSettings> = flowOf(WeeklyNoteSettings()),
+    /** #22: where "Just hide this week" is kept; handed the Monday it hides. */
+    private val hideNoteFor: (String) -> Unit = {},
     /** #219: slips waiting out their Undo, already gone from Review, so not counted here either. */
     pendingDiscards: Flow<Set<String>> = flowOf(emptySet()),
     /** Asked again each time Today comes back, since the reader changes it in the system's pages. */
@@ -213,6 +232,9 @@ class HomeViewModel(
     /** Bumped when the screen comes back, so a card that belongs to the morning goes at noon. */
     private val clockTicks = MutableStateFlow(0)
 
+    /** #22: no note for this week; next Monday shows its own. */
+    fun hideNoteWeek() = hideNoteFor(clock.now().toLocalDateTime(BangkokTime).date.toString())
+
     fun refreshClock() {
         clockTicks.value += 1
     }
@@ -222,12 +244,12 @@ class HomeViewModel(
             ledger.todaysTransactions,
             combine(ledger.sinceLastImportMillis, ledger.importRuns) { since, runs -> since to runs.latestRunFailed() },
             combine(ledger.queuedSlips, pendingDiscards) { slips, pending -> slips.filterNot { it.id in pending } },
-            combine(isScanning, watchedFolders, moodByTimeOfDay, combine(weeklyCheckIn, weeklyTarget, ::Pair), clockTicks) { scanning, folders, mood, weekly, _ ->
-                Extras(scanning, folders, mood, weekly.first, weekly.second)
+            combine(isScanning, watchedFolders, moodByTimeOfDay, combine(weeklyCheckIn, weeklyTarget, weeklyNote, ::Triple), clockTicks) { scanning, folders, mood, weekly, _ ->
+                Extras(scanning, folders, mood, weekly.first, weekly.second, weekly.third)
             },
             // ShopNames too: naming a shop read as noise retitles its rows here without a restart.
             combine(ledger.allTransactions, combine(categoryUpdates, subCategoryUpdates, ShopNames.names) { c, s, _ -> c to s }, period, ::Triple),
-        ) { snapshot, (sinceLastImportMillis, failed), queued, (scanning, folders, mood, weekly, target), (ledgerRows, filing, chosen) ->
+        ) { snapshot, (sinceLastImportMillis, failed), queued, (scanning, folders, mood, weekly, target, note), (ledgerRows, filing, chosen) ->
             val (categories, subCategories) = filing
             val todays = when (snapshot) {
                 LedgerSnapshot.Unanswered -> return@combine HomeUiState.Loading
@@ -266,7 +288,7 @@ class HomeViewModel(
                 amountLabel = chosen.spent(),
                 compared = history.usualDay(today)?.asCompared()?.takeIf { chosen == HomePeriod.Today },
                 moodCard = history.moodCard(dayPartAt(now), today).takeIf { mood && chosen == HomePeriod.Today },
-                weeklyCard = if (weekly && chosen == HomePeriod.Today && today.dayOfWeek == DayOfWeek.MONDAY) history.weeklyCard(today, categories, target) else null,
+                weeklyCard = if (weekly && chosen == HomePeriod.Today && today.dayOfWeek == DayOfWeek.MONDAY) history.weeklyCard(today, categories, target, note) else null,
                 target = if (chosen == HomePeriod.Week && target != null) history.targetLine(target, today, categories) else null,
                 topCategories = transactions.spendByCategory(categories)
                     .take(TOP_CATEGORIES)
@@ -374,7 +396,14 @@ private fun Transaction.asSavedRow(categories: List<Category>, subCategories: Li
         row.copy(meta = listOfNotNull(occurredAtEpochMillis.dateIn(BangkokTime).dayLabel(), row.parts.category).joinToString(" · "))
     }
 
-private data class Extras(val scanning: Boolean, val folders: List<WatchedFolder>, val mood: Boolean, val weekly: Boolean, val target: WeeklyTarget?)
+private data class Extras(
+    val scanning: Boolean,
+    val folders: List<WatchedFolder>,
+    val mood: Boolean,
+    val weekly: Boolean,
+    val target: WeeklyTarget?,
+    val note: WeeklyNoteSettings,
+)
 
 private fun UsualDay.asCompared() = ComparedUiModel(
     line = differencePhrase(),
@@ -417,10 +446,17 @@ private fun List<Transaction>.spendingOn(day: LocalDate): List<Transaction> =
     filter { it.direction == Direction.Expense && it.occurredAtEpochMillis.dateIn(BangkokTime) == day }
 
 /** #20: last week beside a usual one, then the category that rose most. Never red, never "over". */
-private fun List<Transaction>.weeklyCard(today: LocalDate, categories: List<Category>, target: WeeklyTarget?): WeeklyCardUiModel? {
+private fun List<Transaction>.weeklyCard(
+    today: LocalDate,
+    categories: List<Category>,
+    target: WeeklyTarget?,
+    note: WeeklyNoteSettings = WeeklyNoteSettings(),
+): WeeklyCardUiModel? {
     val check = weeklyCheckIn(today) ?: return null
     val home = AppText.copy.home
     val difference = check.difference
+    // #22: the note speaks for this Monday until hidden; the card from #20 stays either way.
+    if (note.on && note.hiddenWeek != today.toString()) return noteCard(check, categories, target, today, note.tone)
     val versus = when {
         difference == null -> ""
         difference > Satang.Zero -> home.weekMore(difference.formatCompact())
@@ -466,4 +502,53 @@ private fun List<Transaction>.targetSentence(target: WeeklyTarget?, today: Local
     } else {
         words.stayedUnder(name, amount)
     }
+}
+
+/**
+ * #22: the #20 card in the chosen tone. Planned spending is already out of the rise; a rise with
+ * planned money beside it says how much was planned. A week under or on usual says so in the tone.
+ */
+private fun List<Transaction>.noteCard(
+    check: WeeklyCheckIn,
+    categories: List<Category>,
+    target: WeeklyTarget?,
+    today: LocalDate,
+    tone: NoteTone,
+): WeeklyCardUiModel {
+    val home = AppText.copy.home
+    val words = noteCopy(tone)
+    val difference = check.difference
+    val rise = check.rise
+    val riseName = rise?.let { r -> categories.firstOrNull { it.id == r.categoryId }?.inAppLanguage()?.name }
+    val line = if (rise != null && riseName != null) {
+        val said = if (rise.planned > Satang.Zero) {
+            words.roseAfterPlanned(riseName, rise.difference.formatCompact(), rise.planned.formatCompact())
+        } else {
+            words.rose(riseName, rise.difference.formatCompact(), rise.shops.firstOrNull())
+        }
+        val versus = difference?.takeIf { it > Satang.Zero }?.let { home.weekMore(it.formatCompact()) }.orEmpty()
+        home.weekCameTo(check.spent.formatCompact(), versus) + " " + said
+    } else {
+        val said = when {
+            difference == null -> null
+            difference < Satang.Zero -> words.under((-difference).formatCompact())
+            difference == Satang.Zero -> words.same
+            else -> null
+        }
+        val versus = difference?.takeIf { it > Satang.Zero }?.let { home.weekMore(it.formatCompact()) }.orEmpty()
+        home.weekCameTo(check.spent.formatCompact(), versus) + (said?.let { " $it" } ?: "")
+    }
+    return WeeklyCardUiModel(
+        lead = home.weekLead,
+        line = line + targetSentence(target, today, categories),
+        glyph = when {
+            difference == null || difference == Satang.Zero -> "trending_flat"
+            difference > Satang.Zero -> "trending_up"
+            else -> "trending_down"
+        },
+        from = check.from.toString(),
+        to = check.to.toString(),
+        categoryId = rise?.categoryId.takeIf { riseName != null },
+        showsNotRight = true,
+    )
 }

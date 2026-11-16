@@ -12,8 +12,10 @@ import com.ptut.expense.domain.retentionPhrase
 import com.ptut.expense.domain.settings.ImportChoices
 import com.ptut.expense.domain.settings.ImportSettings
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.NoteTone
 import com.ptut.expense.locale.SettingsCopy
 import com.ptut.expense.locale.incomeSlipCopy
+import com.ptut.expense.locale.noteCopy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +24,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 
 /** Which row. It is the row's identity as well as the destination it opens. */
-enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, Assistant, Feedback, Licences }
+enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, Assistant, Feedback, Licences }
 
 /** Where Send feedback writes to. The same address PRIVACY.md and SECURITY.md give. */
 const val FEEDBACK_ADDRESS = "developer.ptut@gmail.com"
@@ -79,6 +81,8 @@ class SettingsViewModel(
     private val showAssistant: Boolean = false,
     /** #25: the phone can ask for a fingerprint, face or PIN. Android 8 cannot, so it draws no row. */
     private val canLock: Boolean = false,
+    /** #22: the weekly note's tone row, in debug builds until the note has been tried. */
+    private val showNoteTone: Boolean = false,
 ) : ViewModel() {
 
     fun setMoodByTimeOfDay(on: Boolean) = settings.setMoodByTimeOfDay(on)
@@ -88,6 +92,9 @@ class SettingsViewModel(
     fun setAppLock(on: Boolean) = settings.setAppLock(on)
 
     fun setWeeklyCheckIn(on: Boolean) = settings.setWeeklyCheckIn(on)
+
+    /** #22: Plain and Playful, one tap each way. */
+    fun switchNoteTone() = settings.setNoteTone(if (settings.choices.value.noteTone == NoteTone.Plain) NoteTone.Playful else NoteTone.Plain)
 
     /** #26: your name as slips print it; empty starts learning again. */
     fun setSlipOwner(name: String?) = settings.setSlipOwner(name)
@@ -177,6 +184,13 @@ class SettingsViewModel(
             group = 1,
             switchedOn = choices.weeklyCheckIn,
         ),
+        SettingsRowUiModel(
+            id = SettingsAction.NoteTone,
+            name = noteCopy().toneTitle,
+            value = if (choices.noteTone == NoteTone.Playful) noteCopy().tonePlayful else noteCopy().tonePlain,
+            icon = "tune",
+            group = 1,
+        ).takeIf { showNoteTone },
         // Off draws the pill solid. iOS Reduce Transparency does the same without asking (#123).
         SettingsRowUiModel(
             id = SettingsAction.Transparency,

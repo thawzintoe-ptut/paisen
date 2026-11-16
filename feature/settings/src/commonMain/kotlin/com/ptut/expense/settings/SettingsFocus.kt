@@ -16,7 +16,7 @@ fun ImportFix.owningRow(): SettingsAction = when (this) {
  * each row that opens one to its route, in `SettingsRoutes.kt`.
  */
 fun SettingsAction.opensScreen(): Boolean = when (this) {
-    SettingsAction.MoodByTimeOfDay, SettingsAction.WeeklyCheckIn, SettingsAction.Transparency, SettingsAction.AppLock, SettingsAction.SlipOwner -> false
+    SettingsAction.MoodByTimeOfDay, SettingsAction.WeeklyCheckIn, SettingsAction.Transparency, SettingsAction.AppLock, SettingsAction.SlipOwner, SettingsAction.NoteTone -> false
 
     SettingsAction.SlipSource,
     SettingsAction.BackgroundImport,

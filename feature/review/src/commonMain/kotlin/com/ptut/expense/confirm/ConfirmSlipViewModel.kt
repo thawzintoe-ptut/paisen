@@ -70,6 +70,8 @@ class ConfirmSlipViewModel(
     private val clock: Clock = Clock.System,
     /** Injected so a test can name the rows it wrote. Random everywhere else. */
     /** #114: a haptic on every save and delete, played by the shell. */
+    /** #22: debug builds only until the weekly note has been tried. */
+    private val offersPlanned: Boolean = false,
     private val haptics: Haptics = Haptics(),
     private val newId: () -> String = { Uuid.random().toString() },
 ) : ViewModel() {
@@ -113,6 +115,9 @@ class ConfirmSlipViewModel(
     }
 
     fun type(entry: AmountEntry) = state.update { it.copy(entry = entry) }
+
+    /** #22: held until Save, like the category. */
+    fun markPlanned(on: Boolean) = state.update { it.copy(planned = on) }
 
     /** The reader's name for this shop; it goes onto the rule this save creates. */
     fun nameShop(name: String) = state.update { it.copy(shopName = name) }
@@ -181,6 +186,7 @@ class ConfirmSlipViewModel(
                     folder = slip.sourceFolder,
                     displayName = typed.takeIf { current.shopRead && it.isNotEmpty() && it != slip.merchant },
                     direction = slip.direction,
+                    planned = current.planned && slip.direction == Direction.Expense,
                 ),
             )
             haptics.saved()
@@ -273,6 +279,7 @@ class ConfirmSlipViewModel(
         category = null,
         categories = categories.forDirection(this?.direction ?: Direction.Expense),
         moneyIn = this?.direction == Direction.Income,
+        offersPlanned = offersPlanned && this?.direction != Direction.Income,
         saving = false,
         saved = false,
         shopRead = this?.reason != ReviewReason.Unreadable,

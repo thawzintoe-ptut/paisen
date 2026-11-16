@@ -20,14 +20,20 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
@@ -37,6 +43,7 @@ import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
 import com.ptut.expense.design.ptutIcon
+import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.categoryAndProvenance
@@ -47,6 +54,7 @@ import com.ptut.expense.domain.spoken
 import com.ptut.expense.locale.CommonCopy
 import com.ptut.expense.locale.HomeCopy
 import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.locale.noteCopy
 import com.ptut.expense.ui.sky.SkyEmptyState
 import com.ptut.expense.ui.sky.SkyMoodCard
 import com.ptut.expense.ui.sky.SkyPageSheet
@@ -79,6 +87,8 @@ fun HomeView(
     onOpenReceipt: (String) -> Unit = {},
     /** The weekly card's slice of History (#20). */
     onOpenWeek: (WeeklyCardUiModel) -> Unit = {},
+    /** #22: "Just hide this week" on the weekly note. */
+    onHideNoteWeek: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
@@ -95,6 +105,7 @@ fun HomeView(
                 onOpenTransaction = onOpenTransaction,
                 onOpenReceipt = onOpenReceipt,
                 onOpenWeek = onOpenWeek,
+                onHideNoteWeek = onHideNoteWeek,
             )
         }
     }
@@ -111,6 +122,7 @@ private fun LoadedHome(
     onOpenTransaction: (String) -> Unit,
     onOpenReceipt: (String) -> Unit,
     onOpenWeek: (WeeklyCardUiModel) -> Unit,
+    onHideNoteWeek: () -> Unit,
 ) {
     val text = LocalCopy.current.home
     val common = LocalCopy.current.common
@@ -141,6 +153,7 @@ private fun LoadedHome(
                         onClick = { onOpenWeek(card) },
                         modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
                     )
+                    if (card.showsNotRight) NotRightLink(card, onOpenWeek, onHideNoteWeek)
                 }
                 // Below the freshness line, so a stale banner stays the louder of the two (#121).
                 state.moodCard?.let { card ->
@@ -477,4 +490,37 @@ private fun HomePeriod.quiet(text: HomeCopy): String = when (this) {
     HomePeriod.Today -> text.quietDay
     HomePeriod.Week -> text.quietWeek
     HomePeriod.Month -> text.quietMonth
+}
+
+/** #22: under the weekly note, a quiet link that opens the three-choice sheet. */
+@Composable
+private fun NotRightLink(card: WeeklyCardUiModel, onOpenWeek: (WeeklyCardUiModel) -> Unit, onHideNoteWeek: () -> Unit) {
+    var asking by remember { mutableStateOf(false) }
+    Text(
+        text = noteCopy().notRight,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textDecoration = TextDecoration.Underline,
+        modifier = Modifier
+            .padding(horizontal = Spacing.md)
+            .padding(top = Spacing.xs)
+            .tappable(PtutRadii.r12, Role.Button) { asking = true },
+    )
+    if (asking) {
+        NoteNotRightSheet(
+            onPlanned = {
+                asking = false
+                onOpenWeek(card)
+            },
+            onWrongCategory = {
+                asking = false
+                onOpenWeek(card)
+            },
+            onHideWeek = {
+                asking = false
+                onHideNoteWeek()
+            },
+            onDismiss = { asking = false },
+        )
+    }
 }

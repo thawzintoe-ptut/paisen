@@ -261,4 +261,6 @@ data class BackupTransaction(
     val memo: String? = null,
     /** Format 3: the shop rule that filed the row, so the rule's count comes back with it. */
     val ruleId: String? = null,
+    /** #22: optional and false when absent, so older files and older apps read it without a format change. */
+    val planned: Boolean = false,
 )

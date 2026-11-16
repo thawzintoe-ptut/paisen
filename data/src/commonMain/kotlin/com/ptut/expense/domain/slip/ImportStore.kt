@@ -72,6 +72,8 @@ data class ConfirmedSlip(
     val displayName: String? = null,
     /** #26: the record and its rule are money in or money out. */
     val direction: Direction = Direction.Expense,
+    /** #22: marked planned on Check slip. */
+    val planned: Boolean = false,
 )
 
 /**

@@ -46,6 +46,7 @@ import com.ptut.expense.domain.slip.SlipPictures
 import com.ptut.expense.edit.EditTransactionViewModel
 import com.ptut.expense.folders.PhotoFoldersViewModel
 import com.ptut.expense.home.HomeViewModel
+import com.ptut.expense.home.WeeklyNoteSettings
 import com.ptut.expense.importer.FakeSlipTextReader
 import com.ptut.expense.importer.SlipDiscards
 import com.ptut.expense.importer.SlipImporter
@@ -204,6 +205,7 @@ val viewModelModule: Module = module {
     // built — a rename shows the next time the screen is opened, not while it is on top.
     viewModel {
         val photos = getOrNull<PhotoSettings>()
+        val noteOn = getOrNull<AppBuild>()?.debug == true
         HomeViewModel(
             ledger = get(),
             // The fact the freshness chip needs, taken off the one object that knows it.
@@ -215,6 +217,11 @@ val viewModelModule: Module = module {
             moodByTimeOfDay = getOrNull<ImportSettings>()?.choices?.map { it.moodByTimeOfDay } ?: flowOf(false),
             weeklyCheckIn = getOrNull<ImportSettings>()?.choices?.map { it.weeklyCheckIn } ?: flowOf(false),
             weeklyTarget = getOrNull<ImportSettings>()?.choices?.map { it.weeklyTarget } ?: flowOf(null),
+            // #22: debug builds only until the note has been tried.
+            weeklyNote = getOrNull<ImportSettings>()?.choices?.map {
+                WeeklyNoteSettings(on = noteOn, tone = it.noteTone, hiddenWeek = it.hiddenNoteWeek)
+            } ?: flowOf(WeeklyNoteSettings()),
+            hideNoteFor = { monday -> getOrNull<ImportSettings>()?.hideNoteWeek(monday) },
             pendingDiscards = get<SlipDiscards>().pending,
             onlyPickedPhotos = { photos?.onlyPickedPhotos == true },
         )
@@ -241,6 +248,7 @@ val viewModelModule: Module = module {
             assistant = getOrNull<LanguageModelPort>()?.state ?: flowOf(ModelState.NotOffered),
             showAssistant = getOrNull<AppBuild>()?.debug == true,
             canLock = getOrNull<DeviceAuth>()?.isAvailable() == true,
+            showNoteTone = getOrNull<AppBuild>()?.debug == true,
         )
     }
 
@@ -350,6 +358,7 @@ val viewModelModule: Module = module {
             toasts = get(),
             discards = get(),
             categories = storedCategories(),
+            offersPlanned = getOrNull<AppBuild>()?.debug == true,
             subCategories = storedSubCategories(),
             // "A slip closes the debt": debug builds only until it has been tried with real groups.
             debtsFor = { amount, payee ->
@@ -377,6 +386,8 @@ val viewModelModule: Module = module {
             rules = getOrNull(),
             haptics = get(),
             shared = getOrNull(),
+            // #22: debug builds only until the weekly note has been tried.
+            offersPlanned = getOrNull<AppBuild>()?.debug == true,
         )
     }
     viewModel { (transactionId: String) ->

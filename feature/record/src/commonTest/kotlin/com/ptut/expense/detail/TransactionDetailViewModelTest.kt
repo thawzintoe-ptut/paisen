@@ -351,6 +351,24 @@ class TransactionDetailViewModelTest : ViewModelTest() {
      * and the ledger is not touched until the answer comes back.
      */
     @Test
+    fun `the Planned switch marks the row and shows it marked`() = runTest {
+        val ledger = FakeLedger(listOf(filedSlip))
+        val viewModel = TransactionDetailViewModel(transactionId = filedSlip.id, ledger = ledger, toasts = ToastMessages(), clock = fixedClock, offersPlanned = true)
+
+        viewModel.uiState.test {
+            val before = awaitLoaded()
+            assertTrue(before.offersPlanned)
+            assertFalse(before.planned)
+
+            viewModel.setPlanned(true)
+
+            assertTrue(awaitItem().loaded().planned)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertTrue(ledger.allTransactions.value.rows().single().planned)
+    }
+
+    @Test
     fun `asking to delete raises the dialog and leaves the row alone`() = runTest {
         val ledger = FakeLedger(listOf(filedSlip))
         val viewModel = viewModel(ledger)

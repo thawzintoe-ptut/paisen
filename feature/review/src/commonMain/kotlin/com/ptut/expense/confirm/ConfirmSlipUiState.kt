@@ -38,6 +38,9 @@ data class ConfirmSlipUiState(
     val categories: List<Category>,
     /** #26: the slip names you as the recipient, so the payee row reads "Money in from". */
     val moneyIn: Boolean = false,
+    /** #22: marked planned before saving; offered for money out in builds with the weekly note. */
+    val planned: Boolean = false,
+    val offersPlanned: Boolean = false,
     /** The chosen category's own sub-categories. Empty until one with any is chosen (#111). */
     val subCategories: List<SubCategory> = emptyList(),
     val subCategory: SubCategory? = null,

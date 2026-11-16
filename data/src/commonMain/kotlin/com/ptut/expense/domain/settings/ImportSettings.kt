@@ -3,6 +3,7 @@ package com.ptut.expense.domain.settings
 import com.ptut.expense.domain.EvidenceRetention
 import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.slip.SlipOwner
+import com.ptut.expense.locale.NoteTone
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +32,10 @@ data class ImportChoices(
     val weeklyTarget: WeeklyTarget? = null,
     /** #26: your name as slips print it, learned from your own slips or set by hand. */
     val slipOwner: SlipOwner = SlipOwner(),
+    /** #22: how the weekly note sounds. */
+    val noteTone: NoteTone = NoteTone.Plain,
+    /** #22: the Monday (ISO date) whose note the reader hid; that week shows none. */
+    val hiddenNoteWeek: String? = null,
 )
 
 /**
@@ -88,6 +93,13 @@ class ImportSettings(private val store: ImportSettingsStore) {
     fun learnSlipOwner(sender: String) = update { it.copy(slipOwner = it.slipOwner.learnFrom(sender)) }
 
     /** #26: set by hand, or cleared to start learning again. */
+
+    /** #22 */
+    fun setNoteTone(tone: NoteTone) = update { it.copy(noteTone = tone) }
+
+    /** #22: hides the note for the week starting [monday]; a new week shows its own. */
+    fun hideNoteWeek(monday: String) = update { it.copy(hiddenNoteWeek = monday) }
+
     fun setSlipOwner(name: String?) = update { it.copy(slipOwner = SlipOwner(name = name?.trim()?.takeIf(String::isNotEmpty))) }
 
     /**

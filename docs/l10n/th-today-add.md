@@ -131,3 +131,20 @@ Plain amounts only: the target never says "over budget" and is never red.
 | Nothing was spent on this day. | ไม่มีรายจ่ายในวันนี้ | ReceiptCopy.kt `nothingSpent` |
 | TOTAL | รวม | ReceiptCopy.kt `total` |
 | Kept on this phone. Nothing was sent anywhere. | เก็บไว้ในโทรศัพท์เครื่องนี้ ไม่ได้ส่งไปที่ไหนเลย | ReceiptCopy.kt `keptOnPhone` |
+
+## Weekly note and Planned (#22, new, 16 Nov; Playful lines need the closest read)
+
+| English | Thai | Where |
+| --- | --- | --- |
+| {category} rose {amount}, mostly at {shop}. | {category}เพิ่มขึ้น {amount} ส่วนใหญ่ที่ {shop} | NoteCopy.kt `rose` (Plain) |
+| {category} rose {amount} after the planned {planned}. | {category}เพิ่ม {amount} ไม่นับ {planned} ที่วางแผนไว้ | `roseAfterPlanned` (Plain) |
+| {amount} under a usual week. | ต่ำกว่าสัปดาห์ปกติ {amount} | `under` (Plain) |
+| Right on a usual week. | เท่ากับสัปดาห์ปกติ | `same` (Plain) |
+| {shop} had a good week: {category} ran {amount} above usual. | สัปดาห์นี้ {shop} ยิ้มเลย {category}เกินปกติไป {amount} | `rose` (Playful) |
+| {planned} of {category} was planned. Only {amount} sneaked in. | {planned} วางแผนไว้แล้ว แอบเพิ่มมาแค่ {amount} | `roseAfterPlanned` (Playful) |
+| {amount} under a usual week. Your wallet noticed. | ต่ำกว่าปกติ {amount} กระเป๋าตังค์ยิ้มแล้ว | `under` (Playful) |
+| Right on a usual week. Steady. | เท่าเดิมเป๊ะ สม่ำเสมอดี | `same` (Playful) |
+| Planned / Left out of weekly notes | วางแผนไว้ / ไม่นับในบันทึกรายสัปดาห์ | `planned`, `plannedHint` |
+| That's not right / What's off? | ไม่ถูกต้อง / อะไรไม่ถูก | `notRight`, `whatsOff` |
+| Some of it was planned / A category is wrong / Just hide this week | บางส่วนวางแผนไว้แล้ว / หมวดหมู่ไม่ถูก / ซ่อนสัปดาห์นี้ | sheet choices |
+| Note tone / Plain / Playful | น้ำเสียงของบันทึก / เรียบ ๆ / สนุก ๆ | `toneTitle`, `tonePlain`, `tonePlayful` |

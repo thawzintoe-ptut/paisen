@@ -5,6 +5,7 @@ import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.settings.ImportChoices
 import com.ptut.expense.domain.settings.ImportSettingsStore
 import com.ptut.expense.domain.slip.SlipOwner
+import com.ptut.expense.locale.NoteTone
 import platform.Foundation.NSUserDefaults
 import kotlin.time.Duration.Companion.days
 
@@ -19,6 +20,8 @@ private const val TARGET_SATANG = "ptut-weekly-target-satang"
 private const val OWNER_NAME = "ptut-slip-owner-name"
 private const val OWNER_CANDIDATE = "ptut-slip-owner-candidate"
 private const val OWNER_SEEN = "ptut-slip-owner-seen"
+private const val NOTE_TONE = "ptut-note-tone"
+private const val HIDDEN_NOTE_WEEK = "ptut-hidden-note-week"
 
 /**
  * The iOS half of [ImportSettingsStore]. Both keys are written together, so a zero read back from
@@ -55,6 +58,8 @@ class UserDefaultsImportSettingsStore : ImportSettingsStore {
                 candidate = defaults.stringForKey(OWNER_CANDIDATE),
                 seen = defaults.integerForKey(OWNER_SEEN).toInt(),
             ),
+            noteTone = NoteTone.entries.firstOrNull { it.name == defaults.stringForKey(NOTE_TONE) } ?: shipped.noteTone,
+            hiddenNoteWeek = defaults.stringForKey(HIDDEN_NOTE_WEEK),
         )
     }
 
@@ -68,6 +73,8 @@ class UserDefaultsImportSettingsStore : ImportSettingsStore {
         writeOptional(choices.slipOwner.name, OWNER_NAME)
         writeOptional(choices.slipOwner.candidate, OWNER_CANDIDATE)
         defaults.setInteger(choices.slipOwner.seen.toLong(), OWNER_SEEN)
+        defaults.setObject(choices.noteTone.name, NOTE_TONE)
+        writeOptional(choices.hiddenNoteWeek, HIDDEN_NOTE_WEEK)
         val target = choices.weeklyTarget
         if (target == null) {
             defaults.removeObjectForKey(TARGET_CATEGORY)

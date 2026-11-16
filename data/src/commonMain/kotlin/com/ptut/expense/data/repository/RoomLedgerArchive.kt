@@ -150,6 +150,7 @@ class RoomLedgerArchive(
         memo = memo,
         sourceFolder = sourceFolder,
         ruleId = ruleId,
+        planned = planned,
     )
 }
 
@@ -185,6 +186,7 @@ private fun TransactionEntity.toBackup() = BackupTransaction(
     subCategoryId = subCategoryId,
     memo = memo,
     ruleId = ruleId,
+    planned = planned,
 )
 
 private fun ExpenseVersionEntity.toBackup() = BackupExpenseVersion(

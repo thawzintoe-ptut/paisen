@@ -64,6 +64,8 @@ data class Transaction(
     val sourceFolder: String? = null,
     /** The shop rule that filed this row without asking, or null (#117). What the Why card explains. */
     val ruleId: String? = null,
+    /** #22: the reader marked it planned. Weekly notes never count it as a rise. */
+    val planned: Boolean = false,
 )
 
 val Transaction.isEdited: Boolean get() = editedAt != null

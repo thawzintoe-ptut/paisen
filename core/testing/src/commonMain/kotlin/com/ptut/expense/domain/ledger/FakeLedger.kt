@@ -68,6 +68,10 @@ class FakeLedger(
      * meets what it will meet in the app: the three fields changed, [Transaction.editedAt] set,
      * and every other column left where it was.
      */
+    override suspend fun setPlanned(transactionId: String, planned: Boolean) {
+        rewrite(currentRows.map { row -> if (row.id == transactionId) row.copy(planned = planned) else row })
+    }
+
     override suspend fun applyEdit(transactionId: String, edit: TransactionEdit) {
         editedAt += 1
         rewrite(

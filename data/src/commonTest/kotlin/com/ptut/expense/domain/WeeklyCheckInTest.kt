@@ -88,6 +88,32 @@ class WeeklyCheckInTest {
     }
 
     @Test
+    fun `a planned payment is never part of a rise and is counted beside it`() {
+        val rows = listOf(
+            spend(day(10, 27), 200, "food"),
+            spend(day(11, 4), 200, "food"),
+            spend(day(11, 10), 300, "food", shop = "LAWSON"),
+            spend(day(11, 11), 600, "food", shop = "LAWSON").copy(planned = true),
+        )
+
+        val rise = rows.weeklyCheckIn(monday)!!.rise!!
+
+        assertEquals(Satang.ofMinorUnits(10_000), rise.difference)
+        assertEquals(Satang.ofMinorUnits(60_000), rise.planned)
+    }
+
+    @Test
+    fun `a rise made only of planned payments is no rise`() {
+        val rows = listOf(
+            spend(day(10, 27), 200, "food"),
+            spend(day(11, 4), 200, "food"),
+            spend(day(11, 10), 900, "food").copy(planned = true),
+        )
+
+        assertNull(rows.weeklyCheckIn(monday)!!.rise)
+    }
+
+    @Test
     fun `a week below usual everywhere has no next step`() {
         val rows = listOf(
             spend(day(10, 27), 500),

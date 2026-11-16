@@ -99,6 +99,7 @@ class RoomImportStore(
         slipAmountMinor = readAmount?.toMinorUnits(),
         filedAt = confirmedAtEpochMillis,
         sourceFolder = folder,
+        planned = planned,
     )
 
     override suspend fun discard(id: String) = queuedSlipDao.discard(id)

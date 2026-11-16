@@ -34,8 +34,11 @@ data class WeeklyCheckIn(
     val difference: Satang? get() = usual?.let { spent - it }
 }
 
-/** [shops] are the counterparties that took most of it last week, biggest first. */
-data class CategoryRise(val categoryId: String, val difference: Satang, val shops: List<String>)
+/**
+ * [shops] are the counterparties that took most of it last week, biggest first. #22: [difference]
+ * counts only what was not marked planned; [planned] is what was, in the same category.
+ */
+data class CategoryRise(val categoryId: String, val difference: Satang, val shops: List<String>, val planned: Satang = Satang.Zero)
 
 /**
  * Last week, Monday to Sunday on [zone] days, seen from [today]. Null on a week with no spending,
@@ -76,16 +79,23 @@ internal fun List<Transaction>.total(): Satang = fold(Satang.Zero) { sum, row ->
 
 internal fun List<Satang>.mean(): Satang = Satang(sumOf { it.raw } / size)
 
-/** A row with no category cannot be named, so it never leads the next step. */
-private fun List<Transaction>.biggestRise(earlier: List<List<Transaction>>): CategoryRise? =
-    mapNotNull { it.categoryId }.distinct()
+/**
+ * A row with no category cannot be named, so it never leads the next step. #22: a planned payment is
+ * never part of a rise, this week or in the usual weeks it is measured against.
+ */
+private fun List<Transaction>.biggestRise(earlier: List<List<Transaction>>): CategoryRise? {
+    val unplanned = filterNot { it.planned }
+    return unplanned.mapNotNull { it.categoryId }.distinct()
         .map { id ->
-            val usual = earlier.map { week -> week.filter { it.categoryId == id }.total() }.mean()
-            id to (filter { it.categoryId == id }.total() - usual)
+            val usual = earlier.map { week -> week.filter { it.categoryId == id && !it.planned }.total() }.mean()
+            id to (unplanned.filter { it.categoryId == id }.total() - usual)
         }
         .filter { (_, difference) -> difference > Satang.Zero }
         .maxByOrNull { (_, difference) -> difference }
-        ?.let { (id, difference) -> CategoryRise(id, difference, shopsIn(id)) }
+        ?.let { (id, difference) ->
+            CategoryRise(id, difference, unplanned.shopsIn(id), planned = filter { it.categoryId == id && it.planned }.total())
+        }
+}
 
 private fun List<Transaction>.shopsIn(categoryId: String): List<String> =
     filter { it.categoryId == categoryId }

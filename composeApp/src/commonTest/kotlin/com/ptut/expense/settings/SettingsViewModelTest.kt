@@ -64,7 +64,8 @@ class SettingsViewModelTest : ViewModelTest() {
                 null,
                 PtutRoute.Activity,
                 PtutRoute.Categories,
-                // #121, #20, #123 and #25: switches with no screen behind them; the row's tap flips it.
+                // #121, #20, #22, #123 and #25: rows with no screen behind them; the row's tap changes it.
+                null,
                 null,
                 null,
                 null,

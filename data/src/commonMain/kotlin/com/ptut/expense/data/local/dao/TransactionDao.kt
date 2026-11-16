@@ -113,6 +113,10 @@ interface TransactionDao {
         occurredAtEpochMillis: Long?,
         editedAtEpochMillis: Long,
     )
+
+    // #22: only the flag; the row keeps its editedAt.
+    @Query("UPDATE transactions SET planned = :planned WHERE id = :id")
+    suspend fun setPlanned(id: String, planned: Boolean)
 }
 
 /**

@@ -381,6 +381,7 @@ private fun LedgerShell() {
                     onOpenTransaction = { navController.openTransaction(it) },
                     onOpenReceipt = { navController.navigate(PtutRoute.DayReceipt(it)) },
                     onOpenWeek = { navController.navigate(PtutRoute.LedgerSlice(it.from, it.to, it.categoryId)) { launchSingleTop = true } },
+                    onHideNoteWeek = viewModel::hideNoteWeek,
                 )
                 if (askingAllowAll) {
                     // Asked for only under "Select photos", the one case that offers Android's picker.
@@ -679,6 +680,8 @@ private fun LedgerShell() {
                                 .onFailure { scope.launch { toasts.show(ToastMessage(noEmailApp, ToastTone.Error)) } }
                         } else if (action == SettingsAction.SlipOwner) {
                             editingOwner = true
+                        } else if (action == SettingsAction.NoteTone) {
+                            settings.switchNoteTone()
                         } else {
                             action.destination()?.let { navController.navigate(it) }
                         }
@@ -898,6 +901,7 @@ private fun LedgerShell() {
                     onChooseDebt = confirm::chooseDebt,
                     onPayDebt = confirm::payDebt,
                     onNotThisDebt = confirm::notThisDebt,
+                    onPlanned = confirm::markPlanned,
                 )
             }
 
@@ -941,6 +945,7 @@ private fun LedgerShell() {
                     onShare = { groupId -> navController.navigate(PtutRoute.AddSharedExpense(groupId, transactionId = id)) { launchSingleTop = true } },
                     onOpenSharedGroup = { navController.navigate(PtutRoute.SharedGroup(it)) { launchSingleTop = true } },
                     onSetAlsoRemove = detail::setAlsoRemove,
+                    onSetPlanned = detail::setPlanned,
                 )
             }
 

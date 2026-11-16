@@ -20,6 +20,7 @@ import com.ptut.expense.domain.TransactionSource
 import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.locale.NoteTone
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +30,7 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.toInstant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -237,6 +239,55 @@ class HomeViewModelTest : ViewModelTest() {
 
             val line = assertNotNull((awaitItem() as HomeUiState.Success).weeklyCard).line
             assertTrue(line.endsWith("Food & drink went ฿100 past its ฿400 target."), line)
+        }
+    }
+
+    @Test
+    fun thePlainNoteNamesTheRiseAndOffersThatsNotRight() = runTest {
+        val viewModel = viewModel(transactions = emptyList(), saved = weekOfSpending(), now = MONDAY_NOON, weeklyCheckIn = true, note = WeeklyNoteSettings(on = true))
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            val card = assertNotNull((awaitItem() as HomeUiState.Success).weeklyCard)
+            assertTrue(card.line.endsWith("Food & drink rose ฿300, mostly at LAWSON."), card.line)
+            assertTrue(card.showsNotRight)
+        }
+    }
+
+    @Test
+    fun thePlayfulNoteSaysTheSameNumbersInItsOwnWords() = runTest {
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            saved = weekOfSpending(),
+            now = MONDAY_NOON,
+            weeklyCheckIn = true,
+            note = WeeklyNoteSettings(on = true, tone = NoteTone.Playful),
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            val line = assertNotNull((awaitItem() as HomeUiState.Success).weeklyCard).line
+            assertTrue(line.endsWith("LAWSON had a good week: Food & drink ran ฿300 above usual."), line)
+        }
+    }
+
+    @Test
+    fun aHiddenWeekKeepsTheCardButDropsTheNote() = runTest {
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            saved = weekOfSpending(),
+            now = MONDAY_NOON,
+            weeklyCheckIn = true,
+            note = WeeklyNoteSettings(on = true, hiddenWeek = "2026-11-16"),
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            val card = assertNotNull((awaitItem() as HomeUiState.Success).weeklyCard)
+            assertFalse(card.showsNotRight)
         }
     }
 
@@ -549,12 +600,14 @@ class HomeViewModelTest : ViewModelTest() {
         onlyPickedPhotos: () -> Boolean = { false },
         weeklyCheckIn: Boolean = false,
         target: WeeklyTarget? = null,
+        note: WeeklyNoteSettings = WeeklyNoteSettings(),
     ) = HomeViewModel(
         ledger = FakeLedger(transactions, sinceLastImportMillis, queued, all = transactions + saved, runs = runs),
         subCategoryUpdates = subCategories,
         onlyPickedPhotos = onlyPickedPhotos,
         weeklyCheckIn = flowOf(weeklyCheckIn),
         weeklyTarget = flowOf(target),
+        weeklyNote = flowOf(note),
         clock = object : Clock {
             override fun now(): Instant = now
         },

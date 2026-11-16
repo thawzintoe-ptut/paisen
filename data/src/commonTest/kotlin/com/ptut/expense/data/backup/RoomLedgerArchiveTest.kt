@@ -37,6 +37,18 @@ class RoomLedgerArchiveTest {
     }
 
     @Test
+    fun `a planned mark survives export and import`() = runTest {
+        val planned = byHand.copy(planned = true)
+        val file = archive(holding = listOf(satangExact, planned)).export()
+
+        val empty = FakeLedgerTable()
+        archive(table = empty).restore(file)
+
+        assertEquals(true, empty.rows.single { it.id == planned.id }.planned)
+        assertEquals(false, empty.rows.single { it.id == satangExact.id }.planned)
+    }
+
+    @Test
     fun `importing the same file twice adds no rows`() = runTest {
         val file = archive(holding = listOf(satangExact, byHand)).export()
 
@@ -264,6 +276,8 @@ private class TransactionsOnDisk(
 ) : TransactionDao {
 
     override suspend fun all(): List<TransactionEntity> = rows
+
+    override suspend fun setPlanned(id: String, planned: Boolean) = error("an archive never marks a row")
 
     override fun observeBetween(
         fromEpochMillis: Long,

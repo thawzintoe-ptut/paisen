@@ -6,6 +6,7 @@ import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.settings.ImportChoices
 import com.ptut.expense.domain.settings.ImportSettingsStore
 import com.ptut.expense.domain.slip.SlipOwner
+import com.ptut.expense.locale.NoteTone
 import kotlin.time.Duration.Companion.days
 
 private const val CHOICES_FILE = "ptut-import-settings"
@@ -20,6 +21,8 @@ private const val TARGET_SATANG = "weekly-target-satang"
 private const val OWNER_NAME = "slip-owner-name"
 private const val OWNER_CANDIDATE = "slip-owner-candidate"
 private const val OWNER_SEEN = "slip-owner-seen"
+private const val NOTE_TONE = "note-tone"
+private const val HIDDEN_NOTE_WEEK = "hidden-note-week"
 
 /**
  * Two values in their own file, so clearing it by hand puts the shipped defaults back.
@@ -51,6 +54,8 @@ class SharedPreferencesImportSettingsStore(context: Context) : ImportSettingsSto
                 candidate = choices.getString(OWNER_CANDIDATE, null),
                 seen = choices.getInt(OWNER_SEEN, 0),
             ),
+            noteTone = NoteTone.entries.firstOrNull { it.name == choices.getString(NOTE_TONE, null) } ?: shipped.noteTone,
+            hiddenNoteWeek = choices.getString(HIDDEN_NOTE_WEEK, null),
         )
     }
 
@@ -67,6 +72,8 @@ class SharedPreferencesImportSettingsStore(context: Context) : ImportSettingsSto
             .putString(OWNER_NAME, choices.slipOwner.name)
             .putString(OWNER_CANDIDATE, choices.slipOwner.candidate)
             .putInt(OWNER_SEEN, choices.slipOwner.seen)
+            .putString(NOTE_TONE, choices.noteTone.name)
+            .putString(HIDDEN_NOTE_WEEK, choices.hiddenNoteWeek)
             .apply()
     }
 }

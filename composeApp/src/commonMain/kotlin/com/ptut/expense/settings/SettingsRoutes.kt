@@ -28,7 +28,7 @@ fun SettingsAction.destination(): PtutRoute? = when (this) {
     SettingsAction.Categories -> PtutRoute.Categories
 
     // Switches with no screen behind them: the row's tap flips it (#121, #123).
-    SettingsAction.MoodByTimeOfDay, SettingsAction.WeeklyCheckIn, SettingsAction.Transparency, SettingsAction.AppLock, SettingsAction.SlipOwner -> null
+    SettingsAction.MoodByTimeOfDay, SettingsAction.WeeklyCheckIn, SettingsAction.Transparency, SettingsAction.AppLock, SettingsAction.SlipOwner, SettingsAction.NoteTone -> null
 
     SettingsAction.ExportLedger -> PtutRoute.ExportData
 

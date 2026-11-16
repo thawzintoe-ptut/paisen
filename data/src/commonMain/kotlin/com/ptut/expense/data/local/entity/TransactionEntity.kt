@@ -1,5 +1,6 @@
 package com.ptut.expense.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -78,6 +79,9 @@ data class TransactionEntity(
     val sourceFolder: String? = null,
     /** The shop rule that filed the row without asking (#117). Added in schema 11; null on every other row. */
     val ruleId: String? = null,
+    /** Schema 20 (#22): the reader marked this payment as planned, so weekly notes leave it out. */
+    @ColumnInfo(defaultValue = "0")
+    val planned: Boolean = false,
 )
 
 /**
@@ -100,6 +104,7 @@ fun TransactionEntity.toDomain(): Transaction = Transaction(
     sourceFolder = sourceFolder,
     filedAt = filedAt,
     ruleId = ruleId,
+    planned = planned,
 )
 
 /**
@@ -147,4 +152,5 @@ fun Transaction.toEntity() = TransactionEntity(
     filedAt = filedAt,
     sourceFolder = sourceFolder,
     ruleId = ruleId,
+    planned = planned,
 )

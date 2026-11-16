@@ -92,3 +92,20 @@ Burmese for Today, the Add sheet and the day receipt that the Sky MY design does
 | {category} stayed under its {target} target. | {category} က {target} ပန်းတိုင်အောက်မှာ ရှိခဲ့တယ်။ | locale/TargetCopy.kt `stayedUnder` |
 | {category} went {over} past its {target} target. | {category} က {target} ပန်းတိုင်ထက် {over} ကျော်သွားတယ်။ | locale/TargetCopy.kt `wentPast` |
 | of {target} | ပန်းတိုင် {target} | locale/TargetCopy.kt `ofTarget` |
+
+## Weekly note and Planned (#22, new, 16 Nov; Playful lines need the closest read)
+
+| English | Burmese | Where |
+| --- | --- | --- |
+| {category} rose {amount}, mostly at {shop}. | {category} {amount} တက်တယ်၊ အများစုက {shop} မှာ။ | locale/NoteCopy.kt `rose` (Plain) |
+| {category} rose {amount} after the planned {planned}. | စီစဉ်ထားတဲ့ {planned} ကလွဲရင် {category} {amount} တက်တယ်။ | `roseAfterPlanned` (Plain) |
+| {amount} under a usual week. | ပုံမှန် တစ်ပတ်ထက် {amount} နည်းတယ်။ | `under` (Plain) |
+| Right on a usual week. | ပုံမှန် တစ်ပတ်အတိုင်းပဲ။ | `same` (Plain) |
+| {shop} had a good week: {category} ran {amount} above usual. | {shop} အတွက် ကောင်းတဲ့ အပတ်ပဲ၊ {category} ပုံမှန်ထက် {amount} ပိုသွားတယ်။ | `rose` (Playful) |
+| {planned} of {category} was planned. Only {amount} sneaked in. | {category} {planned} က စီစဉ်ထားပြီးသား၊ {amount} ပဲ ခိုးဝင်လာတယ်။ | `roseAfterPlanned` (Playful) |
+| {amount} under a usual week. Your wallet noticed. | ပုံမှန်ထက် {amount} နည်းတယ်။ ပိုက်ဆံအိတ်လေး ပျော်နေပြီ။ | `under` (Playful) |
+| Right on a usual week. Steady. | ပုံမှန်အတိုင်း တည်တည်ငြိမ်ငြိမ်ပဲ။ | `same` (Playful) |
+| Planned / Left out of weekly notes | စီစဉ်ထားတာ / အပတ်စဉ် မှတ်ချက်ထဲ မထည့်ဘူး | `planned`, `plannedHint` |
+| That's not right / What's off? | ဒါ မမှန်ဘူး / ဘာမှားနေလဲ | `notRight`, `whatsOff` |
+| Some of it was planned / A category is wrong / Just hide this week | တချို့က စီစဉ်ထားပြီးသား / အမျိုးအစား မှားနေတယ် / ဒီအပတ် ဖျောက်ထားမယ် | sheet choices |
+| Note tone / Plain / Playful | မှတ်ချက် လေသံ / ရိုးရိုး / ပေါ့ပေါ့ပါးပါး | `toneTitle`, `tonePlain`, `tonePlayful` |

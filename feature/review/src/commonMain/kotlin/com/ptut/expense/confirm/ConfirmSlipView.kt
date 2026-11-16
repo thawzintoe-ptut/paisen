@@ -47,6 +47,7 @@ import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.SlipsCopy
 import com.ptut.expense.locale.incomeSlipCopy
+import com.ptut.expense.locale.noteCopy
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.KeyboardAmountField
 import com.ptut.expense.ui.SlipPicture
@@ -61,6 +62,7 @@ import com.ptut.expense.ui.sky.SkyHairline
 import com.ptut.expense.ui.sky.SkyKeyValueRow
 import com.ptut.expense.ui.sky.SkyNoticeCard
 import com.ptut.expense.ui.sky.SkySubChipBox
+import com.ptut.expense.ui.sky.SkySwitchRow
 import com.ptut.expense.ui.sky.SkyTextAction
 import com.ptut.expense.ui.sky.SkyTopBar
 
@@ -93,6 +95,7 @@ fun ConfirmSlipView(
     onChooseDebt: (Int) -> Unit = {},
     onPayDebt: (keepInSpending: Boolean) -> Unit = {},
     onNotThisDebt: () -> Unit = {},
+    onPlanned: (Boolean) -> Unit = {},
 ) {
     val text = LocalCopy.current.slips
     val common = LocalCopy.current.common
@@ -225,6 +228,12 @@ fun ConfirmSlipView(
                     selected = uiState.subCategory,
                     onSelect = onSubCategory,
                 )
+            }
+
+            // #22: money out only, and only in builds that offer the weekly note.
+            if (uiState.offersPlanned) {
+                val words = noteCopy()
+                SkySwitchRow(label = words.planned, hint = words.plannedHint, checked = uiState.planned, onCheckedChange = onPlanned)
             }
 
             // FR-13, before the rule exists: a rule found out about afterwards was never agreed to.

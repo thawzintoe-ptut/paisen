@@ -78,6 +78,8 @@ class TransactionDetailViewModel(
      * then draws without the row, which is the same thing it does for a row no rule filed.
      */
     private val rules: RuleRepository? = null,
+    /** #22: debug builds only until the weekly note has been tried. */
+    private val offersPlanned: Boolean = false,
     /** FR-19: the transaction's own Bangkok day and time, never the device's. */
     private val zone: TimeZone = BangkokTime,
     /** Only to ask what today is. Which totals a delete moves depends on the day it happens. */
@@ -153,6 +155,8 @@ class TransactionDetailViewModel(
             consequence = consequence(),
             deleteMoves = moved?.let { text.comesOff(amount.format(), it) } ?: text.comesOffHistory(amount.format()),
             isIncome = direction == Direction.Income,
+            planned = planned,
+            offersPlanned = offersPlanned && direction == Direction.Expense,
             ruleFooter = ruleFooter(known),
             shopRule = shopRule(known),
         )
@@ -280,6 +284,11 @@ class TransactionDetailViewModel(
             sharedGroupId = group?.id,
             sharedGroupName = group?.name,
         )
+    }
+
+    /** #22: planned on or off, written at once like a switch in Settings. */
+    fun setPlanned(on: Boolean) {
+        viewModelScope.launch { ledger.setPlanned(transactionId, on) }
     }
 
     fun setAlsoRemove(on: Boolean) {

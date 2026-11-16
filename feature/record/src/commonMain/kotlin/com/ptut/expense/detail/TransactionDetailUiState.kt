@@ -50,6 +50,9 @@ sealed interface TransactionDetailUiState {
         val deleteMoves: String,
         /** Titles the record "Income" rather than "Purchase" (#147, R10). */
         val isIncome: Boolean = false,
+        /** #22: the reader marked it planned, and whether this build offers the switch (money out only). */
+        val planned: Boolean = false,
+        val offersPlanned: Boolean = false,
         val ruleFooter: String,
         /** Null where no rule files this shop — a row added by hand, or a shop never remembered. */
         val shopRule: ShopRuleRowUiModel? = null,

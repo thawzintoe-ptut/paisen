@@ -88,4 +88,10 @@ interface LedgerRepository {
      * the reader cannot see.
      */
     suspend fun applyEdit(transactionId: String, edit: TransactionEdit)
+
+    /**
+     * #22: the reader says this payment was planned. Not a change to the money, so it does not stamp
+     * the row as edited. The default does nothing, for the test doubles that never mark one.
+     */
+    suspend fun setPlanned(transactionId: String, planned: Boolean) = Unit
 }

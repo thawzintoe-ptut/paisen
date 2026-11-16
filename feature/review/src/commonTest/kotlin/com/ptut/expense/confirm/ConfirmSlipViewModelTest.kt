@@ -473,6 +473,29 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun `a slip marked planned is saved planned`() = runTest {
+        val store = InMemoryImportStore()
+        val viewModel = ConfirmSlipViewModel(
+            slipId = "q1",
+            ledger = FakeLedger(listOf(slip(Satang(48_500)))),
+            importer = SlipImporter(FakeSlipSource(), FakeSlipTextReader(), store),
+            toasts = ToastMessages(),
+            discards = SlipDiscards(SlipImporter(FakeSlipSource(), FakeSlipTextReader(), store), ToastMessages(), CoroutineScope(Dispatchers.Main)) { Duration.ZERO },
+            offersPlanned = true,
+            newId = { "generated" },
+        )
+        runCurrent()
+        assertTrue(viewModel.uiState.value.offersPlanned)
+
+        viewModel.markPlanned(true)
+        viewModel.choose(food)
+        viewModel.save()
+        runCurrent()
+
+        assertTrue(store.confirmed.single().planned)
+    }
+
+    @Test
     fun `money out offers no income category`() = runTest {
         val viewModel = viewModel(slip(Satang(48_500)))
         runCurrent()

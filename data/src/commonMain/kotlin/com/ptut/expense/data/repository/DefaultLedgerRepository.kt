@@ -104,6 +104,8 @@ class DefaultLedgerRepository(
      * The edit stamp comes from this repository's clock, the same one the day window was built
      * from — so a correction made at 23:59 cannot claim a day the screen is not showing.
      */
+    override suspend fun setPlanned(transactionId: String, planned: Boolean) = transactionDao.setPlanned(transactionId, planned)
+
     override suspend fun applyEdit(transactionId: String, edit: TransactionEdit) {
         transactionDao.applyEdit(
             id = transactionId,
