@@ -27,15 +27,19 @@ class FakeSlipSource(
     /** A K PLUS folder as both platforms see it: another app wrote the pictures, so none can go. */
     var refusesDeletes: Boolean = false
 
-    fun add(id: String, transcript: String, capturedAtEpochMillis: Long, folderId: String? = null) {
+    fun add(id: String, transcript: String, capturedAtEpochMillis: Long, folderId: String? = null, folderName: String? = null) {
         images[id] = transcript to capturedAtEpochMillis
         folderId?.let { folders[id] = it }
+        folderName?.let { names[id] = it }
     }
+
+    /** #26: the watched folder's name, which is what tells the bank app's own folder apart. */
+    private val names = mutableMapOf<String, String>()
 
     override suspend fun candidates(): List<SlipCandidate> {
         if (scanFails) throw IllegalStateException("the folder could not be read")
         return images.entries
-            .map { (id, image) -> SlipCandidate(id, image.second, folders[id]) }
+            .map { (id, image) -> SlipCandidate(id, image.second, folders[id], names[id]) }
             .sortedBy { it.capturedAtEpochMillis }
     }
 
@@ -103,8 +107,8 @@ class InMemoryImportStore(rules: List<MerchantRule> = emptyList()) : ImportStore
         queued.firstOrNull { it.id == slip.queuedSlipId }?.let { importedHashes += it.hash }
         queued.removeAll { it.id == slip.queuedSlipId }
         slip.counterparty?.let { counterparty ->
-            rules.removeAll { it.counterparty == counterparty }
-            rules += MerchantRule(counterparty, slip.categoryId)
+            rules.removeAll { it.counterparty == counterparty && it.direction == slip.direction }
+            rules += MerchantRule(counterparty, slip.categoryId, direction = slip.direction)
         }
         slip.reference?.let {
             contentKeys += Triple(it, slip.amount.toMinorUnits(), slip.occurredAtEpochMillis)

@@ -39,7 +39,9 @@ class RoomImportStore(
 ) : ImportStore {
 
     override suspend fun rules(): List<MerchantRule> =
-        ruleDao.all().map { MerchantRule(counterparty = it.counterparty, categoryId = it.categoryId, id = it.id) }
+        ruleDao.all().map {
+            MerchantRule(counterparty = it.counterparty, categoryId = it.categoryId, id = it.id, direction = Direction.valueOf(it.direction))
+        }
 
     override suspend fun isImported(hash: String): Boolean = importedSlipDao.isImported(hash)
 
@@ -77,6 +79,7 @@ class RoomImportStore(
                 categoryId = slip.categoryId,
                 createdAtEpochMillis = slip.confirmedAtEpochMillis,
                 displayName = slip.displayName?.trim()?.takeIf { it.isNotEmpty() },
+                direction = slip.direction.name,
             )
         },
         queuedSlipId = slip.queuedSlipId,
@@ -86,7 +89,7 @@ class RoomImportStore(
         id = transactionId,
         occurredAtEpochMillis = occurredAtEpochMillis,
         amountMinor = amount.toMinorUnits(),
-        direction = Direction.Expense.name,
+        direction = direction.name,
         categoryId = categoryId,
         subCategoryId = subCategoryId,
         counterparty = counterparty,
@@ -113,14 +116,14 @@ class RoomImportStore(
     }
 
     /**
-     * Every slip in the set is money out. The header names the rail — `Payment Completed` or
-     * `Transfer Completed` — and never the direction, so it is not read as one.
+     * The header names the rail — `Payment Completed` or `Transfer Completed` — and never the
+     * direction. #26: the direction comes from whose names the slip prints, decided before here.
      */
     private fun FiledSlip.toEntity() = TransactionEntity(
         id = id,
         occurredAtEpochMillis = read.occurredAtEpochMillis,
         amountMinor = read.amount.toMinorUnits(),
-        direction = Direction.Expense.name,
+        direction = direction.name,
         categoryId = categoryId,
         counterparty = read.counterparty,
         source = TransactionSource.Scan.name,
@@ -145,6 +148,7 @@ class RoomImportStore(
         evidenceExpired = false,
         lowConfidence = lowConfidence.asColumn(),
         sourceFolder = folder,
+        direction = direction.name,
     )
 
     private fun ImportRun.toEntity() = ImportRunEntity(

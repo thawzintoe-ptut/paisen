@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
@@ -45,6 +46,9 @@ data class QueuedSlipEntity(
     val lowConfidence: String = "",
     /** The watched folder the slip came from. Added in schema 10. */
     val sourceFolder: String? = null,
+    /** Schema 19 (#26): money out or money in, as the slip read. Every slip before it was money out. */
+    @ColumnInfo(defaultValue = "Expense")
+    val direction: String = "Expense",
 )
 
 fun QueuedSlipEntity.toDomain(): QueuedSlip = QueuedSlip(
@@ -57,6 +61,7 @@ fun QueuedSlipEntity.toDomain(): QueuedSlip = QueuedSlip(
     capturedAtEpochMillis = capturedAtEpochMillis,
     lowConfidence = lowConfidence.toSlipFields(),
     sourceFolder = sourceFolder,
+    direction = Direction.entries.firstOrNull { it.name == direction } ?: Direction.Expense,
 )
 
 /**

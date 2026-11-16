@@ -49,6 +49,7 @@ import com.ptut.expense.home.HomeViewModel
 import com.ptut.expense.importer.FakeSlipTextReader
 import com.ptut.expense.importer.SlipDiscards
 import com.ptut.expense.importer.SlipImporter
+import com.ptut.expense.importer.SlipOwnerBook
 import com.ptut.expense.ledger.LedgerScope
 import com.ptut.expense.ledger.LedgerViewModel
 import com.ptut.expense.locale.Language
@@ -348,7 +349,7 @@ val viewModelModule: Module = module {
             importer = get(),
             toasts = get(),
             discards = get(),
-            categories = storedCategories().forDirection(Direction.Expense),
+            categories = storedCategories(),
             subCategories = storedSubCategories(),
             // "A slip closes the debt": debug builds only until it has been tried with real groups.
             debtsFor = { amount, payee ->
@@ -475,6 +476,11 @@ val ledgerModule: Module = module {
             store = get(),
             folders = get(),
             retention = { settings.choices.value.retention },
+            owner = object : SlipOwnerBook {
+                override fun name(): String? = settings.choices.value.slipOwner.name
+
+                override fun learnFrom(sender: String) = settings.learnSlipOwner(sender)
+            },
         )
     }
 

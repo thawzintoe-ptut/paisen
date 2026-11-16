@@ -1,5 +1,6 @@
 package com.ptut.expense.domain.slip
 
+import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
@@ -17,6 +18,8 @@ data class FiledSlip(
     val folder: String? = null,
     /** The rule that filed it, for the record's Why card (#117). */
     val ruleId: String? = null,
+    /** #26: money in when the slip names you as the recipient. */
+    val direction: Direction = Direction.Expense,
 )
 
 /**
@@ -36,6 +39,8 @@ data class QueuedSlipEntry(
     val lowConfidence: Set<SlipField> = emptySet(),
     /** The watched folder it came from (#170). */
     val folder: String? = null,
+    /** #26: money in when the slip names you as the recipient. */
+    val direction: Direction = Direction.Expense,
 )
 
 /**
@@ -65,6 +70,8 @@ data class ConfirmedSlip(
     val folder: String? = null,
     /** The reader's name for a shop read as noise, kept on the rule; [counterparty] stays the key. */
     val displayName: String? = null,
+    /** #26: the record and its rule are money in or money out. */
+    val direction: Direction = Direction.Expense,
 )
 
 /**

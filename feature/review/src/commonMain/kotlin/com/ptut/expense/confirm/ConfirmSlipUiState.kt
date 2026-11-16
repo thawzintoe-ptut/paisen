@@ -36,6 +36,8 @@ data class ConfirmSlipUiState(
     val lowConfidence: Set<SlipField>,
     val category: Category?,
     val categories: List<Category>,
+    /** #26: the slip names you as the recipient, so the payee row reads "Money in from". */
+    val moneyIn: Boolean = false,
     /** The chosen category's own sub-categories. Empty until one with any is chosen (#111). */
     val subCategories: List<SubCategory> = emptyList(),
     val subCategory: SubCategory? = null,

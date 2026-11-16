@@ -274,6 +274,20 @@ class SlipParserTest {
     // Counterparty
 
     @Test
+    fun `the sender block names the person who paid`() {
+        val read = complete("LAWSON108_P3793 THE LIVIN", "Transaction ID:", "016200000003BPM00003", "Amount:", "50.00 Baht")
+
+        assertEquals("MR. SOMCHAI J", read.sender)
+    }
+
+    @Test
+    fun `a banner beside the sender does not become the sender`() {
+        val read = assertIs<SlipRead.Complete>(SlipParser.parse(bannerSlip("MS. ANONG", "KBank", "xxx-x-xxxxx-x")))
+
+        assertEquals("MR. SOMCHAI J", read.sender)
+    }
+
+    @Test
     fun `a Thai-only shop is read in Thai by a reader that reads Thai`() {
         val read = complete(
             "ถุงเงิน (คุณสมชาย)",
@@ -569,6 +583,7 @@ class SlipParserTest {
                 occurredAtEpochMillis = LocalDateTime(2026, 8, 14, 19, 58)
                     .toInstant(BangkokTime).toEpochMilliseconds(),
                 reference = "016200000002TXN00002",
+                sender = "MR. SOMCHAI J",
             ),
             read,
         )

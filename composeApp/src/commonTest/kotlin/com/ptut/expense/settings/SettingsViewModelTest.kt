@@ -31,6 +31,7 @@ class SettingsViewModelTest : ViewModelTest() {
                 "Photo folders",
                 "Background import",
                 "Keep unread slips",
+                "Your name on slips",
                 "Activity",
                 "Categories",
                 "Mood by time of day",
@@ -59,6 +60,8 @@ class SettingsViewModelTest : ViewModelTest() {
                 PtutRoute.PhotoFolders,
                 PtutRoute.BackgroundImport,
                 PtutRoute.KeepFailedSlips,
+                // #26: opens a small dialog, not a screen.
+                null,
                 PtutRoute.Activity,
                 PtutRoute.Categories,
                 // #121, #20, #123 and #25: switches with no screen behind them; the row's tap flips it.

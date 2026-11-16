@@ -61,9 +61,8 @@ class ConfirmSlipViewModel(
     private val importer: SlipImporter,
     private val toasts: ToastMessages,
     private val discards: SlipDiscards,
-    // C-2: a slip is money sent, so Income is never on offer here.
-    // C-2: a slip is money sent, so only the categories the reader files spending under.
-    private val categories: List<Category> = Category.seed().forDirection(Direction.Expense),
+    // #26: every category; the slip's own direction picks which are offered, so money in offers income.
+    private val categories: List<Category> = Category.seed(),
     private val subCategories: List<SubCategory> = emptyList(),
     /** The shared-group debts a slip for this amount could have paid, the slip's payee as a hint. */
     private val debtsFor: (Satang, String?) -> List<SlipDebt> = { _, _ -> emptyList() },
@@ -181,6 +180,7 @@ class ConfirmSlipViewModel(
                     readAmount = slip.amount,
                     folder = slip.sourceFolder,
                     displayName = typed.takeIf { current.shopRead && it.isNotEmpty() && it != slip.merchant },
+                    direction = slip.direction,
                 ),
             )
             haptics.saved()
@@ -246,7 +246,9 @@ class ConfirmSlipViewModel(
         }
     }
 
-    private fun debtsOf(slip: QueuedSlip): List<SlipDebt> = slip.amount?.let { debtsFor(it, slip.merchant) }.orEmpty()
+    // A debt is paid by money going out; money in never closes one here.
+    private fun debtsOf(slip: QueuedSlip): List<SlipDebt> =
+        slip.amount?.takeIf { slip.direction == Direction.Expense }?.let { debtsFor(it, slip.merchant) }.orEmpty()
 
     private fun debtMatch(): DebtMatchUiModel? {
         val chosen = debts.getOrNull(chosenDebt) ?: return null
@@ -269,7 +271,8 @@ class ConfirmSlipViewModel(
         lowConfidence = this?.lowConfidence.orEmpty(),
         amountUnread = this != null && amount == null,
         category = null,
-        categories = categories,
+        categories = categories.forDirection(this?.direction ?: Direction.Expense),
+        moneyIn = this?.direction == Direction.Income,
         saving = false,
         saved = false,
         shopRead = this?.reason != ReviewReason.Unreadable,

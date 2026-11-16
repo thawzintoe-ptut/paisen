@@ -13,6 +13,7 @@ import com.ptut.expense.domain.settings.ImportChoices
 import com.ptut.expense.domain.settings.ImportSettings
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.SettingsCopy
+import com.ptut.expense.locale.incomeSlipCopy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +22,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 
 /** Which row. It is the row's identity as well as the destination it opens. */
-enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, Assistant, Feedback, Licences }
+enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, Assistant, Feedback, Licences }
 
 /** Where Send feedback writes to. The same address PRIVACY.md and SECURITY.md give. */
 const val FEEDBACK_ADDRESS = "developer.ptut@gmail.com"
@@ -88,6 +89,9 @@ class SettingsViewModel(
 
     fun setWeeklyCheckIn(on: Boolean) = settings.setWeeklyCheckIn(on)
 
+    /** #26: your name as slips print it; empty starts learning again. */
+    fun setSlipOwner(name: String?) = settings.setSlipOwner(name)
+
     val uiState: StateFlow<SettingsUiState> = combine(
         ledger.sinceLastImportMillis,
         settings.choices,
@@ -133,6 +137,13 @@ class SettingsViewModel(
             name = text.keepUnreadSlips,
             value = text.thenDeleted(retentionPhrase(choices.retention)),
             icon = "auto_delete",
+        ),
+        // #26: whose name marks a slip as money in. Learned from your own slips, correctable here.
+        SettingsRowUiModel(
+            id = SettingsAction.SlipOwner,
+            name = incomeSlipCopy().ownerRow,
+            value = choices.slipOwner.name ?: incomeSlipCopy().ownerUnknown,
+            icon = "call_received",
         ),
         // Activity's way in, now Home has no bell (#144, N2).
         SettingsRowUiModel(

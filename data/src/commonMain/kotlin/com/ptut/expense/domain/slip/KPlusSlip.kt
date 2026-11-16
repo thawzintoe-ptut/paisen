@@ -41,9 +41,9 @@ object KPlusSlip : SlipFormat {
         val unsure = unsureFields(name, amount)
 
         return if (amount != null && occurredAt != null && reference != null) {
-            SlipRead.Complete(name.value, amount, occurredAt, reference, unsure)
+            SlipRead.Complete(name.value, amount, occurredAt, reference, unsure, sender = trimmed.sender())
         } else {
-            SlipRead.Partial(name.value, amount, occurredAt, reference, unsure)
+            SlipRead.Partial(name.value, amount, occurredAt, reference, unsure, sender = trimmed.sender())
         }
     }
 
@@ -140,6 +140,17 @@ object KPlusSlip : SlipFormat {
 
         val name = block.joinWrappedName(candidate)
         return if (name.value.isReaderNoise()) block.accountHolder() ?: name else name
+    }
+
+    /**
+     * #26: the first name in the sender block, between the date and the sender's masked account.
+     * The K+ logo reads as one letter and the bank as `KBank`, both after or shorter than the name.
+     */
+    private fun List<String>.sender(): String? {
+        val account = indexOfFirst { MASKED_ID_SHAPE.matches(it) }
+        val date = indexOfFirst { DATE_SHAPE.matches(it) }
+        if (account == -1 || date == -1 || date >= account) return null
+        return subList(date + 1, account).firstOrNull { it.readsAsName() && !it.isReaderNoise() }
     }
 
     /**

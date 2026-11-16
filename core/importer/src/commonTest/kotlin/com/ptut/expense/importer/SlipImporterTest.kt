@@ -1,12 +1,14 @@
 package com.ptut.expense.importer
 
 import app.cash.turbine.test
+import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.rules.MerchantRule
 import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.QueuedSlipEntry
+import com.ptut.expense.domain.slip.SlipOwner
 import com.ptut.expense.platform.photos.SlipCandidate
 import com.ptut.expense.platform.photos.SlipSource
 import kotlinx.coroutines.async
@@ -16,6 +18,7 @@ import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
@@ -51,11 +54,13 @@ class SlipImporterTest {
         source: FakeSlipSource,
         store: InMemoryImportStore,
         clock: Clock = FixedClock(now),
+        owner: SlipOwnerBook = SlipOwnerBook.Unknown,
     ) = SlipImporter(
         source = source,
         reader = FakeSlipTextReader(),
         store = store,
         clock = clock,
+        owner = owner,
         newId = { "id-${store.filed.size}-${store.runs.size}" },
     )
 
@@ -162,6 +167,61 @@ class SlipImporterTest {
         assertEquals(1, summary.queued)
         assertEquals(0, summary.unreadable)
         assertContentEquals(listOf("glare.jpg"), source.remaining.toList())
+    }
+
+    // #26 — money in
+
+    @Test
+    fun `your name is learned only from slips in the bank app's own folder`() = runTest {
+        val source = FakeSlipSource()
+        val store = InMemoryImportStore(listOf(lawson))
+        val owner = OwnerInMemory()
+        source.add("shot.jpg", slip(reference = "016200000001AQR00001"), capturedAt(), folderName = "Screenshots")
+        source.add("a.jpg", slip(reference = "016200000002AQR00002"), capturedAt(), folderName = "K PLUS")
+        importer(source, store, owner = owner).run()
+        assertNull(owner.owner.name)
+
+        source.add("b.jpg", slip(reference = "016200000003AQR00003"), capturedAt(), folderName = "K PLUS")
+        importer(source, store, owner = owner).run()
+
+        assertEquals("MR. SOMCHAI J", owner.owner.name)
+    }
+
+    @Test
+    fun `a slip that names you as recipient waits in To check as money in and then files itself`() = runTest {
+        val source = FakeSlipSource()
+        val store = InMemoryImportStore(listOf(lawson))
+        val owner = OwnerInMemory(SlipOwner(name = "MR. SOMCHAI J"))
+        source.add("in1.jpg", received("MS. ANONG W", "MR. SOMCHAI JAIDEE", "016200000010APP00010"), capturedAt())
+        importer(source, store, owner = owner).run()
+
+        val asked = store.queued.single()
+        assertEquals(Direction.Income, asked.direction)
+        assertEquals("MS. ANONG W", asked.counterparty)
+        assertEquals(ReviewReason.NewMerchant, asked.reason)
+
+        importer(source, store, owner = owner).confirm(
+            confirmation(asked, Satang.ofMinorUnits(50_000)).copy(counterparty = "MS. ANONG W", categoryId = "income", direction = Direction.Income),
+        )
+        source.add("in2.jpg", received("MS. ANONG W", "MR. SOMCHAI JAIDEE", "016200000011APP00011"), capturedAt())
+        importer(source, store, owner = owner).run()
+
+        val filed = store.filed.single()
+        assertEquals(Direction.Income, filed.direction)
+        assertEquals("income", filed.categoryId)
+    }
+
+    @Test
+    fun `paying someone who has paid you still asks under money out`() = runTest {
+        val source = FakeSlipSource()
+        val store = InMemoryImportStore(listOf(lawson, MerchantRule("MS. ANONG W", "income", direction = Direction.Income)))
+        val owner = OwnerInMemory(SlipOwner(name = "MR. SOMCHAI J"))
+        source.add("out.jpg", slip(merchant = "MS. ANONG W", reference = "016200000012AQR00012"), capturedAt())
+
+        importer(source, store, owner = owner).run()
+
+        assertEquals(0, store.filed.size)
+        assertEquals(Direction.Expense, store.queued.single().direction)
     }
 
     // NFR-4 — the picture
@@ -311,6 +371,33 @@ class SlipImporterTest {
 
         assertEquals(1, source.mostScansAtOnce)
         assertEquals(2, store.runs.size, "each caller still gets its own journal entry")
+    }
+
+    /** #26: a slip someone else's K PLUS saved, sent to you as a picture. */
+    private fun received(from: String, to: String, reference: String, amount: String = "500.00") = """
+        Transfer Completed
+        15 Aug 26  9:25 AM
+        $from
+        KBank
+        xxx-x-xxxxx-x
+        $to
+        KBank
+        xxx-x-xxxxx-x
+        Transaction ID:
+        $reference
+        Amount:
+        $amount Baht
+        Fee:
+        0.00 Baht
+    """.trimIndent()
+
+    /** #26: the learned name, held the way the app's settings hold it. */
+    private class OwnerInMemory(var owner: SlipOwner = SlipOwner()) : SlipOwnerBook {
+        override fun name(): String? = owner.name
+
+        override fun learnFrom(sender: String) {
+            owner = owner.learnFrom(sender)
+        }
     }
 
     private fun capturedAt(): Long = now.toEpochMilliseconds()

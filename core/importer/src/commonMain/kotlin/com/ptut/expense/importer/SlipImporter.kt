@@ -1,5 +1,6 @@
 package com.ptut.expense.importer
 
+import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.EvidenceRetention
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ImportRun
@@ -13,6 +14,7 @@ import com.ptut.expense.domain.slip.ImportStore
 import com.ptut.expense.domain.slip.QueuedSlipEntry
 import com.ptut.expense.domain.slip.SlipParser
 import com.ptut.expense.domain.slip.SlipRead
+import com.ptut.expense.domain.slip.direction
 import com.ptut.expense.platform.ocr.SlipTextReader
 import com.ptut.expense.platform.photos.SlipCandidate
 import com.ptut.expense.platform.photos.SlipSource
@@ -86,6 +88,8 @@ class SlipImporter(
      * until the process restarted. Defaulted so a test that is not about retention says nothing.
      */
     private val retention: () -> Duration = { EvidenceRetention },
+    /** #26: whose phone this is, so a slip that names them as recipient reads as money in. */
+    private val owner: SlipOwnerBook = SlipOwnerBook.Unknown,
     /**
      * Injected so a test can name the row it wrote. Random everywhere else, and last so the tests
      * that name one keep reading it as a trailing lambda.
@@ -242,11 +246,16 @@ class SlipImporter(
             return Outcome.Unreadable
         }
 
-        return when (val read = SlipParser.parse(lines)) {
-            is SlipRead.Complete -> file(candidate, hash, read, rules)
+        val read = SlipParser.parse(lines)
+        // #26: the bank app's own folder holds only your payments, so its sender is you.
+        if (read is SlipRead.Readable && candidate.isBankFolder()) read.sender?.let(owner::learnFrom)
+        val direction = (read as? SlipRead.Readable)?.direction(owner.name()) ?: Direction.Expense
+
+        return when (read) {
+            is SlipRead.Complete -> file(candidate, hash, read.seenFrom(direction), rules, direction)
 
             // FR-7: the amount did not read. It is queued with that field still empty.
-            is SlipRead.Partial -> queue(candidate, hash, read, ReviewReason.AmountUnclear)
+            is SlipRead.Partial -> queue(candidate, hash, read.seenFrom(direction), ReviewReason.AmountUnclear, direction)
 
             // #113: a slip that read no shop becomes a hand entry. An image with no slip labels is not a slip.
             SlipRead.Unreadable -> if (SlipParser.hasSlipLabels(lines)) {
@@ -267,11 +276,12 @@ class SlipImporter(
         hash: String,
         read: SlipRead.Complete,
         rules: List<MerchantRule>,
+        direction: Direction,
     ): Outcome {
-        val rule = RuleEngine.ruleFor(read.counterparty, rules)
+        val rule = RuleEngine.ruleFor(read.counterparty, rules, direction)
             // FR-11: the first slip from a merchant is a question, not a guess. Every one after
             // it is filed without asking, because by then the reader has answered.
-            ?: return queue(candidate, hash, read, ReviewReason.NewMerchant)
+            ?: return queue(candidate, hash, read, ReviewReason.NewMerchant, direction)
 
         val written = store.file(
             FiledSlip(
@@ -282,6 +292,7 @@ class SlipImporter(
                 filedAtEpochMillis = now(),
                 folder = candidate.folderName,
                 ruleId = rule.id.ifEmpty { null },
+                direction = direction,
             ),
         )
 
@@ -298,6 +309,7 @@ class SlipImporter(
         hash: String,
         read: SlipRead.Readable,
         reason: ReviewReason,
+        direction: Direction = Direction.Expense,
     ): Outcome = enqueue(
         candidate,
         QueuedSlipEntry(
@@ -313,6 +325,7 @@ class SlipImporter(
             reason = reason,
             lowConfidence = read.lowConfidence,
             folder = candidate.folderName,
+            direction = direction,
         ),
     )
 
@@ -402,3 +415,40 @@ class SlipImporter(
             ImportSummary(outcome, found, filed, queued, alreadySeen, unreadable)
     }
 }
+
+/**
+ * #26: your name as the slips print it. Learned from the bank app's own folder, which only holds
+ * your payments, and asked for each slip so a name corrected in Settings counts at once.
+ */
+interface SlipOwnerBook {
+    fun name(): String?
+
+    fun learnFrom(sender: String)
+
+    /** Nothing learned and nothing kept: every slip stays money out, as before #26. */
+    object Unknown : SlipOwnerBook {
+        override fun name(): String? = null
+
+        override fun learnFrom(sender: String) = Unit
+    }
+}
+
+/** The K PLUS app saves its slips in a folder or album of its own name. */
+private fun SlipCandidate.isBankFolder(): Boolean = folderName?.contains(BANK_FOLDER, ignoreCase = true) == true
+
+private const val BANK_FOLDER = "K PLUS"
+
+/**
+ * #26: money in is filed under who sent it. The parser's counterparty is the recipient, which on a
+ * slip someone sent you is you, so the sender takes its place.
+ */
+private fun SlipRead.Readable.seenFrom(direction: Direction): SlipRead.Readable {
+    val from = sender?.takeIf { direction == Direction.Income } ?: return this
+    return when (this) {
+        is SlipRead.Complete -> copy(counterparty = from)
+        is SlipRead.Partial -> copy(counterparty = from)
+    }
+}
+
+private fun SlipRead.Complete.seenFrom(direction: Direction): SlipRead.Complete =
+    (this as SlipRead.Readable).seenFrom(direction) as SlipRead.Complete

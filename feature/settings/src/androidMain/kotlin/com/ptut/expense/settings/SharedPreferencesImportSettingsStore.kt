@@ -5,6 +5,7 @@ import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.settings.ImportChoices
 import com.ptut.expense.domain.settings.ImportSettingsStore
+import com.ptut.expense.domain.slip.SlipOwner
 import kotlin.time.Duration.Companion.days
 
 private const val CHOICES_FILE = "ptut-import-settings"
@@ -16,6 +17,9 @@ private const val APP_LOCK = "app-lock"
 private const val WEEKLY_CHECK_IN = "weekly-check-in"
 private const val TARGET_CATEGORY = "weekly-target-category"
 private const val TARGET_SATANG = "weekly-target-satang"
+private const val OWNER_NAME = "slip-owner-name"
+private const val OWNER_CANDIDATE = "slip-owner-candidate"
+private const val OWNER_SEEN = "slip-owner-seen"
 
 /**
  * Two values in their own file, so clearing it by hand puts the shipped defaults back.
@@ -42,6 +46,11 @@ class SharedPreferencesImportSettingsStore(context: Context) : ImportSettingsSto
             weeklyTarget = choices.getString(TARGET_CATEGORY, null)?.let { id ->
                 choices.getLong(TARGET_SATANG, 0L).takeIf { it > 0L }?.let { WeeklyTarget(id, Satang.ofMinorUnits(it)) }
             },
+            slipOwner = SlipOwner(
+                name = choices.getString(OWNER_NAME, null),
+                candidate = choices.getString(OWNER_CANDIDATE, null),
+                seen = choices.getInt(OWNER_SEEN, 0),
+            ),
         )
     }
 
@@ -55,6 +64,9 @@ class SharedPreferencesImportSettingsStore(context: Context) : ImportSettingsSto
             .putBoolean(WEEKLY_CHECK_IN, choices.weeklyCheckIn)
             .putString(TARGET_CATEGORY, choices.weeklyTarget?.categoryId)
             .putLong(TARGET_SATANG, choices.weeklyTarget?.amount?.toMinorUnits() ?: 0L)
+            .putString(OWNER_NAME, choices.slipOwner.name)
+            .putString(OWNER_CANDIDATE, choices.slipOwner.candidate)
+            .putInt(OWNER_SEEN, choices.slipOwner.seen)
             .apply()
     }
 }

@@ -36,6 +36,8 @@ data class QueuedSlip(
     val lowConfidence: Set<SlipField> = emptySet(),
     /** The watched folder the slip came from, carried onto the row it becomes (#170). */
     val sourceFolder: String? = null,
+    /** #26: money in when the slip names you as the recipient. */
+    val direction: Direction = Direction.Expense,
 )
 
 /** "14 Aug 19:41 · ref 0142K9" — enough for the reader to match the row to a paper slip. */

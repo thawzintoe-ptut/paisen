@@ -3,6 +3,7 @@ package com.ptut.expense.confirm
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
+import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.ReviewReason
@@ -454,6 +455,33 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
     )
 
     @Test
+    fun `money in offers only income categories and is saved as income`() = runTest {
+        val store = InMemoryImportStore()
+        val viewModel = viewModel(slip(Satang(50_000), merchant = "MS. ANONG W", direction = Direction.Income), store = store, debts = listOf(ayeDebt.copy(amount = Satang(50_000))))
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.moneyIn)
+        assertTrue(state.categories.all { it.direction == Direction.Income })
+        assertNull(state.debtMatch)
+
+        viewModel.choose(state.categories.first())
+        viewModel.save()
+        runCurrent()
+
+        assertEquals(Direction.Income, store.confirmed.single().direction)
+    }
+
+    @Test
+    fun `money out offers no income category`() = runTest {
+        val viewModel = viewModel(slip(Satang(48_500)))
+        runCurrent()
+
+        assertFalse(viewModel.uiState.value.moneyIn)
+        assertTrue(viewModel.uiState.value.categories.none { it.direction == Direction.Income })
+    }
+
+    @Test
     fun `a field the parser had to judge says so beside its label`() = runTest {
         val viewModel = viewModel(slip(Satang(2_825), lowConfidence = setOf(SlipField.Amount)))
         runCurrent()
@@ -491,6 +519,7 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         reference: String = "0142K9",
         lowConfidence: Set<SlipField> = emptySet(),
         occurredAt: Instant = now,
+        direction: Direction = Direction.Expense,
     ) = QueuedSlip(
         id = "q1",
         merchant = merchant,
@@ -500,6 +529,7 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         reason = if (amount == null) ReviewReason.AmountUnclear else ReviewReason.NewMerchant,
         capturedAtEpochMillis = now.toEpochMilliseconds(),
         lowConfidence = lowConfidence,
+        direction = direction,
     )
 
     private class FakeLedger(queued: List<QueuedSlip>) : LedgerRepository {

@@ -46,6 +46,7 @@ import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.SlipsCopy
+import com.ptut.expense.locale.incomeSlipCopy
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.KeyboardAmountField
 import com.ptut.expense.ui.SlipPicture
@@ -180,7 +181,7 @@ fun ConfirmSlipView(
                 // The shop is named where it is shown: a read name can be put right in place, and
                 // noise or a slip with no shop starts empty with what it was read as for a hint.
                 SkyEditableKeyValueRow(
-                    label = text.paidTo.marked(SlipField.Counterparty in uiState.lowConfidence, text),
+                    label = (if (uiState.moneyIn) incomeSlipCopy().moneyInFrom else text.paidTo).marked(SlipField.Counterparty in uiState.lowConfidence, text),
                     value = uiState.shopName,
                     onValueChange = onShopName,
                     placeholder = uiState.merchant.ifBlank { text.shopNameExample },

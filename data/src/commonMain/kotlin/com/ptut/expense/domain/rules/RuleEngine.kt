@@ -1,11 +1,15 @@
 package com.ptut.expense.domain.rules
 
+import com.ptut.expense.domain.Direction
+
 /** FR-12, a remembered merchant: this counterparty always lands in this category. */
 data class MerchantRule(
     val counterparty: String,
     val categoryId: String,
     /** The rule row's id, stamped on what it files so the record can say why (#117). */
     val id: String = "",
+    /** #26: a person can have one rule for money out and another for money in. */
+    val direction: Direction = Direction.Expense,
 )
 
 /**
@@ -22,11 +26,12 @@ data class MerchantRule(
  */
 object RuleEngine {
 
-    fun categoryFor(counterparty: String, rules: List<MerchantRule>): String? = ruleFor(counterparty, rules)?.categoryId
+    fun categoryFor(counterparty: String, rules: List<MerchantRule>, direction: Direction = Direction.Expense): String? =
+        ruleFor(counterparty, rules, direction)?.categoryId
 
-    fun ruleFor(counterparty: String, rules: List<MerchantRule>): MerchantRule? {
+    fun ruleFor(counterparty: String, rules: List<MerchantRule>, direction: Direction = Direction.Expense): MerchantRule? {
         val key = counterparty.matchKey()
-        return rules.firstOrNull { it.counterparty.matchKey() == key }
+        return rules.firstOrNull { it.direction == direction && it.counterparty.matchKey() == key }
     }
 
     private fun String.matchKey(): String = trim().lowercase()

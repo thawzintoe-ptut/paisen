@@ -2,6 +2,7 @@ package com.ptut.expense.domain.settings
 
 import com.ptut.expense.domain.EvidenceRetention
 import com.ptut.expense.domain.WeeklyTarget
+import com.ptut.expense.domain.slip.SlipOwner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +29,8 @@ data class ImportChoices(
     val weeklyCheckIn: Boolean = true,
     /** #21: the one spend-less target, or null with none set. */
     val weeklyTarget: WeeklyTarget? = null,
+    /** #26: your name as slips print it, learned from your own slips or set by hand. */
+    val slipOwner: SlipOwner = SlipOwner(),
 )
 
 /**
@@ -80,6 +83,12 @@ class ImportSettings(private val store: ImportSettingsStore) {
 
     /** Null clears it. A target on another category replaces the old one: there is only ever one. */
     fun setWeeklyTarget(target: WeeklyTarget?) = update { it.copy(weeklyTarget = target) }
+
+    /** #26: a sender read off a slip the bank app saved, so it is yours. */
+    fun learnSlipOwner(sender: String) = update { it.copy(slipOwner = it.slipOwner.learnFrom(sender)) }
+
+    /** #26: set by hand, or cleared to start learning again. */
+    fun setSlipOwner(name: String?) = update { it.copy(slipOwner = SlipOwner(name = name?.trim()?.takeIf(String::isNotEmpty))) }
 
     /**
      * Written before it is announced, like the first-run flag. If the process dies between the two

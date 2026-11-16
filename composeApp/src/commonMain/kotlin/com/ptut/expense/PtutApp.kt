@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -108,6 +109,7 @@ import com.ptut.expense.settings.LicencesViewModel
 import com.ptut.expense.settings.SettingsAction
 import com.ptut.expense.settings.SettingsView
 import com.ptut.expense.settings.SettingsViewModel
+import com.ptut.expense.settings.SlipOwnerDialog
 import com.ptut.expense.settings.TimezoneView
 import com.ptut.expense.settings.TimezoneViewModel
 import com.ptut.expense.settings.destination
@@ -653,6 +655,18 @@ private fun LedgerShell() {
                 val deviceAuth = koinInject<DeviceAuth>()
                 val appLock = koinInject<AppLock>()
                 val unlockReason = LocalCopy.current.settings.unlockReason
+                // #26: the one row that opens a dialog, not a screen.
+                var editingOwner by rememberSaveable { mutableStateOf(false) }
+                if (editingOwner) {
+                    SlipOwnerDialog(
+                        current = koinInject<ImportSettings>().choices.value.slipOwner.name,
+                        onSave = {
+                            settings.setSlipOwner(it)
+                            editingOwner = false
+                        },
+                        onDismiss = { editingOwner = false },
+                    )
+                }
                 SettingsView(
                     uiState = state,
                     // Every row but one is a destination, so the screen navigates and the state
@@ -663,6 +677,8 @@ private fun LedgerShell() {
                             // The phone's own mail app writes and sends it. Android throws when it has none.
                             runCatching { uriHandler.openUri(feedbackMail(build)) }
                                 .onFailure { scope.launch { toasts.show(ToastMessage(noEmailApp, ToastTone.Error)) } }
+                        } else if (action == SettingsAction.SlipOwner) {
+                            editingOwner = true
                         } else {
                             action.destination()?.let { navController.navigate(it) }
                         }

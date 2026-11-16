@@ -31,6 +31,12 @@ sealed interface SlipRead {
          * holds a value worth showing — it is just worth checking against the picture first.
          */
         val lowConfidence: Set<SlipField>
+
+        /**
+         * #26: the name in the sender block, or null when none read. A slip from your own phone names
+         * you here; a slip someone sent you names them, and that is how money in is told apart.
+         */
+        val sender: String?
     }
 
     /**
@@ -43,6 +49,7 @@ sealed interface SlipRead {
         override val occurredAtEpochMillis: Long,
         override val reference: String,
         override val lowConfidence: Set<SlipField> = emptySet(),
+        override val sender: String? = null,
     ) : Readable
 
     /**
@@ -55,6 +62,7 @@ sealed interface SlipRead {
         override val occurredAtEpochMillis: Long?,
         override val reference: String?,
         override val lowConfidence: Set<SlipField> = emptySet(),
+        override val sender: String? = null,
     ) : Readable
 
     /**

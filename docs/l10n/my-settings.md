@@ -137,3 +137,14 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | Unlock to see your spending. | သင့်အသုံးစရိတ်ကို ကြည့်ဖို့ သော့ဖွင့်ပါ။ | locale/SettingsCopy.kt `lockedText` |
 | Unlock | သော့ဖွင့်မယ် | locale/SettingsCopy.kt `unlock` |
 | Unlock PaiSeN | PaiSeN ကို သော့ဖွင့်မယ် | locale/SettingsCopy.kt `unlockReason` |
+
+## Money in from slips (#26, new, 16 Nov)
+
+| English | Burmese | Where |
+| --- | --- | --- |
+| Money in from | ဝင်ငွေ ပေးသူ | locale/IncomeSlipCopy.kt `moneyInFrom` |
+| Your name on slips | စလစ်ပေါ်က သင့်နာမည် | locale/IncomeSlipCopy.kt `ownerRow` |
+| Not learned yet | မသိရသေးဘူး | locale/IncomeSlipCopy.kt `ownerUnknown` |
+| As K PLUS prints you as the sender, like MR. THAW Z. A slip that names you as the recipient is filed as money in. Leave it empty and PaiSeN learns it again from your own slips. | K PLUS က ပေးပို့သူအဖြစ် ထုတ်တဲ့အတိုင်း၊ ဥပမာ MR. THAW Z။ သင့်ကို လက်ခံသူအဖြစ် ဖော်ပြထားတဲ့ စလစ်ကို ဝင်ငွေအဖြစ် သိမ်းမယ်။ ဗလာထားရင် သင့်ကိုယ်ပိုင် စလစ်တွေကနေ PaiSeN ပြန်သင်ယူမယ်။ | locale/IncomeSlipCopy.kt `ownerHint` |
+| Save | သိမ်းမယ် | locale/IncomeSlipCopy.kt `save` |
+| Cancel | မလုပ်တော့ဘူး | locale/IncomeSlipCopy.kt `cancel` |

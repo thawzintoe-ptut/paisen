@@ -18,6 +18,7 @@ import com.ptut.expense.data.local.entity.SharedGroupEntity
 import com.ptut.expense.data.local.entity.SharedPaymentEntity
 import com.ptut.expense.data.local.entity.SubCategoryEntity
 import com.ptut.expense.data.local.entity.TransactionEntity
+import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.backup.BackupCategory
 import com.ptut.expense.domain.backup.BackupExpenseVersion
 import com.ptut.expense.domain.backup.BackupGroup
@@ -70,7 +71,12 @@ class RoomLedgerArchive(
         val known = catalogDao?.restore(
             categories = backup.categories.map(BackupCategory::toEntity),
             subCategories = backup.subCategories.map { SubCategoryEntity(it.id, it.categoryId, it.name) },
-            rules = backup.shopRules.map { RuleEntity(it.id, it.counterparty, it.categoryId, it.createdAtEpochMillis, displayName = it.displayName) },
+            // #26: the file keeps no direction on a rule, but a money-in rule always files under a money-in
+            // category, and the category keeps its own.
+            rules = backup.shopRules.map {
+                val direction = backup.categories.firstOrNull { category -> category.id == it.categoryId }?.direction ?: Direction.Expense.name
+                RuleEntity(it.id, it.counterparty, it.categoryId, it.createdAtEpochMillis, displayName = it.displayName, direction = direction)
+            },
         ) ?: categoryDao.ids().toSet()
         val rows = backup.transactions.map { transactionDao.withCheckedSubCategory(it.toEntity(known)) }
         val lost = backup.transactions.filter { it.categoryId != null && it.categoryId !in known }.map { it.id }.toSet()

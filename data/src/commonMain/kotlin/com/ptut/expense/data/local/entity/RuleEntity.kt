@@ -1,5 +1,6 @@
 package com.ptut.expense.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -22,9 +23,9 @@ import androidx.room.PrimaryKey
         ),
     ],
     indices = [
-        // One rule per merchant: a second rule for the same name would make classification
-        // depend on row order.
-        Index(value = ["counterparty"], unique = true),
+        // One rule per merchant and direction: a second rule for the same pair would make
+        // classification depend on row order. #26: a person you pay and who pays you has two.
+        Index(value = ["counterparty", "direction"], unique = true),
         Index("categoryId"),
     ],
 )
@@ -38,4 +39,7 @@ data class RuleEntity(
      * name). [counterparty] stays the noise, because that is what every later slip prints.
      */
     val displayName: String? = null,
+    /** Schema 19 (#26): money out or money in. Every rule before it was money out. */
+    @ColumnInfo(defaultValue = "Expense")
+    val direction: String = "Expense",
 )

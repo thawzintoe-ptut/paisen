@@ -186,3 +186,14 @@ Choices to check in this area:
 | Shopping | ช้อปปิ้ง | CategoriesCopy.kt `seedNames` `shopping` |
 | Other | อื่น ๆ | CategoriesCopy.kt `seedNames` `other` |
 | Income | รายรับ | CategoriesCopy.kt `seedNames` `income` |
+
+## Money in from slips (#26, new, 16 Nov)
+
+| English | Thai | Where |
+| --- | --- | --- |
+| Money in from | รับเงินจาก | IncomeSlipCopy.kt `moneyInFrom` |
+| Your name on slips | ชื่อของคุณบนสลิป | IncomeSlipCopy.kt `ownerRow` |
+| Not learned yet | ยังไม่รู้จัก | IncomeSlipCopy.kt `ownerUnknown` |
+| As K PLUS prints you as the sender, like MR. THAW Z. A slip that names you as the recipient is filed as money in. Leave it empty and PaiSeN learns it again from your own slips. | ตามที่ K PLUS พิมพ์ชื่อคุณเป็นผู้โอน เช่น MR. THAW Z สลิปที่ระบุคุณเป็นผู้รับจะบันทึกเป็นเงินเข้า เว้นว่างไว้ PaiSeN จะเรียนรู้ชื่อใหม่จากสลิปของคุณเอง | IncomeSlipCopy.kt `ownerHint` |
+| Save | บันทึก | IncomeSlipCopy.kt `save` |
+| Cancel | ยกเลิก | IncomeSlipCopy.kt `cancel` |

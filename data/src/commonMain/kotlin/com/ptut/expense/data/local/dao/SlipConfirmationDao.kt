@@ -33,8 +33,9 @@ abstract class SlipConfirmationDao {
      * chosen is the reader's latest answer — an ignored insert would leave the rule filing
      * somewhere the note on screen promised it would not.
      */
-    @Query("DELETE FROM rule WHERE counterparty = :counterparty")
-    protected abstract suspend fun clearRuleFor(counterparty: String)
+    // #26: only the rule of the same direction; a person you pay keeps that rule when they pay you.
+    @Query("DELETE FROM rule WHERE counterparty = :counterparty AND direction = :direction")
+    protected abstract suspend fun clearRuleFor(counterparty: String, direction: String)
 
     @Insert
     protected abstract suspend fun insertRule(row: RuleEntity)
@@ -61,7 +62,7 @@ abstract class SlipConfirmationDao {
     ) {
         insertTransaction(transaction)
         if (rule != null) {
-            clearRuleFor(rule.counterparty)
+            clearRuleFor(rule.counterparty, rule.direction)
             insertRule(rule)
         }
         hashOf(queuedSlipId)?.let { hash ->
