@@ -1,6 +1,7 @@
 package com.ptut.expense.domain.settings
 
 import com.ptut.expense.domain.EvidenceRetention
+import com.ptut.expense.domain.WeeklyTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +26,8 @@ data class ImportChoices(
     val appLock: Boolean = false,
     /** Monday's card on Today about last week (#20). On, so the check-in is there to find. */
     val weeklyCheckIn: Boolean = true,
+    /** #21: the one spend-less target, or null with none set. */
+    val weeklyTarget: WeeklyTarget? = null,
 )
 
 /**
@@ -74,6 +77,9 @@ class ImportSettings(private val store: ImportSettingsStore) {
     fun setAppLock(on: Boolean) = update { it.copy(appLock = on) }
 
     fun setWeeklyCheckIn(on: Boolean) = update { it.copy(weeklyCheckIn = on) }
+
+    /** Null clears it. A target on another category replaces the old one: there is only ever one. */
+    fun setWeeklyTarget(target: WeeklyTarget?) = update { it.copy(weeklyTarget = target) }
 
     /**
      * Written before it is announced, like the first-run flag. If the process dies between the two

@@ -1,5 +1,7 @@
 package com.ptut.expense.settings
 
+import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.settings.ImportChoices
 import com.ptut.expense.domain.settings.ImportSettingsStore
 import platform.Foundation.NSUserDefaults
@@ -11,6 +13,8 @@ private const val MOOD_BY_TIME_OF_DAY = "ptut-mood-by-time-of-day"
 private const val TRANSPARENCY = "ptut-transparency"
 private const val APP_LOCK = "ptut-app-lock"
 private const val WEEKLY_CHECK_IN = "ptut-weekly-check-in"
+private const val TARGET_CATEGORY = "ptut-weekly-target-category"
+private const val TARGET_SATANG = "ptut-weekly-target-satang"
 
 /**
  * The iOS half of [ImportSettingsStore]. Both keys are written together, so a zero read back from
@@ -39,6 +43,9 @@ class UserDefaultsImportSettingsStore : ImportSettingsStore {
             weeklyCheckIn = defaults.objectForKey(WEEKLY_CHECK_IN)
                 ?.let { defaults.boolForKey(WEEKLY_CHECK_IN) }
                 ?: shipped.weeklyCheckIn,
+            weeklyTarget = defaults.stringForKey(TARGET_CATEGORY)?.let { id ->
+                defaults.integerForKey(TARGET_SATANG).takeIf { it > 0L }?.let { WeeklyTarget(id, Satang.ofMinorUnits(it)) }
+            },
         )
     }
 
@@ -49,5 +56,13 @@ class UserDefaultsImportSettingsStore : ImportSettingsStore {
         defaults.setBool(choices.transparency, TRANSPARENCY)
         defaults.setBool(choices.appLock, APP_LOCK)
         defaults.setBool(choices.weeklyCheckIn, WEEKLY_CHECK_IN)
+        val target = choices.weeklyTarget
+        if (target == null) {
+            defaults.removeObjectForKey(TARGET_CATEGORY)
+            defaults.removeObjectForKey(TARGET_SATANG)
+        } else {
+            defaults.setObject(target.categoryId, TARGET_CATEGORY)
+            defaults.setInteger(target.amount.toMinorUnits(), TARGET_SATANG)
+        }
     }
 }

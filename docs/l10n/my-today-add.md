@@ -79,3 +79,16 @@ Burmese for Today, the Add sheet and the day receipt that the Sky MY design does
 | , {amount} less than a usual week | ၊ ပုံမှန် တစ်ပတ်ထက် {amount} နည်းတယ် | locale/HomeCopy.kt `weekLess` |
 | , the same as a usual week | ၊ ပုံမှန် တစ်ပတ်လိုပဲ | locale/HomeCopy.kt `weekSame` |
 | {category} rose most, {amount} more, mostly at {shop} and {shop}. | {category} က အများဆုံး တက်တယ်၊ {amount} ပိုသုံးတယ်၊ အများစုက {shop} နဲ့ {shop} မှာ။ | locale/HomeCopy.kt `weekRise` |
+
+## Weekly target (#21, new, 16 Nov)
+
+| English | Burmese | Where |
+| --- | --- | --- |
+| Weekly target | အပတ်စဉ် ပန်းတိုင် | locale/TargetCopy.kt `fieldLabel` |
+| Spend less than this in a week. Leave it empty for no target. | တစ်ပတ်မှာ ဒီထက် နည်းနည်း သုံးမယ်။ ပန်းတိုင် မထားချင်ရင် ဗလာထားပါ။ | locale/TargetCopy.kt `fieldHint` |
+| A usual week here: {amount} | ဒီအမျိုးအစားရဲ့ ပုံမှန် တစ်ပတ်: {amount} | locale/TargetCopy.kt `usualWeek` |
+| Saving replaces the {amount} target on {category}. There is one target at a time. | သိမ်းရင် {category} ပေါ်က {amount} ပန်းတိုင်ကို အစားထိုးမယ်။ ပန်းတိုင် တစ်ခုပဲ ထားလို့ရတယ်။ | locale/TargetCopy.kt `replaces` |
+| {category}: {spent} of {target} this week | {category}: ဒီအပတ် {target} ထဲက {spent} | locale/TargetCopy.kt `weekLine` |
+| {category} stayed under its {target} target. | {category} က {target} ပန်းတိုင်အောက်မှာ ရှိခဲ့တယ်။ | locale/TargetCopy.kt `stayedUnder` |
+| {category} went {over} past its {target} target. | {category} က {target} ပန်းတိုင်ထက် {over} ကျော်သွားတယ်။ | locale/TargetCopy.kt `wentPast` |
+| of {target} | ပန်းတိုင် {target} | locale/TargetCopy.kt `ofTarget` |

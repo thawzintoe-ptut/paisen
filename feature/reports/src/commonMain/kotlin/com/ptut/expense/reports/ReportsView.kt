@@ -467,6 +467,7 @@ private fun CategoryRow(row: CategoryRowUiModel, onClick: () -> Unit) {
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(row.amount, style = type.listHeadline, color = MaterialTheme.colorScheme.onSurface)
+            row.target?.let { Text(it, style = type.meta, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             Text(row.purchases, style = type.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

@@ -849,6 +849,7 @@ private fun LedgerShell() {
                     onRenameSubCategory = { id, name -> edit.renameSubCategory(id, name) },
                     onRemoveSubCategory = { edit.removeSubCategory(it) },
                     onDelete = { edit.delete(it) },
+                    onTarget = edit::typeTarget,
                 )
             }
 

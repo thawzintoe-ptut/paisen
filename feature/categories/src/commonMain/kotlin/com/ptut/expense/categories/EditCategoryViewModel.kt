@@ -2,22 +2,34 @@ package com.ptut.expense.categories
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
+import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.categories.CategoryRepository
+import com.ptut.expense.domain.dateIn
+import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.suggestedTarget
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.targetCopy
 import com.ptut.expense.ui.Haptics
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDate
+import kotlin.time.Clock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -38,6 +50,9 @@ class EditCategoryViewModel(
     /** #114: a haptic on every save and delete, played by the shell. */
     private val haptics: Haptics = Haptics(),
     private val newId: () -> String = { Uuid.random().toString() },
+    /** #21: where the one weekly target lives. Null in a graph with no settings: the field is not drawn. */
+    private val settings: ImportSettings? = null,
+    private val today: () -> LocalDate = { Clock.System.now().toEpochMilliseconds().dateIn(BangkokTime) },
 ) : ViewModel() {
 
     /** Null until the reader types. Absent means "as stored", which is not the same as blank. */
@@ -48,6 +63,9 @@ class EditCategoryViewModel(
     private val subEdits = MutableStateFlow(SubCategoryEdits())
     private val movedCount = MutableStateFlow(0)
     private val rulesMoved = MutableStateFlow(0)
+
+    /** Whole baht as typed, held until Save like the name. Null means "as stored". */
+    private val typedTarget = MutableStateFlow<String?>(null)
 
     private val closed = MutableStateFlow(false)
 
@@ -64,9 +82,11 @@ class EditCategoryViewModel(
         typedName,
         chosenIcon,
         combine(chosenDirection, chosenColor, subEdits, ::Triple),
-        combine(movedCount, rulesMoved, ::Pair),
-    ) { held, typed, icon, chosen, moved ->
-        state(held.first, held.second, held.third, typed, icon, chosen.first, chosen.second, chosen.third, moved.first, moved.second)
+        combine(movedCount, rulesMoved, settings?.choices?.map { it.weeklyTarget } ?: flowOf(null), typedTarget) { moved, rules, stored, typed ->
+            Counts(moved, rules, stored, typed)
+        },
+    ) { held, typed, icon, chosen, counts ->
+        state(held.first, held.second, held.third, typed, icon, chosen.first, chosen.second, chosen.third, counts)
     }
         .stateIn(
             scope = viewModelScope,
@@ -102,6 +122,11 @@ class EditCategoryViewModel(
         chosenColor.value = color
     }
 
+    /** #21: digits only, at most seven, so the field can hold nothing that is not whole baht. */
+    fun typeTarget(typed: String) {
+        typedTarget.value = typed.filter(Char::isDigit).take(MAX_TARGET_DIGITS)
+    }
+
     /** Saves everything the screen holds together: one screen, one Save, one write. */
     fun save() = viewModelScope.launch {
         val known = categories.categories.value
@@ -119,12 +144,25 @@ class EditCategoryViewModel(
             subCategories = edits.toSave(categories.subCategories.value),
             removedSubCategoryIds = edits.removed.toList(),
         )
+        saveTarget()
         haptics.saved()
         typedName.value = null
         chosenIcon.value = null
         chosenDirection.value = null
         chosenColor.value = null
         subEdits.value = SubCategoryEdits()
+    }
+
+    /** Empty clears the target only when it is this category's; another category's stays. */
+    private fun saveTarget() {
+        val typed = typedTarget.value ?: return
+        val store = settings ?: return
+        val baht = typed.toLongOrNull()
+        when {
+            baht != null && baht > 0 -> store.setWeeklyTarget(WeeklyTarget(categoryId, Satang.ofMinorUnits(baht * SATANG_PER_BAHT)))
+            store.choices.value.weeklyTarget?.categoryId == categoryId -> store.setWeeklyTarget(null)
+        }
+        typedTarget.value = null
     }
 
     /** Held until Save, like the name (#116). */
@@ -166,6 +204,8 @@ class EditCategoryViewModel(
     /** FR-18: only ever called with an answer to where the transactions go. */
     fun delete(moveTo: String) = viewModelScope.launch {
         categories.delete(categoryId, moveTo)
+        // #21: the target goes with its category.
+        if (settings?.choices?.value?.weeklyTarget?.categoryId == categoryId) settings.setWeeklyTarget(null)
         haptics.deleted()
         closed.value = true
     }
@@ -187,8 +227,7 @@ class EditCategoryViewModel(
         direction: Direction?,
         color: String?,
         edits: SubCategoryEdits,
-        moved: Int,
-        rules: Int,
+        counts: Counts,
     ): EditCategoryUiState {
         val stored = known.firstOrNull { it.id == categoryId }
         val held = stored ?: draft(known) ?: return EditCategoryUiState()
@@ -204,7 +243,8 @@ class EditCategoryViewModel(
             (icon != null && icon != held.icon) ||
             (direction != null && direction != held.direction) ||
             (color != null && color != held.color) ||
-            edits.changes(mine)
+            edits.changes(mine) ||
+            counts.typedTarget?.let { it.toLongOrNull() != counts.target?.takeIf { t -> t.categoryId == categoryId }?.amount?.wholeBaht() } == true
         // Never itself, and never the other direction: delete must not turn spending into income.
         val destinations = known.filter { it.id != categoryId && it.direction == held.direction }
 
@@ -223,10 +263,16 @@ class EditCategoryViewModel(
             },
             dirty = stored == null || edited,
             edited = edited,
-            deleteConsequence = consequence(moved, rules),
+            deleteConsequence = consequence(counts.moved, counts.rules),
             deleteDestinations = destinations.map { CategoryChoiceUiModel(it.id, it.name, it.icon, it.color) },
             // A draft has nothing to delete, and the last of its direction has nowhere to send its rows.
             canDelete = stored != null && destinations.isNotEmpty(),
+            showsTarget = settings != null && (direction ?: held.direction) == Direction.Expense,
+            target = counts.typedTarget ?: counts.target?.takeIf { it.categoryId == categoryId }?.amount?.wholeBaht()?.toString().orEmpty(),
+            targetHint = rows.suggestedTarget(categoryId, today())?.let { targetCopy().usualWeek(it.formatCompact()) } ?: targetCopy().fieldHint,
+            targetNote = counts.target?.takeIf { it.categoryId != categoryId && !counts.typedTarget.isNullOrEmpty() }?.let { other ->
+                targetCopy().replaces(other.amount.formatCompact(), known.firstOrNull { it.id == other.categoryId }?.name.orEmpty())
+            },
         )
     }
 
@@ -262,3 +308,11 @@ private data class SubCategoryEdits(
     fun toSave(stored: List<SubCategory>): List<SubCategory> =
         added + stored.mapNotNull { sub -> renamed[sub.id]?.takeIf { it != sub.name }?.let { sub.copy(name = it) } }
 }
+
+/** What the screen counts beside the category itself: rows and rules that would move, and the target. */
+private data class Counts(val moved: Int, val rules: Int, val target: WeeklyTarget?, val typedTarget: String?)
+
+private const val MAX_TARGET_DIGITS = 7
+private const val SATANG_PER_BAHT = 100L
+
+private fun Satang.wholeBaht(): Long = toMinorUnits() / SATANG_PER_BAHT

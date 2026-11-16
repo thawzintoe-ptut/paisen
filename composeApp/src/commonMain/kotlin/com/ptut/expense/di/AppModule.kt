@@ -212,6 +212,7 @@ val viewModelModule: Module = module {
             watchedFolders = getOrNull<WatchedFolderRepository>()?.folders ?: flowOf(emptyList()),
             moodByTimeOfDay = getOrNull<ImportSettings>()?.choices?.map { it.moodByTimeOfDay } ?: flowOf(false),
             weeklyCheckIn = getOrNull<ImportSettings>()?.choices?.map { it.weeklyCheckIn } ?: flowOf(false),
+            weeklyTarget = getOrNull<ImportSettings>()?.choices?.map { it.weeklyTarget } ?: flowOf(null),
             pendingDiscards = get<SlipDiscards>().pending,
             onlyPickedPhotos = { photos?.onlyPickedPhotos == true },
         )
@@ -315,7 +316,7 @@ val viewModelModule: Module = module {
     }
     viewModel { CategoriesViewModel(ledger = get(), categories = get()) }
     viewModel { (categoryId: String, isNew: Boolean) ->
-        EditCategoryViewModel(categoryId = categoryId, ledger = get(), categories = get(), isNew = isNew, haptics = get())
+        EditCategoryViewModel(categoryId = categoryId, ledger = get(), categories = get(), isNew = isNew, haptics = get(), settings = getOrNull())
     }
     viewModel {
         ReportsViewModel(
@@ -323,6 +324,7 @@ val viewModelModule: Module = module {
             categories = storedCategories(),
             categoryUpdates = liveCategories(),
             subCategoryUpdates = liveSubCategories(),
+            weeklyTarget = getOrNull<ImportSettings>()?.choices?.map { it.weeklyTarget } ?: flowOf(null),
         )
     }
     // The retention is read when the screen is built, like the categories above: a change made

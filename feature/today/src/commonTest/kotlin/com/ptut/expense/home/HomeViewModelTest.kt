@@ -17,6 +17,7 @@ import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.TransactionSource
+import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import kotlinx.coroutines.flow.Flow
@@ -198,6 +199,44 @@ class HomeViewModelTest : ViewModelTest() {
             assertEquals("2026-11-15", card.to)
             assertEquals("food", card.categoryId)
             assertEquals("trending_up", card.glyph)
+        }
+    }
+
+    @Test
+    fun theWeekTabShowsTheTargetLineInPlainWords() = runTest {
+        val wednesday = LocalDateTime(2026, 11, 18, 12, 0).toInstant(BangkokTime)
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            saved = listOf(saved("t1", at(2026, 11, 16, 12, 0), filed = 0L).copy(amount = Satang(190_000))),
+            now = wednesday,
+            target = WeeklyTarget("food", Satang(250_000)),
+        )
+        viewModel.show(HomePeriod.Week)
+
+        viewModel.uiState.test {
+            var state = awaitItem()
+            while (state !is HomeUiState.Success || state.period != HomePeriod.Week) state = awaitItem()
+            val target = state.target
+            assertEquals("Food & drink: ฿1,900 of ฿2,500 this week", target?.line)
+            assertEquals(0.76f, target?.fraction)
+        }
+    }
+
+    @Test
+    fun mondaysCardSaysWhetherLastWeekStayedUnderTheTarget() = runTest {
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            saved = weekOfSpending(),
+            now = MONDAY_NOON,
+            weeklyCheckIn = true,
+            target = WeeklyTarget("food", Satang(40_000)),
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            val line = assertNotNull((awaitItem() as HomeUiState.Success).weeklyCard).line
+            assertTrue(line.endsWith("Food & drink went ฿100 past its ฿400 target."), line)
         }
     }
 
@@ -509,11 +548,13 @@ class HomeViewModelTest : ViewModelTest() {
         runs: List<ImportRun> = emptyList(),
         onlyPickedPhotos: () -> Boolean = { false },
         weeklyCheckIn: Boolean = false,
+        target: WeeklyTarget? = null,
     ) = HomeViewModel(
         ledger = FakeLedger(transactions, sinceLastImportMillis, queued, all = transactions + saved, runs = runs),
         subCategoryUpdates = subCategories,
         onlyPickedPhotos = onlyPickedPhotos,
         weeklyCheckIn = flowOf(weeklyCheckIn),
+        weeklyTarget = flowOf(target),
         clock = object : Clock {
             override fun now(): Instant = now
         },

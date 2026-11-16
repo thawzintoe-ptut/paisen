@@ -13,6 +13,7 @@ import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
+import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import kotlinx.coroutines.flow.Flow
@@ -186,10 +187,42 @@ class ReportsViewModelTest : ViewModelTest() {
         }
     }
 
+    @Test
+    fun theWeekShowsTheTargetBesideItsCategoryOnly() = runTest {
+        val viewModel = viewModel(
+            listOf(expense(day = 12, satang = 190_000, categoryId = "food"), expense(day = 12, satang = 30_000, categoryId = "transport")),
+            target = WeeklyTarget("food", Satang(250_000)),
+        )
+
+        viewModel.uiState.test {
+            awaitItem()
+
+            val rows = (awaitItem() as ReportsUiState.Success).categories
+            assertEquals("of ฿2,500", rows.first { it.id == "food" }.target)
+            assertEquals(null, rows.first { it.id == "transport" }.target)
+        }
+    }
+
+    @Test
+    fun aMonthShowsNoWeeklyTarget() = runTest {
+        val viewModel = viewModel(
+            listOf(expense(day = 12, satang = 190_000, categoryId = "food")),
+            target = WeeklyTarget("food", Satang(250_000)),
+        )
+        viewModel.show(ReportPeriod.Month)
+
+        viewModel.uiState.test {
+            val state = awaitItem()
+            val rows = (if (state is ReportsUiState.Success) state else awaitItem() as ReportsUiState.Success).categories
+            assertEquals(null, rows.first { it.id == "food" }.target)
+        }
+    }
+
     private fun viewModel(
         transactions: List<Transaction>,
         categories: Flow<List<Category>> = flowOf(Category.seed()),
         subCategories: Flow<List<SubCategory>> = flowOf(emptyList()),
+        target: WeeklyTarget? = null,
     ) = ReportsViewModel(
         ledger = FakeLedger(transactions),
         clock = object : Clock {
@@ -197,6 +230,7 @@ class ReportsViewModelTest : ViewModelTest() {
         },
         categoryUpdates = categories,
         subCategoryUpdates = subCategories,
+        weeklyTarget = flowOf(target),
     )
 
     /** Reports only reads recent history; the rest of the seam is not its business. */

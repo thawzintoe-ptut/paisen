@@ -42,14 +42,14 @@ data class CategoryRise(val categoryId: String, val difference: Satang, val shop
  * so a quiet week draws no card at all.
  */
 fun List<Transaction>.weeklyCheckIn(today: LocalDate, zone: TimeZone = BangkokTime): WeeklyCheckIn? {
-    val thisMonday = today.minus(today.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
+    val thisMonday = today.mondayOfWeek()
     val from = thisMonday.minus(DAYS_IN_WEEK, DateTimeUnit.DAY)
     val expenses = filter { it.direction == Direction.Expense }
     val lastWeek = expenses.inWeek(from, zone)
     val spent = lastWeek.total()
     if (spent <= Satang.Zero) return null
 
-    val firstMonday = minOf { it.occurredAtEpochMillis }.dateIn(zone).let { it.minus(it.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY) }
+    val firstMonday = minOf { it.occurredAtEpochMillis }.dateIn(zone).mondayOfWeek()
     val earlier = (1..USUAL_WEEK_WEEKS)
         .map { from.minus(it, DateTimeUnit.WEEK) }
         .filter { it >= firstMonday }
@@ -67,14 +67,14 @@ fun List<Transaction>.weeklyCheckIn(today: LocalDate, zone: TimeZone = BangkokTi
     )
 }
 
-private fun List<Transaction>.inWeek(monday: LocalDate, zone: TimeZone): List<Transaction> {
+internal fun List<Transaction>.inWeek(monday: LocalDate, zone: TimeZone): List<Transaction> {
     val end = monday.plus(DAYS_IN_WEEK, DateTimeUnit.DAY)
     return filter { it.occurredAtEpochMillis.dateIn(zone).let { day -> day >= monday && day < end } }
 }
 
-private fun List<Transaction>.total(): Satang = fold(Satang.Zero) { sum, row -> sum + row.amount }
+internal fun List<Transaction>.total(): Satang = fold(Satang.Zero) { sum, row -> sum + row.amount }
 
-private fun List<Satang>.mean(): Satang = Satang(sumOf { it.raw } / size)
+internal fun List<Satang>.mean(): Satang = Satang(sumOf { it.raw } / size)
 
 /** A row with no category cannot be named, so it never leads the next step. */
 private fun List<Transaction>.biggestRise(earlier: List<List<Transaction>>): CategoryRise? =
@@ -95,3 +95,6 @@ private fun List<Transaction>.shopsIn(categoryId: String): List<String> =
         .entries.sortedByDescending { it.value }
         .take(RISE_SHOPS)
         .map { it.key }
+
+/** The Monday that starts [this] date's week. PaiSeN's weeks run Monday to Sunday. */
+internal fun LocalDate.mondayOfWeek(): LocalDate = minus(dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)

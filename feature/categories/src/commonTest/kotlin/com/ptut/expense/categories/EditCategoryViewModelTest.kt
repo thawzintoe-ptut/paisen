@@ -1,10 +1,15 @@
 package com.ptut.expense.categories
 
+import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
+import com.ptut.expense.domain.WeeklyTarget
+import com.ptut.expense.domain.settings.ImportChoices
+import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.settings.ImportSettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -14,11 +19,15 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.toInstant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
@@ -434,6 +443,123 @@ class EditCategoryViewModelTest {
         assertTrue(categories.categories.value.none { it.id == "food" })
         assertTrue(model.isDeleted.value)
     }
+
+    @Test
+    fun `typing a weekly target lights save and stores it for this category`() = runTest {
+        val settings = settings()
+        val model = targeting(settings)
+        runCurrent()
+        assertTrue(model.uiState.value.showsTarget)
+
+        model.typeTarget("2,500 baht")
+        runCurrent()
+        assertEquals("2500", model.uiState.value.target)
+        assertTrue(model.uiState.value.dirty)
+
+        model.save()
+        runCurrent()
+
+        assertEquals(WeeklyTarget("food", Satang.ofMinorUnits(250_000)), settings.choices.value.weeklyTarget)
+        assertFalse(model.uiState.value.dirty)
+    }
+
+    @Test
+    fun `emptying the field clears this category's target`() = runTest {
+        val settings = settings(WeeklyTarget("food", Satang.ofMinorUnits(250_000)))
+        val model = targeting(settings)
+        runCurrent()
+        assertEquals("2500", model.uiState.value.target)
+
+        model.typeTarget("")
+        model.save()
+        runCurrent()
+
+        assertNull(settings.choices.value.weeklyTarget)
+    }
+
+    @Test
+    fun `another category's target is named before it is replaced and kept when nothing is typed`() = runTest {
+        val held = WeeklyTarget("groceries", Satang.ofMinorUnits(150_000))
+        val settings = settings(held)
+        val model = targeting(settings)
+        runCurrent()
+        assertEquals("", model.uiState.value.target)
+
+        model.typeTarget("")
+        model.save()
+        runCurrent()
+        assertEquals(held, settings.choices.value.weeklyTarget)
+
+        model.typeTarget("900")
+        runCurrent()
+        assertEquals(
+            "Saving replaces the ฿1,500 target on Groceries. There is one target at a time.",
+            model.uiState.value.targetNote,
+        )
+    }
+
+    @Test
+    fun `the hint offers a usual week from the category's own history`() = runTest {
+        val rows = listOf(week(2026, 10, 27, 240_000), week(2026, 11, 3, 220_000), week(2026, 11, 10, 260_000))
+        val model = targeting(settings(), rows)
+        runCurrent()
+
+        assertEquals("A usual week here: ฿2,400", model.uiState.value.targetHint)
+    }
+
+    @Test
+    fun `an income category offers no target`() = runTest {
+        val model = targeting(settings())
+        runCurrent()
+
+        model.chooseDirection(Direction.Income)
+        runCurrent()
+
+        assertFalse(model.uiState.value.showsTarget)
+    }
+
+    @Test
+    fun `deleting a category takes its target with it`() = runTest {
+        val settings = settings(WeeklyTarget("food", Satang.ofMinorUnits(250_000)))
+        val model = targeting(settings)
+        runCurrent()
+
+        model.delete("groceries")
+        runCurrent()
+
+        assertNull(settings.choices.value.weeklyTarget)
+    }
+
+    private fun settings(target: WeeklyTarget? = null) = ImportSettings(
+        object : ImportSettingsStore {
+            private var held = ImportChoices(weeklyTarget = target)
+
+            override fun read() = held
+
+            override fun write(choices: ImportChoices) {
+                held = choices
+            }
+        },
+    )
+
+    private fun TestScope.targeting(settings: ImportSettings, rows: List<Transaction> = emptyList()) = watching(
+        EditCategoryViewModel(
+            categoryId = "food",
+            ledger = StaticLedger(rows),
+            categories = FakeCategories(listOf(food, groceries)),
+            settings = settings,
+            today = { LocalDate(2026, 11, 18) },
+        ),
+    )
+
+    private fun week(year: Int, month: Int, day: Int, minor: Long) = Transaction(
+        id = "w$month-$day",
+        occurredAtEpochMillis = LocalDateTime(year, month, day, 12, 0).toInstant(BangkokTime).toEpochMilliseconds(),
+        amount = Satang.ofMinorUnits(minor),
+        direction = Direction.Expense,
+        categoryId = "food",
+        counterparty = null,
+    )
 
     private fun TestScope.viewModel() = watching(
         EditCategoryViewModel(

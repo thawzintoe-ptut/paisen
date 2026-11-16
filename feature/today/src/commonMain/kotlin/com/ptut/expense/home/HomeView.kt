@@ -153,6 +153,7 @@ private fun LoadedHome(
                     )
                 }
                 PeriodAmount(state = state, empty = empty, modifier = Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.sm))
+                state.target?.let { TargetLine(it, Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.s12)) }
                 if (state.topCategories.isNotEmpty()) {
                     TopCategoryTiles(state.topCategories, Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.md))
                 }
@@ -349,6 +350,29 @@ private fun ImportStatus(
             onAction = fix?.let { { onFixImport(it) } },
             modifier = modifier,
         )
+    }
+}
+
+/** #21: one line and a thin bar in the quiet ink. Past the target the bar is full and still not red. */
+@Composable
+private fun TargetLine(target: TargetUiModel, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+        Text(target.line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(
+            modifier = Modifier
+                .padding(top = Spacing.xxs)
+                .fillMaxWidth()
+                .height(Spacing.xxs)
+                .clip(PtutRadii.r12)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(target.fraction)
+                    .height(Spacing.xxs)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+        }
     }
 }
 

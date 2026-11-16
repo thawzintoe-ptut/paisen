@@ -44,6 +44,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import com.ptut.expense.design.CategoryIcon
@@ -60,6 +61,7 @@ import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.locale.targetCopy
 import com.ptut.expense.ui.sky.AskBeforeLeaving
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
@@ -96,6 +98,8 @@ fun EditCategoryView(
     onRemoveSubCategory: (String) -> Unit,
     onDelete: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** #21: the weekly target, whole baht as typed. */
+    onTarget: (String) -> Unit = {},
 ) {
     var asking by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
@@ -206,6 +210,18 @@ fun EditCategoryView(
                 onAdd = addTyped,
                 modifier = Modifier.padding(horizontal = Spacing.md),
             )
+        }
+
+        if (uiState.showsTarget) {
+            item {
+                TargetField(
+                    typed = uiState.target,
+                    hint = uiState.targetHint,
+                    note = uiState.targetNote,
+                    onType = onTarget,
+                    modifier = Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.md),
+                )
+            }
         }
 
         item {
@@ -467,6 +483,42 @@ private fun AddSubCategory(typed: String?, onType: (String?) -> Unit, onAdd: () 
                 Icon(PtutIcon.Check.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(Sizes.settingsTrailing))
             }
         }
+    }
+}
+
+/** #21: whole baht, a number pad, and what a usual week here comes to. No red, ever. */
+@Composable
+private fun TargetField(typed: String, hint: String, note: String?, onType: (String) -> Unit, modifier: Modifier = Modifier) {
+    val words = targetCopy()
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = words.fieldLabel,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().heightIn(min = SkySizes.keyValueRow),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("฿", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            BasicTextField(
+                value = typed,
+                onValueChange = onType,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                modifier = Modifier.weight(1f).semantics { contentDescription = words.fieldLabel },
+            )
+        }
+        Box(Modifier.fillMaxWidth().height(SkySizes.hairline).background(MaterialTheme.colorScheme.outlineVariant))
+        Text(
+            text = note ?: hint,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Spacing.xxs),
+        )
     }
 }
 

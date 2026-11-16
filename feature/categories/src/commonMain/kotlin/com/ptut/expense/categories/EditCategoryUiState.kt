@@ -37,6 +37,14 @@ data class EditCategoryUiState(
     /** Somewhere for the transactions to go. A category cannot be deleted without one. */
     val deleteDestinations: List<CategoryChoiceUiModel> = emptyList(),
     val canDelete: Boolean = false,
+    /** #21: money-out categories only, and only where the graph binds the settings. */
+    val showsTarget: Boolean = false,
+    /** Whole baht as typed, or the stored target's, or empty for none. */
+    val target: String = "",
+    /** "A usual week here: ฿2,300", or the plain hint when there is too little history. */
+    val targetHint: String = "",
+    /** Said before Save when another category holds the one target. */
+    val targetNote: String? = null,
 )
 
 data class SubCategoryRowUiModel(

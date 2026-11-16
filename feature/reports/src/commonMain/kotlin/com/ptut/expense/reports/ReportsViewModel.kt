@@ -12,6 +12,7 @@ import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TrendDirection
+import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.abbreviated
 import com.ptut.expense.domain.averageBy
 import com.ptut.expense.domain.bucketSize
@@ -34,6 +35,7 @@ import com.ptut.expense.domain.summarise
 import com.ptut.expense.domain.trendBetween
 import com.ptut.expense.domain.weekdayAndDay
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.targetCopy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -102,6 +104,8 @@ data class CategoryRowUiModel(
     val purchases: String,
     /** The split under it, at lower weight (p34). Empty when no row here has a sub-category. */
     val subCategories: List<SubCategorySpendUiModel> = emptyList(),
+    /** #21: "of ฿2,500" on the week period, for the one category with a target. */
+    val target: String? = null,
 )
 
 data class SubCategorySpendUiModel(val name: String, val amount: String)
@@ -151,6 +155,8 @@ class ReportsViewModel(
     private val categoryUpdates: Flow<List<Category>> = flowOf(categories),
     /** The sub-categories as they change, for the same reason (#112). */
     private val subCategoryUpdates: Flow<List<SubCategory>> = flowOf(emptyList()),
+    /** #21: the one weekly target, or null with none set. */
+    private val weeklyTarget: Flow<WeeklyTarget?> = flowOf(null),
 ) : ViewModel() {
 
     private val period = MutableStateFlow(ReportPeriod.Week)
@@ -162,10 +168,10 @@ class ReportsViewModel(
         .flatMapLatest { chosen ->
             // The long periods compare against a stretch the recent window does not hold.
             val rows = if (chosen.needsWholeLedger) ledger.allTransactions else ledger.recentTransactions
-            combine(rows, selected, categoryUpdates, subCategoryUpdates) { snapshot, picked, categories, subCategories ->
+            combine(rows, selected, categoryUpdates, subCategoryUpdates, weeklyTarget) { snapshot, picked, categories, subCategories, target ->
                 when (snapshot) {
                     LedgerSnapshot.Unanswered -> ReportsUiState.Loading
-                    is LedgerSnapshot.Rows -> report(snapshot.transactions, chosen, picked, categories, subCategories)
+                    is LedgerSnapshot.Rows -> report(snapshot.transactions, chosen, picked, categories, subCategories, target)
                 }
             }
         }
@@ -191,6 +197,7 @@ class ReportsViewModel(
         picked: Int?,
         categories: List<Category>,
         subCategories: List<SubCategory>,
+        target: WeeklyTarget? = null,
     ): ReportsUiState.Success {
         val today = clock.now().dateIn(BangkokTime)
         val range = chosen.rangeContaining(today)
@@ -255,6 +262,8 @@ class ReportsViewModel(
                     ),
                     purchases = text.purchases(it.count),
                     subCategories = it.subCategories.map { sub -> SubCategorySpendUiModel(sub.name, sub.total.format()) },
+                    target = target?.takeIf { t -> chosen == ReportPeriod.Week && t.categoryId == it.category.id }
+                        ?.let { t -> targetCopy().ofTarget(t.amount.formatCompact()) },
                 )
             },
         )

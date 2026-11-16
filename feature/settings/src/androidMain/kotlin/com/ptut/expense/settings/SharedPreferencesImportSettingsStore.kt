@@ -1,6 +1,8 @@
 package com.ptut.expense.settings
 
 import android.content.Context
+import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.settings.ImportChoices
 import com.ptut.expense.domain.settings.ImportSettingsStore
 import kotlin.time.Duration.Companion.days
@@ -12,6 +14,8 @@ private const val MOOD_BY_TIME_OF_DAY = "mood-by-time-of-day"
 private const val TRANSPARENCY = "transparency"
 private const val APP_LOCK = "app-lock"
 private const val WEEKLY_CHECK_IN = "weekly-check-in"
+private const val TARGET_CATEGORY = "weekly-target-category"
+private const val TARGET_SATANG = "weekly-target-satang"
 
 /**
  * Two values in their own file, so clearing it by hand puts the shipped defaults back.
@@ -35,6 +39,9 @@ class SharedPreferencesImportSettingsStore(context: Context) : ImportSettingsSto
             transparency = choices.getBoolean(TRANSPARENCY, shipped.transparency),
             appLock = choices.getBoolean(APP_LOCK, shipped.appLock),
             weeklyCheckIn = choices.getBoolean(WEEKLY_CHECK_IN, shipped.weeklyCheckIn),
+            weeklyTarget = choices.getString(TARGET_CATEGORY, null)?.let { id ->
+                choices.getLong(TARGET_SATANG, 0L).takeIf { it > 0L }?.let { WeeklyTarget(id, Satang.ofMinorUnits(it)) }
+            },
         )
     }
 
@@ -46,6 +53,8 @@ class SharedPreferencesImportSettingsStore(context: Context) : ImportSettingsSto
             .putBoolean(TRANSPARENCY, choices.transparency)
             .putBoolean(APP_LOCK, choices.appLock)
             .putBoolean(WEEKLY_CHECK_IN, choices.weeklyCheckIn)
+            .putString(TARGET_CATEGORY, choices.weeklyTarget?.categoryId)
+            .putLong(TARGET_SATANG, choices.weeklyTarget?.amount?.toMinorUnits() ?: 0L)
             .apply()
     }
 }
