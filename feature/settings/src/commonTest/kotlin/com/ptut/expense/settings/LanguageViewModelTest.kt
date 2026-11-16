@@ -20,15 +20,8 @@ class LanguageViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `a release build lists English and Burmese only`() {
+    fun `a release build lists Thai after Burmese`() {
         val viewModel = LanguageViewModel(offered = Language.offered(debug = false))
-
-        assertEquals(listOf("English", "မြန်မာ"), viewModel.uiState.value.options.map { it.label })
-    }
-
-    @Test
-    fun `a debug build lists Thai after Burmese`() {
-        val viewModel = LanguageViewModel(offered = Language.offered(debug = true))
 
         assertEquals(listOf("English", "မြန်မာ", "ไทย"), viewModel.uiState.value.options.map { it.label })
     }

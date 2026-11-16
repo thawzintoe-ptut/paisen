@@ -1,12 +1,13 @@
 package com.ptut.expense.locale
 
-/** The languages PaiSeN is written in. [label] is each one's own name, as the switch shows it. */
+/**
+ * The languages PaiSeN is written in. [label] is each one's own name, as the switch shows it.
+ * A new language passes `released = false` until its words are signed off, so only debug builds offer it.
+ */
 enum class Language(val tag: String, val label: String, private val released: Boolean = true) {
     English("en", "English"),
     Burmese("my", "မြန်မာ"),
-
-    /** F1.3: only debug builds offer it until a native Thai reader signs off the words. */
-    Thai("th", "ไทย", released = false),
+    Thai("th", "ไทย"),
     ;
 
     val copy: Copy get() = when (this) {

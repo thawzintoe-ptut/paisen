@@ -37,7 +37,9 @@ The first public version.
   and your PromptPay number to a chat.
 - Export and import of the whole ledger as a file.
 - Send feedback in Settings: opens your email app with the app version and phone model filled in.
-- English and Burmese, in light and dark.
+- English, Burmese and Thai, in light and dark. Thai shows years in the Buddhist Era, and a phone
+  set to Thai opens in Thai until you pick another language. Push notices reach each phone in its
+  own language.
 - An iPhone build (`.ipa`) on each GitHub release, to install with SideStore or AltStore and your
   own Apple ID. It has no Sign in with Apple or push notifications, and an invite link opens in
   Safari, where **Open in PaiSen** takes you to the app.

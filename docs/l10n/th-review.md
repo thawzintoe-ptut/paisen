@@ -1,11 +1,11 @@
 # Thai review: start here
 
-PaiSeN has Thai for every screen. There is no Thai design, so a native Thai reader checks all of it
-before Thai is offered in release builds. Until then only debug builds show it.
+PaiSeN has Thai for every screen, in release and debug builds. There is no Thai design, so these
+tables are where a Thai reader checks it and sends fixes.
 
 ## How to check
 
-1. Install the debug build. On a phone set to Thai it opens in Thai. On any other phone, pick ไทย in
+1. Install the app. On a phone set to Thai it opens in Thai. On any other phone, pick ไทย in
    Settings → Language.
 2. Read the tables below in this order, with the app open beside them. Each row gives the English,
    the Thai and the field in the code.
@@ -46,8 +46,9 @@ Each one repeats across many rows, so a change here is one change in many places
 
 ## Sign-off
 
-Reader:
+Reader: the app owner
 
-Date:
+Date: 16 November 2026
 
-Notes:
+Notes: checked in the app and turned on for release builds. A native Thai reader has not gone
+through these tables yet; their fixes are still welcome, row by row.
