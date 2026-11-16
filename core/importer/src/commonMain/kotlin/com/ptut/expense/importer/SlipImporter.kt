@@ -2,12 +2,14 @@ package com.ptut.expense.importer
 
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.EvidenceRetention
+import com.ptut.expense.domain.ForeignAmount
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.folders.FolderReadTally
 import com.ptut.expense.domain.rules.MerchantRule
 import com.ptut.expense.domain.rules.RuleEngine
+import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.FiledSlip
 import com.ptut.expense.domain.slip.ImportStore
@@ -90,6 +92,8 @@ class SlipImporter(
     private val retention: () -> Duration = { EvidenceRetention },
     /** #26: whose phone this is, so a slip that names them as recipient reads as money in. */
     private val owner: SlipOwnerBook = SlipOwnerBook.Unknown,
+    /** #33: Myanmar wallet receipts, debug builds only until one real receipt per wallet has read. */
+    private val readsWallets: Boolean = true,
     /**
      * Injected so a test can name the row it wrote. Random everywhere else, and last so the tests
      * that name one keep reading it as a trailing lambda.
@@ -246,10 +250,11 @@ class SlipImporter(
             return Outcome.Unreadable
         }
 
-        val read = SlipParser.parse(lines)
+        val read = SlipParser.parse(lines, readsWallets)
         // #26: the bank app's own folder holds only your payments, so its sender is you.
         if (read is SlipRead.Readable && candidate.isBankFolder()) read.sender?.let(owner::learnFrom)
-        val direction = (read as? SlipRead.Readable)?.direction(owner.name()) ?: Direction.Expense
+        // #33: a wallet receipt that shows its own direction (a minus sign, a "To") is believed first.
+        val direction = (read as? SlipRead.Readable)?.let { it.knownDirection ?: it.direction(owner.name()) } ?: Direction.Expense
 
         return when (read) {
             is SlipRead.Complete -> file(candidate, hash, read.seenFrom(direction), rules, direction)
@@ -258,7 +263,7 @@ class SlipImporter(
             is SlipRead.Partial -> queue(candidate, hash, read.seenFrom(direction), ReviewReason.AmountUnclear, direction)
 
             // #113: a slip that read no shop becomes a hand entry. An image with no slip labels is not a slip.
-            SlipRead.Unreadable -> if (SlipParser.hasSlipLabels(lines)) {
+            SlipRead.Unreadable -> if (SlipParser.hasSlipLabels(lines, readsWallets)) {
                 queueUnread(candidate, hash)
             } else {
                 land(candidate, SlipPlace.NotASlip)
@@ -283,6 +288,14 @@ class SlipImporter(
             // it is filed without asking, because by then the reader has answered.
             ?: return queue(candidate, hash, read, ReviewReason.NewMerchant, direction)
 
+        // #33: kyat needs a rate before it becomes baht. The first slip asks; later ones use the last.
+        val foreign = if (read.currency == BAHT) {
+            null
+        } else {
+            val rate = store.rateFor(read.currency) ?: return queue(candidate, hash, read, ReviewReason.RateNeeded, direction)
+            ForeignAmount(read.currency, read.amount.toMinorUnits(), rate)
+        }
+
         val written = store.file(
             FiledSlip(
                 newId(),
@@ -293,6 +306,7 @@ class SlipImporter(
                 folder = candidate.folderName,
                 ruleId = rule.id.ifEmpty { null },
                 direction = direction,
+                foreign = foreign,
             ),
         )
 
@@ -303,6 +317,9 @@ class SlipImporter(
         land(candidate, if (written) SlipPlace.Filed else SlipPlace.AlreadyRecorded, read.occurredAtEpochMillis)
         return if (written) Outcome.Filed else Outcome.AlreadySeen
     }
+
+    /** #33: the last rate saved for [currency], so Check slip opens on it. */
+    suspend fun rateFor(currency: String): Rate? = store.rateFor(currency)
 
     private suspend fun queue(
         candidate: SlipCandidate,
@@ -326,6 +343,7 @@ class SlipImporter(
             lowConfidence = read.lowConfidence,
             folder = candidate.folderName,
             direction = direction,
+            currency = read.currency,
         ),
     )
 
@@ -437,6 +455,8 @@ interface SlipOwnerBook {
 private fun SlipCandidate.isBankFolder(): Boolean = folderName?.contains(BANK_FOLDER, ignoreCase = true) == true
 
 private const val BANK_FOLDER = "K PLUS"
+
+private const val BAHT = "THB"
 
 /**
  * #26: money in is filed under who sent it. The parser's counterparty is the recipient, which on a

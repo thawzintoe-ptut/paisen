@@ -55,6 +55,7 @@ import com.ptut.expense.domain.usualDay
 import com.ptut.expense.domain.weeklyCheckIn
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.NoteTone
+import com.ptut.expense.locale.kyatCopy
 import com.ptut.expense.locale.noteCopy
 import com.ptut.expense.locale.targetCopy
 import kotlinx.coroutines.flow.Flow
@@ -367,10 +368,12 @@ private fun List<QueuedSlip>.asReviewCard(): ReviewCardUiModel? {
     val newMerchants = count { it.reason == ReviewReason.NewMerchant }
     val unclear = count { it.reason == ReviewReason.AmountUnclear }
     val unread = count { it.reason == ReviewReason.Unreadable }
+    val rates = count { it.reason == ReviewReason.RateNeeded }
     val reasons = listOfNotNull(
         newMerchants.takeIf { it > 0 }?.let(text.newShops),
         unclear.takeIf { it > 0 }?.let(text.unreadableAmounts),
         unread.takeIf { it > 0 }?.let(text.unreadSlips),
+        rates.takeIf { it > 0 }?.let(kyatCopy().slipsNeedRate),
     )
     // One title for every reason (#157, C3): "need a category" is wrong for an unread amount.
     return ReviewCardUiModel(

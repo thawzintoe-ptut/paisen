@@ -9,13 +9,17 @@ package com.ptut.expense.domain.slip
  */
 object SlipParser {
 
-    private val formats: List<SlipFormat> = listOf(KPlusSlip, WaveSlip)
+    private val baht: List<SlipFormat> = listOf(KPlusSlip, WaveSlip)
+    private val wallets: List<SlipFormat> = listOf(KbzPaySlip, WavePaySlip, AyaPaySlip)
     private val fallback: SlipFormat = KPlusSlip
 
-    fun parse(lines: List<String>): SlipRead = formatOf(lines).parse(lines)
+    /** [withWallets] off reads as before #33: a Myanmar wallet receipt is no slip at all. */
+    fun parse(lines: List<String>, withWallets: Boolean = true): SlipRead = formatOf(lines, withWallets).parse(lines)
 
-    fun hasSlipLabels(lines: List<String>): Boolean = formats.any { it.hasSlipLabels(lines) }
+    fun hasSlipLabels(lines: List<String>, withWallets: Boolean = true): Boolean = formats(withWallets).any { it.hasSlipLabels(lines) }
 
-    private fun formatOf(lines: List<String>): SlipFormat =
-        formats.firstOrNull { it.recognises(lines) } ?: fallback
+    private fun formats(withWallets: Boolean): List<SlipFormat> = if (withWallets) baht + wallets else baht
+
+    private fun formatOf(lines: List<String>, withWallets: Boolean): SlipFormat =
+        formats(withWallets).firstOrNull { it.recognises(lines) } ?: fallback
 }

@@ -2,6 +2,7 @@ package com.ptut.expense.importer
 
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.rules.MerchantRule
+import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.FiledSlip
 import com.ptut.expense.domain.slip.ImportStore
@@ -62,10 +63,15 @@ class InMemoryImportStore(rules: List<MerchantRule> = emptyList()) : ImportStore
     val queued = mutableListOf<QueuedSlipEntry>()
     val runs = mutableListOf<ImportRun>()
 
+    /** #33: the last rate per currency, as `currency_rate` holds it. A confirm with one saves it. */
+    val rates = mutableMapOf<String, Rate>()
+
     private val importedHashes = mutableSetOf<String>()
     private val contentKeys = mutableSetOf<Triple<String, Long, Long>>()
 
     override suspend fun rules(): List<MerchantRule> = rules
+
+    override suspend fun rateFor(currency: String): Rate? = rates[currency]
 
     override suspend fun isImported(hash: String): Boolean = hash in importedHashes
 
@@ -104,6 +110,7 @@ class InMemoryImportStore(rules: List<MerchantRule> = emptyList()) : ImportStore
      */
     override suspend fun confirm(slip: ConfirmedSlip) {
         confirmed += slip
+        slip.foreign?.let { rates[it.currency] = it.rate }
         queued.firstOrNull { it.id == slip.queuedSlipId }?.let { importedHashes += it.hash }
         queued.removeAll { it.id == slip.queuedSlipId }
         slip.counterparty?.let { counterparty ->

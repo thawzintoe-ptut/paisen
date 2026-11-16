@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.ForeignAmount
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
@@ -17,9 +18,12 @@ import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.rules.ShopNames
+import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.PaymentDraft
 import com.ptut.expense.domain.shared.PaymentMethod
+import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.shared.SlipDebt
+import com.ptut.expense.domain.shared.parseMinor
 import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.isReaderNoise
 import com.ptut.expense.domain.slip.shownShop
@@ -27,6 +31,7 @@ import com.ptut.expense.domain.under
 import com.ptut.expense.importer.SlipDiscards
 import com.ptut.expense.importer.SlipImporter
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.kyatCopy
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastMessage
@@ -87,6 +92,7 @@ class ConfirmSlipViewModel(
     val uiState: StateFlow<ConfirmSlipUiState> = state.asStateFlow()
 
     init {
+        slip?.takeIf { it.isForeign }?.let { found -> viewModelScope.launch { loadRate(found.currency) } }
         viewModelScope.launch {
             ledger.queuedSlips
                 .map { queue -> queue.firstOrNull { it.id == slipId } }
@@ -102,6 +108,7 @@ class ConfirmSlipViewModel(
         if (first) {
             debts = debtsOf(found)
             state.value = found.toUiState().copy(debtMatch = debtMatch())
+            if (found.isForeign) viewModelScope.launch { loadRate(found.currency) }
         } else {
             state.update { it.copy(phase = ConfirmSlipPhase.Ready) }
         }
@@ -114,7 +121,29 @@ class ConfirmSlipViewModel(
         state.update { if (it.saving || it.saved || it.dismissed) it else it.copy(phase = ConfirmSlipPhase.Missing) }
     }
 
-    fun type(entry: AmountEntry) = state.update { it.copy(entry = entry) }
+    fun type(entry: AmountEntry) = state.update { it.copy(entry = entry).withBaht() }
+
+    /** #33: baht for 1,000 kyat, typed. Digits and one point only. */
+    fun typeRate(text: String) = state.update {
+        it.copy(rateText = text.filter { c -> c.isDigit() || c == '.' }, askForRate = false).withBaht()
+    }
+
+    /** The last rate saved opens the field, so only the first kyat slip has to ask. */
+    private suspend fun loadRate(currency: String) {
+        val last = importer.rateFor(currency) ?: return
+        state.update { if (it.rateText.isEmpty()) it.copy(rateText = last.typedFor(Currencies.of(currency).rateUnit)).withBaht() else it }
+    }
+
+    /** What the typed kyat at the typed rate saves as, or null while either is not a number. */
+    private fun ConfirmSlipUiState.withBaht(): ConfirmSlipUiState = copy(bahtLine = foreignOf(this)?.let { kyatCopy().inBaht(it.baht.format()) })
+
+    private fun foreignOf(current: ConfirmSlipUiState): ForeignAmount? {
+        val slip = slip?.takeIf { it.isForeign } ?: return null
+        val currency = Currencies.of(slip.currency)
+        val rate = Rate.parse(current.rateText, currency.rateUnit) ?: return null
+        val typed = parseMinor(current.entry.typed, currency)?.takeIf { it > 0 } ?: return null
+        return ForeignAmount(slip.currency, typed, rate)
+    }
 
     /** #22: held until Save, like the category. */
     fun markPlanned(on: Boolean) = state.update { it.copy(planned = on) }
@@ -161,7 +190,13 @@ class ConfirmSlipViewModel(
             return
         }
 
-        val amount = current.entry.toSatang()
+        // #33: a kyat slip saves its baht at the typed rate, and keeps the kyat and the rate beside it.
+        val foreign = foreignOf(current)
+        if (slip.isForeign && foreign == null) {
+            state.update { it.copy(askForRate = true) }
+            return
+        }
+        val amount = foreign?.baht ?: current.entry.toSatang()
         val typed = current.shopName.trim()
         // A read shop stays the rule's key, so its next slip still matches; a name typed over it is
         // what rows show. A slip that read no shop takes the typed name as its shop.
@@ -182,11 +217,12 @@ class ConfirmSlipViewModel(
                     confirmedAtEpochMillis = clock.now().toEpochMilliseconds(),
                     // What the parser read, not what the reader typed over it. FR-7 kept this
                     // null when the figure did not read, and null is what screen 11c wants too.
-                    readAmount = slip.amount,
+                    readAmount = if (foreign == null) slip.amount else slip.amount?.let { ForeignAmount(slip.currency, it.toMinorUnits(), foreign.rate).baht },
                     folder = slip.sourceFolder,
                     displayName = typed.takeIf { current.shopRead && it.isNotEmpty() && it != slip.merchant },
                     direction = slip.direction,
                     planned = current.planned && slip.direction == Direction.Expense,
+                    foreign = foreign,
                 ),
             )
             haptics.saved()
@@ -253,8 +289,9 @@ class ConfirmSlipViewModel(
     }
 
     // A debt is paid by money going out; money in never closes one here.
+    // A kyat figure is not a baht debt, so a kyat slip is never offered one.
     private fun debtsOf(slip: QueuedSlip): List<SlipDebt> =
-        slip.amount?.takeIf { slip.direction == Direction.Expense }?.let { debtsFor(it, slip.merchant) }.orEmpty()
+        slip.amount?.takeIf { slip.direction == Direction.Expense && !slip.isForeign }?.let { debtsFor(it, slip.merchant) }.orEmpty()
 
     private fun debtMatch(): DebtMatchUiModel? {
         val chosen = debts.getOrNull(chosenDebt) ?: return null
@@ -273,7 +310,9 @@ class ConfirmSlipViewModel(
         reference = this?.note.orEmpty(),
         // An amount the parser lifted off the slip is what the reader is here to check. One it
         // could not read arrives null, and the pad stays empty rather than offering a figure.
-        entry = this?.amount?.let(AmountEntry::of) ?: AmountEntry(),
+        entry = this?.amount?.let { if (isForeign) AmountEntry(it.toMinorUnits().toString(), pending = true) else AmountEntry.of(it) } ?: AmountEntry(),
+        currencySymbol = this?.let { Currencies.of(it.currency).symbol } ?: Currencies.Thb.symbol,
+        asksRate = this?.isForeign == true,
         lowConfidence = this?.lowConfidence.orEmpty(),
         amountUnread = this != null && amount == null,
         category = null,
@@ -302,6 +341,8 @@ class ConfirmSlipViewModel(
         val day = Instant.fromEpochMilliseconds(this).toLocalDateTime(BangkokTime).date
         return if (day == clock.now().toLocalDateTime(BangkokTime).date) AppText.copy.slips.savedToday else day.dayLabel()
     }
+
+    private val QueuedSlip.isForeign: Boolean get() = currency != Currencies.Thb.code
 
     private companion object {
         /** Long enough for a cold Room start, and not final: a slip that turns up after it shows. */

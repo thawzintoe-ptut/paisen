@@ -66,6 +66,8 @@ data class Transaction(
     val ruleId: String? = null,
     /** #22: the reader marked it planned. Weekly notes never count it as a rise. */
     val planned: Boolean = false,
+    /** #33: paid in another currency; null for baht. [amount] is always the baht the ledger counts. */
+    val foreign: ForeignAmount? = null,
 )
 
 val Transaction.isEdited: Boolean get() = editedAt != null

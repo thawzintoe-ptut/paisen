@@ -139,3 +139,20 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | Not read yet, tried again on the next scan | မဖတ်ရသေးဘူး၊ နောက်တစ်ခါ ရှာရင် ပြန်ဖတ်မယ် | `SlipsCopy` shareNotReadYet |
 | The picture was gone before it was read | မဖတ်ခင် ပုံက မရှိတော့ဘူး | `SlipsCopy` shareGone |
 | It will show in Today or To check | ဒီနေ့ ဒါမှမဟုတ် စစ်ဖို့ထဲမှာ ပေါ်လာမယ် | `SlipsCopy` shareLookIn |
+
+## A kyat slip asks for a rate (16 Nov, not yet checked)
+
+| English | Burmese | Where |
+|---|---|---|
+| A kyat slip needs a rate | ကျပ်စလစ်အတွက် ငွေလဲနှုန်း လိုတယ် | `KyatCopy` rateNeeded |
+| {shop} · {amount} · add the rate in To check | {shop} · {amount} · စစ်ဖို့ထဲမှာ နှုန်းထည့်ပါ | `KyatCopy` rateNeededBody |
+| Kyat rate needed | ကျပ်နှုန်း လိုတယ် | `KyatCopy` reasonRate |
+| Rate | နှုန်း | `KyatCopy` rateLabel |
+| ฿ per 1,000 K | 1,000 K ကို ฿ | `KyatCopy` rateUnit |
+| See today's rate | ဒီနေ့ နှုန်း ကြည့်မယ် | `KyatCopy` todaysRate |
+| Type the rate first | နှုန်းအရင် ထည့်ပါ | `KyatCopy` askRate |
+| Saved as {baht} | {baht} အဖြစ် သိမ်းမယ် | `KyatCopy` inBaht |
+| Later kyat slips use this rate until you change it. | နောက် ကျပ်စလစ်တွေက ဒီနှုန်းကို သုံးမယ်။ ပြောင်းချင်ရင် ပြောင်းလို့ရတယ်။ | `KyatCopy` rateNote |
+| Paid | ပေးခဲ့တာ | `KyatCopy` paidLabel |
+| {amount} at ฿{rate} per 1,000 K | {amount}၊ 1,000 K ကို ฿{rate} နှုန်း | `KyatCopy` atRate |
+| one kyat slip / {n} kyat slips | ကျပ်စလစ် {n} ခု | `KyatCopy` slipsNeedRate |

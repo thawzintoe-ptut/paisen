@@ -469,6 +469,7 @@ val ledgerModule: Module = module {
             importRunDao = database.importRunDao(),
             ruleDao = database.ruleDao(),
             slipConfirmationDao = database.slipConfirmationDao(),
+            sharedDao = database.sharedDao(),
         )
     }
 
@@ -492,6 +493,7 @@ val ledgerModule: Module = module {
 
                 override fun learnFrom(sender: String) = settings.learnSlipOwner(sender)
             },
+            readsWallets = getOrNull<AppBuild>()?.debug == true,
         )
     }
 

@@ -14,6 +14,8 @@ data class QueuedSlipUi(
     val meta: String,
     val amount: DisplayAmount,
     val reason: ReviewReason,
+    /** #33: a kyat slip's own figure, "K29,500", drawn in place of baht it does not have yet. */
+    val foreignAmount: String? = null,
 )
 
 /**

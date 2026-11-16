@@ -39,6 +39,7 @@ import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.format
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.SlipsCopy
+import com.ptut.expense.locale.kyatCopy
 import com.ptut.expense.ui.DisplayAmount
 import com.ptut.expense.ui.SlipPicture
 import com.ptut.expense.ui.sky.SkyButton
@@ -154,7 +155,7 @@ private fun QueuedSlipCard(
                     }
                     (slip.amount as? DisplayAmount.Exact)?.let { exact ->
                         Text(
-                            text = exact.amount.format(),
+                            text = slip.foreignAmount ?: exact.amount.format(),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(start = Spacing.xs),
@@ -221,4 +222,5 @@ private fun ReviewReason.line(text: SlipsCopy): String = when (this) {
     ReviewReason.NewMerchant -> text.reasonNewShop
     ReviewReason.AmountUnclear -> text.reasonAmountHard
     ReviewReason.Unreadable -> text.reasonUnreadable
+    ReviewReason.RateNeeded -> kyatCopy().reasonRate
 }

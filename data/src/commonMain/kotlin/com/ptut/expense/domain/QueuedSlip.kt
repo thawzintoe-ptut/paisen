@@ -10,6 +10,9 @@ enum class ReviewReason {
 
     /** No shop read, but the text has slip labels (#113). The stored name is read back with `valueOf`. */
     Unreadable,
+
+    /** #33: a slip in kyat (or another currency) with no saved rate yet; Check slip asks for one. */
+    RateNeeded,
 }
 
 /**
@@ -38,6 +41,8 @@ data class QueuedSlip(
     val sourceFolder: String? = null,
     /** #26: money in when the slip names you as the recipient. */
     val direction: Direction = Direction.Expense,
+    /** #33: [amount] is in this currency's minor units; kyat slips wait here for a rate. */
+    val currency: String = "THB",
 )
 
 /** "14 Aug 19:41 · ref 0142K9" — enough for the reader to match the row to a paper slip. */

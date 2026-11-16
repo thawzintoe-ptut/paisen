@@ -263,4 +263,9 @@ data class BackupTransaction(
     val ruleId: String? = null,
     /** #22: optional and false when absent, so older files and older apps read it without a format change. */
     val planned: Boolean = false,
+    /** #33: optional, so older files read as baht and older apps ignore them. */
+    val currency: String? = null,
+    val originalMinor: Long? = null,
+    val rateUnscaled: Long? = null,
+    val rateScale: Int? = null,
 )

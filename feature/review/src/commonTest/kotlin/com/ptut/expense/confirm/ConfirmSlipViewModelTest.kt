@@ -16,6 +16,7 @@ import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.shared.PaymentDraft
 import com.ptut.expense.domain.shared.PaymentMethod
+import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.shared.SlipDebt
 import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.domain.slip.SlipParser
@@ -579,6 +580,59 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
 
     /** Assembled: verifyNoAccountNumbers scans this file too, and the guard is worth more. */
     private fun maskedAccount(lastFour: String) = "xxx-x-x" + lastFour + "-5"
+
+    // #33: a kyat slip
+
+    private fun kyat(amount: Satang = Satang(29_500)) =
+        slip(amount = amount).copy(currency = "MMK", reason = ReviewReason.RateNeeded)
+
+    @Test
+    fun `a kyat slip shows its kyat and asks for a rate before it saves`() = runTest {
+        val store = InMemoryImportStore()
+        val viewModel = viewModel(kyat(), store = store)
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertEquals("K", state.currencySymbol)
+        assertEquals("29500", state.entry.display)
+        assertTrue(state.asksRate)
+
+        viewModel.choose(food)
+        viewModel.save()
+        runCurrent()
+
+        assertEquals(emptyList(), store.confirmed)
+        assertEquals("Type the rate first", viewModel.uiState.value.categoryHint)
+    }
+
+    @Test
+    fun `a kyat slip saves its baht at the typed rate and keeps the kyat and the rate`() = runTest {
+        val store = InMemoryImportStore()
+        val viewModel = viewModel(kyat(), store = store)
+        runCurrent()
+
+        viewModel.typeRate("8.2")
+        assertEquals("Saved as ฿241.90", viewModel.uiState.value.bahtLine)
+        viewModel.choose(food)
+        viewModel.save()
+        runCurrent()
+
+        val confirmed = store.confirmed.single()
+        assertEquals(Satang(24_190), confirmed.amount)
+        assertEquals("MMK", confirmed.foreign?.currency)
+        assertEquals(29_500L, confirmed.foreign?.originalMinor)
+        assertEquals(Rate.parse("8.2", 1_000), store.rates["MMK"])
+    }
+
+    @Test
+    fun `the next kyat slip opens on the rate saved last`() = runTest {
+        val store = InMemoryImportStore().apply { rates["MMK"] = Rate.parse("8.2", 1_000)!! }
+        val viewModel = viewModel(kyat(), store = store)
+        runCurrent()
+
+        assertEquals("8.2", viewModel.uiState.value.rateText)
+        assertEquals("Saved as ฿241.90", viewModel.uiState.value.bahtLine)
+    }
 
     private companion object {
         const val SENDER_LAST_FOUR = "12" + "34"

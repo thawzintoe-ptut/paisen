@@ -1,6 +1,8 @@
 package com.ptut.expense.domain
 
 import com.ptut.expense.domain.rules.ShopNames
+import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.formatMinor
 import com.ptut.expense.domain.slip.isReaderNoise
 import com.ptut.expense.locale.AppText
 import kotlinx.datetime.TimeZone
@@ -48,10 +50,12 @@ enum class Provenance {
  * What [metaLine] joins, kept apart so a Sky row can put the time under the amount (#156).
  * [category] is null when it is already the row's name, so "Food & drink" is not said twice.
  */
-data class MetaParts(val category: String?, val time: String?, val provenance: Provenance)
+
+/** [foreign] is a kyat record's own figure, "K29,500" (#33); the row's amount stays the baht it counts as. */
+data class MetaParts(val category: String?, val time: String?, val provenance: Provenance, val foreign: String? = null)
 
 /** The line under a Sky row's name, "Groceries · auto"; the time sits under the amount (#146, K7). */
-fun MetaParts.categoryAndProvenance(): String = listOfNotNull(category, provenance.label).joinToString(" · ")
+fun MetaParts.categoryAndProvenance(): String = listOfNotNull(category, foreign, provenance.label).joinToString(" · ")
 
 /**
  * What a row was filed as, when, and who filed it.
@@ -69,6 +73,7 @@ fun Transaction.metaParts(
     category = filedAs(categories, subCategories).takeIf { ownName() != null },
     time = if (source.isAutomatic) occurredAtEpochMillis.timeOfDayIn(zone) else null,
     provenance = if (source.isAutomatic) Provenance.Auto else Provenance.ByHand,
+    foreign = foreign?.let { formatMinor(it.originalMinor, Currencies.of(it.currency)) },
 )
 
 /** The line under a merchant name on a row: [metaParts] joined, "Groceries · 18:30 · auto". */
@@ -78,7 +83,7 @@ fun Transaction.metaLine(
     subCategories: List<SubCategory> = emptyList(),
 ): String = metaParts(categories, zone, subCategories).joined()
 
-private fun MetaParts.joined(): String = listOfNotNull(category, time, provenance.label).joinToString(" · ")
+private fun MetaParts.joined(): String = listOfNotNull(category, foreign, time, provenance.label).joinToString(" · ")
 
 fun Transaction.category(categories: List<Category>): Category? =
     categories.firstOrNull { it.id == categoryId }

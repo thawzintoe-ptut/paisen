@@ -68,7 +68,7 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         DeletedBuiltInEntity::class,
         PaymentRemovalEntity::class,
     ],
-    version = 20,
+    version = 21,
     // Schema 2 adds the nullable transactions.editedAt, and schema 4 the nullable memo and
     // slipAmountMinor beside it. Schema 5 adds the watched_folder table whole. A nullable column
     // with no default, and a new table, are the shapes Room migrates on its own. Schema 6 is
@@ -101,6 +101,7 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         AutoMigration(from = 17, to = 18),
         AutoMigration(from = 18, to = 19),
         AutoMigration(from = 19, to = 20),
+        AutoMigration(from = 20, to = 21),
     ],
     exportSchema = true,
 )

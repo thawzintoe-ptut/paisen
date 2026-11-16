@@ -10,6 +10,8 @@ import com.ptut.expense.domain.isAutomatic
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.metaLine
+import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.formatMinor
 import com.ptut.expense.domain.slip.shownShop
 import com.ptut.expense.importer.SlipDiscards
 import com.ptut.expense.locale.AppText
@@ -87,6 +89,8 @@ class ReviewViewModel(
                 meta = slip.metaLine(),
                 amount = DisplayAmount.of(slip.amount),
                 reason = slip.reason,
+                foreignAmount = slip.amount?.takeIf { slip.currency != Currencies.Thb.code }
+                    ?.let { formatMinor(it.toMinorUnits(), Currencies.of(slip.currency)) },
             )
         },
         retentionNote = retentionNote(),

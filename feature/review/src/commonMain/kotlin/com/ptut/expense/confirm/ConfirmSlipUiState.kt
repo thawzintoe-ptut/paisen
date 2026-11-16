@@ -4,6 +4,7 @@ import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.kyatCopy
 import com.ptut.expense.ui.AmountEntry
 
 /**
@@ -66,12 +67,25 @@ data class ConfirmSlipUiState(
     val debtMatch: DebtMatchUiModel? = null,
     /** Said once the payment is recorded and the slip stays to be filed as my own spending. */
     val debtPaidNote: String? = null,
+    /** #33: "฿", or "K" for a kyat slip, whose amount is typed in kyat. */
+    val currencySymbol: String = "฿",
+    /** #33: a kyat slip asks for baht per 1,000 K, opened on the last rate saved. */
+    val asksRate: Boolean = false,
+    val rateText: String = "",
+    /** "Saved as ฿236.00" once the kyat and the rate both read. */
+    val bahtLine: String? = null,
+    /** Confirm was pressed on a kyat slip with no rate. Cleared by typing one. */
+    val askForRate: Boolean = false,
 ) {
     /**
      * Inline, beside Confirm, rather than a toast: the keyboard covers the toast, and Confirm then
      * seemed to do nothing (#216).
      */
-    val categoryHint: String? get() = if (askForCategory) AppText.copy.slips.pickCategory else null
+    val categoryHint: String? get() = when {
+        askForRate -> kyatCopy().askRate
+        askForCategory -> AppText.copy.slips.pickCategory
+        else -> null
+    }
 
     /** An unread slip has no date of its own, so the photo's time stands in and says so. */
     val whenLabel: String get() = if (shopRead) AppText.copy.slips.whenLabel else AppText.copy.slips.whenPhotoTime

@@ -52,3 +52,20 @@ Date: 16 November 2026
 
 Notes: checked in the app and turned on for release builds. A native Thai reader has not gone
 through these tables yet; their fixes are still welcome, row by row.
+
+## A kyat slip asks for a rate (16 Nov, not yet checked)
+
+| English | Thai | Where |
+|---|---|---|
+| A kyat slip needs a rate | สลิปจ๊าดต้องใส่อัตราแลกเปลี่ยน | `KyatCopy` rateNeeded |
+| {shop} · {amount} · add the rate in To check | {shop} · {amount} · ใส่อัตราในรอตรวจ | `KyatCopy` rateNeededBody |
+| Kyat rate needed | ต้องใส่อัตราจ๊าด | `KyatCopy` reasonRate |
+| Rate | อัตรา | `KyatCopy` rateLabel |
+| ฿ per 1,000 K | ฿ ต่อ 1,000 K | `KyatCopy` rateUnit |
+| See today's rate | ดูอัตราวันนี้ | `KyatCopy` todaysRate |
+| Type the rate first | ใส่อัตราก่อน | `KyatCopy` askRate |
+| Saved as {baht} | บันทึกเป็น {baht} | `KyatCopy` inBaht |
+| Later kyat slips use this rate until you change it. | สลิปจ๊าดใบต่อไปใช้อัตรานี้จนกว่าคุณจะเปลี่ยน | `KyatCopy` rateNote |
+| Paid | จ่าย | `KyatCopy` paidLabel |
+| {amount} at ฿{rate} per 1,000 K | {amount} ที่ ฿{rate} ต่อ 1,000 K | `KyatCopy` atRate |
+| one kyat slip / {n} kyat slips | สลิปจ๊าด {n} ใบ | `KyatCopy` slipsNeedRate |

@@ -49,6 +49,9 @@ data class QueuedSlipEntity(
     /** Schema 19 (#26): money out or money in, as the slip read. Every slip before it was money out. */
     @ColumnInfo(defaultValue = "Expense")
     val direction: String = "Expense",
+    /** Schema 21 (#33): the slip's currency; [amountMinor] is in its minor units. THB before it. */
+    @ColumnInfo(defaultValue = "THB")
+    val currency: String = "THB",
 )
 
 fun QueuedSlipEntity.toDomain(): QueuedSlip = QueuedSlip(
@@ -62,6 +65,7 @@ fun QueuedSlipEntity.toDomain(): QueuedSlip = QueuedSlip(
     lowConfidence = lowConfidence.toSlipFields(),
     sourceFolder = sourceFolder,
     direction = Direction.entries.firstOrNull { it.name == direction } ?: Direction.Expense,
+    currency = currency,
 )
 
 /**

@@ -151,6 +151,10 @@ class RoomLedgerArchive(
         sourceFolder = sourceFolder,
         ruleId = ruleId,
         planned = planned,
+        currency = currency ?: "THB",
+        originalMinor = originalMinor,
+        rateUnscaled = rateUnscaled,
+        rateScale = rateScale,
     )
 }
 
@@ -187,6 +191,10 @@ private fun TransactionEntity.toBackup() = BackupTransaction(
     memo = memo,
     ruleId = ruleId,
     planned = planned,
+    currency = currency.takeUnless { it == "THB" },
+    originalMinor = originalMinor,
+    rateUnscaled = rateUnscaled,
+    rateScale = rateScale,
 )
 
 private fun ExpenseVersionEntity.toBackup() = BackupExpenseVersion(

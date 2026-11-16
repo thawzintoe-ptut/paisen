@@ -10,12 +10,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -29,11 +32,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.Sizes
@@ -47,6 +54,7 @@ import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.SlipsCopy
 import com.ptut.expense.locale.incomeSlipCopy
+import com.ptut.expense.locale.kyatCopy
 import com.ptut.expense.locale.noteCopy
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.KeyboardAmountField
@@ -96,6 +104,7 @@ fun ConfirmSlipView(
     onPayDebt: (keepInSpending: Boolean) -> Unit = {},
     onNotThisDebt: () -> Unit = {},
     onPlanned: (Boolean) -> Unit = {},
+    onRate: (String) -> Unit = {},
 ) {
     val text = LocalCopy.current.slips
     val common = LocalCopy.current.common
@@ -104,6 +113,7 @@ fun ConfirmSlipView(
     val focus = LocalFocusManager.current
     // #216: the keyboard goes, so the hint and the chips it points at can both be seen.
     LaunchedEffect(uiState.askForCategory) { if (uiState.askForCategory) focus.clearFocus() }
+    val openLink = LocalUriHandler.current
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -166,7 +176,7 @@ fun ConfirmSlipView(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("฿", style = MaterialTheme.ptutType.sheet, color = MaterialTheme.colorScheme.onSurface)
+                        Text(uiState.currencySymbol, style = MaterialTheme.ptutType.sheet, color = MaterialTheme.colorScheme.onSurface)
                         KeyboardAmountField(
                             entry = uiState.entry,
                             onType = onType,
@@ -177,6 +187,11 @@ fun ConfirmSlipView(
                     }
                     SkyConfidenceBadge(label = uiState.confidence)
                 }
+            }
+
+            // #33: a kyat slip becomes baht at this rate. The link opens a money-transfer rate to copy from.
+            if (uiState.asksRate) {
+                RateRow(uiState, onRate, onTodaysRate = { openLink.openUri(TODAYS_RATE) })
             }
 
             Column {
@@ -327,3 +342,35 @@ private fun DebtMatchCard(
 
 /** A field the parser had to judge says so, so it is checked against the picture first. */
 private fun String.marked(unsure: Boolean, text: SlipsCopy): String = if (unsure) text.checkIt(this) else this
+
+/** TrueMoney Myanmar's transfer page shows the day's baht-to-kyat rate; there is no feed to fetch it from. */
+private const val TODAYS_RATE = "https://truemoney.com.mm/en/services/irmoney-service/"
+
+@Composable
+private fun RateRow(uiState: ConfirmSlipUiState, onRate: (String) -> Unit, onTodaysRate: () -> Unit) {
+    val words = kyatCopy()
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            Text(words.rateLabel, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+            BasicTextField(
+                value = uiState.rateText,
+                onValueChange = onRate,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = Modifier
+                    .width(SkySizes.rateField)
+                    .heightIn(min = SkySizes.search)
+                    .clip(PtutRadii.r12)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = Spacing.s12, vertical = Spacing.s10)
+                    .semantics { contentDescription = "${words.rateLabel}, ${words.rateUnit}" },
+            )
+            Text(words.rateUnit, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        uiState.bahtLine?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Text(words.rateNote, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        SkyTextAction(label = words.todaysRate, onClick = onTodaysRate, enabled = true)
+    }
+}

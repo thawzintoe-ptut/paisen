@@ -1,10 +1,12 @@
 package com.ptut.expense.domain.slip
 
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.ForeignAmount
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.rules.MerchantRule
+import com.ptut.expense.domain.shared.Rate
 
 /** A slip good enough to file without asking: read in full, and its merchant already remembered. */
 data class FiledSlip(
@@ -20,6 +22,8 @@ data class FiledSlip(
     val ruleId: String? = null,
     /** #26: money in when the slip names you as the recipient. */
     val direction: Direction = Direction.Expense,
+    /** #33: a kyat slip's kyat and rate; the record's amount is then [ForeignAmount.baht]. */
+    val foreign: ForeignAmount? = null,
 )
 
 /**
@@ -41,6 +45,8 @@ data class QueuedSlipEntry(
     val folder: String? = null,
     /** #26: money in when the slip names you as the recipient. */
     val direction: Direction = Direction.Expense,
+    /** #33: [amount] is in this currency. */
+    val currency: String = "THB",
 )
 
 /**
@@ -74,6 +80,8 @@ data class ConfirmedSlip(
     val direction: Direction = Direction.Expense,
     /** #22: marked planned on Check slip. */
     val planned: Boolean = false,
+    /** #33: paid in kyat at this rate; [amount] is the baht it came to. */
+    val foreign: ForeignAmount? = null,
 )
 
 /**
@@ -81,6 +89,9 @@ data class ConfirmedSlip(
  * every dedupe and retention rule can be driven from the host suite.
  */
 interface ImportStore {
+
+    /** #33: the last rate saved for [currency] on this phone, shared with groups (#181); null when none. */
+    suspend fun rateFor(currency: String): Rate? = null
 
     /** Read once per run rather than held open: a rule added mid-run belongs to the next one. */
     suspend fun rules(): List<MerchantRule>

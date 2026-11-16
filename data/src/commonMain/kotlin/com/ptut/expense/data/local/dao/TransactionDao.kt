@@ -87,6 +87,9 @@ interface TransactionDao {
      * happened to hold for the merchant, the reference, the source and the slip's own reading, and
      * one stale copy of those would quietly rewrite the evidence screen 11c refuses to touch.
      *
+     * #33: a new baht amount is no longer the kyat at the rate, so a kyat row becomes a baht one.
+     * SQLite reads every right-hand side from the row before the update.
+     *
      * An id the table no longer holds updates no rows, which is the same right answer
      * [deleteById] gives.
      */
@@ -94,6 +97,10 @@ interface TransactionDao {
         """
         UPDATE transactions
         SET amountMinor = :amountMinor,
+            currency = CASE WHEN amountMinor = :amountMinor THEN currency ELSE 'THB' END,
+            originalMinor = CASE WHEN amountMinor = :amountMinor THEN originalMinor END,
+            rateUnscaled = CASE WHEN amountMinor = :amountMinor THEN rateUnscaled END,
+            rateScale = CASE WHEN amountMinor = :amountMinor THEN rateScale END,
             categoryId = :categoryId,
             subCategoryId = (
                 SELECT id FROM sub_category WHERE id = :subCategoryId AND categoryId = :categoryId

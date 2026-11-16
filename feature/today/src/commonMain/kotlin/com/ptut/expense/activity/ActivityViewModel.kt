@@ -20,6 +20,8 @@ import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.phrase
 import com.ptut.expense.domain.rangeContaining
+import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.formatMinor
 import com.ptut.expense.domain.slip.shownShop
 import com.ptut.expense.domain.startOfDayEpochMillis
 import com.ptut.expense.domain.summarise
@@ -27,6 +29,7 @@ import com.ptut.expense.domain.trendBetween
 import com.ptut.expense.domain.weekdayAndDay
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.SlipsCopy
+import com.ptut.expense.locale.kyatCopy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -216,6 +219,10 @@ class ActivityViewModel(
     private fun DateRange.shiftedWeeks(weeks: Int) =
         DateRange(start.plus(weeks, DateTimeUnit.WEEK), endInclusive.plus(weeks, DateTimeUnit.WEEK))
 
+    /** #33: a kyat slip shows its kyat, "K29,500"; it has no baht until it has a rate. */
+    private fun QueuedSlip.shownAmount(): String? =
+        amount?.let { if (currency == Currencies.Thb.code) it.formatCompact() else formatMinor(it.toMinorUnits(), Currencies.of(currency)) }
+
     private fun QueuedSlip.asEntry(text: SlipsCopy = AppText.copy.slips) = Dated(
         sortKey = capturedAtEpochMillis,
         model = ActivityEntryUiModel(
@@ -224,18 +231,20 @@ class ActivityViewModel(
                 ReviewReason.NewMerchant -> text.needsCategory
                 ReviewReason.AmountUnclear -> text.needsAmount
                 ReviewReason.Unreadable -> text.imageUnread
+                ReviewReason.RateNeeded -> kyatCopy().rateNeeded
             },
             body = when (reason) {
-                ReviewReason.NewMerchant -> text.addedToCheck(shownShop(merchant, text.unknownShop), amount?.formatCompact() ?: text.notCounted)
+                ReviewReason.NewMerchant -> text.addedToCheck(shownShop(merchant, text.unknownShop), shownAmount() ?: text.notCounted)
                 ReviewReason.AmountUnclear -> text.amountNotConfident(shownShop(merchant, text.unknownShop))
                 ReviewReason.Unreadable -> text.fillByHand
+                ReviewReason.RateNeeded -> kyatCopy().rateNeededBody(shownShop(merchant, text.unknownShop), shownAmount() ?: text.notCounted)
             },
             time = capturedAtEpochMillis.stamp(),
             // To check's own glyph (p23); an image that read nothing takes p23's warning instead.
             icon = if (reason == ReviewReason.Unreadable) "error" else "inbox",
             tone = when (reason) {
                 ReviewReason.NewMerchant -> ActivityTone.Reported
-                ReviewReason.AmountUnclear, ReviewReason.Unreadable -> ActivityTone.NeedsYou
+                ReviewReason.AmountUnclear, ReviewReason.Unreadable, ReviewReason.RateNeeded -> ActivityTone.NeedsYou
             },
             target = ActivityTarget.Slip(id),
         ),

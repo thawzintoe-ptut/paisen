@@ -1,5 +1,6 @@
 package com.ptut.expense.domain.slip
 
+import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.Satang
 
 /**
@@ -37,6 +38,12 @@ sealed interface SlipRead {
          * you here; a slip someone sent you names them, and that is how money in is told apart.
          */
         val sender: String?
+
+        /** #33: the currency [amount] is in; its minor units, so kyat (0 digits) reads 29,500 as 29500. */
+        val currency: String
+
+        /** #33: a wallet receipt that says the direction itself (a minus sign, a "To" block); null leaves it to #26. */
+        val knownDirection: Direction?
     }
 
     /**
@@ -50,6 +57,8 @@ sealed interface SlipRead {
         override val reference: String,
         override val lowConfidence: Set<SlipField> = emptySet(),
         override val sender: String? = null,
+        override val currency: String = "THB",
+        override val knownDirection: Direction? = null,
     ) : Readable
 
     /**
@@ -63,6 +72,8 @@ sealed interface SlipRead {
         override val reference: String?,
         override val lowConfidence: Set<SlipField> = emptySet(),
         override val sender: String? = null,
+        override val currency: String = "THB",
+        override val knownDirection: Direction? = null,
     ) : Readable
 
     /**

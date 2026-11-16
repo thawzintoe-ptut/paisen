@@ -49,6 +49,18 @@ class RoomLedgerArchiveTest {
     }
 
     @Test
+    fun `a kyat row keeps its kyat and its rate through export and import`() = runTest {
+        val kyat = satangExact.copy(currency = "MMK", originalMinor = 29_500, rateUnscaled = 82, rateScale = 4, amountMinor = 24_190)
+        val file = archive(holding = listOf(kyat, byHand)).export()
+
+        val empty = FakeLedgerTable()
+        archive(table = empty).restore(file)
+
+        assertEquals(kyat, empty.rows.single { it.id == kyat.id })
+        assertEquals("THB", empty.rows.single { it.id == byHand.id }.currency)
+    }
+
+    @Test
     fun `importing the same file twice adds no rows`() = runTest {
         val file = archive(holding = listOf(satangExact, byHand)).export()
 

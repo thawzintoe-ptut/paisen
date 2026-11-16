@@ -902,6 +902,7 @@ private fun LedgerShell() {
                     onPayDebt = confirm::payDebt,
                     onNotThisDebt = confirm::notThisDebt,
                     onPlanned = confirm::markPlanned,
+                    onRate = confirm::typeRate,
                 )
             }
 

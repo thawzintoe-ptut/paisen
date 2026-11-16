@@ -4,9 +4,11 @@ import com.ptut.expense.data.local.dao.ImportRunDao
 import com.ptut.expense.data.local.dao.ImportedSlipDao
 import com.ptut.expense.data.local.dao.QueuedSlipDao
 import com.ptut.expense.data.local.dao.RuleDao
+import com.ptut.expense.data.local.dao.SharedDao
 import com.ptut.expense.data.local.dao.SlipConfirmationDao
 import com.ptut.expense.data.local.dao.TransactionDao
 import com.ptut.expense.data.local.dao.withCheckedSubCategory
+import com.ptut.expense.data.local.entity.CurrencyRateEntity
 import com.ptut.expense.data.local.entity.FOLDER_SEPARATOR
 import com.ptut.expense.data.local.entity.ImportRunEntity
 import com.ptut.expense.data.local.entity.ImportedSlipEntity
@@ -20,6 +22,7 @@ import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.TransactionSource
 import com.ptut.expense.domain.rules.MerchantRule
+import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.FiledSlip
 import com.ptut.expense.domain.slip.ImportStore
@@ -36,7 +39,12 @@ class RoomImportStore(
     private val importRunDao: ImportRunDao,
     private val ruleDao: RuleDao,
     private val slipConfirmationDao: SlipConfirmationDao,
+    /** #33: the app-wide last rate per currency, the same table shared groups write (#181). */
+    private val sharedDao: SharedDao? = null,
 ) : ImportStore {
+
+    override suspend fun rateFor(currency: String): Rate? =
+        sharedDao?.rate(currency)?.let { Rate(it.rateUnscaled, it.rateScale) }
 
     override suspend fun rules(): List<MerchantRule> =
         ruleDao.all().map {
@@ -83,7 +91,12 @@ class RoomImportStore(
             )
         },
         queuedSlipId = slip.queuedSlipId,
-    )
+    ).also {
+        // #33: the rate typed on Check slip becomes the next kyat slip's, in a group or here.
+        slip.foreign?.let { foreign ->
+            sharedDao?.upsertRate(CurrencyRateEntity(foreign.currency, foreign.rate.unscaled, foreign.rate.scale, slip.confirmedAtEpochMillis))
+        }
+    }
 
     private fun ConfirmedSlip.toEntity() = TransactionEntity(
         id = transactionId,
@@ -100,6 +113,10 @@ class RoomImportStore(
         filedAt = confirmedAtEpochMillis,
         sourceFolder = folder,
         planned = planned,
+        currency = foreign?.currency ?: "THB",
+        originalMinor = foreign?.originalMinor,
+        rateUnscaled = foreign?.rate?.unscaled,
+        rateScale = foreign?.rate?.scale,
     )
 
     override suspend fun discard(id: String) = queuedSlipDao.discard(id)
@@ -123,7 +140,7 @@ class RoomImportStore(
     private fun FiledSlip.toEntity() = TransactionEntity(
         id = id,
         occurredAtEpochMillis = read.occurredAtEpochMillis,
-        amountMinor = read.amount.toMinorUnits(),
+        amountMinor = (foreign?.baht ?: read.amount).toMinorUnits(),
         direction = direction.name,
         categoryId = categoryId,
         counterparty = read.counterparty,
@@ -131,10 +148,14 @@ class RoomImportStore(
         reference = read.reference,
         // A slip filed without asking was filed at exactly what the parser read, so the two agree
         // today. They stop agreeing the moment screen 11c corrects one, which is the point.
-        slipAmountMinor = read.amount.toMinorUnits(),
+        slipAmountMinor = (foreign?.baht ?: read.amount).toMinorUnits(),
         filedAt = filedAtEpochMillis,
         sourceFolder = folder,
         ruleId = ruleId,
+        currency = foreign?.currency ?: "THB",
+        originalMinor = foreign?.originalMinor,
+        rateUnscaled = foreign?.rate?.unscaled,
+        rateScale = foreign?.rate?.scale,
     )
 
     private fun QueuedSlipEntry.toEntity() = QueuedSlipEntity(
@@ -150,6 +171,7 @@ class RoomImportStore(
         lowConfidence = lowConfidence.asColumn(),
         sourceFolder = folder,
         direction = direction.name,
+        currency = currency,
     )
 
     private fun ImportRun.toEntity() = ImportRunEntity(

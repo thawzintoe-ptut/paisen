@@ -6,10 +6,12 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.ForeignAmount
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionSource
+import com.ptut.expense.domain.shared.Rate
 
 /**
  * FR-9: money is [amountMinor], an INTEGER count of satang. No column here is REAL.
@@ -82,6 +84,13 @@ data class TransactionEntity(
     /** Schema 20 (#22): the reader marked this payment as planned, so weekly notes leave it out. */
     @ColumnInfo(defaultValue = "0")
     val planned: Boolean = false,
+    /** Schema 21 (#33): the currency it was paid in. THB on every row before it. */
+    @ColumnInfo(defaultValue = "THB")
+    val currency: String = "THB",
+    /** Schema 21: the amount in [currency]'s minor units, with the saved rate. Null on a baht row. */
+    val originalMinor: Long? = null,
+    val rateUnscaled: Long? = null,
+    val rateScale: Int? = null,
 )
 
 /**
@@ -105,6 +114,7 @@ fun TransactionEntity.toDomain(): Transaction = Transaction(
     filedAt = filedAt,
     ruleId = ruleId,
     planned = planned,
+    foreign = foreignAmount(),
 )
 
 /**
@@ -153,4 +163,17 @@ fun Transaction.toEntity() = TransactionEntity(
     sourceFolder = sourceFolder,
     ruleId = ruleId,
     planned = planned,
+    currency = foreign?.currency ?: "THB",
+    originalMinor = foreign?.originalMinor,
+    rateUnscaled = foreign?.rate?.unscaled,
+    rateScale = foreign?.rate?.scale,
 )
+
+/** All three columns or none: a row missing one is read as baht rather than guessed. */
+internal fun TransactionEntity.foreignAmount(): ForeignAmount? {
+    if (currency == "THB") return null
+    val original = originalMinor ?: return null
+    val unscaled = rateUnscaled ?: return null
+    val scale = rateScale ?: return null
+    return ForeignAmount(currency, original, Rate(unscaled, scale))
+}
