@@ -146,10 +146,10 @@ class SlipImporterTest {
     }
 
     @Test
-    fun `a Thai-only merchant is queued as an unread slip at the photo time and keeps its picture`() = runTest {
+    fun `a slip with no readable shop is queued as an unread slip at the photo time and keeps its picture`() = runTest {
         val source = FakeSlipSource()
         val store = InMemoryImportStore(listOf(lawson))
-        source.add("thai.jpg", SlipTranscripts.unreadable, capturedAt())
+        source.add("glare.jpg", SlipTranscripts.unreadable, capturedAt())
 
         val summary = importer(source, store).run()
 
@@ -161,7 +161,7 @@ class SlipImporterTest {
         assertEquals(capturedAt(), queued.occurredAtEpochMillis)
         assertEquals(1, summary.queued)
         assertEquals(0, summary.unreadable)
-        assertContentEquals(listOf("thai.jpg"), source.remaining.toList())
+        assertContentEquals(listOf("glare.jpg"), source.remaining.toList())
     }
 
     // NFR-4 — the picture

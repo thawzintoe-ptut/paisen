@@ -59,14 +59,14 @@ object SlipTranscripts {
         0.00 Baht
     """.trimIndent()
 
-    /** C-3: a Thai-only merchant. The reader ships no Thai model, so this one cannot be filed. */
+    /** A slip whose shop line the reader lost, glare say: only the QR id is left. A Thai name no longer does this (#23). */
     val unreadable: String = """
         Payment Completed
         14 Aug 26  12:41 PM
         MR. SOMCHAI J
         KBank
         xxx-x-xxxxx-x
-        ถุงเงิน (คุณสมชาย)
+        QN33507WI0187725Y
         Transaction ID:
         016200000003BPM00003
         Amount:

@@ -69,7 +69,7 @@ class DebugSlipViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `a Thai-only slip is queued to be filled in by hand and keeps its picture`() =
+    fun `a slip with no readable shop is queued to be filled in by hand and keeps its picture`() =
         runTest {
             viewModel.injectUnreadable()
             runCurrent()

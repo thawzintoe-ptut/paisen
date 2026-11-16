@@ -274,20 +274,50 @@ class SlipParserTest {
     // Counterparty
 
     @Test
-    fun `a Thai-only recipient is unreadable rather than a guess or an empty string`() {
-        val read = SlipParser.parse(
-            slip(
-                "ถุงเงิน (คุณสมชาย)",
-                "QN33507WI0187725Y",
-                "MRSOMCHAIPRASERT",
-                "Transaction ID:",
-                "016200000003BPM00003",
-                "Amount:",
-                "50.00 Baht",
-            ),
+    fun `a Thai-only shop is read in Thai by a reader that reads Thai`() {
+        val read = complete(
+            "ถุงเงิน (คุณสมชาย)",
+            "QN33507WI0187725Y",
+            "MRSOMCHAIPRASERT",
+            "Transaction ID:",
+            "016200000003BPM00003",
+            "Amount:",
+            "50.00 Baht",
         )
 
-        assertEquals(SlipRead.Unreadable, read)
+        assertEquals("ถุงเงิน (คุณสมชาย)", read.counterparty)
+    }
+
+    @Test
+    fun `a Thai shop a Latin-only reader turns to noise falls back to the account holder`() {
+        val read = complete(
+            "msus:quus:óiÜangönms",
+            "QN33507WI0187725Y",
+            "MRSOMCHAIPRASERT",
+            "Transaction ID:",
+            "016200000003BPM00003",
+            "Amount:",
+            "50.00 Baht",
+        )
+
+        assertEquals("MRSOMCHAIPRASERT", read.counterparty)
+    }
+
+    @Test
+    fun `two Thai trade name lines above the English company still give the English company`() {
+        val read = complete(
+            "บุญเติมเอนดัง",
+            "ร้านเวนดิ้งบายบุญเติม",
+            "FORTH SMART SERVICE PUBLIC",
+            "CO.,LTD.",
+            "R20260815061828",
+            "Transaction ID:",
+            "016200000008AQR00008",
+            "Amount:",
+            "35.00 Baht",
+        )
+
+        assertEquals("FORTH SMART SERVICE PUBLIC CO.,LTD.", read.counterparty)
     }
 
     @Test

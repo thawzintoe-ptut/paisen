@@ -17,8 +17,11 @@ import platform.Vision.VNRecognizedText
 import platform.Vision.VNRecognizedTextObservation
 import platform.Vision.VNRequestTextRecognitionLevelAccurate
 
-/** C-3: the Latin reader, named the way Vision names it. There is no Thai model to ask for. */
+/** The Latin reader, named the way Vision names it. */
 private const val LATIN = "en-US"
+
+/** #23: Vision reads Thai, so a Thai shop name is read rather than turned to noise. */
+private const val THAI = "th-TH"
 
 /** One reading per line is all the parser can use; Vision offers alternates it would ignore. */
 private const val BEST_CANDIDATE_ONLY = 1uL
@@ -34,9 +37,9 @@ private const val BEST_CANDIDATE_ONLY = 1uL
  * edits the very characters the parser needs. ML Kit does no correction either, so leaving it off
  * is also what keeps the two platforms reading the same slip the same way.
  *
- * C-3: only the Latin language is asked for, so a Thai merchant line comes back as noise or not at
- * all — the same outcome ML Kit gives on Android, which is the point. Vision does list `th-TH`
- * among its languages, and turning it on here would make one platform read a slip the other cannot.
+ * #23: Thai first, then English, as measured on 20 real slips: two shops read in Thai that English
+ * lost, every amount read the same. ML Kit has no Thai, so the parser still prefers an English
+ * company name when a slip prints both, and both platforms file that shop under the same rule.
  *
  * The reading itself cannot be tested off a device: Vision's detectors run in the Simulator without
  * error and return no observations at all, so a round-trip test there would pass an empty list off
@@ -54,7 +57,7 @@ class VisionSlipTextReader : SlipTextReader {
     private fun recognizeText() = VNRecognizeTextRequest().apply {
         recognitionLevel = VNRequestTextRecognitionLevelAccurate
         usesLanguageCorrection = false
-        recognitionLanguages = listOf(LATIN)
+        recognitionLanguages = listOf(THAI, LATIN)
     }
 
     /**

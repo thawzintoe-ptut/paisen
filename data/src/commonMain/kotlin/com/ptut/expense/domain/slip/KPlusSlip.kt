@@ -126,12 +126,29 @@ object KPlusSlip : SlipFormat {
         val block = subList(senderAccount + 1, size)
             .takeWhile { !it.equals(REFERENCE_LABEL, ignoreCase = true) }
             .let { it.drop(it.bannerLines()) }
-        val candidate = block.take(NAME_CANDIDATE_DEPTH)
-            .indexOfFirst { it.readsAsName() }
+        // #23: a Thai trade name often sits above the English company name. The English one stays the
+        // shop, so a reader that sees Thai files under the same rule as one that does not.
+        val names = block.take(NAME_RUN_DEPTH).takeWhile { it.readsAsName() || it.readsAsThaiName() }
+        val latin = names.indexOfFirst { it.readsAsName() }
+        val thai = names.indexOfFirst { it.readsAsThaiName() }
+        val candidate = when {
+            latin != -1 -> latin
+            thai != -1 -> return ReadName(block[thai], wrapped = false)
+            else -> block.take(NAME_CANDIDATE_DEPTH).indexOfFirst { it.readsAsName() }
+        }
         if (candidate == -1) return null
 
-        return block.joinWrappedName(candidate)
+        val name = block.joinWrappedName(candidate)
+        return if (name.value.isReaderNoise()) block.accountHolder() ?: name else name
     }
+
+    /**
+     * #23: a PromptPay shop prints its Thai name, its QR id, then the account holder in English
+     * capitals with no spaces (`MRSOMCHAIPRASERT`). A Latin-only reader turns the Thai name into
+     * noise, and the holder is the one readable name left.
+     */
+    private fun List<String>.accountHolder(): ReadName? =
+        take(NAME_RUN_DEPTH).firstOrNull { ACCOUNT_HOLDER.matches(it) }?.let { ReadName(it, wrapped = false) }
 
     /**
      * How many noise lines a banner beside the sender left above the recipient (K PLUS's THAILAND
@@ -172,6 +189,10 @@ object KPlusSlip : SlipFormat {
      * capitals and digits is excluded — `QN33507WI0187725Y` is not a merchant. So is the text in a
      * recipient's icon: the PromptPay logo reads as `Prompt Pay`, a shop icon as one letter.
      */
+
+    /** #23: two Thai letters make a name for a reader that reads Thai; ML Kit never returns any. */
+    private fun String.readsAsThaiName(): Boolean = count { it in THAI } >= MIN_NAME_LETTERS
+
     private fun String.readsAsName(): Boolean =
         count { it in 'a'..'z' || it in 'A'..'Z' } >= MIN_NAME_LETTERS &&
             !CODE_SHAPE.matches(this) &&
@@ -230,6 +251,13 @@ object KPlusSlip : SlipFormat {
     /** The date sits directly under the header; searching further would find nothing but codes. */
     private const val HEADER_SEARCH_DEPTH = 4
     private const val NAME_CANDIDATE_DEPTH = 2
+
+    /** #23: Thai trade names, then the English company name: as deep as the run of names goes. */
+    private const val NAME_RUN_DEPTH = 3
+    private val THAI = '\u0E00'..'\u0E7F'
+
+    /** `MRSOMCHAIPRASERT`: a title glued to the holder's name, all capitals. */
+    private val ACCOUNT_HOLDER = Regex("""(MR|MRS|MS|MISS)[A-Z]{4,}""")
 
     /** The QR caption, the id, and the caption's second line: as far below the label as the id sits. */
     private const val REFERENCE_SEARCH_DEPTH = 3
