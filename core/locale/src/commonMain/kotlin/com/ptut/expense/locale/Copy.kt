@@ -59,5 +59,8 @@ val ThaiCopy = Copy(
     slips = ThaiSlips,
     onboarding = ThaiOnboarding,
     folders = ThaiFolders,
+    reports = ThaiReports,
+    history = ThaiHistory,
+    record = ThaiRecord,
     phrases = ThaiPhrases,
 )

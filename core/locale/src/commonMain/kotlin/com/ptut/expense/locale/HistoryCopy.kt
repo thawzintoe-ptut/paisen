@@ -38,3 +38,22 @@ val BurmeseHistory = HistoryCopy(
     clearFilters = "စစ်ထုတ်တာ ဖြုတ်မယ်",
     clearSearch = "ရှာထားတာ ဖျက်မယ်",
 )
+
+val ThaiHistory = HistoryCopy(
+    title = "ประวัติ",
+    search = "ค้นหารายการ",
+    filters = "ตัวกรอง",
+    show = "แสดง",
+    filterAll = "ทั้งหมด",
+    filterAuto = "บันทึกอัตโนมัติ",
+    filterByHand = "เพิ่มเอง",
+    filterEdited = "แก้ไขแล้ว",
+    emptyHeadline = "ยังไม่มีรายการ",
+    emptyBody = "สลิปจะบันทึกเองเมื่อเข้ามา และรายการที่คุณเพิ่มเองก็จะแสดงที่นี่ด้วย",
+    emptyStatus = "ประวัติจะเพิ่มขึ้นเองเมื่อมีสลิปเข้ามา",
+    noMatchHeadline = "ไม่มีรายการที่ตรงกัน",
+    noMatchBody = "ไม่มีรายการที่ตรงกับสิ่งที่คุณค้นหา ล้างตัวกรอง หรือค้นหาให้กว้างขึ้น",
+    hiddenByFilter = { n -> "อีก $n รายการอยู่นอกตัวกรองนี้" },
+    clearFilters = "ล้างตัวกรอง",
+    clearSearch = "ล้างคำค้นหา",
+)
