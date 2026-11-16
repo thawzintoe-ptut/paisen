@@ -30,12 +30,13 @@ import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.formatMinor
+import com.ptut.expense.domain.shared.rateUnitLabel
 import com.ptut.expense.domain.shared.sharedExpenseOf
 import com.ptut.expense.domain.slip.shownShop
 import com.ptut.expense.domain.spoken
 import com.ptut.expense.domain.timeOfDayIn
 import com.ptut.expense.locale.AppText
-import com.ptut.expense.locale.kyatCopy
+import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.MetaGlyph
 import com.ptut.expense.ui.ToastAction
@@ -243,7 +244,7 @@ class TransactionDetailViewModel(
         // #33: what was paid in kyat and the rate that made it baht.
         foreign?.let { paid ->
             val currency = Currencies.of(paid.currency)
-            TransactionMetaRow("PAID", kyatCopy().atRate(formatMinor(paid.originalMinor, currency), paid.rate.typedFor(currency.rateUnit)), icon = MetaGlyph.Tag)
+            TransactionMetaRow("PAID", currencyCopy().atRate(formatMinor(paid.originalMinor, currency), paid.rate.typedFor(currency.rateUnit), currency.rateUnitLabel()), icon = MetaGlyph.Tag)
         },
         // In full here: a row's name is only the note's first line, cut to fit (#210).
         memo?.let { TransactionMetaRow("NOTE", it, icon = MetaGlyph.Note) },

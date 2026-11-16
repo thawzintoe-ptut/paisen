@@ -182,6 +182,9 @@ fun formatMinor(amountMinor: Long, currency: Currency): String {
     return "$sign${currency.symbol}$whole.$fraction"
 }
 
+/** What one rate is typed for: "1,000 K", or "$" for a rate per single unit. */
+fun Currency.rateUnitLabel(): String = if (rateUnit == 1L) symbol else "${groupDigits(rateUnit)} $symbol"
+
 /** Typed digits ("1850000", "240.5") to minor units, or null when the text is not an amount. */
 fun parseMinor(text: String, currency: Currency): Long? {
     val clean = text.trim().replace(",", "")

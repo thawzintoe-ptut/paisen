@@ -29,7 +29,7 @@ import com.ptut.expense.domain.trendBetween
 import com.ptut.expense.domain.weekdayAndDay
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.SlipsCopy
-import com.ptut.expense.locale.kyatCopy
+import com.ptut.expense.locale.currencyCopy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -231,13 +231,13 @@ class ActivityViewModel(
                 ReviewReason.NewMerchant -> text.needsCategory
                 ReviewReason.AmountUnclear -> text.needsAmount
                 ReviewReason.Unreadable -> text.imageUnread
-                ReviewReason.RateNeeded -> kyatCopy().rateNeeded
+                ReviewReason.RateNeeded -> currencyCopy().rateNeeded
             },
             body = when (reason) {
                 ReviewReason.NewMerchant -> text.addedToCheck(shownShop(merchant, text.unknownShop), shownAmount() ?: text.notCounted)
                 ReviewReason.AmountUnclear -> text.amountNotConfident(shownShop(merchant, text.unknownShop))
                 ReviewReason.Unreadable -> text.fillByHand
-                ReviewReason.RateNeeded -> kyatCopy().rateNeededBody(shownShop(merchant, text.unknownShop), shownAmount() ?: text.notCounted)
+                ReviewReason.RateNeeded -> currencyCopy().rateNeededBody(shownShop(merchant, text.unknownShop), shownAmount() ?: text.notCounted)
             },
             time = capturedAtEpochMillis.stamp(),
             // To check's own glyph (p23); an image that read nothing takes p23's warning instead.

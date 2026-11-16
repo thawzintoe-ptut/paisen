@@ -123,6 +123,10 @@ sealed interface PtutRoute {
     @Serializable
     data object Timezone : PtutRoute
 
+    /** The currency the Add sheet opens on, beside Timezone in Settings. */
+    @Serializable
+    data object AddCurrency : PtutRoute
+
     /** The app's language, English or Burmese, beside Timezone in Settings. */
     @Serializable
     data object Language : PtutRoute

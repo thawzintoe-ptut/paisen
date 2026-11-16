@@ -80,6 +80,7 @@ class PtutAppTest {
     private fun TestApp(
         sinceLastImport: Long? = HEALTHY,
         firstRunAnswered: Boolean = true,
+        debug: Boolean = false,
     ) = KoinApplication(
         configuration = koinConfiguration {
             modules(
@@ -88,7 +89,7 @@ class PtutAppTest {
                     single<LedgerRepository> { SampleLedgerRepository(sinceLastImport = sinceLastImport) }
                     // Settings resolves all three to draw its rows, and the release build is
                     // the one under test: a debug graph would add the slip panel below them.
-                    single { AppBuild(debug = false) }
+                    single { AppBuild(debug = debug) }
                     single<LedgerArchive> { UnusedArchive() }
                     single<LedgerFileStore> { UnusedFileStore() }
                     // Every screen but one is behind first run, so the graph answers by
@@ -240,6 +241,29 @@ class PtutAppTest {
         onNodeWithContentDescription("฿485, spent").assertIsDisplayed()
         // Named by its category, so the line under it leaves the category out (#210).
         onNodeWithText("added by hand").assertIsDisplayed()
+    }
+
+    /**
+     * Another currency end to end, through the shell's own wiring: the sign opens the list, a
+     * currency with no rate opens the rate sheet, and the line under the amount says what it saves.
+     */
+    @Test
+    fun aDollarAmountOnTheAddSheetSavesAtTheRateTypedInItsSheet() = runComposeUiTest {
+        setContent { TestApp(debug = true) }
+
+        onNodeWithContentDescription("Add an expense by hand").performClick()
+        onNodeWithContentDescription("Currency, ฿").performClick()
+        onNodeWithText("USD  $").performClick()
+        onNodeWithText("Rate for USD").assertIsDisplayed()
+        onNode(hasSetTextAction() and hasContentDescription("Rate, ฿ per $")).performTextInput("33.4")
+        onNodeWithContentDescription("Done").performClick()
+
+        onNode(hasSetTextAction() and hasContentDescription("Amount")).performTextInput("12.5")
+        onNodeWithText("฿417.50 · ฿33.4 per $").assertIsDisplayed()
+        onNode(hasText("Food & drink") and hasClickAction()).performClick()
+        onNodeWithContentDescription("Save ฿417.50").performClick()
+
+        onNodeWithContentDescription("Save ฿417.50").assertDoesNotExist()
     }
 
     /** The save key stays lit, so a tap with no category writes nothing and says why (plan §G item 6). */

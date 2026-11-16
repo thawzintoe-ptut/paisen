@@ -4,7 +4,7 @@ import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.locale.AppText
-import com.ptut.expense.locale.kyatCopy
+import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.AmountEntry
 
 /**
@@ -72,6 +72,8 @@ data class ConfirmSlipUiState(
     /** #33: a kyat slip asks for baht per 1,000 K, opened on the last rate saved. */
     val asksRate: Boolean = false,
     val rateText: String = "",
+    /** "1,000 K": what one rate is typed for. */
+    val rateUnit: String = "",
     /** "Saved as ฿236.00" once the kyat and the rate both read. */
     val bahtLine: String? = null,
     /** Confirm was pressed on a kyat slip with no rate. Cleared by typing one. */
@@ -82,7 +84,7 @@ data class ConfirmSlipUiState(
      * seemed to do nothing (#216).
      */
     val categoryHint: String? get() = when {
-        askForRate -> kyatCopy().askRate
+        askForRate -> currencyCopy().askRate
         askForCategory -> AppText.copy.slips.pickCategory
         else -> null
     }

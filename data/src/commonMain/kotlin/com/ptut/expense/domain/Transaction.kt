@@ -91,6 +91,8 @@ data class TransactionDraft(
     val occurredAtEpochMillis: Long? = null,
     /** The add sheet's note (#211), already trimmed, or null for none. It becomes the row's name. */
     val memo: String? = null,
+    /** Typed in another currency at a rate; [amount] is then its baht. */
+    val foreign: ForeignAmount? = null,
 )
 
 data class PeriodSummary(

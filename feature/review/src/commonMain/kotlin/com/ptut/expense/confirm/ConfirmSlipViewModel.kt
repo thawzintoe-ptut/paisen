@@ -24,6 +24,7 @@ import com.ptut.expense.domain.shared.PaymentMethod
 import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.shared.SlipDebt
 import com.ptut.expense.domain.shared.parseMinor
+import com.ptut.expense.domain.shared.rateUnitLabel
 import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.isReaderNoise
 import com.ptut.expense.domain.slip.shownShop
@@ -31,7 +32,7 @@ import com.ptut.expense.domain.under
 import com.ptut.expense.importer.SlipDiscards
 import com.ptut.expense.importer.SlipImporter
 import com.ptut.expense.locale.AppText
-import com.ptut.expense.locale.kyatCopy
+import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastMessage
@@ -135,7 +136,7 @@ class ConfirmSlipViewModel(
     }
 
     /** What the typed kyat at the typed rate saves as, or null while either is not a number. */
-    private fun ConfirmSlipUiState.withBaht(): ConfirmSlipUiState = copy(bahtLine = foreignOf(this)?.let { kyatCopy().inBaht(it.baht.format()) })
+    private fun ConfirmSlipUiState.withBaht(): ConfirmSlipUiState = copy(bahtLine = foreignOf(this)?.let { currencyCopy().inBaht(it.baht.format()) })
 
     private fun foreignOf(current: ConfirmSlipUiState): ForeignAmount? {
         val slip = slip?.takeIf { it.isForeign } ?: return null
@@ -313,6 +314,7 @@ class ConfirmSlipViewModel(
         entry = this?.amount?.let { if (isForeign) AmountEntry(it.toMinorUnits().toString(), pending = true) else AmountEntry.of(it) } ?: AmountEntry(),
         currencySymbol = this?.let { Currencies.of(it.currency).symbol } ?: Currencies.Thb.symbol,
         asksRate = this?.isForeign == true,
+        rateUnit = this?.let { Currencies.of(it.currency).rateUnitLabel() }.orEmpty(),
         lowConfidence = this?.lowConfidence.orEmpty(),
         amountUnread = this != null && amount == null,
         category = null,

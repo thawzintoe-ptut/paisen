@@ -57,15 +57,29 @@ through these tables yet; their fixes are still welcome, row by row.
 
 | English | Thai | Where |
 |---|---|---|
-| A kyat slip needs a rate | สลิปจ๊าดต้องใส่อัตราแลกเปลี่ยน | `KyatCopy` rateNeeded |
-| {shop} · {amount} · add the rate in To check | {shop} · {amount} · ใส่อัตราในรอตรวจ | `KyatCopy` rateNeededBody |
-| Kyat rate needed | ต้องใส่อัตราจ๊าด | `KyatCopy` reasonRate |
-| Rate | อัตรา | `KyatCopy` rateLabel |
-| ฿ per 1,000 K | ฿ ต่อ 1,000 K | `KyatCopy` rateUnit |
-| See today's rate | ดูอัตราวันนี้ | `KyatCopy` todaysRate |
-| Type the rate first | ใส่อัตราก่อน | `KyatCopy` askRate |
-| Saved as {baht} | บันทึกเป็น {baht} | `KyatCopy` inBaht |
-| Later kyat slips use this rate until you change it. | สลิปจ๊าดใบต่อไปใช้อัตรานี้จนกว่าคุณจะเปลี่ยน | `KyatCopy` rateNote |
-| Paid | จ่าย | `KyatCopy` paidLabel |
-| {amount} at ฿{rate} per 1,000 K | {amount} ที่ ฿{rate} ต่อ 1,000 K | `KyatCopy` atRate |
-| one kyat slip / {n} kyat slips | สลิปจ๊าด {n} ใบ | `KyatCopy` slipsNeedRate |
+| A kyat slip needs a rate | สลิปจ๊าดต้องใส่อัตราแลกเปลี่ยน | `CurrencyCopy` rateNeeded |
+| {shop} · {amount} · add the rate in To check | {shop} · {amount} · ใส่อัตราในรอตรวจ | `CurrencyCopy` rateNeededBody |
+| Kyat rate needed | ต้องใส่อัตราจ๊าด | `CurrencyCopy` reasonRate |
+| Rate | อัตรา | `CurrencyCopy` rateLabel |
+| ฿ per {unit} | ฿ ต่อ {unit} | `CurrencyCopy` perUnit |
+| See today's rate | ดูอัตราวันนี้ | `CurrencyCopy` todaysRate |
+| Type the rate first | ใส่อัตราก่อน | `CurrencyCopy` askRate |
+| Saved as {baht} | บันทึกเป็น {baht} | `CurrencyCopy` inBaht |
+| Later entries in this currency use this rate until you change it. | รายการสกุลนี้ครั้งต่อไปใช้อัตรานี้จนกว่าคุณจะเปลี่ยน | `CurrencyCopy` rateNote |
+| Paid | จ่าย | `CurrencyCopy` paidLabel |
+| {amount} at ฿{rate} per {unit} | {amount} ที่ ฿{rate} ต่อ {unit} | `CurrencyCopy` atRate |
+| one kyat slip / {n} kyat slips | สลิปจ๊าด {n} ใบ | `CurrencyCopy` slipsNeedRate |
+
+## Any currency on Add (16 Nov, not yet checked)
+
+| English | Thai | Where |
+|---|---|---|
+| Currency | สกุลเงิน | `CurrencyCopy` currencyTitle |
+| Add starts in | เพิ่มรายการเริ่มที่ | `CurrencyCopy` startsIn |
+| The Add sheet opens on this currency. Totals still count in baht. | หน้าเพิ่มรายการเปิดที่สกุลนี้ ยอดรวมยังนับเป็นบาท | `CurrencyCopy` startsInIntro |
+| {code} · from this phone | {code} · ตามเครื่องนี้ | `CurrencyCopy` fromPhone |
+| Follow this phone ({code}) | ตามเครื่องนี้ ({code}) | `CurrencyCopy` followPhone |
+| Rate for {code} | อัตรา {code} | `CurrencyCopy` rateFor |
+| Set the rate for {code} | ใส่อัตรา {code} | `CurrencyCopy` setRate |
+| {baht} · ฿{rate} per {unit} | {baht} · ฿{rate} ต่อ {unit} | `CurrencyCopy` converted |
+| ฿{rate} per {unit} | ฿{rate} ต่อ {unit} | `CurrencyCopy` rateOnly |

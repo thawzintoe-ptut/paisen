@@ -36,6 +36,8 @@ data class ImportChoices(
     val noteTone: NoteTone = NoteTone.Plain,
     /** #22: the Monday (ISO date) whose note the reader hid; that week shows none. */
     val hiddenNoteWeek: String? = null,
+    /** The currency the Add sheet opens on, or null to follow the phone's country. */
+    val addCurrency: String? = null,
 )
 
 /**
@@ -99,6 +101,9 @@ class ImportSettings(private val store: ImportSettingsStore) {
 
     /** #22: hides the note for the week starting [monday]; a new week shows its own. */
     fun hideNoteWeek(monday: String) = update { it.copy(hiddenNoteWeek = monday) }
+
+    /** Null follows the phone's country again. */
+    fun setAddCurrency(code: String?) = update { it.copy(addCurrency = code) }
 
     fun setSlipOwner(name: String?) = update { it.copy(slipOwner = SlipOwner(name = name?.trim()?.takeIf(String::isNotEmpty))) }
 

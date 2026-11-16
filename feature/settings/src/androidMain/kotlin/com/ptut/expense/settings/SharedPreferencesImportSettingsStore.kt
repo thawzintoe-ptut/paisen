@@ -23,6 +23,7 @@ private const val OWNER_CANDIDATE = "slip-owner-candidate"
 private const val OWNER_SEEN = "slip-owner-seen"
 private const val NOTE_TONE = "note-tone"
 private const val HIDDEN_NOTE_WEEK = "hidden-note-week"
+private const val ADD_CURRENCY = "add-currency"
 
 /**
  * Two values in their own file, so clearing it by hand puts the shipped defaults back.
@@ -56,6 +57,7 @@ class SharedPreferencesImportSettingsStore(context: Context) : ImportSettingsSto
             ),
             noteTone = NoteTone.entries.firstOrNull { it.name == choices.getString(NOTE_TONE, null) } ?: shipped.noteTone,
             hiddenNoteWeek = choices.getString(HIDDEN_NOTE_WEEK, null),
+            addCurrency = choices.getString(ADD_CURRENCY, null),
         )
     }
 
@@ -74,6 +76,7 @@ class SharedPreferencesImportSettingsStore(context: Context) : ImportSettingsSto
             .putInt(OWNER_SEEN, choices.slipOwner.seen)
             .putString(NOTE_TONE, choices.noteTone.name)
             .putString(HIDDEN_NOTE_WEEK, choices.hiddenNoteWeek)
+            .putString(ADD_CURRENCY, choices.addCurrency)
             .apply()
     }
 }

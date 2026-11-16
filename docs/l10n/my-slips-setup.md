@@ -144,15 +144,29 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 
 | English | Burmese | Where |
 |---|---|---|
-| A kyat slip needs a rate | ကျပ်စလစ်အတွက် ငွေလဲနှုန်း လိုတယ် | `KyatCopy` rateNeeded |
-| {shop} · {amount} · add the rate in To check | {shop} · {amount} · စစ်ဖို့ထဲမှာ နှုန်းထည့်ပါ | `KyatCopy` rateNeededBody |
-| Kyat rate needed | ကျပ်နှုန်း လိုတယ် | `KyatCopy` reasonRate |
-| Rate | နှုန်း | `KyatCopy` rateLabel |
-| ฿ per 1,000 K | 1,000 K ကို ฿ | `KyatCopy` rateUnit |
-| See today's rate | ဒီနေ့ နှုန်း ကြည့်မယ် | `KyatCopy` todaysRate |
-| Type the rate first | နှုန်းအရင် ထည့်ပါ | `KyatCopy` askRate |
-| Saved as {baht} | {baht} အဖြစ် သိမ်းမယ် | `KyatCopy` inBaht |
-| Later kyat slips use this rate until you change it. | နောက် ကျပ်စလစ်တွေက ဒီနှုန်းကို သုံးမယ်။ ပြောင်းချင်ရင် ပြောင်းလို့ရတယ်။ | `KyatCopy` rateNote |
-| Paid | ပေးခဲ့တာ | `KyatCopy` paidLabel |
-| {amount} at ฿{rate} per 1,000 K | {amount}၊ 1,000 K ကို ฿{rate} နှုန်း | `KyatCopy` atRate |
-| one kyat slip / {n} kyat slips | ကျပ်စလစ် {n} ခု | `KyatCopy` slipsNeedRate |
+| A kyat slip needs a rate | ကျပ်စလစ်အတွက် ငွေလဲနှုန်း လိုတယ် | `CurrencyCopy` rateNeeded |
+| {shop} · {amount} · add the rate in To check | {shop} · {amount} · စစ်ဖို့ထဲမှာ နှုန်းထည့်ပါ | `CurrencyCopy` rateNeededBody |
+| Kyat rate needed | ကျပ်နှုန်း လိုတယ် | `CurrencyCopy` reasonRate |
+| Rate | နှုန်း | `CurrencyCopy` rateLabel |
+| ฿ per {unit} | {unit} ကို ฿ | `CurrencyCopy` perUnit |
+| See today's rate | ဒီနေ့ နှုန်း ကြည့်မယ် | `CurrencyCopy` todaysRate |
+| Type the rate first | နှုန်းအရင် ထည့်ပါ | `CurrencyCopy` askRate |
+| Saved as {baht} | {baht} အဖြစ် သိမ်းမယ် | `CurrencyCopy` inBaht |
+| Later entries in this currency use this rate until you change it. | ဒီငွေနဲ့ နောက်ထည့်တာတွေက ဒီနှုန်းကို သုံးမယ်။ ပြောင်းချင်ရင် ပြောင်းလို့ရတယ်။ | `CurrencyCopy` rateNote |
+| Paid | ပေးခဲ့တာ | `CurrencyCopy` paidLabel |
+| {amount} at ฿{rate} per {unit} | {amount}၊ {unit} ကို ฿{rate} နှုန်း | `CurrencyCopy` atRate |
+| one kyat slip / {n} kyat slips | ကျပ်စလစ် {n} ခု | `CurrencyCopy` slipsNeedRate |
+
+## Any currency on Add (16 Nov, not yet checked)
+
+| English | Burmese | Where |
+|---|---|---|
+| Currency | ငွေကြေး | `CurrencyCopy` currencyTitle |
+| Add starts in | ထည့်ရင် စမယ့်ငွေ | `CurrencyCopy` startsIn |
+| The Add sheet opens on this currency. Totals still count in baht. | ထည့်တဲ့ စာမျက်နှာက ဒီငွေနဲ့ စမယ်။ စုစုပေါင်းကတော့ ဘတ်နဲ့ပဲ တွက်တယ်။ | `CurrencyCopy` startsInIntro |
+| {code} · from this phone | {code} · ဒီဖုန်းအတိုင်း | `CurrencyCopy` fromPhone |
+| Follow this phone ({code}) | ဒီဖုန်းအတိုင်း ({code}) | `CurrencyCopy` followPhone |
+| Rate for {code} | {code} နှုန်း | `CurrencyCopy` rateFor |
+| Set the rate for {code} | {code} နှုန်း ထည့်ပါ | `CurrencyCopy` setRate |
+| {baht} · ฿{rate} per {unit} | {baht} · {unit} ကို ฿{rate} | `CurrencyCopy` converted |
+| ฿{rate} per {unit} | {unit} ကို ฿{rate} | `CurrencyCopy` rateOnly |

@@ -44,7 +44,7 @@ import com.ptut.expense.design.ptutMotion
 import com.ptut.expense.design.tappable
 import com.ptut.expense.locale.Copy
 import com.ptut.expense.locale.LocalCopy
-import com.ptut.expense.locale.kyatCopy
+import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.locale.noteCopy
 import com.ptut.expense.ui.rememberScreenReader
 import com.ptut.expense.ui.sky.SkyBarIconAction
@@ -349,7 +349,7 @@ private fun String.skyLabel(copy: Copy): String = when (this) {
     "DATE" -> copy.record.whenLabel
     "SOURCE" -> copy.record.fromLabel
     "REFERENCE" -> copy.record.referenceLabel
-    "PAID" -> kyatCopy().paidLabel
+    "PAID" -> currencyCopy().paidLabel
     else -> lowercase().replaceFirstChar { it.uppercase() }
 }
 

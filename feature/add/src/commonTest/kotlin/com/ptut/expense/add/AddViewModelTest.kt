@@ -21,6 +21,9 @@ import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.Currency
+import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
@@ -204,6 +207,133 @@ class AddViewModelTest : ViewModelTest() {
         runCurrent()
 
         assertEquals("supermarket", ledger.recorded.single().subCategoryId)
+    }
+
+    // Another currency
+
+    private fun inCurrencies(
+        ledger: RecordingLedger = RecordingLedger(),
+        start: Currency = Currencies.Thb,
+        rates: MutableMap<String, Rate> = mutableMapOf(),
+    ) = AddViewModel(
+        ledger = ledger,
+        toasts = ToastMessages(),
+        offersCurrencies = true,
+        startingCurrency = { start },
+        lastRate = { rates[it] },
+        saveRate = { code, rate -> rates[code] = rate },
+    )
+
+    @Test
+    fun aDollarAmountSavesItsBahtAndKeepsTheDollarsAndTheRate() = runTest {
+        val ledger = RecordingLedger()
+        val rates = mutableMapOf<String, Rate>()
+        val viewModel = inCurrencies(ledger, rates = rates)
+
+        viewModel.chooseCurrency(Currencies.of("USD"))
+        viewModel.type(entryOf("12.50"))
+        viewModel.typeRate("33.4")
+        viewModel.choose(Food)
+        assertEquals("Saved as ฿417.50", viewModel.uiState.value.bahtLine)
+        viewModel.save()
+        runCurrent()
+
+        val draft = ledger.recorded.single()
+        assertEquals(Satang(41_750), draft.amount)
+        assertEquals("USD", draft.foreign?.currency)
+        assertEquals(1_250L, draft.foreign?.originalMinor)
+        assertEquals(Rate.parse("33.4"), rates["USD"])
+    }
+
+    @Test
+    fun anotherCurrencyWithNoRateSavesNothingAndAsksForOne() = runTest {
+        val ledger = RecordingLedger()
+        val viewModel = inCurrencies(ledger)
+
+        viewModel.chooseCurrency(Currencies.of("MMK"))
+        viewModel.type(entryOf("29500"))
+        viewModel.choose(Food)
+        viewModel.save()
+        runCurrent()
+
+        assertTrue(ledger.recorded.isEmpty())
+        assertEquals("Type the rate first", viewModel.uiState.value.missing)
+    }
+
+    @Test
+    fun aFreshSheetOpensOnTheStartingCurrencyAndItsLastRate() = runTest {
+        val viewModel = inCurrencies(start = Currencies.of("MMK"), rates = mutableMapOf("MMK" to Rate.parse("8.2", 1_000)!!))
+
+        viewModel.reset()
+        runCurrent()
+
+        assertEquals("MMK", viewModel.uiState.value.currency.code)
+        assertEquals("8.2", viewModel.uiState.value.rateText)
+        assertEquals("1,000 K", viewModel.uiState.value.rateUnit)
+    }
+
+    @Test
+    fun aCurrencyWithNoSavedRateOpensTheRateSheetAndTheLineAsksForOne() = runTest {
+        val viewModel = inCurrencies()
+
+        viewModel.chooseCurrency(Currencies.of("USD"))
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.editingRate)
+        assertEquals("Set the rate for USD", viewModel.uiState.value.rateLine)
+    }
+
+    @Test
+    fun aCurrencyWithASavedRateStaysOnTheSheetAndTheLineSaysWhatItComesTo() = runTest {
+        val viewModel = inCurrencies(rates = mutableMapOf("USD" to Rate.parse("33.4")!!))
+
+        viewModel.chooseCurrency(Currencies.of("USD"))
+        runCurrent()
+        viewModel.type(entryOf("12.50"))
+
+        assertFalse(viewModel.uiState.value.editingRate)
+        assertEquals("฿417.50 · ฿33.4 per $", viewModel.uiState.value.rateLine)
+    }
+
+    @Test
+    fun cancelInTheRateSheetPutsTheOldRateBack() = runTest {
+        val viewModel = inCurrencies(rates = mutableMapOf("USD" to Rate.parse("33.4")!!))
+        viewModel.chooseCurrency(Currencies.of("USD"))
+        runCurrent()
+
+        viewModel.openRate()
+        viewModel.typeRate("40")
+        viewModel.closeRate(keep = false)
+
+        assertEquals("33.4", viewModel.uiState.value.rateText)
+        assertFalse(viewModel.uiState.value.editingRate)
+    }
+
+    @Test
+    fun saveWithNoRateOpensTheRateSheetOnceAmountAndCategoryAreThere() = runTest {
+        val ledger = RecordingLedger()
+        val viewModel = inCurrencies(ledger)
+        viewModel.chooseCurrency(Currencies.of("USD"))
+        runCurrent()
+        viewModel.closeRate(keep = false)
+
+        viewModel.type(entryOf("12.50"))
+        viewModel.choose(Food)
+        viewModel.save()
+        runCurrent()
+
+        assertTrue(ledger.recorded.isEmpty())
+        assertTrue(viewModel.uiState.value.editingRate)
+    }
+
+    @Test
+    fun aBuildWithoutCurrenciesStaysInBaht() = runTest {
+        val viewModel = AddViewModel(ledger = RecordingLedger(), toasts = ToastMessages(), startingCurrency = { Currencies.of("MMK") })
+
+        viewModel.reset()
+        viewModel.chooseCurrency(Currencies.of("USD"))
+
+        assertEquals(Currencies.Thb, viewModel.uiState.value.currency)
     }
 
     private fun withSubCategories(ledger: RecordingLedger = RecordingLedger()) = AddViewModel(

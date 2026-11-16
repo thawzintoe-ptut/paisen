@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -40,6 +41,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import com.ptut.expense.agent.SpeechLanguage
 import com.ptut.expense.design.PtutIcon
+import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.Sizes
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
@@ -50,8 +52,11 @@ import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.SubCategory
+import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.locale.CommonCopy
 import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.KeyboardAmountField
 import com.ptut.expense.ui.MemoSheet
@@ -63,6 +68,7 @@ import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyChip
 import com.ptut.expense.ui.sky.SkyDateTimePicker
 import com.ptut.expense.ui.sky.SkyGroupedCard
+import com.ptut.expense.ui.sky.SkyRateRow
 import com.ptut.expense.ui.sky.SkySegmentedToggle
 import com.ptut.expense.ui.sky.SkySubChipBox
 
@@ -102,12 +108,24 @@ fun AddSheet(
     /** The yes or no to [AddUiState.askingOnline], asked before a language is first heard online. */
     onAgreeOnline: () -> Unit = {},
     onDismissOnlineAsk: () -> Unit = {},
+    onCurrency: (Currency) -> Unit = {},
+    onRate: (String) -> Unit = {},
+    onOpenRate: () -> Unit = {},
+    onCloseRate: (keep: Boolean) -> Unit = {},
 ) {
     if (uiState.editingMemo) MemoSheet(memo = uiState.memo, onMemo = onMemo, onDismiss = onCloseMemo)
     uiState.askingOnline?.let { language -> OnlineAsk(language = language, onListen = onAgreeOnline, onTypeInstead = onDismissOnlineAsk) }
     val common = LocalCopy.current.common
     val shell = LocalCopy.current.shell
     val focus = LocalFocusManager.current
+    var choosingCurrency by rememberSaveable { mutableStateOf(false) }
+    if (uiState.editingRate) RateSheet(uiState = uiState, onRate = onRate, onClose = onCloseRate)
+    if (choosingCurrency) {
+        CurrencySheet(chosen = uiState.currency, onPick = {
+            onCurrency(it)
+            choosingCurrency = false
+        }, onDismiss = { choosingCurrency = false })
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -145,7 +163,16 @@ fun AddSheet(
                 onSelect = { onKind(DirectionOrder[it]) },
             )
 
-            DraftAmount(entry = uiState.entry, kind = uiState.kind, onType = onType)
+            DraftAmount(
+                entry = uiState.entry,
+                kind = uiState.kind,
+                onType = onType,
+                symbol = uiState.currency.symbol,
+                onSymbol = if (uiState.offersCurrencies) ({ choosingCurrency = true }) else null,
+            )
+
+            // Anything but baht counts as baht at a rate: one line says what it comes to, and a tap changes the rate.
+            uiState.rateLine?.let { line -> RateLine(line = line, asking = uiState.needsRate, onClick = onOpenRate) }
 
             // Wraps rather than scrolls: a category has to be chosen before SAVE lights up.
             FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
@@ -450,16 +477,111 @@ private fun Direction.label(common: CommonCopy): String = when (this) {
  * takes the kind's ink, as the rows do, and the toggle above still names the kind in words.
  */
 @Composable
-private fun DraftAmount(entry: AmountEntry, kind: Direction, onType: (AmountEntry) -> Unit) {
+private fun DraftAmount(
+    entry: AmountEntry,
+    kind: Direction,
+    onType: (AmountEntry) -> Unit,
+    symbol: String = "฿",
+    onSymbol: (() -> Unit)? = null,
+) {
     val common = LocalCopy.current.common
     val ink = if (kind == Direction.Income) MaterialTheme.ptut.ok else MaterialTheme.ptut.signatureInk
+    val currencyTitle = currencyCopy().currencyTitle
     Row(verticalAlignment = Alignment.Bottom) {
+        // A tap on the sign opens the currency list, in builds that offer it; a 44 tap area around it.
         Text(
-            text = "฿",
+            text = symbol,
             style = MaterialTheme.ptutType.heroSymbol,
             color = ink,
-            modifier = Modifier.padding(end = Spacing.xxs, bottom = Spacing.xs),
+            modifier = Modifier
+                .padding(end = Spacing.xxs, bottom = Spacing.xs)
+                .then(
+                    if (onSymbol == null) {
+                        Modifier
+                    } else {
+                        Modifier
+                            .sizeIn(minWidth = Sizes.minTouchTarget, minHeight = Sizes.minTouchTarget)
+                            .semantics { contentDescription = "$currencyTitle, $symbol" }
+                            .tappable(PtutRadii.r12, Role.Button, onClick = onSymbol)
+                    },
+                ),
         )
         KeyboardAmountField(entry = entry, onType = onType, label = common.amount, openOnStart = true, color = ink)
+    }
+}
+
+/** Every currency the app can turn into baht, as the shared groups offer them. */
+@Composable
+private fun CurrencySheet(chosen: Currency, onPick: (Currency) -> Unit, onDismiss: () -> Unit) {
+    SkyBottomSheet(onDismissRequest = onDismiss) {
+        Text(
+            currencyCopy().currencyTitle,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = Spacing.sm),
+        )
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(top = Spacing.sm)) {
+            Currencies.all.forEach { currency ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = SkySizes.transactionRow)
+                        .tappable(PtutRadii.r12, Role.Button) { onPick(currency) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("${currency.code}  ${currency.symbol}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                    if (currency == chosen) {
+                        Icon(PtutIcon.Check.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.cardGlyph))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The foreign amount in baht and its rate, or a prompt for one; a 44 tap target that opens [RateSheet]. */
+@Composable
+private fun RateLine(line: String, asking: Boolean, onClick: () -> Unit) {
+    val ink = if (asking) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier = Modifier
+            .heightIn(min = Sizes.minTouchTarget)
+            .tappable(PtutRadii.r12, Role.Button, onClick = onClick)
+            .padding(end = Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+    ) {
+        Text(line, style = MaterialTheme.typography.bodyMedium, color = ink)
+        Icon(PtutIcon.Edit.image, contentDescription = null, tint = ink, modifier = Modifier.size(SkySizes.cardGlyph))
+    }
+}
+
+/** The rate in its own sheet, as the note is, so the keyboard never covers the amount. Cancel puts the old rate back. */
+@Composable
+private fun RateSheet(uiState: AddUiState, onRate: (String) -> Unit, onClose: (keep: Boolean) -> Unit) {
+    val common = LocalCopy.current.common
+    SkyBottomSheet(onDismissRequest = { onClose(false) }) {
+        Text(
+            currencyCopy().rateFor(uiState.currency.code),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = Spacing.md),
+        )
+        SkyRateRow(
+            rateText = uiState.rateText,
+            unit = uiState.rateUnit,
+            bahtLine = uiState.bahtLine,
+            onRate = onRate,
+            showLabel = false,
+            focusOnStart = true,
+            modifier = Modifier.padding(top = Spacing.s12),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
+        ) {
+            SkyButton(label = common.cancel, onClick = { onClose(false) }, kind = SkyButtonKind.Outline, modifier = Modifier.weight(1f))
+            SkyButton(label = common.done, onClick = { onClose(true) }, modifier = Modifier.weight(1.6f))
+        }
     }
 }

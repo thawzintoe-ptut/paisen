@@ -39,7 +39,7 @@ import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.format
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.SlipsCopy
-import com.ptut.expense.locale.kyatCopy
+import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.DisplayAmount
 import com.ptut.expense.ui.SlipPicture
 import com.ptut.expense.ui.sky.SkyButton
@@ -222,5 +222,5 @@ private fun ReviewReason.line(text: SlipsCopy): String = when (this) {
     ReviewReason.NewMerchant -> text.reasonNewShop
     ReviewReason.AmountUnclear -> text.reasonAmountHard
     ReviewReason.Unreadable -> text.reasonUnreadable
-    ReviewReason.RateNeeded -> kyatCopy().reasonRate
+    ReviewReason.RateNeeded -> currencyCopy().reasonRate
 }

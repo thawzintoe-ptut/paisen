@@ -26,6 +26,7 @@ fun SettingsAction.opensScreen(): Boolean = when (this) {
     SettingsAction.ExportLedger,
     SettingsAction.ImportLedger,
     SettingsAction.Timezone,
+    SettingsAction.AddCurrency,
     SettingsAction.Language,
     SettingsAction.Assistant,
     SettingsAction.Feedback,

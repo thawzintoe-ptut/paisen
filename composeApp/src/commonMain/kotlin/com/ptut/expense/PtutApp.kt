@@ -92,6 +92,8 @@ import com.ptut.expense.reports.ReportsView
 import com.ptut.expense.reports.ReportsViewModel
 import com.ptut.expense.review.ReviewView
 import com.ptut.expense.review.ReviewViewModel
+import com.ptut.expense.settings.AddCurrencyView
+import com.ptut.expense.settings.AddCurrencyViewModel
 import com.ptut.expense.settings.AssistantModelView
 import com.ptut.expense.settings.AssistantModelViewModel
 import com.ptut.expense.settings.BackgroundImportView
@@ -785,6 +787,16 @@ private fun LedgerShell() {
                 )
             }
 
+            composable<PtutRoute.AddCurrency> {
+                val currency = koinViewModel<AddCurrencyViewModel>()
+                val state by currency.uiState.collectAsStateWithLifecycle()
+                AddCurrencyView(
+                    uiState = state,
+                    onBack = { navController.popBackStack() },
+                    onChoose = currency::choose,
+                )
+            }
+
             composable<PtutRoute.Timezone> {
                 TimezoneView(
                     uiState = koinViewModel<TimezoneViewModel>().uiState,
@@ -1044,6 +1056,10 @@ private fun LedgerShell() {
                 onDownloadVoice = addViewModel::downloadVoice,
                 onAgreeOnline = addViewModel::agreeOnline,
                 onDismissOnlineAsk = addViewModel::dismissOnlineAsk,
+                onCurrency = addViewModel::chooseCurrency,
+                onRate = addViewModel::typeRate,
+                onOpenRate = addViewModel::openRate,
+                onCloseRate = addViewModel::closeRate,
             )
         }
         if (askDiscard) {

@@ -139,6 +139,10 @@ fun TransactionDraft.toEntity(
     reference = null,
     memo = memo,
     filedAt = filedAt,
+    currency = foreign?.currency ?: "THB",
+    originalMinor = foreign?.originalMinor,
+    rateUnscaled = foreign?.rate?.unscaled,
+    rateScale = foreign?.rate?.scale,
 )
 
 /**

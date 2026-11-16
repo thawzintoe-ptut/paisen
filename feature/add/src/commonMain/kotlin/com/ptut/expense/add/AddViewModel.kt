@@ -16,13 +16,22 @@ import com.ptut.expense.agent.VoiceDownload
 import com.ptut.expense.agent.VoiceLanguages
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.ForeignAmount
+import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.forDirection
+import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.Currency
+import com.ptut.expense.domain.shared.Rate
+import com.ptut.expense.domain.shared.parseMinor
+import com.ptut.expense.domain.shared.rateUnitLabel
 import com.ptut.expense.domain.under
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastMessage
@@ -74,7 +83,41 @@ data class AddUiState(
     val askingOnline: SpeechLanguage? = null,
     /** True once SAVE was tapped before the row could be written, so [missing] is said as a warning. */
     val triedSave: Boolean = false,
+    /** The amount's currency. Anything but baht asks for a rate and saves its baht. */
+    val currency: Currency = Currencies.Thb,
+    /** The currency switch, in builds that offer it. */
+    val offersCurrencies: Boolean = false,
+    /** Baht for one [Currency.rateUnit], as typed; opens on the last rate saved. */
+    val rateText: String = "",
+    /** The typed amount at the typed rate, or null while either is not a number. */
+    val foreign: ForeignAmount? = null,
+    /** "Saved as ฿241.90" under the rate. */
+    val bahtLine: String? = null,
+    /** True while the rate sheet is open over this one. */
+    val editingRate: Boolean = false,
 ) {
+    /**
+     * The one line under a foreign amount, and the way into the rate: "฿417.50 · ฿33.4 per $", or
+     * "Set the rate for USD" while there is none. Null in baht.
+     */
+    val rateLine: String?
+        get() {
+            if (currency.isBaht) return null
+            val words = currencyCopy()
+            val rate = Rate.parse(rateText, currency.rateUnit) ?: return words.setRate(currency.code)
+            val typed = rate.typedFor(currency.rateUnit)
+            return foreign?.let { words.converted(it.baht.format(), typed, rateUnit) } ?: words.rateOnly(typed, rateUnit)
+        }
+
+    /** No rate yet, so the line under the amount asks rather than reports. */
+    val needsRate: Boolean get() = !currency.isBaht && Rate.parse(rateText, currency.rateUnit) == null
+
+    /** "1,000 K": what one rate is typed for. */
+    val rateUnit: String get() = currency.rateUnitLabel()
+
+    /** What the row will hold in baht: the typed amount, or the foreign amount at its rate. */
+    private val baht: Satang get() = foreign?.baht ?: entry.toSatang()
+
     /**
      * What still stops a save, amount first, or null once the row can be written. FR-14: both kinds
      * need an amount and a category, so income cannot skip the rule (plan §G item 6).
@@ -82,13 +125,15 @@ data class AddUiState(
     val missing: String?
         get() = when {
             entry.isEmpty -> AppText.copy.add.typeAmountHint
+            !currency.isBaht && parseMinor(entry.typed, currency) == null -> AppText.copy.add.typeAmountHint
             category == null -> AppText.copy.add.pickCategoryHint
+            !currency.isBaht && foreign == null -> currencyCopy().askRate
             else -> null
         }
 
     /** "Save ฿60" once the row can be written, so the key says what it will write. */
     val saveLabel: String
-        get() = if (missing == null) AppText.copy.add.saveAmount(entry.toSatang().formatCompact()) else AppText.copy.common.save
+        get() = if (missing == null) AppText.copy.add.saveAmount(baht.formatCompact()) else AppText.copy.common.save
 
     /** #214: something typed or picked that closing the sheet would lose, so closing asks first. */
     val changed: Boolean
@@ -162,6 +207,13 @@ class AddViewModel(
     private val reader: AgentReader? = null,
     /** #212: on-device speech for Quick add. Null in a graph that binds none. */
     private val speech: SpeechInput? = null,
+    /** Debug builds first: the amount can be typed in any of [Currencies.all]. */
+    private val offersCurrencies: Boolean = false,
+    /** The currency a fresh sheet opens on: the Settings choice, or the phone's country. */
+    private val startingCurrency: () -> Currency = { Currencies.Thb },
+    /** The last rate saved for a currency, shared with slips and groups. */
+    private val lastRate: suspend (String) -> Rate? = { null },
+    private val saveRate: suspend (String, Rate) -> Unit = { _, _ -> },
 ) : ViewModel() {
 
     private val state = MutableStateFlow(fresh(voice = null))
@@ -171,9 +223,56 @@ class AddViewModel(
 
     fun reset() {
         state.value = fresh()
+        loadRate(state.value.currency)
     }
 
-    fun type(entry: AmountEntry) = state.update { it.copy(entry = entry) }
+    fun type(entry: AmountEntry) = state.update { it.copy(entry = entry).priced() }
+
+    /**
+     * A new currency starts on its own last rate; what was typed as the amount stays. One with no
+     * rate saved opens the rate sheet, since nothing can be saved in it without one.
+     */
+    fun chooseCurrency(currency: Currency) {
+        if (!offersCurrencies || currency == state.value.currency) return
+        state.update { it.copy(currency = currency, rateText = "", editingRate = false).priced() }
+        loadRate(currency, askIfNone = true)
+    }
+
+    fun typeRate(text: String) = state.update { it.copy(rateText = text.filter { c -> c.isDigit() || c == '.' }).priced() }
+
+    /** The rate typed in its sheet shows live; Cancel puts back the one there was. */
+    fun openRate() {
+        if (state.value.currency.isBaht) return
+        rateBefore = state.value.rateText
+        state.update { it.copy(editingRate = true) }
+    }
+
+    fun closeRate(keep: Boolean) = state.update {
+        val kept = if (keep) it else it.copy(rateText = rateBefore).priced()
+        kept.copy(editingRate = false)
+    }
+
+    private var rateBefore: String = ""
+
+    private fun loadRate(currency: Currency, askIfNone: Boolean = false) {
+        if (currency.isBaht) return
+        viewModelScope.launch {
+            val last = lastRate(currency.code)
+            if (last == null) {
+                if (askIfNone && state.value.currency == currency) openRate()
+                return@launch
+            }
+            state.update { if (it.currency == currency && it.rateText.isEmpty()) it.copy(rateText = last.typedFor(currency.rateUnit)).priced() else it }
+        }
+    }
+
+    private fun AddUiState.priced(): AddUiState {
+        if (currency.isBaht) return copy(foreign = null, bahtLine = null)
+        val rate = Rate.parse(rateText, currency.rateUnit)
+        val minor = parseMinor(entry.typed, currency)?.takeIf { it > 0 }
+        val priced = if (rate != null && minor != null) ForeignAmount(currency.code, minor, rate) else null
+        return copy(foreign = priced, bahtLine = priced?.let { currencyCopy().inBaht(it.baht.format()) })
+    }
 
     /**
      * The chosen category goes with the kind. Income and spending share no category, so keeping
@@ -194,6 +293,8 @@ class AddViewModel(
         categories = categories(Direction.Expense),
         quickAdd = agent != null,
         voice = voice?.copy(listening = false),
+        currency = if (offersCurrencies) startingCurrency() else Currencies.Thb,
+        offersCurrencies = offersCurrencies,
     )
 
     /**
@@ -219,6 +320,8 @@ class AddViewModel(
         val underCategory = subCategories().under(category?.id)
         current.copy(
             entry = action.amount?.let(AmountEntry::of) ?: current.entry,
+            // A sentence's amount is read as baht, so a heard figure puts the sheet back in baht.
+            currency = if (action.amount != null) Currencies.Thb else current.currency,
             kind = kind,
             categories = offered,
             category = category,
@@ -227,7 +330,7 @@ class AddViewModel(
                 ?: current.subCategory.takeIf { category == current.category },
             occurredAtEpochMillis = action.occurredAtEpochMillis ?: current.occurredAtEpochMillis,
             memo = action.memo ?: current.memo,
-        )
+        ).priced()
     }
 
     /**
@@ -423,13 +526,17 @@ class AddViewModel(
         val current = state.value
         if (current.saving) return
         val category = current.category
-        if (current.entry.isEmpty || category == null) {
-            // SAVE stays lit, so a tap too early is answered with what is missing.
+        if (current.missing != null || category == null) {
+            // SAVE stays lit, so a tap too early is answered with what is missing. A missing rate
+            // is answered with the sheet that takes it, once the amount and category are there.
+            val askRate = current.needsRate && !current.entry.isEmpty && category != null
             state.update { it.copy(triedSave = true) }
+            if (askRate) openRate()
             return
         }
 
-        val amount = current.entry.toSatang()
+        val foreign = current.foreign?.takeUnless { current.currency.isBaht }
+        val amount = foreign?.baht ?: current.entry.toSatang()
         state.update { it.copy(saving = true) }
         viewModelScope.launch {
             ledger.record(
@@ -440,8 +547,10 @@ class AddViewModel(
                     subCategoryId = current.subCategory?.id,
                     occurredAtEpochMillis = current.occurredAtEpochMillis,
                     memo = current.memo,
+                    foreign = foreign,
                 ),
             )
+            foreign?.let { saveRate(it.currency, it.rate) }
             // formatCompact, not format: the design's line is `Saved ฿485 · Food & drink`, and
             // `฿485.00` in a sentence reads as a machine reporting rather than a receipt.
             haptics.saved()

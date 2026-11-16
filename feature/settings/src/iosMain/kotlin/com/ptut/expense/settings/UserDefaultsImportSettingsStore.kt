@@ -22,6 +22,7 @@ private const val OWNER_CANDIDATE = "ptut-slip-owner-candidate"
 private const val OWNER_SEEN = "ptut-slip-owner-seen"
 private const val NOTE_TONE = "ptut-note-tone"
 private const val HIDDEN_NOTE_WEEK = "ptut-hidden-note-week"
+private const val ADD_CURRENCY = "ptut-add-currency"
 
 /**
  * The iOS half of [ImportSettingsStore]. Both keys are written together, so a zero read back from
@@ -60,6 +61,7 @@ class UserDefaultsImportSettingsStore : ImportSettingsStore {
             ),
             noteTone = NoteTone.entries.firstOrNull { it.name == defaults.stringForKey(NOTE_TONE) } ?: shipped.noteTone,
             hiddenNoteWeek = defaults.stringForKey(HIDDEN_NOTE_WEEK),
+            addCurrency = defaults.stringForKey(ADD_CURRENCY),
         )
     }
 
@@ -75,6 +77,7 @@ class UserDefaultsImportSettingsStore : ImportSettingsStore {
         defaults.setInteger(choices.slipOwner.seen.toLong(), OWNER_SEEN)
         defaults.setObject(choices.noteTone.name, NOTE_TONE)
         writeOptional(choices.hiddenNoteWeek, HIDDEN_NOTE_WEEK)
+        writeOptional(choices.addCurrency, ADD_CURRENCY)
         val target = choices.weeklyTarget
         if (target == null) {
             defaults.removeObjectForKey(TARGET_CATEGORY)

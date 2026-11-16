@@ -53,8 +53,8 @@ import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.SlipsCopy
+import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.locale.incomeSlipCopy
-import com.ptut.expense.locale.kyatCopy
 import com.ptut.expense.locale.noteCopy
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.KeyboardAmountField
@@ -69,6 +69,7 @@ import com.ptut.expense.ui.sky.SkyEmptyState
 import com.ptut.expense.ui.sky.SkyHairline
 import com.ptut.expense.ui.sky.SkyKeyValueRow
 import com.ptut.expense.ui.sky.SkyNoticeCard
+import com.ptut.expense.ui.sky.SkyRateRow
 import com.ptut.expense.ui.sky.SkySubChipBox
 import com.ptut.expense.ui.sky.SkySwitchRow
 import com.ptut.expense.ui.sky.SkyTextAction
@@ -191,7 +192,7 @@ fun ConfirmSlipView(
 
             // #33: a kyat slip becomes baht at this rate. The link opens a money-transfer rate to copy from.
             if (uiState.asksRate) {
-                RateRow(uiState, onRate, onTodaysRate = { openLink.openUri(TODAYS_RATE) })
+                SkyRateRow(uiState.rateText, uiState.rateUnit, uiState.bahtLine, onRate, onTodaysRate = { openLink.openUri(TODAYS_RATE) })
             }
 
             Column {
@@ -345,32 +346,3 @@ private fun String.marked(unsure: Boolean, text: SlipsCopy): String = if (unsure
 
 /** TrueMoney Myanmar's transfer page shows the day's baht-to-kyat rate; there is no feed to fetch it from. */
 private const val TODAYS_RATE = "https://truemoney.com.mm/en/services/irmoney-service/"
-
-@Composable
-private fun RateRow(uiState: ConfirmSlipUiState, onRate: (String) -> Unit, onTodaysRate: () -> Unit) {
-    val words = kyatCopy()
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            Text(words.rateLabel, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-            BasicTextField(
-                value = uiState.rateText,
-                onValueChange = onRate,
-                singleLine = true,
-                textStyle = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier
-                    .width(SkySizes.rateField)
-                    .heightIn(min = SkySizes.search)
-                    .clip(PtutRadii.r12)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(horizontal = Spacing.s12, vertical = Spacing.s10)
-                    .semantics { contentDescription = "${words.rateLabel}, ${words.rateUnit}" },
-            )
-            Text(words.rateUnit, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        uiState.bahtLine?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        Text(words.rateNote, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        SkyTextAction(label = words.todaysRate, onClick = onTodaysRate, enabled = true)
-    }
-}

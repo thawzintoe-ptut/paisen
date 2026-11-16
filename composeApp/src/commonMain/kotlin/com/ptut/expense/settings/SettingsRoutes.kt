@@ -36,6 +36,8 @@ fun SettingsAction.destination(): PtutRoute? = when (this) {
 
     SettingsAction.Timezone -> PtutRoute.Timezone
 
+    SettingsAction.AddCurrency -> PtutRoute.AddCurrency
+
     SettingsAction.Language -> PtutRoute.Language
 
     SettingsAction.Assistant -> PtutRoute.AssistantModel

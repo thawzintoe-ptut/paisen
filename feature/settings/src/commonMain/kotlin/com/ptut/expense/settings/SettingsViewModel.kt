@@ -14,6 +14,7 @@ import com.ptut.expense.domain.settings.ImportSettings
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.NoteTone
 import com.ptut.expense.locale.SettingsCopy
+import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.locale.incomeSlipCopy
 import com.ptut.expense.locale.noteCopy
 import kotlinx.coroutines.flow.Flow
@@ -24,7 +25,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 
 /** Which row. It is the row's identity as well as the destination it opens. */
-enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, Assistant, Feedback, Licences }
+enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, AddCurrency, Assistant, Feedback, Licences }
 
 /** Where Send feedback writes to. The same address PRIVACY.md and SECURITY.md give. */
 const val FEEDBACK_ADDRESS = "developer.ptut@gmail.com"
@@ -83,6 +84,10 @@ class SettingsViewModel(
     private val canLock: Boolean = false,
     /** #22: the weekly note's tone row, in debug builds until the note has been tried. */
     private val showNoteTone: Boolean = false,
+    /** The Add sheet's starting currency, in builds that offer other currencies there. */
+    private val showAddCurrency: Boolean = false,
+    /** What the phone's country maps to, for the row's value when nothing is pinned. */
+    private val phoneCurrency: () -> String = { "THB" },
 ) : ViewModel() {
 
     fun setMoodByTimeOfDay(on: Boolean) = settings.setMoodByTimeOfDay(on)
@@ -223,6 +228,13 @@ class SettingsViewModel(
             icon = "schedule",
             group = 2,
         ),
+        SettingsRowUiModel(
+            id = SettingsAction.AddCurrency,
+            name = currencyCopy().startsIn,
+            value = choices.addCurrency ?: currencyCopy().fromPhone(phoneCurrency()),
+            icon = "payments",
+            group = 2,
+        ).takeIf { showAddCurrency },
         // "Backup file", not "CSV or backup file": export is JSON only in v1 (#147, S7).
         SettingsRowUiModel(
             id = SettingsAction.ExportLedger,

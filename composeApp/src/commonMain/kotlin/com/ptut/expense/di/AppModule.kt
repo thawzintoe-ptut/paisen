@@ -12,6 +12,7 @@ import com.ptut.expense.categories.EditCategoryViewModel
 import com.ptut.expense.confirm.ConfirmSlipViewModel
 import com.ptut.expense.data.local.PtutDatabase
 import com.ptut.expense.data.local.PtutDatabaseContext
+import com.ptut.expense.data.local.entity.CurrencyRateEntity
 import com.ptut.expense.data.local.openPtutDatabase
 import com.ptut.expense.data.local.ptutDatabaseBuilder
 import com.ptut.expense.data.repository.DefaultLedgerRepository
@@ -39,6 +40,7 @@ import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.domain.settings.ImportSettings
 import com.ptut.expense.domain.settings.ImportSettingsStore
+import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.debtsPaidBy
 import com.ptut.expense.domain.slip.ImportStore
@@ -76,6 +78,7 @@ import com.ptut.expense.receipt.DayReceiptViewModel
 import com.ptut.expense.reports.ReportsViewModel
 import com.ptut.expense.resources.Res
 import com.ptut.expense.review.ReviewViewModel
+import com.ptut.expense.settings.AddCurrencyViewModel
 import com.ptut.expense.settings.AssistantModelViewModel
 import com.ptut.expense.settings.BackgroundImportViewModel
 import com.ptut.expense.settings.KeepFailedSlipsViewModel
@@ -249,6 +252,8 @@ val viewModelModule: Module = module {
             showAssistant = getOrNull<AppBuild>()?.debug == true,
             canLock = getOrNull<DeviceAuth>()?.isAvailable() == true,
             showNoteTone = getOrNull<AppBuild>()?.debug == true,
+            showAddCurrency = getOrNull<AppBuild>()?.debug == true,
+            phoneCurrency = { (getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb).code },
         )
     }
 
@@ -415,8 +420,16 @@ val viewModelModule: Module = module {
             agent = getOrNull(),
             reader = getOrNull(),
             speech = getOrNull(),
+            offersCurrencies = getOrNull<AppBuild>()?.debug == true,
+            startingCurrency = { get<ImportSettings>().choices.value.addCurrency?.let(Currencies::of) ?: (getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb) },
+            lastRate = { code -> getOrNull<ImportStore>()?.rateFor(code) },
+            saveRate = { code, rate ->
+                getOrNull<PtutDatabase>()?.sharedDao()?.upsertRate(CurrencyRateEntity(code, rate.unscaled, rate.scale, Clock.System.now().toEpochMilliseconds()))
+            },
         )
     }
+
+    viewModel { AddCurrencyViewModel(settings = get(), phoneCurrency = { (getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb) }) }
 
     viewModel { (shop: String) ->
         ShopRuleViewModel(shop = shop, rules = get(), categories = storedCategories())
@@ -578,6 +591,7 @@ fun dataModule(databaseContext: PtutDatabaseContext): Module = module {
      */
     /** NFR-4 and FR-3's answers, where they survive a process death. */
     single<ImportSettingsStore> { importSettingsStore(databaseContext) }
+    single { PhoneCurrency { phoneCountry(databaseContext) } }
     single<LanguageStore> { languageStore(databaseContext) }
     single { repeatReminders(databaseContext) }
     single<SpeechInput> { speechInput(databaseContext) }
