@@ -34,6 +34,7 @@ import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.iconName
 import com.ptut.expense.domain.importFix
 import com.ptut.expense.domain.importFreshness
+import com.ptut.expense.domain.inAppLanguage
 import com.ptut.expense.domain.isAutomatic
 import com.ptut.expense.domain.label
 import com.ptut.expense.domain.ledger.LedgerRepository
@@ -47,6 +48,7 @@ import com.ptut.expense.domain.savedOn
 import com.ptut.expense.domain.spendByCategory
 import com.ptut.expense.domain.summarise
 import com.ptut.expense.domain.usualDay
+import com.ptut.expense.domain.weeklyCheckIn
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,6 +58,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
@@ -147,6 +150,8 @@ sealed interface HomeUiState {
         val compared: ComparedUiModel? = null,
         /** p07 and p08's card under the tabs: yesterday before noon, today after 18:00 (#121, #122). */
         val moodCard: MoodCardUiModel? = null,
+        /** #20: Monday's look back at last week, on the Today tab only. */
+        val weeklyCard: WeeklyCardUiModel? = null,
     ) : HomeUiState
 }
 
@@ -158,6 +163,9 @@ data class ComparedUiModel(val line: String, val glyph: String)
 
 /** "Good morning" or "Your day, wrapped", its sentence, its glyph, and the day its receipt opens on (#120). */
 data class MoodCardUiModel(val lead: String, val line: String, val glyph: String, val receiptDate: String)
+
+/** #20: "Your week", its sentences, its trend glyph, and the slice of History a tap opens: ISO days, Sunday included. */
+data class WeeklyCardUiModel(val lead: String, val line: String, val glyph: String, val from: String, val to: String, val categoryId: String?)
 
 class HomeViewModel(
     ledger: LedgerRepository,
@@ -180,6 +188,8 @@ class HomeViewModel(
     watchedFolders: Flow<List<WatchedFolder>> = flowOf(emptyList()),
     /** Settings' "Mood by time of day" (#121). Off where nothing binds it, so a test sees no mood card. */
     moodByTimeOfDay: Flow<Boolean> = flowOf(false),
+    /** Settings' "Weekly check-in" (#20). Off where nothing binds it, so a test sees no weekly card. */
+    weeklyCheckIn: Flow<Boolean> = flowOf(false),
     /** #219: slips waiting out their Undo, already gone from Review, so not counted here either. */
     pendingDiscards: Flow<Set<String>> = flowOf(emptySet()),
     /** Asked again each time Today comes back, since the reader changes it in the system's pages. */
@@ -200,12 +210,12 @@ class HomeViewModel(
             ledger.todaysTransactions,
             combine(ledger.sinceLastImportMillis, ledger.importRuns) { since, runs -> since to runs.latestRunFailed() },
             combine(ledger.queuedSlips, pendingDiscards) { slips, pending -> slips.filterNot { it.id in pending } },
-            combine(isScanning, watchedFolders, moodByTimeOfDay, clockTicks) { scanning, folders, mood, _ ->
-                Extras(scanning, folders, mood)
+            combine(isScanning, watchedFolders, moodByTimeOfDay, weeklyCheckIn, clockTicks) { scanning, folders, mood, weekly, _ ->
+                Extras(scanning, folders, mood, weekly)
             },
             // ShopNames too: naming a shop read as noise retitles its rows here without a restart.
             combine(ledger.allTransactions, combine(categoryUpdates, subCategoryUpdates, ShopNames.names) { c, s, _ -> c to s }, period, ::Triple),
-        ) { snapshot, (sinceLastImportMillis, failed), queued, (scanning, folders, mood), (ledgerRows, filing, chosen) ->
+        ) { snapshot, (sinceLastImportMillis, failed), queued, (scanning, folders, mood, weekly), (ledgerRows, filing, chosen) ->
             val (categories, subCategories) = filing
             val todays = when (snapshot) {
                 LedgerSnapshot.Unanswered -> return@combine HomeUiState.Loading
@@ -244,6 +254,7 @@ class HomeViewModel(
                 amountLabel = chosen.spent(),
                 compared = history.usualDay(today)?.asCompared()?.takeIf { chosen == HomePeriod.Today },
                 moodCard = history.moodCard(dayPartAt(now), today).takeIf { mood && chosen == HomePeriod.Today },
+                weeklyCard = if (weekly && chosen == HomePeriod.Today && today.dayOfWeek == DayOfWeek.MONDAY) history.weeklyCard(today, categories) else null,
                 topCategories = transactions.spendByCategory(categories)
                     .take(TOP_CATEGORIES)
                     .map { TopCategoryUiModel(name = it.category.name, icon = it.category.icon) },
@@ -350,7 +361,7 @@ private fun Transaction.asSavedRow(categories: List<Category>, subCategories: Li
         row.copy(meta = listOfNotNull(occurredAtEpochMillis.dateIn(BangkokTime).dayLabel(), row.parts.category).joinToString(" · "))
     }
 
-private data class Extras(val scanning: Boolean, val folders: List<WatchedFolder>, val mood: Boolean)
+private data class Extras(val scanning: Boolean, val folders: List<WatchedFolder>, val mood: Boolean, val weekly: Boolean)
 
 private fun UsualDay.asCompared() = ComparedUiModel(
     line = differencePhrase(),
@@ -391,3 +402,31 @@ private fun List<Transaction>.moodCard(part: DayPart, today: LocalDate): MoodCar
 
 private fun List<Transaction>.spendingOn(day: LocalDate): List<Transaction> =
     filter { it.direction == Direction.Expense && it.occurredAtEpochMillis.dateIn(BangkokTime) == day }
+
+/** #20: last week beside a usual one, then the category that rose most. Never red, never "over". */
+private fun List<Transaction>.weeklyCard(today: LocalDate, categories: List<Category>): WeeklyCardUiModel? {
+    val check = weeklyCheckIn(today) ?: return null
+    val home = AppText.copy.home
+    val difference = check.difference
+    val versus = when {
+        difference == null -> ""
+        difference > Satang.Zero -> home.weekMore(difference.formatCompact())
+        difference < Satang.Zero -> home.weekLess((-difference).formatCompact())
+        else -> home.weekSame
+    }
+    val rise = check.rise
+    val riseName = rise?.let { r -> categories.firstOrNull { it.id == r.categoryId }?.inAppLanguage()?.name }
+    val next = if (rise != null && riseName != null) " " + home.weekRise(riseName, rise.difference.formatCompact(), rise.shops) else ""
+    return WeeklyCardUiModel(
+        lead = home.weekLead,
+        line = home.weekCameTo(check.spent.formatCompact(), versus) + next,
+        glyph = when {
+            difference == null || difference == Satang.Zero -> "trending_flat"
+            difference > Satang.Zero -> "trending_up"
+            else -> "trending_down"
+        },
+        from = check.from.toString(),
+        to = check.to.toString(),
+        categoryId = rise?.categoryId.takeIf { riseName != null },
+    )
+}

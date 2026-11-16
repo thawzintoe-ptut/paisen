@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 
 /** Which row. It is the row's identity as well as the destination it opens. */
-enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, Activity, Categories, MoodByTimeOfDay, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, Assistant, Feedback, Licences }
+enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, Assistant, Feedback, Licences }
 
 /** Where Send feedback writes to. The same address PRIVACY.md and SECURITY.md give. */
 const val FEEDBACK_ADDRESS = "developer.ptut@gmail.com"
@@ -85,6 +85,8 @@ class SettingsViewModel(
     fun setTransparency(on: Boolean) = settings.setTransparency(on)
 
     fun setAppLock(on: Boolean) = settings.setAppLock(on)
+
+    fun setWeeklyCheckIn(on: Boolean) = settings.setWeeklyCheckIn(on)
 
     val uiState: StateFlow<SettingsUiState> = combine(
         ledger.sinceLastImportMillis,
@@ -154,6 +156,15 @@ class SettingsViewModel(
             icon = "wb_twilight",
             group = 1,
             switchedOn = choices.moodByTimeOfDay,
+        ),
+        // #20: Monday's look back at last week on Today.
+        SettingsRowUiModel(
+            id = SettingsAction.WeeklyCheckIn,
+            name = text.weeklyCheckIn,
+            value = text.weeklyCheckInValue,
+            icon = "calendar_month",
+            group = 1,
+            switchedOn = choices.weeklyCheckIn,
         ),
         // Off draws the pill solid. iOS Reduce Transparency does the same without asking (#123).
         SettingsRowUiModel(

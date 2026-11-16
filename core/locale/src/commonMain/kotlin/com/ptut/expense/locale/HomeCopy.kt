@@ -55,6 +55,14 @@ data class HomeCopy(
     val wrapLine: (count: Int, total: String) -> String = { count, total ->
         "${count.homeCounted()} ${if (count == 1) "purchase" else "purchases"}, $total. Tap for the receipt."
     },
+    val weekLead: String = "Your week",
+    val weekCameTo: (spent: String, versus: String) -> String = { spent, versus -> "Last week came to $spent$versus." },
+    val weekMore: (amount: String) -> String = { amount -> ", $amount more than a usual week" },
+    val weekLess: (amount: String) -> String = { amount -> ", $amount less than a usual week" },
+    val weekSame: String = ", the same as a usual week",
+    val weekRise: (category: String, amount: String, shops: List<String>) -> String = { category, amount, shops ->
+        "$category rose most, $amount more" + (if (shops.isEmpty()) "" else ", mostly at ${shops.joinToString(" and ")}") + "."
+    },
 )
 
 private fun Int.homeSpelled(): String = if (this == 1) "one" else toString()
@@ -115,4 +123,12 @@ val BurmeseHome = HomeCopy(
     yesterdayCameTo = { spent, versus -> "မနေ့က $spent သုံးခဲ့တယ်$versus။" },
     dayWrapped = "ဒီနေ့ အနှစ်ချုပ်",
     wrapLine = { count, total -> "${count.inMyanmarDigits()} ကြိမ်သုံးတယ်၊ $total။ ဘောက်ချာကြည့်ဖို့ နှိပ်ပါ။" },
+    weekLead = "ပြီးခဲ့တဲ့ အပတ်",
+    weekCameTo = { spent, versus -> "ပြီးခဲ့တဲ့ အပတ်က $spent သုံးခဲ့တယ်$versus။" },
+    weekMore = { amount -> "၊ ပုံမှန် တစ်ပတ်ထက် $amount များတယ်" },
+    weekLess = { amount -> "၊ ပုံမှန် တစ်ပတ်ထက် $amount နည်းတယ်" },
+    weekSame = "၊ ပုံမှန် တစ်ပတ်လိုပဲ",
+    weekRise = { category, amount, shops ->
+        "$category က အများဆုံး တက်တယ်၊ $amount ပိုသုံးတယ်" + (if (shops.isEmpty()) "" else "၊ အများစုက ${shops.joinToString(" နဲ့ ")} မှာ") + "။"
+    },
 )

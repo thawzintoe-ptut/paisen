@@ -34,6 +34,7 @@ class SettingsViewModelTest : ViewModelTest() {
                 "Activity",
                 "Categories",
                 "Mood by time of day",
+                "Weekly check-in",
                 "Transparency",
                 "Language",
                 "Timezone",
@@ -52,7 +53,7 @@ class SettingsViewModelTest : ViewModelTest() {
      * without a destination, because the enum has to name one.
      */
     @Test
-    fun `every row names a destination except the three switches and feedback`() {
+    fun `every row names a destination except the four switches and feedback`() {
         assertEquals(
             listOf(
                 PtutRoute.PhotoFolders,
@@ -60,7 +61,8 @@ class SettingsViewModelTest : ViewModelTest() {
                 PtutRoute.KeepFailedSlips,
                 PtutRoute.Activity,
                 PtutRoute.Categories,
-                // #121, #123 and #25: switches with no screen behind them; the row's tap flips it.
+                // #121, #20, #123 and #25: switches with no screen behind them; the row's tap flips it.
+                null,
                 null,
                 null,
                 null,

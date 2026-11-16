@@ -77,6 +77,8 @@ fun HomeView(
     onOpenTransaction: (String) -> Unit,
     /** A mood card's day receipt, by its ISO date (#120). */
     onOpenReceipt: (String) -> Unit = {},
+    /** The weekly card's slice of History (#20). */
+    onOpenWeek: (WeeklyCardUiModel) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
@@ -92,6 +94,7 @@ fun HomeView(
                 onFixImport = onFixImport,
                 onOpenTransaction = onOpenTransaction,
                 onOpenReceipt = onOpenReceipt,
+                onOpenWeek = onOpenWeek,
             )
         }
     }
@@ -107,6 +110,7 @@ private fun LoadedHome(
     onFixImport: (ImportFix) -> Unit,
     onOpenTransaction: (String) -> Unit,
     onOpenReceipt: (String) -> Unit,
+    onOpenWeek: (WeeklyCardUiModel) -> Unit,
 ) {
     val text = LocalCopy.current.home
     val common = LocalCopy.current.common
@@ -129,6 +133,15 @@ private fun LoadedHome(
                     onFixImport = onFixImport,
                     modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
                 )
+                state.weeklyCard?.let { card ->
+                    SkyMoodCard(
+                        lead = card.lead,
+                        line = card.line,
+                        icon = ptutIcon(card.glyph),
+                        onClick = { onOpenWeek(card) },
+                        modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
+                    )
+                }
                 // Below the freshness line, so a stale banner stays the louder of the two (#121).
                 state.moodCard?.let { card ->
                     SkyMoodCard(

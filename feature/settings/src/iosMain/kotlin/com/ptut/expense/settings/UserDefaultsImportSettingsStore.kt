@@ -10,6 +10,7 @@ private const val RETENTION_DAYS = "ptut-retention-days"
 private const val MOOD_BY_TIME_OF_DAY = "ptut-mood-by-time-of-day"
 private const val TRANSPARENCY = "ptut-transparency"
 private const val APP_LOCK = "ptut-app-lock"
+private const val WEEKLY_CHECK_IN = "ptut-weekly-check-in"
 
 /**
  * The iOS half of [ImportSettingsStore]. Both keys are written together, so a zero read back from
@@ -35,6 +36,9 @@ class UserDefaultsImportSettingsStore : ImportSettingsStore {
                 ?.let { defaults.boolForKey(TRANSPARENCY) }
                 ?: shipped.transparency,
             appLock = defaults.boolForKey(APP_LOCK),
+            weeklyCheckIn = defaults.objectForKey(WEEKLY_CHECK_IN)
+                ?.let { defaults.boolForKey(WEEKLY_CHECK_IN) }
+                ?: shipped.weeklyCheckIn,
         )
     }
 
@@ -44,5 +48,6 @@ class UserDefaultsImportSettingsStore : ImportSettingsStore {
         defaults.setBool(choices.moodByTimeOfDay, MOOD_BY_TIME_OF_DAY)
         defaults.setBool(choices.transparency, TRANSPARENCY)
         defaults.setBool(choices.appLock, APP_LOCK)
+        defaults.setBool(choices.weeklyCheckIn, WEEKLY_CHECK_IN)
     }
 }

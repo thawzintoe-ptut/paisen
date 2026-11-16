@@ -23,6 +23,8 @@ data class ImportChoices(
     val transparency: Boolean = true,
     /** Fingerprint, face or phone PIN before the ledger shows (#25). Off until switched on. */
     val appLock: Boolean = false,
+    /** Monday's card on Today about last week (#20). On, so the check-in is there to find. */
+    val weeklyCheckIn: Boolean = true,
 )
 
 /**
@@ -70,6 +72,8 @@ class ImportSettings(private val store: ImportSettingsStore) {
     fun setTransparency(on: Boolean) = update { it.copy(transparency = on) }
 
     fun setAppLock(on: Boolean) = update { it.copy(appLock = on) }
+
+    fun setWeeklyCheckIn(on: Boolean) = update { it.copy(weeklyCheckIn = on) }
 
     /**
      * Written before it is announced, like the first-run flag. If the process dies between the two

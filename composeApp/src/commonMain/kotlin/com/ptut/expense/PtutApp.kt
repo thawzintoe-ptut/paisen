@@ -378,6 +378,7 @@ private fun LedgerShell() {
                     },
                     onOpenTransaction = { navController.openTransaction(it) },
                     onOpenReceipt = { navController.navigate(PtutRoute.DayReceipt(it)) },
+                    onOpenWeek = { navController.navigate(PtutRoute.LedgerSlice(it.from, it.to, it.categoryId)) { launchSingleTop = true } },
                 )
                 if (askingAllowAll) {
                     // Asked for only under "Select photos", the one case that offers Android's picker.
@@ -670,6 +671,8 @@ private fun LedgerShell() {
                     onSwitch = { action, on ->
                         when (action) {
                             SettingsAction.MoodByTimeOfDay -> settings.setMoodByTimeOfDay(on)
+
+                            SettingsAction.WeeklyCheckIn -> settings.setWeeklyCheckIn(on)
 
                             SettingsAction.Transparency -> settings.setTransparency(on)
 

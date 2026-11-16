@@ -66,3 +66,16 @@ Burmese for Today, the Add sheet and the day receipt that the Sky MY design does
 | 1 row matches / {n} rows match | ကိုက်တာ {n} ခု ရှိတယ် | locale/AddCopy.kt:39 |
 | Other | အခြား | locale/ReceiptCopy.kt:14 |
 | Nothing was spent on this day. | ဒီရက်မှာ ဘာမှ မသုံးခဲ့ဘူး။ | locale/ReceiptCopy.kt:15 |
+
+## Weekly check-in (#20, new, 16 Nov)
+
+| English | Burmese | Where |
+| --- | --- | --- |
+| Weekly check-in | အပတ်စဉ် အနှစ်ချုပ် | locale/SettingsCopy.kt `weeklyCheckIn` |
+| Mondays, last week beside a usual one | တနင်္လာနေ့တိုင်း ပြီးခဲ့တဲ့ အပတ်ကို ပုံမှန် တစ်ပတ်နဲ့ ယှဉ်ပြတယ် | locale/SettingsCopy.kt `weeklyCheckInValue` |
+| Your week | ပြီးခဲ့တဲ့ အပတ် | locale/HomeCopy.kt `weekLead` |
+| Last week came to {spent}{versus}. | ပြီးခဲ့တဲ့ အပတ်က {spent} သုံးခဲ့တယ်{versus}။ | locale/HomeCopy.kt `weekCameTo` |
+| , {amount} more than a usual week | ၊ ပုံမှန် တစ်ပတ်ထက် {amount} များတယ် | locale/HomeCopy.kt `weekMore` |
+| , {amount} less than a usual week | ၊ ပုံမှန် တစ်ပတ်ထက် {amount} နည်းတယ် | locale/HomeCopy.kt `weekLess` |
+| , the same as a usual week | ၊ ပုံမှန် တစ်ပတ်လိုပဲ | locale/HomeCopy.kt `weekSame` |
+| {category} rose most, {amount} more, mostly at {shop} and {shop}. | {category} က အများဆုံး တက်တယ်၊ {amount} ပိုသုံးတယ်၊ အများစုက {shop} နဲ့ {shop} မှာ။ | locale/HomeCopy.kt `weekRise` |

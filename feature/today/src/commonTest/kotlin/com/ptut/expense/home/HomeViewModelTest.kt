@@ -28,7 +28,9 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.toInstant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -179,6 +181,46 @@ class HomeViewModelTest : ViewModelTest() {
             val state = awaitItem() as HomeUiState.Success
             assertEquals(ImportStatusUiModel.OnlyPicked, state.importStatus)
             assertEquals(ImportFix.AllowAllPhotos, state.importFix)
+        }
+    }
+
+    @Test
+    fun mondayShowsLastWeekBesideAUsualWeekAndOpensTheCategoryThatRose() = runTest {
+        val viewModel = viewModel(transactions = emptyList(), saved = weekOfSpending(), now = MONDAY_NOON, weeklyCheckIn = true)
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            val card = assertNotNull((awaitItem() as HomeUiState.Success).weeklyCard)
+            assertTrue(card.line.startsWith("Last week came to ฿500, ฿300 more than a usual week."), card.line)
+            assertTrue(card.line.contains("mostly at LAWSON"), card.line)
+            assertEquals("2026-11-09", card.from)
+            assertEquals("2026-11-15", card.to)
+            assertEquals("food", card.categoryId)
+            assertEquals("trending_up", card.glyph)
+        }
+    }
+
+    @Test
+    fun tuesdayShowsNoWeeklyCard() = runTest {
+        val tuesday = LocalDateTime(2026, 11, 17, 12, 0).toInstant(BangkokTime)
+        val viewModel = viewModel(transactions = emptyList(), saved = weekOfSpending(), now = tuesday, weeklyCheckIn = true)
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            assertNull((awaitItem() as HomeUiState.Success).weeklyCard)
+        }
+    }
+
+    @Test
+    fun theWeeklyCardStaysAwayWithItsSwitchOff() = runTest {
+        val viewModel = viewModel(transactions = emptyList(), saved = weekOfSpending(), now = MONDAY_NOON, weeklyCheckIn = false)
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            assertNull((awaitItem() as HomeUiState.Success).weeklyCard)
         }
     }
 
@@ -466,10 +508,12 @@ class HomeViewModelTest : ViewModelTest() {
         subCategories: Flow<List<SubCategory>> = flowOf(emptyList()),
         runs: List<ImportRun> = emptyList(),
         onlyPickedPhotos: () -> Boolean = { false },
+        weeklyCheckIn: Boolean = false,
     ) = HomeViewModel(
         ledger = FakeLedger(transactions, sinceLastImportMillis, queued, all = transactions + saved, runs = runs),
         subCategoryUpdates = subCategories,
         onlyPickedPhotos = onlyPickedPhotos,
+        weeklyCheckIn = flowOf(weeklyCheckIn),
         clock = object : Clock {
             override fun now(): Instant = now
         },
@@ -493,6 +537,13 @@ class HomeViewModelTest : ViewModelTest() {
         counterparty = "LAWSON108_P3793 THE LIVIN",
         source = TransactionSource.Scan,
         filedAt = filed,
+    )
+
+    /** ฿200 in each of the two weeks before last, then ฿500 last week, most of it at one shop. */
+    private fun weekOfSpending() = listOf(
+        saved("w1", at(2026, 10, 27, 12, 0), filed = 0L).copy(amount = Satang(20_000)),
+        saved("w2", at(2026, 11, 4, 12, 0), filed = 0L).copy(amount = Satang(20_000)),
+        saved("w3", at(2026, 11, 10, 12, 0), filed = 0L).copy(amount = Satang(50_000), counterparty = "LAWSON"),
     )
 
     private fun at(year: Int, month: Int, day: Int, hour: Int, minute: Int): Long =
@@ -534,3 +585,5 @@ class HomeViewModelTest : ViewModelTest() {
 private val Supermarket = SubCategory("supermarket", "groceries", "Supermarket")
 
 private const val FIVE_MINUTES = 5L * 60 * 1000
+
+private val MONDAY_NOON = LocalDateTime(2026, 11, 16, 12, 0).toInstant(BangkokTime)

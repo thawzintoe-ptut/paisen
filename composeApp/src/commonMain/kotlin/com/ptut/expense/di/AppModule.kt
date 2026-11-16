@@ -211,6 +211,7 @@ val viewModelModule: Module = module {
             subCategoryUpdates = liveSubCategories(),
             watchedFolders = getOrNull<WatchedFolderRepository>()?.folders ?: flowOf(emptyList()),
             moodByTimeOfDay = getOrNull<ImportSettings>()?.choices?.map { it.moodByTimeOfDay } ?: flowOf(false),
+            weeklyCheckIn = getOrNull<ImportSettings>()?.choices?.map { it.weeklyCheckIn } ?: flowOf(false),
             pendingDiscards = get<SlipDiscards>().pending,
             onlyPickedPhotos = { photos?.onlyPickedPhotos == true },
         )
