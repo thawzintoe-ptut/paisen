@@ -43,7 +43,7 @@ jobs:
       - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-read-only: true
@@ -108,12 +108,43 @@ jobs:
           mkdir -p out
           cp "$(find androidApp/build/outputs/apk/release -name '*.apk')" "out/PaiSeN-$VERSION_NAME.apk"
           cp "$(find androidApp/build/outputs/bundle/release -name '*.aab')" "out/PaiSeN-$VERSION_NAME.aab"
+          # R8 still inlines with -dontobfuscate, so an APK stack trace needs this for its line numbers.
+          # Play reads the same file from inside the AAB; this copy goes on the GitHub release.
+          (cd androidApp/build/outputs/mapping/release && zip -q "$GITHUB_WORKSPACE/out/PaiSeN-$VERSION_NAME-mapping.zip" mapping.txt)
 
       # Anyone can check that a file came from this workflow:
       # gh attestation verify PaiSeN-<version>.apk -R thawzintoe-ptut/paisen
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: 'out/*'
+
+      # The APK went from 62.9 to 50.7 MB in October; this keeps its size in view on every build.
+      - name: Size summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          mb() { awk -v b="$1" 'BEGIN { printf "%.1f MB", b / 1000000 }'; }
+          apk=$(stat -c %s "out/PaiSeN-$VERSION_NAME.apk")
+          aab=$(stat -c %s "out/PaiSeN-$VERSION_NAME.aab")
+          prev_tag=$(git describe --tags --abbrev=0 --match 'v*' --exclude "$GITHUB_REF_NAME" HEAD 2>/dev/null || true)
+          prev=""
+          if [ -n "$prev_tag" ]; then
+            prev=$(gh release view "$prev_tag" --repo "$GITHUB_REPOSITORY" --json assets \
+              --jq '[.assets[] | select(.name | endswith(".apk")) | .size][0] // empty' 2>/dev/null || true)
+          fi
+          if [ -n "$prev" ]; then
+            change=$(awk -v a="$apk" -v p="$prev" -v t="$prev_tag" 'BEGIN { printf "%+.1f MB since %s", (a - p) / 1000000, t }')
+          else
+            change="no earlier release APK"
+          fi
+          {
+            echo "### PaiSeN $VERSION_NAME"
+            echo "| File | Size | Change |"
+            echo "|---|---|---|"
+            echo "| APK | $(mb "$apk") | $change |"
+            echo "| AAB | $(mb "$aab") | |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
