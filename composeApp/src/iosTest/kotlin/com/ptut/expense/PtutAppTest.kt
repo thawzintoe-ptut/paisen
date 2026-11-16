@@ -40,12 +40,12 @@ import com.ptut.expense.onboarding.FakePhotoAccessRequest
 import com.ptut.expense.onboarding.FakePhotoSettings
 import com.ptut.expense.onboarding.OnboardingFlag
 import com.ptut.expense.platform.files.LedgerFileStore
+import com.ptut.expense.platform.lock.AppLock
+import com.ptut.expense.platform.lock.DeviceAuth
 import com.ptut.expense.platform.photos.PhotoAccessRequest
 import com.ptut.expense.platform.photos.PhotoSettings
 import com.ptut.expense.settings.NEEDS_ATTENTION
 import com.ptut.expense.ui.ScreenReader
-import com.ptut.expense.platform.lock.AppLock
-import com.ptut.expense.platform.lock.DeviceAuth
 import org.koin.compose.KoinApplication
 import org.koin.dsl.koinConfiguration
 import org.koin.dsl.module

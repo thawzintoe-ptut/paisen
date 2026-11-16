@@ -23,6 +23,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import com.ptut.expense.NoDeviceAuth
 import com.ptut.expense.PtutApp
 import com.ptut.expense.add.AddSheet
 import com.ptut.expense.add.AddUiState
@@ -55,6 +56,8 @@ import com.ptut.expense.onboarding.FakePhotoSettings
 import com.ptut.expense.onboarding.OnboardingFlag
 import com.ptut.expense.pillSlot
 import com.ptut.expense.platform.files.LedgerFileStore
+import com.ptut.expense.platform.lock.AppLock
+import com.ptut.expense.platform.lock.DeviceAuth
 import com.ptut.expense.platform.photos.PhotoAccessRequest
 import com.ptut.expense.platform.photos.PhotoSettings
 import com.ptut.expense.ui.AmountEntry
@@ -62,9 +65,6 @@ import com.ptut.expense.ui.ScreenReader
 import com.ptut.expense.ui.ToastAction
 import com.ptut.expense.ui.ToastHost
 import com.ptut.expense.ui.ToastMessage
-import com.ptut.expense.NoDeviceAuth
-import com.ptut.expense.platform.lock.AppLock
-import com.ptut.expense.platform.lock.DeviceAuth
 import org.koin.compose.KoinApplication
 import org.koin.core.context.stopKoin
 import org.koin.dsl.koinConfiguration
