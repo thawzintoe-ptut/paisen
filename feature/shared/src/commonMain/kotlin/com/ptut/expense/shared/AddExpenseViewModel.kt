@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.formatCompact
+import com.ptut.expense.domain.inTableLanguage
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.ExpenseChanged
@@ -628,9 +629,12 @@ class AddExpenseViewModel(
         else -> weight.toString()
     }
 
-    /** What the expense is called: the typed description, or the category's name when none was typed. */
+    /**
+     * What the expense is called: the typed description, or the category's name when none was typed.
+     * Every member reads that name, so an installed category goes in as its English name, not this phone's language.
+     */
     private fun titleOf(form: ExpenseForm): String =
-        form.description.trim().ifEmpty { categories.firstOrNull { it.id == form.categoryId }?.name.orEmpty() }
+        form.description.trim().ifEmpty { categories.firstOrNull { it.id == form.categoryId }?.inTableLanguage()?.name.orEmpty() }
 
     private fun amountOf(form: ExpenseForm): Long? = parseMinor(form.amountText, form.currency)
 
