@@ -62,6 +62,9 @@ import com.ptut.expense.ui.ScreenReader
 import com.ptut.expense.ui.ToastAction
 import com.ptut.expense.ui.ToastHost
 import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.NoDeviceAuth
+import com.ptut.expense.platform.lock.AppLock
+import com.ptut.expense.platform.lock.DeviceAuth
 import org.koin.compose.KoinApplication
 import org.koin.core.context.stopKoin
 import org.koin.dsl.koinConfiguration
@@ -395,6 +398,9 @@ class TouchTargetFloorTest {
                     single { ScreenReader { false } }
                     // #118: the shell provides slip pictures; these screens never load one.
                     single { SlipPictures { null } }
+                    // #25: the shell asks for the lock. Off here, and no phone check to ask.
+                    single<DeviceAuth> { NoDeviceAuth }
+                    single { AppLock(enabled = { false }, nowMillis = { 0L }) }
                     single {
                         SlipImporter(
                             source = FakeSlipSource(),

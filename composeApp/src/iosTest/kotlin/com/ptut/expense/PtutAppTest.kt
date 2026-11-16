@@ -44,6 +44,8 @@ import com.ptut.expense.platform.photos.PhotoAccessRequest
 import com.ptut.expense.platform.photos.PhotoSettings
 import com.ptut.expense.settings.NEEDS_ATTENTION
 import com.ptut.expense.ui.ScreenReader
+import com.ptut.expense.platform.lock.AppLock
+import com.ptut.expense.platform.lock.DeviceAuth
 import org.koin.compose.KoinApplication
 import org.koin.dsl.koinConfiguration
 import org.koin.dsl.module
@@ -102,6 +104,9 @@ class PtutAppTest {
                     single { ScreenReader { false } }
                     // #118: the shell provides slip pictures; these screens never load one.
                     single { SlipPictures { null } }
+                    // #25: the shell asks for the lock. Off here, and no phone check to ask.
+                    single<DeviceAuth> { NoDeviceAuth }
+                    single { AppLock(enabled = { false }, nowMillis = { 0L }) }
                     // The shell sweeps evidence on start, so the graph has to answer for an
                     // importer even on a screen that never imports anything.
                     single {
