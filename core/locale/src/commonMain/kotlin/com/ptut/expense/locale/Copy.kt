@@ -63,4 +63,6 @@ val ThaiCopy = Copy(
     history = ThaiHistory,
     record = ThaiRecord,
     phrases = ThaiPhrases,
+    categories = ThaiCategories,
+    settings = ThaiSettings,
 )
