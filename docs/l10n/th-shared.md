@@ -193,3 +193,250 @@ Choices to check in this area:
 | {actor} changed the repeat {what} | {actor} แก้ไขรายการประจำ {what} | SharedPushCopy.kt `repeatChanged` |
 | {actor} stopped the repeat {what} | {actor} หยุดรายการประจำ {what} | SharedPushCopy.kt `repeatStopped` |
 
+## One group: hero, feed, menu, PromptPay and leave or delete
+
+| English | Thai | Where |
+|---|---|---|
+| It is no longer on this phone, so there is nothing to show here. | กลุ่มนี้ไม่อยู่ในโทรศัพท์เครื่องนี้แล้ว จึงไม่มีอะไรให้แสดง | SharedGroupCopy.kt `SharedDetailCopy.goneBody` |
+| Nothing here to settle | ไม่มีอะไรให้เคลียร์ | SharedGroupCopy.kt `goneStatus` |
+| More for this group | เพิ่มเติมสำหรับกลุ่มนี้ | SharedGroupCopy.kt `more` |
+| New (spoken for a new row) | ใหม่ | SharedGroupCopy.kt `newRow` |
+| {name}, not joined yet | {name} ยังไม่ได้เข้าร่วม | SharedGroupCopy.kt `notJoined` |
+| Settle up | เคลียร์ยอด | SharedGroupCopy.kt `settleUp` |
+| Balances | ยอดคงค้าง | SharedGroupCopy.kt `balances` |
+| Repeats | รายการประจำ | SharedGroupCopy.kt `repeats` |
+| Expenses | ค่าใช้จ่าย | SharedGroupCopy.kt `expenses` |
+| No expenses yet. Add the first one with the + button. | ยังไม่มีค่าใช้จ่าย เพิ่มรายการแรกด้วยปุ่ม + | SharedGroupCopy.kt `noExpenses` |
+| Edit group | แก้ไขกลุ่ม | SharedGroupCopy.kt `editGroup` |
+| My PromptPay | PromptPay ของฉัน | SharedGroupCopy.kt `myPromptPay` |
+| Repeat an expense | ตั้งรายการประจำ | SharedGroupCopy.kt `repeatAnExpense` |
+| Delete group | ลบกลุ่ม | SharedGroupCopy.kt `deleteGroup` |
+| Delete for everyone | ลบสำหรับทุกคน | SharedGroupCopy.kt `deleteForEveryone` |
+| Leave group | ออกจากกลุ่ม | SharedGroupCopy.kt `leaveGroup` |
+| So the people in {group} see the same expenses in their own app. | เพื่อให้คนใน {group} เห็นค่าใช้จ่ายเดียวกันในแอปของเขา | SharedGroupCopy.kt `signInReason` |
+| Add the phone number or ID your PromptPay uses. People in this group see a QR for it when they pay you. | ใส่เบอร์โทรหรือเลขประจำตัวที่ PromptPay ของคุณใช้ คนในกลุ่มนี้จะเห็น QR ของคุณเมื่อจ่ายเงินให้คุณ | SharedGroupCopy.kt `promptPayAdd` |
+| Now {current}. Type a new one, or leave it empty to take it off. | ตอนนี้คือ {current} พิมพ์ใหม่ หรือเว้นว่างเพื่อลบออก | SharedGroupCopy.kt `promptPayNow` |
+| PromptPay phone number or ID | เบอร์โทรหรือเลขประจำตัว PromptPay | SharedGroupCopy.kt `promptPayField` |
+| Use a 10-digit phone number, or a 13- or 15-digit ID. | ใช้เบอร์โทร 10 หลัก หรือเลขประจำตัว 13 หรือ 15 หลัก | SharedGroupCopy.kt `promptPayWrong` |
+| Take it off | ลบออก | SharedGroupCopy.kt `takeItOff` |
+| Leave {name}? | ออกจาก {name} ไหม | SharedGroupCopy.kt `leaveAsk` |
+| Delete {name}? | ลบ {name} ไหม | SharedGroupCopy.kt `deleteAsk` |
+| Its expenses, payments and repeats go from this phone. Your own transactions stay in History. | ค่าใช้จ่าย การจ่ายเงิน และรายการประจำของกลุ่มจะหายไปจากโทรศัพท์เครื่องนี้ รายการของคุณเองยังอยู่ในประวัติ | SharedGroupCopy.kt `deleteHereBody` |
+| It goes from everyone's phone, with its expenses, payments and repeats, and the invite link stops working. Your own transactions stay in History. | กลุ่มจะหายไปจากโทรศัพท์ของทุกคน พร้อมค่าใช้จ่าย การจ่ายเงิน และรายการประจำ และลิงก์เชิญจะใช้ไม่ได้อีก รายการของคุณเองยังอยู่ในประวัติ | SharedGroupCopy.kt `deleteForEveryoneBody` |
+| It goes from your phone, and your name is free for someone else. The others keep the group and everything in it. Your own transactions stay in History. | กลุ่มจะหายไปจากโทรศัพท์ของคุณ และชื่อของคุณจะว่างให้คนอื่น คนอื่นยังมีกลุ่มและทุกอย่างในกลุ่ม รายการของคุณเองยังอยู่ในประวัติ | SharedGroupCopy.kt `leaveBody` |
+| Some balances are not settled up. | ยังมียอดที่ยังไม่เคลียร์ | SharedGroupCopy.kt `notSettled` |
+| Leaving… | กำลังออก… | SharedGroupCopy.kt `leaving` |
+| Deleting… | กำลังลบ… | SharedGroupCopy.kt `deleting` |
+| Leave | ออก | SharedGroupCopy.kt `leave` |
+| Add an expense | เพิ่มค่าใช้จ่าย | SharedGroupCopy.kt `addAnExpense` |
+| {n} changes were not accepted by the group | กลุ่มไม่ยอมรับการเปลี่ยนแปลง {n} รายการ | SharedGroupCopy.kt `refused` |
+| Up to date | เป็นปัจจุบันแล้ว | SharedGroupCopy.kt `upToDate` |
+| {from} paid {to} | {from} จ่ายให้ {to} | SharedGroupCopy.kt `paid` |
+| {method} · settlement | {method} · เคลียร์ยอด | SharedGroupCopy.kt `settlement` |
+| In this group you are owed | ในกลุ่มนี้ คุณจะได้รับ | SharedGroupCopy.kt `owedHere` |
+| In this group you owe | ในกลุ่มนี้ คุณต้องจ่าย | SharedGroupCopy.kt `oweHere` |
+| In this group you are settled up | ในกลุ่มนี้ คุณเคลียร์แล้ว | SharedGroupCopy.kt `settledHere` |
+| Total trip spend / Total spend {amount} · shown in THB | ค่าใช้จ่ายทั้งทริป / ค่าใช้จ่ายทั้งหมด {amount} · แสดงเป็น THB | SharedGroupCopy.kt `spendLine` |
+| {payer} paid {amount} | {payer} จ่าย {amount} | SharedGroupCopy.kt `payerPaid` |
+| not involved | ไม่เกี่ยวข้อง | SharedGroupCopy.kt `notInvolved` |
+| you lent | คุณออกให้ | SharedGroupCopy.kt `youLent` |
+| your share | ส่วนของคุณ | SharedGroupCopy.kt `yourShare` |
+| {name} hasn't joined yet | {name} ยังไม่ได้เข้าร่วม | SharedGroupCopy.kt `hasNotJoined` |
+| {a} and {b} haven't joined yet | {a} และ {b} ยังไม่ได้เข้าร่วม | SharedGroupCopy.kt `twoHaveNotJoined` |
+| {n} people haven't joined yet | อีก {n} คนยังไม่ได้เข้าร่วม | SharedGroupCopy.kt `manyHaveNotJoined` |
+| Add people | เพิ่มคน | SharedGroupCopy.kt `addPeople` |
+| New names join from the invite link and pick their own name. | ชื่อใหม่เข้าร่วมจากลิงก์เชิญ และเลือกชื่อของตัวเอง | SharedGroupCopy.kt `addPeopleNote` |
+| Remove someone | นำคนออก | SharedGroupCopy.kt `removeSomeone` |
+| Remove {name} from this group? | นำ {name} ออกจากกลุ่มนี้ไหม | SharedGroupCopy.kt `removeAsk` |
+| {name} keeps every past split and balance, but can't be added to new expenses. | {name} ยังมีการหารและยอดคงค้างที่ผ่านมาครบ แต่จะเพิ่มในค่าใช้จ่ายใหม่ไม่ได้ | SharedGroupCopy.kt `removeBody` |
+| {name} still has a balance here. It stays until it is settled. | {name} ยังมียอดคงค้างในกลุ่มนี้ ยอดจะอยู่จนกว่าจะเคลียร์ | SharedGroupCopy.kt `removeUnsettled` |
+| {n} changes have not been sent yet. If you leave now, the others never see them. | การเปลี่ยนแปลง {n} รายการยังไม่ได้ส่ง ถ้าออกตอนนี้ คนอื่นจะไม่เห็นเลย | SharedGroupCopy.kt `notSent` |
+| Leave anyway | ออกเลย | SharedGroupCopy.kt `leaveAnyway` |
+
+## Who pays whom and the Pay me card
+
+| English | Thai | Where |
+|---|---|---|
+| To settle {group} | เพื่อเคลียร์ยอด {group} | SharedGroupCopy.kt `SharedSettleCopy.toSettle` |
+| {n} between everyone | {n} รายการระหว่างทุกคน | SharedGroupCopy.kt `between` |
+| then | แล้ว | SharedGroupCopy.kt `then` |
+| {n} after simplifying | {n} รายการหลังลดขั้นตอน | SharedGroupCopy.kt `afterSimplifying` |
+| Simplify debts | ลดจำนวนการโอน | SharedGroupCopy.kt `simplify` |
+| Settle a payment | บันทึกการเคลียร์ยอด | SharedGroupCopy.kt `settleAPayment` |
+| {from} pays you | {from} จ่ายให้คุณ | SharedGroupCopy.kt `paysYou` |
+| You pay {to} | คุณจ่ายให้ {to} | SharedGroupCopy.kt `youPay` |
+| {from} pays {to} | {from} จ่ายให้ {to} | SharedGroupCopy.kt `pays` |
+| All settled | เคลียร์ครบแล้ว | SharedGroupCopy.kt `allSettled` |
+| {n} payments | โอน {n} ครั้ง | SharedGroupCopy.kt `payments` |
+| Ask {name} to pay | ขอให้ {name} จ่าย | SharedGroupCopy.kt `askToPay` |
+| For {group} | สำหรับ {group} | SharedGroupCopy.kt `payMeFor` |
+| {payer} pays | {payer} จ่าย | SharedGroupCopy.kt `payMeFrom` |
+| Scan with any Thai bank app · PromptPay {id} | สแกนด้วยแอปธนาคารไทยใดก็ได้ · PromptPay {id} | SharedGroupCopy.kt `payMeScan` |
+| {payer}, your part in {group} is {amount}. Scan the QR in the picture with your bank app to pay me. | {payer} ส่วนของคุณใน {group} คือ {amount} สแกน QR ในรูปด้วยแอปธนาคารเพื่อจ่ายให้ฉัน | SharedGroupCopy.kt `payMeText` |
+| Send the card | ส่งการ์ด | SharedGroupCopy.kt `sendCard` |
+| Amounts in {codes} were converted to THB at the rate saved on each expense, so nobody's total moves with the market. | ยอดใน {codes} แปลงเป็น THB ด้วยอัตราที่บันทึกไว้ในแต่ละค่าใช้จ่าย ยอดของทุกคนจึงไม่เปลี่ยนตามตลาด | SharedGroupCopy.kt `converted` |
+
+## A group's activity
+
+| English | Thai | Where |
+|---|---|---|
+| {group} · activity | {group} · กิจกรรม | SharedGroupCopy.kt `SharedLogCopy.groupTitle` |
+| All | ทั้งหมด | SharedGroupCopy.kt `filterAll` |
+| Expenses | ค่าใช้จ่าย | SharedGroupCopy.kt `filterExpenses` |
+| Payments | การจ่ายเงิน | SharedGroupCopy.kt `filterPayments` |
+| Edits | การแก้ไข | SharedGroupCopy.kt `filterEdits` |
+| Nothing here yet. Expenses, payments and edits show up as they happen. | ยังไม่มีอะไร ค่าใช้จ่าย การจ่ายเงิน และการแก้ไขจะแสดงเมื่อเกิดขึ้น | SharedGroupCopy.kt `empty` |
+| changed to | เปลี่ยนเป็น | SharedGroupCopy.kt `changedTo` |
+| {what} added automatically in {group} | เพิ่ม {what} อัตโนมัติใน {group} | SharedGroupCopy.kt `addedAutomatically` |
+| {author} added {what} in {group} | {author} เพิ่ม {what} ใน {group} | SharedGroupCopy.kt `added` |
+| {author} edited {what} | {author} แก้ไข {what} | SharedGroupCopy.kt `edited` |
+| {author} removed {what} | {author} นำ {what} ออก | SharedGroupCopy.kt `removed` |
+| Split changed because the amount changed · {time} | การหารเปลี่ยนเพราะจำนวนเงินเปลี่ยน · {time} | SharedGroupCopy.kt `splitFollowed` |
+| Changed in History · {time} | แก้ไขในประวัติ · {time} | SharedGroupCopy.kt `changedInHistory` |
+| Details changed · {time} | รายละเอียดเปลี่ยน · {time} | SharedGroupCopy.kt `detailsChanged` |
+| It was: {what} | เดิมคือ: {what} | SharedGroupCopy.kt `itWas` |
+| {from} paid {to} {amount} {how} | {from} จ่ายให้ {to} {amount} {how} | SharedGroupCopy.kt `paid` |
+| Recorded by {author} · {time} | บันทึกโดย {author} · {time} | SharedGroupCopy.kt `recordedBy` |
+| {author} removed a payment | {author} นำการจ่ายเงินรายการหนึ่งออก | SharedGroupCopy.kt `paymentRemoved` |
+| {author} put back a payment | {author} นำการจ่ายเงินกลับมา | SharedGroupCopy.kt `paymentPutBack` |
+| {from} paid {to} {amount} · {time} | {from} จ่ายให้ {to} {amount} · {time} | SharedGroupCopy.kt `whichPayment` |
+| You owe {payer} {amount} | คุณต้องจ่าย {payer} {amount} | SharedGroupCopy.kt `youOwePayer` |
+| You lent {amount} | คุณออกให้ {amount} | SharedGroupCopy.kt `youLent` |
+| Not involved | ไม่เกี่ยวข้อง | SharedGroupCopy.kt `SharedLogCopy.notInvolved` |
+| by bank transfer | ผ่านการโอนธนาคาร | SharedGroupCopy.kt `byBankTransfer` |
+| in cash | เป็นเงินสด | SharedGroupCopy.kt `inCash` |
+| by PromptPay | ผ่าน PromptPay | SharedGroupCopy.kt `byPromptPay` |
+| in another app | ผ่านแอปอื่น | SharedGroupCopy.kt `inAnotherApp` |
+
+## Add or edit a shared expense
+
+| English | Thai | Where |
+|---|---|---|
+| Add expense | เพิ่มค่าใช้จ่าย | SharedExpenseCopy.kt `addExpense` |
+| Edit expense | แก้ไขค่าใช้จ่าย | SharedExpenseCopy.kt `editExpense` |
+| There is nothing to add an expense to. | ไม่มีกลุ่มให้เพิ่มค่าใช้จ่าย | SharedExpenseCopy.kt `goneBody` |
+| Nothing here to save | ไม่มีอะไรให้บันทึก | SharedExpenseCopy.kt `goneStatus` |
+| Remove this expense | นำค่าใช้จ่ายนี้ออก | SharedExpenseCopy.kt `removeThis` |
+| What was it for / What was it for? | ค่าอะไร | SharedExpenseCopy.kt `whatFor`, `whatForHint` |
+| Pick a category | เลือกหมวดหมู่ | SharedExpenseCopy.kt `pickCategory` |
+| Add a note | เพิ่มโน้ต | SharedExpenseCopy.kt `addNote` |
+| Save expense | บันทึกค่าใช้จ่าย | SharedExpenseCopy.kt `saveExpense` |
+| Currency | สกุลเงิน | SharedExpenseCopy.kt `currency` |
+| Remove this expense? | นำค่าใช้จ่ายนี้ออกไหม | SharedExpenseCopy.kt `removeAsk` |
+| Balances drop it and Activity keeps a line saying you removed it. Your own transaction stays in History. | ยอดคงค้างจะไม่นับรายการนี้ และกิจกรรมจะมีบรรทัดบอกว่าคุณนำออก รายการของคุณเองยังอยู่ในประวัติ | SharedExpenseCopy.kt `removeBody` |
+| Remove | นำออก | SharedExpenseCopy.kt `remove` |
+| Split | การหาร | SharedExpenseCopy.kt `split` |
+| Percent checks against 100%. Shares need no total: 2 / 1 / 1 / 1 works out the amounts. | เปอร์เซ็นต์ต้องรวมได้ 100% ตามสัดส่วนไม่ต้องมียอดรวม: 2 / 1 / 1 / 1 จะคำนวณจำนวนเงินให้ | SharedExpenseCopy.kt `splitHelp` |
+| {name}'s {mode} | {mode} ของ {name} | SharedExpenseCopy.kt `weightLabel` |
+| Expense updated | อัปเดตค่าใช้จ่ายแล้ว | SharedExpenseCopy.kt `updated` |
+| Added {what} | เพิ่ม {what} แล้ว | SharedExpenseCopy.kt `added` |
+| Removed {what} / Removed the expense | นำ {what} ออกแล้ว / นำ ค่าใช้จ่าย ออกแล้ว | SharedExpenseCopy.kt `removed` |
+| {group} · {n} people | {group} · {n} คน | SharedExpenseCopy.kt `groupLine` |
+| Type the baht you got for {unit} {symbol} | ใส่จำนวนบาทที่ได้สำหรับ {unit} {symbol} | SharedExpenseCopy.kt `typeBaht` |
+| ≈ {baht} at ฿{rate} per {per}, saved with the expense | ≈ {baht} ที่อัตรา ฿{rate} ต่อ {per} บันทึกพร้อมค่าใช้จ่าย | SharedExpenseCopy.kt `bahtAtRate` |
+| ฿ per {unit} {code} | ฿ ต่อ {unit} {code} | SharedExpenseCopy.kt `ratePer` |
+| {mode} · {n} people | {mode} · {n} คน | SharedExpenseCopy.kt `splitLabel` |
+| From your History. Change the amount, date or category there. | มาจากประวัติของคุณ แก้จำนวนเงิน วันที่ หรือหมวดหมู่ได้ที่นั่น | SharedExpenseCopy.kt `locked` |
+| Someone changed this expense on another phone. Save again to keep yours. | มีคนแก้ไขค่าใช้จ่ายนี้ในโทรศัพท์อีกเครื่อง บันทึกอีกครั้งเพื่อใช้ของคุณ | SharedExpenseCopy.kt `changedElsewhere` |
+| Someone removed this expense. Save again to bring it back with your changes. | มีคนนำค่าใช้จ่ายนี้ออก บันทึกอีกครั้งเพื่อนำกลับมาพร้อมการแก้ไขของคุณ | SharedExpenseCopy.kt `removedElsewhere` |
+| This expense was removed. Save to bring it back. | ค่าใช้จ่ายนี้ถูกนำออกแล้ว บันทึกเพื่อนำกลับมา | SharedExpenseCopy.kt `openedRemoved` |
+| {amount} each | คนละ {amount} | SharedExpenseCopy.kt `each` |
+| you are owed {amount} | คุณจะได้รับ {amount} | SharedExpenseCopy.kt `owedAmount` |
+| you owe {name} {amount} | คุณต้องจ่าย {name} {amount} | SharedExpenseCopy.kt `oweTo` |
+| you are not in this one | คุณไม่ได้อยู่ในรายการนี้ | SharedExpenseCopy.kt `notInThis` |
+| How to split {amount} | หาร {amount} อย่างไร | SharedExpenseCopy.kt `splitTitle` |
+| {left} left to assign | เหลือให้แบ่งอีก {left} | SharedExpenseCopy.kt `leftToAssign` |
+| {over} too much | เกิน {over} | SharedExpenseCopy.kt `tooMuch` |
+| {assigned} of {total} is split so far | แบ่งแล้ว {assigned} จาก {total} | SharedExpenseCopy.kt `splitSoFar` |
+| Give to {NAME} | ให้ {name} | SharedExpenseCopy.kt `giveTo` |
+| Type an amount to save | ใส่จำนวนเงินเพื่อบันทึก | SharedExpenseCopy.kt `hintAmount` |
+| Type the baht rate to save | ใส่อัตราเงินบาทเพื่อบันทึก | SharedExpenseCopy.kt `hintRate` |
+| Pick a category to save | เลือกหมวดหมู่เพื่อบันทึก | SharedExpenseCopy.kt `hintCategory` |
+| The split doesn't add up yet. Open Split to fix it. | การหารยังไม่ลงตัว เปิดการหารเพื่อแก้ไข | SharedExpenseCopy.kt `hintSplit` |
+| {typed} counts as {whole} | {typed} นับเป็น {whole} | SharedExpenseCopy.kt `countsAs` |
+| Paid by and split | ใครจ่ายและการหาร | SharedExpenseCopy.kt `paidAndSplit` |
+| You paid, split equally | คุณจ่าย หารเท่ากัน | SharedExpenseCopy.kt `quickYouEqual` |
+| You are owed the full amount | คุณจะได้รับเต็มจำนวน | SharedExpenseCopy.kt `quickYouFull` |
+| {name} paid, split equally | {name} จ่าย หารเท่ากัน | SharedExpenseCopy.kt `quickOtherEqual` |
+| {name} is owed the full amount | {name} จะได้รับเต็มจำนวน | SharedExpenseCopy.kt `quickOtherFull` |
+| Owed the full amount | ได้รับเต็มจำนวน | SharedExpenseCopy.kt `quickFull` |
+| More options | ตัวเลือกเพิ่มเติม | SharedExpenseCopy.kt `moreOptions` |
+
+## Repeat an expense
+
+| English | Thai | Where |
+|---|---|---|
+| Repeat expense | รายการประจำ | SharedExpenseCopy.kt `SharedRepeatCopy.title` |
+| How often | บ่อยแค่ไหน | SharedExpenseCopy.kt `howOften` |
+| On | เริ่มวันที่ | SharedExpenseCopy.kt `on` |
+| Ends | สิ้นสุด | SharedExpenseCopy.kt `ends` |
+| Remind me the day before | เตือนล่วงหน้า 1 วัน | SharedExpenseCopy.kt `remind` |
+| NEXT THREE | 3 ครั้งถัดไป | SharedExpenseCopy.kt `nextThree` |
+| Stop repeating | หยุดรายการประจำ | SharedExpenseCopy.kt `stop` |
+| Never | ไม่มีกำหนด | SharedExpenseCopy.kt `never` |
+| After {n} times | หลังจาก {n} ครั้ง | SharedExpenseCopy.kt `afterTimes` |
+| On a date | ในวันที่กำหนด | SharedExpenseCopy.kt `onADate` |
+| On {date} | ถึง {date} | SharedExpenseCopy.kt `onDate` |
+| Pick a day | เลือกวัน | SharedExpenseCopy.kt `pickADay` |
+| You paid | คุณจ่าย | SharedExpenseCopy.kt `youPaid` |
+| {name} paid | {name} จ่าย | SharedExpenseCopy.kt `paid` |
+| split 50 / 50 with {name} | หาร 50 / 50 กับ {name} | SharedExpenseCopy.kt `splitHalf` |
+| split equally, {n} ways | หารเท่ากัน {n} คน | SharedExpenseCopy.kt `splitEqually` |
+| Save · repeats {often} | บันทึก · {often} | SharedExpenseCopy.kt `save` |
+| weekly | ทุกสัปดาห์ | SharedExpenseCopy.kt `weekly` |
+| every 2 weeks | ทุก 2 สัปดาห์ | SharedExpenseCopy.kt `everyTwoWeeks` |
+| monthly | ทุกเดือน | SharedExpenseCopy.kt `monthly` |
+| yearly | ทุกปี | SharedExpenseCopy.kt `yearly` |
+| Weekly | รายสัปดาห์ | SharedExpenseCopy.kt `freqWeekly` |
+| 2 weeks | 2 สัปดาห์ | SharedExpenseCopy.kt `freqTwoWeeks` |
+| Monthly | รายเดือน | SharedExpenseCopy.kt `freqMonthly` |
+| Yearly | รายปี | SharedExpenseCopy.kt `freqYearly` |
+| Rent | ค่าเช่า | SharedExpenseCopy.kt `kindRent` |
+| Utilities | ค่าน้ำค่าไฟ | SharedExpenseCopy.kt `kindUtilities` |
+| Internet | อินเทอร์เน็ต | SharedExpenseCopy.kt `kindInternet` |
+| Subscription | ค่าสมาชิก | SharedExpenseCopy.kt `kindSubscription` |
+| Repeat saved. No reminder: notifications are off for PaiSen in system settings. | บันทึกรายการประจำแล้ว ไม่มีการเตือน: การแจ้งเตือนของ PaiSeN ปิดอยู่ในการตั้งค่าระบบ | SharedExpenseCopy.kt `noReminder` |
+| {name} owes you {amount} | {name} ต้องจ่ายคุณ {amount} | SharedExpenseCopy.kt `owesYou` |
+| You are owed {amount} | คุณจะได้รับ {amount} | SharedExpenseCopy.kt `SharedRepeatCopy.youAreOwed` |
+| You owe {name} {amount} | คุณต้องจ่าย {name} {amount} | SharedExpenseCopy.kt `SharedRepeatCopy.youOwe` |
+| {what} repeats tomorrow (reminder) | {what} จะถึงกำหนดพรุ่งนี้ | SharedExpenseCopy.kt `reminderTitle` |
+| {amount} goes into {group} tomorrow. | {amount} จะเข้า {group} พรุ่งนี้ | SharedExpenseCopy.kt `reminderBody` |
+| Stop repeating {what}? | หยุดรายการประจำ {what} ไหม | SharedExpenseCopy.kt `stopAsk` |
+| No more dates are added. What was already added stays in the group. | จะไม่เพิ่มวันใหม่อีก รายการที่เพิ่มไปแล้วยังอยู่ในกลุ่ม | SharedExpenseCopy.kt `stopBody` |
+
+## Record a payment
+
+| English | Thai | Where |
+|---|---|---|
+| Record a payment | บันทึกการจ่ายเงิน | SharedPaymentCopy.kt `title` |
+| PAID | จ่ายแล้ว | SharedPaymentCopy.kt `paidCaps` |
+| Amount paid | จำนวนที่จ่าย | SharedPaymentCopy.kt `amountPaid` |
+| How was it paid? | จ่ายด้วยวิธีไหน | SharedPaymentCopy.kt `howPaid` |
+| Date | วันที่ | SharedPaymentCopy.kt `date` |
+| After this | หลังจากนี้ | SharedPaymentCopy.kt `afterThis` |
+| PromptPay QR for this payment | PromptPay QR สำหรับการจ่ายเงินนี้ | SharedPaymentCopy.kt `qrDescription` |
+| Scan it in your bank app and check the name it shows before you pay. Then record it here. | สแกนในแอปธนาคารของคุณ และตรวจชื่อที่แสดงก่อนจ่าย แล้วค่อยบันทึกที่นี่ | SharedPaymentCopy.kt `scanHint` |
+| This only records the payment. No money moves through PaiSen. | ที่นี่แค่บันทึกการจ่ายเงิน ไม่มีเงินผ่าน PaiSeN | SharedPaymentCopy.kt `onlyRecords` |
+| Open my bank app | เปิดแอปธนาคารของฉัน | SharedPaymentCopy.kt `openMyBank` |
+| QR saved to Photos. In your bank app, tap Scan, then choose it from your photos. | บันทึก QR ลงในรูปภาพแล้ว ในแอปธนาคาร แตะสแกน แล้วเลือกจากรูปภาพ | SharedPaymentCopy.kt `qrSaved` |
+| Take a screenshot of this QR, then choose it from your photos in your bank app. | แคปหน้าจอ QR นี้ แล้วเลือกจากรูปภาพในแอปธนาคารของคุณ | SharedPaymentCopy.kt `takeScreenshot` |
+| Open your bank app | เปิดแอปธนาคารของคุณ | SharedPaymentCopy.kt `openYourBank` |
+| No Thai bank app found on this phone. Open yours and choose the QR from your photos. | ไม่พบแอปธนาคารไทยในโทรศัพท์เครื่องนี้ เปิดแอปของคุณแล้วเลือก QR จากรูปภาพ | SharedPaymentCopy.kt `noBankApp` |
+| Full balance · tap to pay part of it | ยอดเต็ม · แตะเพื่อจ่ายบางส่วน | SharedPaymentCopy.kt `fullBalance` |
+| Nothing owed between you two right now | ตอนนี้ไม่มียอดค้างระหว่างคุณสองคน | SharedPaymentCopy.kt `nothingOwed` |
+| You are settled up | คุณเคลียร์แล้ว | SharedPaymentCopy.kt `youAreSettled` |
+| {name} is settled up | {name} เคลียร์แล้ว | SharedPaymentCopy.kt `isSettled` |
+| {debtor} still owes {creditor} {amount} | {debtor} ยังต้องจ่าย {creditor} {amount} | SharedPaymentCopy.kt `stillOwes` |
+| {debtor} owes {creditor} {amount} | {debtor} ต้องจ่าย {creditor} {amount} | SharedPaymentCopy.kt `owes` |
+| Record {amount} | บันทึก {amount} | SharedPaymentCopy.kt `record` |
+| Payment recorded | บันทึกการจ่ายเงินแล้ว | SharedPaymentCopy.kt `recorded` |
+| Pay {to} by PromptPay {id} | จ่ายให้ {to} ผ่าน PromptPay {id} | SharedPaymentCopy.kt `payBy` |
+| Ask {name} to pay | ขอให้ {name} จ่าย | SharedPaymentCopy.kt `askToPay` |
+| {group}: {name}, you owe me {amount}. (sent to the other person) | {group}: {name} คุณต้องจ่ายฉัน {amount} | SharedPaymentCopy.kt `askMessage` |
+| My PromptPay: {id} | PromptPay ของฉัน: {id} | SharedPaymentCopy.kt `askPromptPay` |
+| Payment | การจ่ายเงิน | SharedPaymentCopy.kt `detailTitle` |
+| Remove payment | นำการจ่ายเงินออก | SharedPaymentCopy.kt `remove` |
+| Remove this payment? | นำการจ่ายเงินนี้ออกไหม | SharedPaymentCopy.kt `removeAsk` |
+| Balances drop it and Activity keeps a line saying you removed it. | ยอดคงค้างจะไม่นับรายการนี้ และกิจกรรมจะมีบรรทัดบอกว่าคุณนำออก | SharedPaymentCopy.kt `removeBodyShared` |
+| Balances drop it. | ยอดคงค้างจะไม่นับรายการนี้ | SharedPaymentCopy.kt `removeBodyLocal` |
+| Payment removed | นำการจ่ายเงินออกแล้ว | SharedPaymentCopy.kt `removed` |
