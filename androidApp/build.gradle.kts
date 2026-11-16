@@ -84,6 +84,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    // CI fails on a new lint error. The six findings of 16 Nov 2026 are in the baseline, among them
+    // two false positives: MissingClass on the telemetry block, and DataExtractionRules with allowBackup off.
+    lint {
+        baseline = file("lint-baseline.xml")
+    }
 }
 
 dependencies {

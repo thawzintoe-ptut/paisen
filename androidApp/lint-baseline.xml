@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 9.2.1" type="baseline" client="gradle" dependencies="false" name="AGP (9.2.1)" variant="all" version="9.2.1">
+
+    <issue
+        id="MissingClass"
+        message="Class referenced in the manifest, `com.google.android.datatransport.runtime.backends.TransportBackendDiscovery`, was not found in the project or the libraries"
+        errorLine1="            android:name=&quot;com.google.android.datatransport.runtime.backends.TransportBackendDiscovery&quot;"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="129"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="InconsistentArrays"
+        message="Array `add_expense_synonyms` has an inconsistent number of items (3 in `values/strings.xml`, 2 in `values-th/strings.xml`)"
+        errorLine1="    &lt;string-array name=&quot;add_expense_synonyms&quot;>"
+        errorLine2="    ^">
+        <location
+            file="src/main/res/values/strings.xml"
+            line="11"
+            column="5"
+            message="Declaration with array size (3)"/>
+        <location
+            file="src/main/res/values-th/strings.xml"
+            line="9"
+            column="5"
+            message="Declaration with array size (2)"/>
+    </issue>
+
+    <issue
+        id="UnusedAttribute"
+        message="Attribute `enableOnBackInvokedCallback` is only used in API level 33 and higher (current min is 26)"
+        errorLine1="        android:enableOnBackInvokedCallback=&quot;true&quot;"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="62"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="SelectedPhotoAccess"
+        message="Your app is currently not handling Selected Photos Access introduced in Android 14+"
+        errorLine1="    &lt;uses-permission android:name=&quot;android.permission.READ_MEDIA_IMAGES&quot; />"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="22"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="DataExtractionRules"
+        message="The attribute `android:dataExtractionRules` only applies for Android 12 and higher; since `minSdkVersion` is API 26 you should also set `android:fullBackupContent`"
+        errorLine1="    &lt;application"
+        errorLine2="    ^">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="55"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="This folder configuration (`v26`) is unnecessary; `minSdkVersion` is 26. Merge all the resources in this folder into `mipmap-anydpi`.">
+        <location
+            file="src/main/res/mipmap-anydpi-v26"/>
+    </issue>
+
+</issues>

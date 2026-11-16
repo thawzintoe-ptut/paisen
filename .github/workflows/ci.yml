@@ -61,12 +61,17 @@ jobs:
       # R8 runs only in a release build. Without the upload key the APK stays unsigned, so a
       # missing keep rule fails on the commit that breaks it, not on tag day.
       - run: ./gradlew :androidApp:assembleRelease
-      - name: Keep the test reports
+      # Fails on a new lint error; androidApp/lint-baseline.xml holds the old findings. The KMP
+      # library modules have no working lint task on AGP 9 yet (KMT-1196), so this is the app only.
+      - run: ./gradlew :androidApp:lintDebug
+      - name: Keep the test and lint reports
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-reports-${{ github.job }}-${{ github.run_attempt }}
-          path: '**/build/reports/tests/'
+          path: |
+            **/build/reports/tests/
+            androidApp/build/reports/lint-results-debug.html
           retention-days: 7
           if-no-files-found: ignore
 
