@@ -46,3 +46,9 @@ val BurmeseCopy = Copy(
     settings = BurmeseSettings,
     shared = BurmeseShared,
 )
+
+/** An area not listed here shows English until its Thai is written. */
+val ThaiCopy = Copy(
+    calendar = ThaiCalendar,
+    language = ThaiLanguage,
+)

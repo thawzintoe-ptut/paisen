@@ -48,44 +48,47 @@ internal fun style(
 @Composable
 fun ptutTypography(): Typography {
     val sky = skyTypography(geistFamily())
-    return if (writtenInBurmese()) sky.inBurmese() else sky
+    return if (drawnInPhoneFont()) sky.inPhoneFont() else sky
 }
 
 /** Read once per composition: `App` rebuilds everything below it when the language changes. */
-private fun writtenInBurmese() = AppText.language.value == Language.Burmese
+private fun drawnInPhoneFont() = when (AppText.language.value) {
+    Language.English -> false
+    Language.Burmese, Language.Thai -> true
+}
 
 /**
- * Geist has no Myanmar letters, so the phone draws them in its own Myanmar font. Burmese stacks
- * marks above and below the line, so its text takes that font's line height; Geist's fixed ones
- * would let two lines touch. Its tracking is left at zero for the same reason.
+ * Geist has no Myanmar or Thai letters, so the phone draws them in its own font. Both scripts stack
+ * marks above and below the line, so their text takes that font's line height; Geist's fixed ones
+ * would let two lines touch. Tracking is left at zero for the same reason.
  */
-private fun TextStyle.inBurmese() = copy(lineHeight = TextUnit.Unspecified, letterSpacing = 0.em)
+private fun TextStyle.inPhoneFont() = copy(lineHeight = TextUnit.Unspecified, letterSpacing = 0.em)
 
-private fun Typography.inBurmese() = copy(
-    displayLarge = displayLarge.inBurmese(),
-    displayMedium = displayMedium.inBurmese(),
-    displaySmall = displaySmall.inBurmese(),
-    headlineLarge = headlineLarge.inBurmese(),
-    headlineMedium = headlineMedium.inBurmese(),
-    headlineSmall = headlineSmall.inBurmese(),
-    titleLarge = titleLarge.inBurmese(),
-    titleMedium = titleMedium.inBurmese(),
-    titleSmall = titleSmall.inBurmese(),
-    bodyLarge = bodyLarge.inBurmese(),
-    bodyMedium = bodyMedium.inBurmese(),
-    bodySmall = bodySmall.inBurmese(),
-    labelLarge = labelLarge.inBurmese(),
-    labelMedium = labelMedium.inBurmese(),
-    labelSmall = labelSmall.inBurmese(),
+private fun Typography.inPhoneFont() = copy(
+    displayLarge = displayLarge.inPhoneFont(),
+    displayMedium = displayMedium.inPhoneFont(),
+    displaySmall = displaySmall.inPhoneFont(),
+    headlineLarge = headlineLarge.inPhoneFont(),
+    headlineMedium = headlineMedium.inPhoneFont(),
+    headlineSmall = headlineSmall.inPhoneFont(),
+    titleLarge = titleLarge.inPhoneFont(),
+    titleMedium = titleMedium.inPhoneFont(),
+    titleSmall = titleSmall.inPhoneFont(),
+    bodyLarge = bodyLarge.inPhoneFont(),
+    bodyMedium = bodyMedium.inPhoneFont(),
+    bodySmall = bodySmall.inPhoneFont(),
+    labelLarge = labelLarge.inPhoneFont(),
+    labelMedium = labelMedium.inPhoneFont(),
+    labelSmall = labelSmall.inPhoneFont(),
 )
 
 /** The word roles only; the amounts and the receipt keep their fixed line heights. */
-private fun PtutType.inBurmese() = copy(
-    screenTitle = screenTitle.inBurmese(),
-    sectionTitle = sectionTitle.inBurmese(),
-    listHeadline = listHeadline.inBurmese(),
-    meta = meta.inBurmese(),
-    eyebrow = eyebrow.inBurmese(),
+private fun PtutType.inPhoneFont() = copy(
+    screenTitle = screenTitle.inPhoneFont(),
+    sectionTitle = sectionTitle.inPhoneFont(),
+    listHeadline = listHeadline.inPhoneFont(),
+    meta = meta.inPhoneFont(),
+    eyebrow = eyebrow.inPhoneFont(),
 )
 
 /**
@@ -153,7 +156,7 @@ data class PtutType(
 @Composable
 internal fun rememberPtutType(): PtutType {
     val sky = skyTypeOf(geistFamily(), geistMonoFamily())
-    val written = if (writtenInBurmese()) sky.inBurmese() else sky
+    val written = if (drawnInPhoneFont()) sky.inPhoneFont() else sky
     return written.cappedFor(LocalDensity.current)
 }
 

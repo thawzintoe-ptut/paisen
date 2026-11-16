@@ -49,6 +49,7 @@ class PushSender internal constructor(
                     buildJsonObject {
                         put("en", notice.en)
                         put("my", notice.my)
+                        put("th", notice.th)
                     },
                 )
             }

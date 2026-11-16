@@ -20,7 +20,7 @@ fun initKoin(databaseContext: PtutDatabaseContext, build: AppBuild) {
         modules(appModules(databaseContext, build))
     }.koin
     // Before the first frame, so nothing is drawn in a language about to change.
-    AppText.use(koin.get<LanguageStore>().read() ?: Language.of(phoneLanguageTag()) ?: Language.English)
+    AppText.use(Language.atLaunch(saved = koin.get<LanguageStore>().read(), phoneTag = phoneLanguageTag(), debug = build.debug))
     // Made now rather than when a rules screen first asks: it fills ShopNames, which every row title reads.
     koin.getOrNull<RuleRepository>()
     // #25: made before the first Activity starts, or Android's prompt has no Activity to draw over.

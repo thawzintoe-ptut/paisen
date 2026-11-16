@@ -51,6 +51,7 @@ import com.ptut.expense.importer.SlipDiscards
 import com.ptut.expense.importer.SlipImporter
 import com.ptut.expense.ledger.LedgerScope
 import com.ptut.expense.ledger.LedgerViewModel
+import com.ptut.expense.locale.Language
 import com.ptut.expense.locale.LanguageStore
 import com.ptut.expense.onboarding.Onboarding
 import com.ptut.expense.onboarding.OnboardingFlag
@@ -258,7 +259,7 @@ val viewModelModule: Module = module {
     viewModel { LedgerBackupViewModel(ledger = get(), archive = get(), files = get(), toasts = get()) }
     viewModel { TimezoneViewModel() }
     // getOrNull: a screen test's graph binds no store; the choice then lasts until the process ends.
-    viewModel { LanguageViewModel(store = getOrNull()) }
+    viewModel { LanguageViewModel(store = getOrNull(), offered = Language.offered(debug = getOrNull<AppBuild>()?.debug == true)) }
     viewModel { AssistantModelViewModel(model = get()) }
     viewModel {
         val model = getOrNull<LanguageModelPort>()?.state?.value

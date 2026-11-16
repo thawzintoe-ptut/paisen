@@ -13,12 +13,12 @@ import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.domain.differencePhrase
 import com.ptut.expense.domain.displayName
 import com.ptut.expense.domain.format
-import com.ptut.expense.domain.inCalendarDigits
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.spoken
 import com.ptut.expense.domain.timeOfDayIn
 import com.ptut.expense.domain.usualDay
+import com.ptut.expense.domain.yearLabel
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -85,7 +85,7 @@ class DayReceiptViewModel(
         val total = spending.fold(Satang.Zero) { sum, row -> sum + row.amount }
         return DayReceiptUiState.Loaded(
             title = title(),
-            heading = "${day.dayLabel()} ${day.year.inCalendarDigits()}".uppercase() + " · ${text.city}",
+            heading = "${day.dayLabel()} ${day.yearLabel()}".uppercase() + " · ${text.city}",
             lines = spending.map { row ->
                 val time = row.occurredAtEpochMillis.timeOfDayIn(BangkokTime)
                 val name = row.displayName(categories, subCategories)

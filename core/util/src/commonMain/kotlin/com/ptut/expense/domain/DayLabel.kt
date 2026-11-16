@@ -25,8 +25,14 @@ fun LocalDate.dayAndMonth(): String = "${day.inCalendarDigits()} ${month.short()
 /** Without the month, for both ends of a range that stays inside one. */
 fun LocalDate.weekdayAndDay(): String = "${dayOfWeek.short()} ${day.inCalendarDigits()}"
 
-/** A day or a year in the app's language: ၁၆ in Burmese, the way its counts are written. */
+/** A day in the app's language: ၁၆ in Burmese, the way its counts are written. */
 fun Int.inCalendarDigits(): String = if (AppText.language.value == Language.Burmese) inMyanmarDigits() else toString()
+
+/** The year as the reader counts it: Buddhist Era in Thai (2569 for 2026), as Thai banks print it. */
+fun LocalDate.yearLabel(): String =
+    if (AppText.language.value == Language.Thai) (year + BUDDHIST_ERA_OFFSET).toString() else year.inCalendarDigits()
+
+private const val BUDDHIST_ERA_OFFSET = 543
 
 /** "Oct": the month alone, for a year's bars. */
 fun LocalDate.monthShort(): String = month.short()

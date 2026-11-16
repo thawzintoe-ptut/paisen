@@ -12,3 +12,9 @@ val BurmeseLanguage = LanguageCopy(
     intro = "PaiSeN ကို ပြမယ့် ဘာသာစကား။ ကိုယ်တိုင်ပေးထားတဲ့ အမျိုးအစားနာမည်နဲ့ မှတ်ချက်တွေက ရေးထားတဲ့အတိုင်း ကျန်မယ်။",
     groupTitle = "PaiSeN ကို ဒီဘာသာနဲ့ ပြမယ်",
 )
+
+val ThaiLanguage = LanguageCopy(
+    title = "ภาษา",
+    intro = "ภาษาที่ใช้แสดงผลใน PaiSeN ชื่อหมวดหมู่และโน้ตที่คุณตั้งเองจะยังคงเป็นแบบที่คุณพิมพ์ไว้",
+    groupTitle = "แสดง PaiSeN เป็นภาษา",
+)

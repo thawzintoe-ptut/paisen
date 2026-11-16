@@ -15,7 +15,10 @@ data class LanguageOptionUiModel(val language: Language, val label: String, val 
 data class LanguageUiState(val options: List<LanguageOptionUiModel>)
 
 /** The app's language. A choice is saved, then the shell is rebuilt in it and opens on Settings again. */
-class LanguageViewModel(private val store: LanguageStore? = null) : ViewModel() {
+class LanguageViewModel(
+    private val store: LanguageStore? = null,
+    private val offered: List<Language> = Language.offered(debug = false),
+) : ViewModel() {
 
     val uiState: StateFlow<LanguageUiState> = AppText.language
         .map(::state)
@@ -27,6 +30,6 @@ class LanguageViewModel(private val store: LanguageStore? = null) : ViewModel() 
     }
 
     private fun state(current: Language) = LanguageUiState(
-        options = Language.entries.map { LanguageOptionUiModel(language = it, label = it.label, chosen = it == current) },
+        options = offered.map { LanguageOptionUiModel(language = it, label = it.label, chosen = it == current) },
     )
 }

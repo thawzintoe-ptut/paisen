@@ -12,7 +12,7 @@ import com.ptut.expense.locale.Language
 import com.ptut.expense.locale.SharedCopy
 
 /**
- * The words for each change a member makes, in both languages at once. [actor] is the name this
+ * The words for each change a member makes, in every language at once. [actor] is the name this
  * phone's member carries in the group, which is the name the other phones show for it.
  */
 class PushNotices(
@@ -71,5 +71,6 @@ class PushNotices(
         title = groupName,
         en = sentence(Language.English.copy.shared),
         my = sentence(Language.Burmese.copy.shared),
+        th = sentence(Language.Thai.copy.shared),
     )
 }
