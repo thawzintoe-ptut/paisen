@@ -65,4 +65,5 @@ val ThaiCopy = Copy(
     phrases = ThaiPhrases,
     categories = ThaiCategories,
     settings = ThaiSettings,
+    shared = ThaiShared,
 )

@@ -47,3 +47,25 @@ val BurmeseSharedPush = SharedPushCopy(
     repeatChanged = { actor, what -> "$actor က ထပ်ခါထပ်ခါ စရိတ် “$what” ကို ပြင်ခဲ့တယ်" },
     repeatStopped = { actor, what -> "$actor က ထပ်ခါထပ်ခါ စရိတ် “$what” ကို ရပ်ခဲ့တယ်" },
 )
+
+val ThaiSharedPush = SharedPushCopy(
+    anExpense = "ค่าใช้จ่ายรายการหนึ่ง",
+    added = { actor, what, amount -> "$actor เพิ่ม $what · $amount" },
+    edited = { actor, what -> "$actor แก้ไข $what" },
+    removed = { actor, what -> "$actor นำ $what ออก" },
+    putBack = { actor, what -> "$actor นำ $what กลับมา" },
+    repeatAdded = { what, amount -> "เพิ่ม $what อัตโนมัติแล้ว · $amount" },
+    paid = { from, to, amount -> "$from จ่ายให้ $to $amount" },
+    paymentRemoved = { actor -> "$actor นำการจ่ายเงินรายการหนึ่งออก" },
+    paymentPutBack = { actor -> "$actor นำการจ่ายเงินกลับมา" },
+    joined = { name -> "$name เข้าร่วมกลุ่มแล้ว" },
+    left = { name -> "$name ออกจากกลุ่มแล้ว" },
+    addedPerson = { actor, name -> "$actor เพิ่ม $name" },
+    removedPerson = { actor, name -> "$actor ลบ $name ออก" },
+    changedName = { actor -> "$actor เปลี่ยนชื่อหนึ่งชื่อ" },
+    renamed = { actor, name -> "$actor เปลี่ยนชื่อกลุ่มเป็น $name" },
+    deleted = { actor -> "$actor ลบกลุ่มนี้" },
+    repeatSetUp = { actor, what -> "$actor ตั้งรายการประจำ: $what" },
+    repeatChanged = { actor, what -> "$actor แก้ไขรายการประจำ $what" },
+    repeatStopped = { actor, what -> "$actor หยุดรายการประจำ $what" },
+)

@@ -97,6 +97,48 @@ val BurmeseShared = SharedCopy(
     sync = BurmeseSharedSync,
 )
 
+val ThaiShared = SharedCopy(
+    title = "กลุ่ม",
+    someone = "ใครบางคน",
+    group = "กลุ่ม",
+    people = "คน",
+    activity = "กิจกรรม",
+    addPerson = "เพิ่มคน",
+    newGroup = "กลุ่มใหม่",
+    groupName = "ชื่อกลุ่ม",
+    paidBy = "จ่ายโดย",
+    chosen = "เลือกแล้ว",
+    signIn = "ลงชื่อเข้าใช้",
+    whoPaysWhom = "ใครจ่ายให้ใคร",
+    invitePeople = "ชวนคน",
+    thisGroupIsGone = "กลุ่มนี้ไม่อยู่แล้ว",
+    allYours = "ของคุณทั้งหมด",
+    youAreOwed = "คุณจะได้รับ",
+    youOwe = "คุณต้องจ่าย",
+    owesYou = "ต้องจ่ายคุณ",
+    settledUp = "เคลียร์แล้ว",
+    typeTrip = "ทริป",
+    typeFlat = "ห้องเช่า",
+    typeCouple = "คู่รัก",
+    methodBankTransfer = "โอนผ่านธนาคาร",
+    methodCash = "เงินสด",
+    methodOtherApp = "แอปอื่น",
+    modeEqually = "หารเท่ากัน",
+    modeExact = "ระบุจำนวน",
+    modePercent = "เปอร์เซ็นต์",
+    modeShares = "ตามสัดส่วน",
+    changesWaiting = { n -> "มีการเปลี่ยนแปลง $n รายการรอซิงก์" },
+    offlineWaiting = { n -> "ออฟไลน์ · รอส่ง $n รายการ" },
+    home = ThaiSharedHome,
+    person = ThaiSharedPerson,
+    join = ThaiSharedJoin,
+    signInSheet = ThaiSharedSignIn,
+    invite = ThaiSharedInvite,
+    account = ThaiSharedAccount,
+    push = ThaiSharedPush,
+    sync = ThaiSharedSync,
+)
+
 internal const val SHARED_MY_YOU = "သင်"
 
 internal fun sharedEnYou(name: String): String = if (name == "You") "you" else name
