@@ -82,6 +82,8 @@ import com.ptut.expense.nav.switchTab
 import com.ptut.expense.onboarding.Onboarding
 import com.ptut.expense.onboarding.OnboardingView
 import com.ptut.expense.onboarding.OnboardingViewModel
+import com.ptut.expense.platform.lock.AppLock
+import com.ptut.expense.platform.lock.DeviceAuth
 import com.ptut.expense.platform.photos.PhotoSettings
 import com.ptut.expense.receipt.DayReceiptView
 import com.ptut.expense.receipt.DayReceiptViewModel
@@ -176,7 +178,7 @@ fun PtutApp() {
         val firstRunAnswered by onboarding.isFinished.collectAsStateWithLifecycle()
 
         CompositionLocalProvider(LocalSlipPictures provides koinInject<SlipPictures>()) {
-            if (firstRunAnswered) LedgerShell() else FirstRun()
+            if (firstRunAnswered) AppLockGate { LedgerShell() } else FirstRun()
         }
     }
 }
@@ -647,6 +649,9 @@ private fun LedgerShell() {
                 val toasts = koinInject<ToastMessages>()
                 val scope = rememberCoroutineScope()
                 val noEmailApp = LocalCopy.current.settings.noEmailApp(FEEDBACK_ADDRESS)
+                val deviceAuth = koinInject<DeviceAuth>()
+                val appLock = koinInject<AppLock>()
+                val unlockReason = LocalCopy.current.settings.unlockReason
                 SettingsView(
                     uiState = state,
                     // Every row but one is a destination, so the screen navigates and the state
@@ -665,7 +670,19 @@ private fun LedgerShell() {
                     onSwitch = { action, on ->
                         when (action) {
                             SettingsAction.MoodByTimeOfDay -> settings.setMoodByTimeOfDay(on)
+
                             SettingsAction.Transparency -> settings.setTransparency(on)
+
+                            // #25: on only after the phone's own check passes, so a failed check cannot lock anyone out.
+                            SettingsAction.AppLock -> scope.launch {
+                                if (!on) {
+                                    settings.setAppLock(false)
+                                } else if (deviceAuth.authenticate(unlockReason)) {
+                                    settings.setAppLock(true)
+                                    appLock.unlock()
+                                }
+                            }
+
                             else -> background.setRunning(on)
                         }
                     },

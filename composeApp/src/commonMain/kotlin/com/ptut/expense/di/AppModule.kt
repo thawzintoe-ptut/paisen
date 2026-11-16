@@ -58,6 +58,8 @@ import com.ptut.expense.onboarding.OnboardingViewModel
 import com.ptut.expense.platform.UnavailableSlipSource
 import com.ptut.expense.platform.UnavailableSlipTextReader
 import com.ptut.expense.platform.files.LedgerFileStore
+import com.ptut.expense.platform.lock.AppLock
+import com.ptut.expense.platform.lock.DeviceAuth
 import com.ptut.expense.platform.notify.repeatReminders
 import com.ptut.expense.platform.ocr.RoutingSlipTextReader
 import com.ptut.expense.platform.ocr.SlipTextReader
@@ -111,6 +113,7 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.core.scope.Scope
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -233,6 +236,7 @@ val viewModelModule: Module = module {
             } ?: flowOf(0 to 0),
             assistant = getOrNull<LanguageModelPort>()?.state ?: flowOf(ModelState.NotOffered),
             showAssistant = getOrNull<AppBuild>()?.debug == true,
+            canLock = getOrNull<DeviceAuth>()?.isAvailable() == true,
         )
     }
 
@@ -559,6 +563,10 @@ fun dataModule(databaseContext: PtutDatabaseContext): Module = module {
 
     single<OnboardingFlag> { onboardingFlag(databaseContext) }
     single<PhotoAccessRequest> { photoAccessRequest(databaseContext) }
+
+    /** #25: the lock reads the switch each time, so turning it off in Settings takes effect at once. */
+    single<DeviceAuth> { deviceAuth(databaseContext) }
+    single { AppLock(enabled = { get<ImportSettings>().choices.value.appLock }, nowMillis = { Clock.System.now().toEpochMilliseconds() }) }
 
     /** FR-5: what the platform can offer, and what the reader chose out of it. */
     single<FolderCatalog> { folderCatalog(databaseContext) }

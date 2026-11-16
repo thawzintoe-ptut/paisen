@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 
 /** Which row. It is the row's identity as well as the destination it opens. */
-enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, Activity, Categories, MoodByTimeOfDay, Transparency, Language, ExportLedger, ImportLedger, Timezone, Assistant, Feedback, Licences }
+enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, Activity, Categories, MoodByTimeOfDay, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, Assistant, Feedback, Licences }
 
 /** Where Send feedback writes to. The same address PRIVACY.md and SECURITY.md give. */
 const val FEEDBACK_ADDRESS = "developer.ptut@gmail.com"
@@ -76,11 +76,15 @@ class SettingsViewModel(
     assistant: Flow<ModelState> = flowOf(ModelState.NotOffered),
     /** A debug build shows the assistant row before any build can offer the model. */
     private val showAssistant: Boolean = false,
+    /** #25: the phone can ask for a fingerprint, face or PIN. Android 8 cannot, so it draws no row. */
+    private val canLock: Boolean = false,
 ) : ViewModel() {
 
     fun setMoodByTimeOfDay(on: Boolean) = settings.setMoodByTimeOfDay(on)
 
     fun setTransparency(on: Boolean) = settings.setTransparency(on)
+
+    fun setAppLock(on: Boolean) = settings.setAppLock(on)
 
     val uiState: StateFlow<SettingsUiState> = combine(
         ledger.sinceLastImportMillis,
@@ -160,6 +164,15 @@ class SettingsViewModel(
             group = 1,
             switchedOn = choices.transparency,
         ),
+        // #25: turning it on asks for the fingerprint, face or PIN first, so a failed check cannot lock anyone out.
+        SettingsRowUiModel(
+            id = SettingsAction.AppLock,
+            name = text.appLock,
+            value = text.appLockValue,
+            icon = "lock",
+            group = 1,
+            switchedOn = choices.appLock,
+        ).takeIf { canLock },
         SettingsRowUiModel(
             id = SettingsAction.Language,
             name = AppText.copy.language.title,

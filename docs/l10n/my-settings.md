@@ -126,3 +126,14 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | English | Burmese | Where |
 | --- | --- | --- |
 | The scan could not run. Check that PaiSeN can see your photos, then try again. | စစ်လို့ မရဘူး။ PaiSeN က ဓာတ်ပုံတွေကို ကြည့်ခွင့်ရှိလား စစ်ပြီး ထပ်ကြိုးစားပါ။ | `SettingsCopy.kt:168` |
+
+## App lock (#25, new, 16 Nov)
+
+| English | Burmese | Where |
+| --- | --- | --- |
+| App lock | အက်ပ် သော့ခတ်မယ် | locale/SettingsCopy.kt `appLock` |
+| Fingerprint, face or phone PIN | လက်ဗွေ၊ မျက်နှာ ဒါမှမဟုတ် ဖုန်း PIN | locale/SettingsCopy.kt `appLockValue` |
+| PaiSeN is locked | PaiSeN ကို သော့ခတ်ထားတယ် | locale/SettingsCopy.kt `lockedTitle` |
+| Unlock to see your spending. | သင့်အသုံးစရိတ်ကို ကြည့်ဖို့ သော့ဖွင့်ပါ။ | locale/SettingsCopy.kt `lockedText` |
+| Unlock | သော့ဖွင့်မယ် | locale/SettingsCopy.kt `unlock` |
+| Unlock PaiSeN | PaiSeN ကို သော့ဖွင့်မယ် | locale/SettingsCopy.kt `unlockReason` |

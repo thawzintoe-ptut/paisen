@@ -29,6 +29,8 @@
 	  #212: Quick add's mic. Speech is recognised on this iPhone only, so both sentences can
 	  promise that the words and the audio stay here.
 	-->
+	<key>NSFaceIDUsageDescription</key>
+	<string>With App lock on, PaiSeN asks for Face ID before it shows your spending. Your face data stays with iOS; PaiSeN never sees it.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>PaiSeN listens when you tap the mic in Quick add, so you can say an expense instead of typing it. Nothing is recorded or uploaded.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

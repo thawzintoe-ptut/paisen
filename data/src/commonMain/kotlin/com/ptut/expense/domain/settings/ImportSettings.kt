@@ -21,6 +21,8 @@ data class ImportChoices(
     val moodByTimeOfDay: Boolean = true,
     /** The nav pill frosted over the list (#123). On, as p21 ships it; off draws it solid. */
     val transparency: Boolean = true,
+    /** Fingerprint, face or phone PIN before the ledger shows (#25). Off until switched on. */
+    val appLock: Boolean = false,
 )
 
 /**
@@ -66,6 +68,8 @@ class ImportSettings(private val store: ImportSettingsStore) {
     fun setMoodByTimeOfDay(on: Boolean) = update { it.copy(moodByTimeOfDay = on) }
 
     fun setTransparency(on: Boolean) = update { it.copy(transparency = on) }
+
+    fun setAppLock(on: Boolean) = update { it.copy(appLock = on) }
 
     /**
      * Written before it is announced, like the first-run flag. If the process dies between the two

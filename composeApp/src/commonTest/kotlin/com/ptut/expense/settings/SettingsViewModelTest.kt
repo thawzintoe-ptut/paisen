@@ -52,7 +52,7 @@ class SettingsViewModelTest : ViewModelTest() {
      * without a destination, because the enum has to name one.
      */
     @Test
-    fun `every row names a destination except the two switches and feedback`() {
+    fun `every row names a destination except the three switches and feedback`() {
         assertEquals(
             listOf(
                 PtutRoute.PhotoFolders,
@@ -60,7 +60,8 @@ class SettingsViewModelTest : ViewModelTest() {
                 PtutRoute.KeepFailedSlips,
                 PtutRoute.Activity,
                 PtutRoute.Categories,
-                // #121 and #123: switches with no screen behind them; the row's tap flips it.
+                // #121, #123 and #25: switches with no screen behind them; the row's tap flips it.
+                null,
                 null,
                 null,
                 PtutRoute.Language,
@@ -160,6 +161,21 @@ class SettingsViewModelTest : ViewModelTest() {
         assertTrue(cadence.slipSource.startsWith("No "), cadence.slipSource)
         assertTrue(cadence.importRhythm.isNotBlank(), "the import row would render a blank line")
         assertTrue(cadence.importExplanation.isNotBlank(), "the screen would open on nothing")
+    }
+
+    @Test
+    fun `a phone that can ask for a fingerprint or PIN shows the app lock switch as stored`() = runTest {
+        val settings = importSettings(ImportChoices(appLock = true))
+        val uiState = SettingsViewModel(FakeLedger(sinceLastImport = null), settings, scheduled(), canLock = true).uiState
+        backgroundScope.launch { uiState.collect { } }
+        runCurrent()
+
+        assertEquals(true, uiState.value.rows.first { it.id == SettingsAction.AppLock }.switchedOn)
+    }
+
+    @Test
+    fun `a phone that cannot ask draws no app lock row`() = runTest {
+        assertTrue(rowsFor().none { it.id == SettingsAction.AppLock })
     }
 
     private fun TestScope.marked(sinceLastImport: Long?): List<String> =

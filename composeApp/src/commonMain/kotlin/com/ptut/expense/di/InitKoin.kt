@@ -5,6 +5,7 @@ import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.Language
 import com.ptut.expense.locale.LanguageStore
+import com.ptut.expense.platform.lock.DeviceAuth
 import org.koin.core.context.startKoin
 
 /**
@@ -22,4 +23,6 @@ fun initKoin(databaseContext: PtutDatabaseContext, build: AppBuild) {
     AppText.use(koin.get<LanguageStore>().read() ?: Language.of(phoneLanguageTag()) ?: Language.English)
     // Made now rather than when a rules screen first asks: it fills ShopNames, which every row title reads.
     koin.getOrNull<RuleRepository>()
+    // #25: made before the first Activity starts, or Android's prompt has no Activity to draw over.
+    koin.getOrNull<DeviceAuth>()
 }

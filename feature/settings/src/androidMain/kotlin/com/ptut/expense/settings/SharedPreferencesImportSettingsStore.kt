@@ -10,6 +10,7 @@ private const val BACKGROUND_IMPORT = "background-import"
 private const val RETENTION_DAYS = "retention-days"
 private const val MOOD_BY_TIME_OF_DAY = "mood-by-time-of-day"
 private const val TRANSPARENCY = "transparency"
+private const val APP_LOCK = "app-lock"
 
 /**
  * Two values in their own file, so clearing it by hand puts the shipped defaults back.
@@ -31,6 +32,7 @@ class SharedPreferencesImportSettingsStore(context: Context) : ImportSettingsSto
                 .days,
             moodByTimeOfDay = choices.getBoolean(MOOD_BY_TIME_OF_DAY, shipped.moodByTimeOfDay),
             transparency = choices.getBoolean(TRANSPARENCY, shipped.transparency),
+            appLock = choices.getBoolean(APP_LOCK, shipped.appLock),
         )
     }
 
@@ -40,6 +42,7 @@ class SharedPreferencesImportSettingsStore(context: Context) : ImportSettingsSto
             .putInt(RETENTION_DAYS, choices.retention.inWholeDays.toInt())
             .putBoolean(MOOD_BY_TIME_OF_DAY, choices.moodByTimeOfDay)
             .putBoolean(TRANSPARENCY, choices.transparency)
+            .putBoolean(APP_LOCK, choices.appLock)
             .apply()
     }
 }

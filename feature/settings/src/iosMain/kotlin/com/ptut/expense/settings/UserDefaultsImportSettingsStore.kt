@@ -9,6 +9,7 @@ private const val BACKGROUND_IMPORT = "ptut-background-import"
 private const val RETENTION_DAYS = "ptut-retention-days"
 private const val MOOD_BY_TIME_OF_DAY = "ptut-mood-by-time-of-day"
 private const val TRANSPARENCY = "ptut-transparency"
+private const val APP_LOCK = "ptut-app-lock"
 
 /**
  * The iOS half of [ImportSettingsStore]. Both keys are written together, so a zero read back from
@@ -33,6 +34,7 @@ class UserDefaultsImportSettingsStore : ImportSettingsStore {
             transparency = defaults.objectForKey(TRANSPARENCY)
                 ?.let { defaults.boolForKey(TRANSPARENCY) }
                 ?: shipped.transparency,
+            appLock = defaults.boolForKey(APP_LOCK),
         )
     }
 
@@ -41,5 +43,6 @@ class UserDefaultsImportSettingsStore : ImportSettingsStore {
         defaults.setInteger(choices.retention.inWholeDays, RETENTION_DAYS)
         defaults.setBool(choices.moodByTimeOfDay, MOOD_BY_TIME_OF_DAY)
         defaults.setBool(choices.transparency, TRANSPARENCY)
+        defaults.setBool(choices.appLock, APP_LOCK)
     }
 }
