@@ -21,7 +21,7 @@ import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.SplitCheck
 import com.ptut.expense.domain.shared.SplitMember
 import com.ptut.expense.domain.shared.SplitMode
-import com.ptut.expense.domain.shared.convert
+import com.ptut.expense.domain.shared.convertOrNull
 import com.ptut.expense.domain.shared.formatMinor
 import com.ptut.expense.domain.shared.inOddUnitOrder
 import com.ptut.expense.domain.shared.membersToSplit
@@ -182,7 +182,7 @@ class AddExpenseViewModel(
 
     val uiState: StateFlow<AddExpenseUiState> = combine(repository.snapshot, form, opened) { snapshot, form, opened ->
         val group = snapshot.group(groupId) ?: return@combine AddExpenseUiState.Missing
-        ready(group, form, membersOf(snapshot, group)).copy(changed = opened != null && form.content != opened)
+        ready(group, form, membersOf(snapshot, group, form.splitMode)).copy(changed = opened != null && form.content != opened)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AddExpenseUiState.Missing)
 
     /** An edit starts from the latest version; a new expense from You paying, split equally (#183). */
@@ -296,7 +296,7 @@ class AddExpenseViewModel(
     fun setQuickPayer(payerId: String) {
         val snapshot = repository.snapshot.value
         val group = snapshot.group(groupId) ?: return
-        val members = membersOf(snapshot, group)
+        val members = membersOf(snapshot, group, form.value.splitMode)
         unlocked {
             if (quickOf(group, it, members) == QuickSplit.OwedInFull) it.withQuick(payerId, QuickSplit.OwedInFull, members) else it.copy(payerMemberId = payerId)
         }
@@ -304,7 +304,7 @@ class AddExpenseViewModel(
 
     private fun currentMembers(): List<SplitMember>? {
         val snapshot = repository.snapshot.value
-        return snapshot.group(groupId)?.let { membersOf(snapshot, it) }
+        return snapshot.group(groupId)?.let { membersOf(snapshot, it, form.value.splitMode) }
     }
 
     private fun ExpenseForm.withQuick(payerId: String, choice: QuickSplit, members: List<SplitMember>): ExpenseForm = when (choice) {
@@ -338,7 +338,7 @@ class AddExpenseViewModel(
         val target = state.form.lastEdited ?: return
         val snapshot = repository.snapshot.value
         val group = snapshot.group(groupId) ?: return
-        val check = check(group, state.form, membersOf(snapshot, group)) ?: return
+        val check = check(group, state.form, membersOf(snapshot, group, state.form.splitMode)) ?: return
         val current = weightOf(state.form, target)
         val given = current + check.left
         form.update { it.copy(weightTexts = it.weightTexts + (target to textOf(it, given))) }
@@ -420,9 +420,12 @@ class AddExpenseViewModel(
         }
     }
 
-    /** The people still in the group, and on an edit everyone with a part in the version being edited. */
-    private fun membersOf(snapshot: SharedSnapshot, group: SharedGroup): List<SplitMember> =
-        group.membersToSplit(keeping = latestOf(snapshot)?.shares.orEmpty().mapTo(mutableSetOf()) { it.memberId })
+    /**
+     * The people still in the group, and on an edit everyone with a part in the version being edited.
+     * An edit of an Equally split keeps only those, as the repository does when it saves.
+     */
+    private fun membersOf(snapshot: SharedSnapshot, group: SharedGroup, mode: SplitMode): List<SplitMember> =
+        group.membersToSplit(mode, sharers = latestOf(snapshot)?.shares.orEmpty().mapTo(mutableSetOf()) { it.memberId })
 
     /** The newest version of the expense being edited, a removed one too; null for a new expense. */
     private fun latestOf(snapshot: SharedSnapshot): SharedExpense? =
@@ -497,7 +500,7 @@ class AddExpenseViewModel(
         val payer = form.payerMemberId ?: me
         val money = group.moneyFormat()
         val myShareMinor = check.parts[me] ?: 0L
-        val myShare = if (amount == 0L) Satang.Zero else convert(myShareMinor, form.currency, rateOf(group, form), group.money)
+        val myShare = if (amount == 0L) Satang.Zero else convertOrNull(myShareMinor, form.currency, rateOf(group, form), group.money) ?: return null
         return when {
             payer == me && myShareMinor < amount -> text.expense.owedAmount((inGroup - myShare).formatCompact(money)) to false
             payer != me && myShareMinor > 0 -> text.expense.oweTo(group.displayName(payer), myShare.formatCompact(money)) to true
@@ -614,7 +617,7 @@ class AddExpenseViewModel(
         if (form.splitMode != SplitMode.Percent && form.splitMode != SplitMode.Shares) return null
         val pays = listOfNotNull(
             formatMinor(partMinor, form.currency),
-            rateOf(group, form)?.let { "≈ ${convert(partMinor, form.currency, it, group.money).formatCompact(group.moneyFormat())}" },
+            rateOf(group, form)?.let { rate -> convertOrNull(partMinor, form.currency, rate, group.money)?.let { "≈ ${it.formatCompact(group.moneyFormat())}" } },
         ).joinToString(" · ")
         val dropped = form.splitMode == SplitMode.Shares && typed.substringAfter('.', "").any { it != '0' }
         val whole = (typed.substringBefore('.').toLongOrNull() ?: 0L).toString()
@@ -658,10 +661,10 @@ class AddExpenseViewModel(
     private fun rateOf(group: SharedGroup, form: ExpenseForm): Rate? =
         if (form.currency.code == group.currency) null else Rate.parse(form.rateText, form.currency.rateUnit)
 
-    /** The amount in the group's money, or null until another currency has its rate. */
+    /** The amount in the group's money, or null until another currency has its rate, or when it is too large to hold. */
     private fun inGroupMoney(group: SharedGroup, form: ExpenseForm): Satang? {
         val rate = rateOf(group, form)
-        return amountOf(form)?.takeIf { form.currency.code == group.currency || rate != null }?.let { convert(it, form.currency, rate, group.money) }
+        return amountOf(form)?.takeIf { form.currency.code == group.currency || rate != null }?.let { convertOrNull(it, form.currency, rate, group.money) }
     }
 }
 

@@ -161,6 +161,17 @@ class RoomSharedRepository(
     }
 
     /** #189: a change to a shared group waits in the outbox until it reaches Firestore. */
+
+    /**
+     * The time a new log row is stamped with. Every phone takes the row with the latest stamp as
+     * current (LogOrder, RemovalOrder), so a row written after [latestAt] must sort after it even when
+     * this phone's clock is behind the one that wrote [latestAt].
+     */
+    private fun stampAfter(latestAt: Long?): Long {
+        val now = clock.now().toEpochMilliseconds()
+        return if (latestAt == null || now > latestAt) now else latestAt + 1
+    }
+
     private suspend fun queueIfShared(groupId: String, kind: String, rowId: String) {
         if (dao.group(groupId)?.remote != true) return
         dao.queue(listOf(SyncOutboxEntity("$kind:$rowId", groupId, kind, rowId, clock.now().toEpochMilliseconds())))
@@ -192,7 +203,7 @@ class RoomSharedRepository(
             throw ExpenseChanged(latest.versionId, latest.removed)
         }
         val sharers = latest?.let { dao.sharesOf(it.versionId) }.orEmpty()
-        val members = group.membersToSplit(keeping = sharers.mapTo(mutableSetOf()) { it.memberId })
+        val members = group.membersToSplit(draft.splitMode, sharers = sharers.mapTo(mutableSetOf()) { it.memberId })
         val check = split(draft.amountMinor, draft.splitMode, members, draft.weights)
         require(check.complete) { "A split that does not add up is not saved" }
 
@@ -219,7 +230,7 @@ class RoomSharedRepository(
             payerMemberId = draft.payerMemberId,
             splitMode = draft.splitMode.name,
             authorMemberId = group.meMemberId,
-            createdAtEpochMillis = now,
+            createdAtEpochMillis = stampAfter(latest?.createdAtEpochMillis),
             removed = false,
         )
         val link = dao.link(expenseId)
@@ -271,7 +282,6 @@ class RoomSharedRepository(
     override suspend fun removeExpense(expenseId: String) {
         val last = requireNotNull(dao.latestVersion(expenseId)) { "No expense $expenseId" }
         if (last.removed) return
-        val now = clock.now().toEpochMilliseconds()
         val versionId = newId()
         val group = snapshot.value.group(last.groupId)
         dao.writeVersion(
@@ -279,7 +289,7 @@ class RoomSharedRepository(
                 versionId = versionId,
                 version = last.version + 1,
                 authorMemberId = group?.meMemberId,
-                createdAtEpochMillis = now,
+                createdAtEpochMillis = stampAfter(last.createdAtEpochMillis),
                 removed = true,
             ),
             shares = dao.sharesOf(last.versionId).map { it.copy(versionId = versionId) },
@@ -321,17 +331,27 @@ class RoomSharedRepository(
         )
     }
 
-    override suspend fun followTransaction(transactionId: String) {
+    override suspend fun followTransaction(transactionId: String, before: TransactionEdit) {
         val expenseId = snapshot.value.links.entries.firstOrNull { it.value == transactionId }?.key ?: return
         val last = dao.latestVersion(expenseId)?.takeUnless { it.removed } ?: return
         val row = dao.transaction(transactionId) ?: return
         val group = snapshot.value.group(last.groupId) ?: return
+        // Your row follows only your own spending: once someone else pays it, it is theirs to change.
+        if (!group.isMe(last.payerMemberId)) return
         // A foreign-currency expense keeps its own amount: only one in both the group's money and the
         // ledger's home can take History's figure (#48).
         val baht = last.currency == group.currency && last.currency == Home.money.code
-        val amountMinor = if (baht) row.amountMinor else last.amountMinor
-        if (amountMinor == last.amountMinor && row.occurredAtEpochMillis == last.occurredAtEpochMillis &&
-            row.categoryId == last.categoryId && row.subCategoryId == last.subCategoryId
+        // What this edit changed, compared with the row before it, never with the group's latest
+        // version: a field left alone in History keeps whatever another phone made it since.
+        val amountMoved = baht && row.amountMinor != before.amount.toMinorUnits()
+        val dateMoved = before.occurredAtEpochMillis != null && row.occurredAtEpochMillis != before.occurredAtEpochMillis
+        val categoryMoved = row.categoryId != before.categoryId || row.subCategoryId != before.subCategoryId
+        val amountMinor = if (amountMoved) row.amountMinor else last.amountMinor
+        val occurredAt = if (dateMoved) row.occurredAtEpochMillis else last.occurredAtEpochMillis
+        val categoryId = if (categoryMoved) row.categoryId else last.categoryId
+        val subCategoryId = if (categoryMoved) row.subCategoryId else last.subCategoryId
+        if (amountMinor == last.amountMinor && occurredAt == last.occurredAtEpochMillis &&
+            categoryId == last.categoryId && subCategoryId == last.subCategoryId
         ) {
             return
         }
@@ -344,24 +364,26 @@ class RoomSharedRepository(
             else -> old.associate { it.memberId to it.weight }
         }
         val exact = split(amountMinor, mode, members, weights)
-        // O1 can push the payer below zero when the amount falls; then every part shrinks in step.
-        val check = if (exact.complete) exact else split(amountMinor, SplitMode.Shares, members, old.associate { it.memberId to it.amountMinor })
-        val satang = if (baht) Satang.ofMinorUnits(row.amountMinor) else Satang.ofMinorUnits(last.amountSatang)
-        val now = clock.now().toEpochMilliseconds()
+        // O1 can push the payer below zero when the amount falls; then every part shrinks in step,
+        // and the weights stored are the old parts it shrank by, so the next edit splits the same way.
+        val keptMode = if (exact.complete) mode else SplitMode.Shares
+        val keptWeights = if (exact.complete) weights else old.associate { it.memberId to it.amountMinor }
+        val check = if (exact.complete) exact else split(amountMinor, SplitMode.Shares, members, keptWeights)
+        val satang = if (amountMoved) Satang.ofMinorUnits(row.amountMinor) else Satang.ofMinorUnits(last.amountSatang)
         val versionId = newId()
-        val written = shares(check, satang, members, weights, if (exact.complete) mode else SplitMode.Shares)
+        val written = shares(check, satang, members, keptWeights, keptMode)
         dao.writeVersion(
             version = last.copy(
                 versionId = versionId,
                 version = last.version + 1,
-                occurredAtEpochMillis = row.occurredAtEpochMillis,
-                categoryId = row.categoryId,
-                subCategoryId = row.subCategoryId,
+                occurredAtEpochMillis = occurredAt,
+                categoryId = categoryId,
+                subCategoryId = subCategoryId,
                 amountMinor = amountMinor,
                 amountSatang = satang.toMinorUnits(),
-                splitMode = if (exact.complete) mode.name else SplitMode.Shares.name,
+                splitMode = keptMode.name,
                 authorMemberId = group.meMemberId,
-                createdAtEpochMillis = now,
+                createdAtEpochMillis = stampAfter(last.createdAtEpochMillis),
                 cause = ExpenseCause.TRANSACTION,
             ),
             shares = written.map { ExpenseShareEntity(versionId, it.memberId, it.weight, it.amountMinor, it.satang.toMinorUnits()) },
@@ -405,7 +427,7 @@ class RoomSharedRepository(
                 paymentId = paymentId,
                 removed = removed,
                 authorMemberId = snapshot.value.group(groupId)?.meMemberId,
-                createdAtEpochMillis = clock.now().toEpochMilliseconds(),
+                createdAtEpochMillis = stampAfter(dao.latestRemovalAt(paymentId)),
             ),
         )
         queueIfShared(groupId, KIND_PAYMENT_REMOVAL, id)
@@ -415,14 +437,13 @@ class RoomSharedRepository(
         val versions = dao.versionsOf(expenseId)
         if (versions.firstOrNull()?.removed != true) return
         val before = versions.firstOrNull { !it.removed } ?: return
-        val now = clock.now().toEpochMilliseconds()
         val versionId = newId()
         dao.writeVersion(
             version = before.copy(
                 versionId = versionId,
                 version = versions.first().version + 1,
                 authorMemberId = snapshot.value.group(before.groupId)?.meMemberId,
-                createdAtEpochMillis = now,
+                createdAtEpochMillis = stampAfter(versions.first().createdAtEpochMillis),
                 cause = null,
             ),
             shares = dao.sharesOf(before.versionId).map { it.copy(versionId = versionId) },

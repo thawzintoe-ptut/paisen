@@ -1,6 +1,7 @@
 package com.ptut.expense.shared
 
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.shared.ExpenseDraft
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.Member
@@ -132,7 +133,7 @@ internal class FakeSharedRepository(group: SharedGroup = flat12) : SharedReposit
 
     override suspend fun removeExpense(expenseId: String) = notThisTest<Unit>()
 
-    override suspend fun followTransaction(transactionId: String) = notThisTest<Unit>()
+    override suspend fun followTransaction(transactionId: String, before: TransactionEdit) = notThisTest<Unit>()
 
     override suspend fun removePayment(paymentId: String) = notThisTest<Unit>()
 

@@ -161,6 +161,10 @@ interface SharedDao {
     @Insert
     suspend fun insertPaymentRemoval(removal: PaymentRemovalEntity)
 
+    /** When the newest removal row for [paymentId] was written, so the next one can come after it. */
+    @Query("SELECT MAX(createdAtEpochMillis) FROM payment_removal WHERE paymentId = :paymentId")
+    suspend fun latestRemovalAt(paymentId: String): Long?
+
     @Query("SELECT * FROM payment_removal WHERE id = :id")
     suspend fun paymentRemoval(id: String): PaymentRemovalEntity?
 
@@ -198,8 +202,12 @@ interface SharedDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun queue(rows: List<SyncOutboxEntity>)
 
-    @Query("DELETE FROM sync_outbox WHERE id = :id")
-    suspend fun dequeue(id: String)
+    /**
+     * Only the row that was uploaded: a change to the same row queued during the upload carries a
+     * newer [queuedAt] and stays, so it goes up next instead of being lost.
+     */
+    @Query("DELETE FROM sync_outbox WHERE id = :id AND createdAtEpochMillis = :queuedAt")
+    suspend fun dequeue(id: String, queuedAt: Long)
 
     @Query("SELECT * FROM shared_group WHERE id = :groupId")
     suspend fun group(groupId: String): SharedGroupEntity?

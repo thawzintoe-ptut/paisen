@@ -147,6 +147,13 @@ internal fun mulDivRound(a: Long, b: Long, divisor: Long): Long {
     return if (remainder >= divisor - remainder) quotient + 1 else quotient
 }
 
+/** [convert], or null when the result is too large to hold in minor units: a stuck key, never real money. */
+fun convertOrNull(amountMinor: Long, from: Currency, rate: Rate?, to: Currency): Satang? = try {
+    convert(amountMinor, from, rate, to)
+} catch (tooLarge: IllegalStateException) {
+    null
+}
+
 /**
  * a × b ÷ divisor, rounded down, and what is left, for a, b ≥ 0. The product is held in 128 bits,
  * so a big VND bill at a nine-decimal rate, or a large Exact split, never passes a Long's range.

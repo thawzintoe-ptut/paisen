@@ -102,6 +102,15 @@ fun SharedGroup.splitMembers(): List<SplitMember> = members.map { SplitMember(it
 fun SharedGroup.membersToSplit(keeping: Set<String> = emptySet()): List<SplitMember> =
     splitMembers().filter { member(it.id)?.archived != true || it.id in keeping }
 
+/**
+ * Who an expense in [mode] is split between. An edit of an Equally split stays between the people
+ * in [sharers], so someone who joined later never owes for it; Shares or Exact adds them on purpose.
+ */
+fun SharedGroup.membersToSplit(mode: SplitMode, sharers: Set<String>): List<SplitMember> {
+    val members = membersToSplit(keeping = sharers)
+    return if (mode == SplitMode.Equally && sharers.isNotEmpty()) members.filter { it.id in sharers } else members
+}
+
 /** What this phone's member is owed (above zero) or owes (below zero) in a group. */
 fun SharedSnapshot.myNet(groupId: String): Satang {
     val me = group(groupId)?.meMemberId ?: return Satang.Zero

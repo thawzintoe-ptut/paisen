@@ -1,6 +1,7 @@
 package com.ptut.expense.domain.shared
 
 import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.TransactionEdit
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.datetime.LocalDate
 
@@ -73,7 +74,12 @@ interface SharedRepository {
      * category. Equally, Percent and Shares recompute; Exact puts the difference on the payer (O1).
      * Nothing flows back the other way from here.
      */
-    suspend fun followTransaction(transactionId: String)
+
+    /**
+     * Only the fields [before] shows were changed in History travel, and only while this phone's
+     * member still pays the expense: an edit another phone made to the rest stays.
+     */
+    suspend fun followTransaction(transactionId: String, before: TransactionEdit)
 
     /**
      * #218: takes a payment out of the balances, also as Undo right after recording it. In a group

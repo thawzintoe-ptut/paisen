@@ -50,7 +50,7 @@ fun split(totalMinor: Long, mode: SplitMode, members: List<SplitMember>, weights
             val points = ordered.associate { it.id to (weights[it.id] ?: 0L) }.filterValues { it > 0 }
             val assigned = points.values.sum()
             val complete = assigned == WHOLE_PERCENT && totalMinor > 0
-            val parts = if (complete) allocate(totalMinor, points, ordered) else points.mapValues { (_, bp) -> totalMinor * bp / WHOLE_PERCENT }
+            val parts = if (complete) allocate(totalMinor, points, ordered) else points.mapValues { (_, bp) -> share(totalMinor, bp, WHOLE_PERCENT) }
             SplitCheck(parts, left = WHOLE_PERCENT - assigned, assigned = assigned, target = WHOLE_PERCENT, complete = complete)
         }
 

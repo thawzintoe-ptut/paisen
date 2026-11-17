@@ -113,6 +113,18 @@ class AddExpenseViewModelTest : ViewModelTest() {
         assertEquals("Type the MMK rate to save", ready.hint)
     }
 
+    /** A stuck key, not real money: the screen stays open and Save stays off. */
+    @Test
+    fun `an amount and rate past what a Long holds keep Save off and do not crash`() = runTest {
+        val viewModel = viewModel(FakeSharedRepository())
+        viewModel.setCurrency(Currencies.of("USD"))
+        viewModel.setAmount("1" + "0".repeat(12))
+        viewModel.setRate("9".repeat(11))
+        runCurrent()
+
+        assertEquals(false, viewModel.ready().canSave)
+    }
+
     private fun TestScope.viewModel(repository: FakeSharedRepository): AddExpenseViewModel {
         val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed())
         backgroundScope.launch { viewModel.uiState.collect {} }

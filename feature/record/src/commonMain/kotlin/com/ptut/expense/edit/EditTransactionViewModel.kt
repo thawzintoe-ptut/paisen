@@ -147,7 +147,7 @@ class EditTransactionViewModel(
         viewModelScope.launch {
             ledger.applyEdit(record.id, edit)
             // O4: the change flows one way, from History to the shared copy.
-            shared?.followTransaction(record.id)
+            shared?.followTransaction(record.id, before = record.asEdit())
             haptics.saved()
             val edited = record.copy(categoryId = edit.categoryId, subCategoryId = edit.subCategoryId, memo = edit.memo)
             toasts?.show(ToastMessage(AppText.copy.record.updated(edited.displayName(known, subCategories))))

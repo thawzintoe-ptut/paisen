@@ -498,12 +498,12 @@ class SharedSync internal constructor(
             if (row.groupId in held) continue
             try {
                 val notice = upload(row, notify = row.groupId != quietFor)
-                dao.dequeue(row.id)
+                dao.dequeue(row.id, row.createdAtEpochMillis)
                 failed.update { it - row.groupId }
                 notice?.let { pushes?.tell(row.groupId, it) }
             } catch (refusal: FirestoreException) {
                 if (refusal.isPermanent()) {
-                    dao.dequeue(row.id)
+                    dao.dequeue(row.id, row.createdAtEpochMillis)
                     takeBack(row)
                     refused.update { it + (row.groupId to (it[row.groupId] ?: 0) + 1) }
                 } else {
@@ -656,6 +656,9 @@ class SharedSync internal constructor(
         // A row changed here and not yet uploaded keeps this phone's values: the server's copy is
         // the older one until the outbox sends it, so a pull in between must not undo the edit.
         val kept = local?.takeIf { "$KIND_GROUP:$groupId" in pendingIn(groupId) }
+        // #48: set when the group was made and never changed; a group from before #48 is baht.
+        val currency = fields.string("currency") ?: local?.currency ?: Currencies.Thb.code
+        val pulledUpTo = PullMark.kept(local?.currency, local?.lastSyncedAtEpochMillis, currency)
         val members = firestore.list("groups/$groupId/members")
         val uid = (auth.account.value as? Account.SignedIn)?.uid
         dao.upsertGroup(
@@ -673,11 +676,10 @@ class SharedSync internal constructor(
                 inviteCode = fields.string("inviteCode"),
                 inviteActive = fields.bool("inviteActive"),
                 // Moves only in markSynced, once the log is in: a pull that fails before then starts here again.
-                lastSyncedAtEpochMillis = local?.lastSyncedAtEpochMillis,
+                lastSyncedAtEpochMillis = pulledUpTo,
                 // This phone's own mark, never on the server: a pull must not reset it.
                 lastSeenAtEpochMillis = local?.lastSeenAtEpochMillis,
-                // #48: set when the group was made and never changed; a group from before #48 is baht.
-                currency = fields.string("currency") ?: local?.currency ?: Currencies.Thb.code,
+                currency = currency,
             ),
         )
         val known = dao.membersOf(groupId).associateBy { it.id }
@@ -697,7 +699,7 @@ class SharedSync internal constructor(
                 )
             },
         )
-        val since = pullSince(local?.lastSyncedAtEpochMillis)
+        val since = pullSince(pulledUpTo)
         val log = if (since == null) wholeLog(groupId) else newerLog(groupId, since)
         // #48: read with the key the group's money names, so a baht amount an older build wrote into a
         // kyat group is skipped rather than taken as kyat.
@@ -913,6 +915,15 @@ private fun SharedGroup.fields(): Fields = mapOf(
  * `amountGroup` instead, so a build from before #48 skips the entry rather than read kyat as baht.
  * The rules hold the same line, so an older build cannot write baht into a kyat group either.
  */
+internal object PullMark {
+    /**
+     * The mark a pull starts from. A phone that held the group in other money (a build from before
+     * #48, which skipped every amountGroup entry but still moved its mark) pulls the whole log once,
+     * or those entries never come.
+     */
+    fun kept(localCurrency: String?, localMark: Long?, serverCurrency: String): Long? = localMark?.takeIf { localCurrency == serverCurrency }
+}
+
 internal object WireAmount {
     fun key(groupCurrency: String): String = if (groupCurrency == Currencies.Thb.code) "amountSatang" else "amountGroup"
 }
