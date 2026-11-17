@@ -5,8 +5,8 @@ name: Cut release
 # candidate, on that candidate's own commit. scripts/release/next-version.sh picks the number.
 #
 # The tag starts release.yml by dispatch: a tag pushed with GITHUB_TOKEN starts no workflow, a
-# workflow_dispatch does. Creating a v* tag needs GitHub Actions on the "release tags" ruleset's
-# bypass list; "release tags locked" keeps moving and deleting one for admins only.
+# workflow_dispatch does. No ruleset blocks creating a v* tag, since a personal account's repo
+# can't let GitHub Actions bypass one; "release tags locked" keeps moving and deleting for admins.
 on:
   workflow_run:
     workflows: [CI]
@@ -127,7 +127,7 @@ jobs:
           object=$(gh api "repos/$GITHUB_REPOSITORY/git/tags" -f tag="$TAG" -f message="$TAG" \
             -f object="$TARGET" -f type=commit --jq .sha)
           gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$object" > /dev/null \
-            || { echo "::error::$TAG was refused. Is GitHub Actions on the 'release tags' ruleset's bypass list?"; exit 1; }
+            || { echo "::error::$TAG was refused. Does a tag ruleset block creating v* tags? Only moving and deleting should be blocked."; exit 1; }
           echo "Tagged \`$TAG\` on ${TARGET:0:7}." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Start the release
