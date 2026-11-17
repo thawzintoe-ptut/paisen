@@ -30,7 +30,7 @@ mlkitTextRecognition = "16.0.1"
 okio = "3.18.2"
 
 # #191: shared groups sync over Firebase's REST APIs. Ktor's client is allowed under sync/ only.
-ktor = "3.6.0"
+ktor = "3.6.1"
 androidxCredentials = "1.6.0"
 googleId = "1.2.1"
 firebaseMessaging = "26.0.2"
