@@ -6,7 +6,7 @@ name: Cut release
 #
 # The tag starts release.yml by dispatch: a tag pushed with GITHUB_TOKEN starts no workflow, a
 # workflow_dispatch does. Creating a v* tag needs GitHub Actions on the "release tags" ruleset's
-# bypass list.
+# bypass list; "release tags locked" keeps moving and deleting one for admins only.
 on:
   workflow_run:
     workflows: [CI]
@@ -48,6 +48,17 @@ jobs:
       actions: write # start release.yml on it
       checks: read # a candidate by hand: did CI fail on this commit?
     steps:
+      # Releases come from main or a release/* hotfix line, never a feature branch or a tag.
+      - name: Check the branch
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          case "$REF" in
+            refs/heads/main | refs/heads/release/*) ;;
+            *) echo "::error::Cut release runs from main or a release/* branch, not ${REF#refs/*/}."; exit 1 ;;
+          esac
+
       # The commit CI passed on, not main's tip: a later push has not been checked yet.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

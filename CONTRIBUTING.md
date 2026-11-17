@@ -189,7 +189,7 @@ Delete `release/0.1` when that version is no longer supported.
 
 ### Branch protection
 
-`main` and the release tags are protected by three rulesets. Their JSON files are in [`.github/rulesets`](.github/rulesets).
+`main` and the release tags are protected by four rulesets. Their JSON files are in [`.github/rulesets`](.github/rulesets).
 To set them up again, go to **Settings → Rules → Rulesets → New ruleset → Import a ruleset** and
 import each file.
 
@@ -197,4 +197,7 @@ import each file.
 |---|---|---|
 | `main: no rewrites` | no deletion, no force push, linear history | nobody |
 | `main: checks` | pull request (0 approvals, squash or rebase), both CI jobs green | repository admins, so the maintainer can push small fixes directly |
-| `release tags` | `v*` tags can't be created, moved or deleted | repository admins and GitHub Actions, so the maintainer and **Cut release** can start a release |
+| `release tags` | `v*` tags can't be created | repository admins and GitHub Actions, so the maintainer and **Cut release** can start a release |
+| `release tags locked` | `v*` tags can't be moved or deleted | repository admins, so no workflow can rewrite or remove a release |
+
+**Cut release** refuses to run from any branch but `main` or `release/*`.
