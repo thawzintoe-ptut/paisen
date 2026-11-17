@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Prints the notes a release ships with. A production release keeps its CHANGELOG.md section
-# ([X.Y.Z]). A beta lists what changed since the tag before it, so each rc says only its own
-# changes: feat commits under "New", fix commits under "Fixed", from their titles. Commits that
-# touch only tests, CI, scripts or docs, and build, ci, chore, docs and refactor commits, are left
-# out. The first tag has nothing before it, so it falls back to [Unreleased].
+# Prints the notes a release ships with, from the commit titles: feat commits under "New", fix
+# commits under "Fixed", and any other breaking change under "New" too, since people meet it. A
+# beta lists what changed since the tag before it, so each rc says only its own changes; a
+# production release lists everything since the production release before it. Commits that touch
+# only tests, CI, scripts or docs, and other types, are left out. commits.sh decides all of it.
+# A first beta has nothing before it, so it falls back to [Unreleased].
 set -euo pipefail
+# shellcheck source-path=SCRIPTDIR
+source "$(dirname "$0")/commits.sh"
 
 kind=${1:?usage: notes.sh <beta|production> <versionName> [tag]}
 name=${2:?usage: notes.sh <beta|production> <versionName> [tag]}
@@ -26,39 +29,46 @@ as_line() {
   printf -- '- %s\n' "$title"
 }
 
-behind_the_scenes() {
-  local files
-  files=$(git show --name-only --format= "$1")
-  [[ -n "$files" ]] && ! grep -qvE '(/[A-Za-z]*[Tt]est/|Test\.kt$|/test/|^\.github/|^scripts/|^docs/)' <<< "$files"
+# The release before this one: any tag for a beta, only a production tag for production.
+previous_tag() {
+  if [[ "$kind" == beta ]]; then
+    git describe --tags --abbrev=0 --match 'v*' "$tag^" 2>/dev/null
+  else
+    git describe --tags --abbrev=0 --match 'v*' --exclude '*-rc.*' "$tag^" 2>/dev/null
+  fi
 }
 
-beta_notes() {
-  local previous
-  previous=$(git describe --tags --abbrev=0 --match 'v*' "$tag^" 2>/dev/null) || return 1
-  local new="" fixed="" sha subject
-  while IFS=$'\t' read -r sha subject; do
+commit_notes() {
+  local previous range
+  if previous=$(previous_tag); then
+    range="$previous..$tag"
+  elif [[ "$kind" == production ]]; then
+    # The first production release says everything that came before it.
+    previous=""
+    range=$tag
+  else
+    return 1
+  fi
+  local new="" fixed="" sha title body
+  while IFS=$'\x1f' read -r -d $'\x1e' sha title body; do
+    sha=${sha#$'\n'}
     behind_the_scenes "$sha" && continue
-    case "$subject" in
-      feat:* | feat\(*) new+=$(as_line "$subject")$'\n' ;;
-      fix:* | fix\(*) fixed+=$(as_line "$subject")$'\n' ;;
+    case "$(commit_type "$title")" in
+      feat) new+=$(as_line "$title")$'\n' ;;
+      fix) fixed+=$(as_line "$title")$'\n' ;;
+      *) ! commit_breaks "$title" "$body" || new+=$(as_line "$title")$'\n' ;;
     esac
-  done < <(git log --reverse --no-merges --format=$'%h\t%s' "$previous..$tag")
+  done < <(commits_in "$range")
   if [[ -z "$new$fixed" ]]; then
     printf 'Dependency and build updates only. Nothing changes in the app.\n\n'
   fi
   [[ -z "$new" ]] || printf '### New\n\n%s\n' "$new"
   [[ -z "$fixed" ]] || printf '### Fixed\n\n%s\n' "$fixed"
-  if [[ -n "${GITHUB_REPOSITORY:-}" ]]; then
+  if [[ -n "${GITHUB_REPOSITORY:-}" && -n "$previous" ]]; then
     printf 'Every change: https://github.com/%s/compare/%s...%s\n' "$GITHUB_REPOSITORY" "$previous" "${GITHUB_REF_NAME:-$tag}"
   fi
 }
 
-if [[ "$kind" == beta ]]; then
-  notes=$(beta_notes || changelog_section Unreleased)
-else
-  notes=$(changelog_section "$name")
-fi
-
-if [[ "$kind" == beta ]]; then heading="Unreleased"; else heading="$name"; fi
-[[ -n "${notes//[[:space:]]/}" ]] || { echo "::error::CHANGELOG.md has no text under ## [$heading]" >&2; exit 1; }
+notes=$(commit_notes || changelog_section Unreleased)
+[[ -n "${notes//[[:space:]]/}" ]] || { echo "::error::No release notes for $name: no commits since the last release, and nothing under ## [Unreleased]" >&2; exit 1; }
 printf '%s\n' "$notes"

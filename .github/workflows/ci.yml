@@ -56,6 +56,8 @@ jobs:
       - run: ./gradlew :androidApp:verifyBundledResources
       # #22: a badly formatted file fails here. No git hook runs it, so commit and push stay fast.
       - run: ./gradlew spotlessCheck
+      # The release number and notes come from the commit titles; their rules are checked on throwaway repos.
+      - run: for test in scripts/release/*.test.sh; do "$test"; done
       - run: ./gradlew testAndroidHostTest
       - run: ./gradlew :androidApp:assembleDebug
       # R8 runs only in a release build. Without the upload key the APK stays unsigned, so a
@@ -143,3 +145,31 @@ jobs:
           path: '**/build/reports/tests/'
           retention-days: 7
           if-no-files-found: ignore
+
+  # The tag the next release would take, in this run's summary, so nobody works it out by hand.
+  # Read-only: it tags nothing, and it is not a required check.
+  next-release:
+    name: Next release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # every commit and tag, for what changed since the last release
+          persist-credentials: false
+      - name: Next release tag
+        run: |
+          {
+            echo "### Next release"
+            if next=$(scripts/release/next-version.sh 2> why.txt); then
+              echo "- Candidate: \`$next\` ($(head -1 why.txt))"
+            else
+              echo "- Candidate: none, $(head -1 why.txt)"
+            fi
+            if final=$(scripts/release/next-version.sh --final 2> why.txt); then
+              echo "- Production: \`$final\` ($(head -1 why.txt))"
+            else
+              echo "- Production: not yet, $(head -1 why.txt | sed 's/:$//')"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

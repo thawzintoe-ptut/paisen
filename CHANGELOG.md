@@ -4,6 +4,9 @@ All notable changes to PaiSeN are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+Each release's notes are made from its `feat:` and `fix:` commit titles (`scripts/release/notes.sh`)
+and shown on its GitHub release; this file is no longer a step in releasing.
+
 ## [Unreleased]
 
 The first public version.

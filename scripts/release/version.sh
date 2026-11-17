@@ -14,6 +14,13 @@ code_of() {
   echo $(( major * 1000000 + minor * 10000 + patch * 100 + rc ))
 }
 
+# `--order <tag>` prints only the versionCode, with no checks against other tags, so
+# next-version.sh sorts tags by the same rule the release numbers them with.
+if [[ "${1:-}" == --order ]]; then
+  code_of "${2:?usage: version.sh --order <tag>}"
+  exit
+fi
+
 tag=${1:?usage: version.sh <tag>}
 code=$(code_of "$tag") || { echo "::error::$tag is not vX.Y.Z or vX.Y.Z-rc.N (Y, Z up to 99; N 1-98)" >&2; exit 1; }
 

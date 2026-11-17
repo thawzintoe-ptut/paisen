@@ -5,6 +5,9 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # cut-release.yml starts it this way on the tag it made: a tag pushed with GITHUB_TOKEN starts
+  # no workflow, a dispatch does. Run it on a tag only; meta refuses a branch.
+  workflow_dispatch:
 
 permissions: {}
 
@@ -30,6 +33,7 @@ jobs:
       # A release comes from main, or from a release/* branch for a hotfix.
       - name: The tag is on main or a release branch
         run: |
+          [ "$GITHUB_REF_TYPE" = tag ] || { echo "::error::Run this on a v* tag, not the branch $GITHUB_REF_NAME"; exit 1; }
           git branch -r --contains "$GITHUB_SHA" | grep -qE '^ *origin/(main|release/.+)$' \
             || { echo "::error::$GITHUB_REF_NAME is not on main or a release/* branch"; exit 1; }
       - name: Version

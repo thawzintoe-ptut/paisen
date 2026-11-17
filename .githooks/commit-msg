@@ -1,0 +1,20 @@
+#!/bin/sh
+# The title's type sets the next version and its line in the release notes
+# (scripts/release/commits.sh), so a title without one would release as a quiet patch.
+set -e
+
+fail() { echo "commit-msg: $1" >&2; exit 1; }
+
+# The first line that is not a comment Git added.
+title=$(sed -n '/^[^#]/{p;q;}' "$1")
+
+# Titles Git writes itself.
+case "$title" in
+  "Merge "* | "Revert "* | "fixup! "* | "squash! "* | "amend! "*) exit 0 ;;
+esac
+
+printf '%s\n' "$title" | grep -qiE '^(feat|fix|chore|docs|test|refactor|build|style|ci|perf)(\([^)]*\))?!?: .' \
+  || fail "start the title with a type, as in \"fix: the add sheet keeps its amount\".
+            Types: feat fix chore docs test refactor build style ci perf; add ! for a breaking change.
+            See CONTRIBUTING.md, or commit with --no-verify only if you are fixing trunk."
+exit 0

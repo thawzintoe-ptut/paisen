@@ -44,6 +44,7 @@ git config push.autoSetupRemote true
 | Hook | Runs | Blocks |
 |---|---|---|
 | `pre-commit` | instantly | `local.properties`, signing keys, raw slip images, files over 1 MB, and account, card, phone or ID numbers in test files |
+| `commit-msg` | instantly | a title that does not start with a type, since the type sets the next version |
 | `pre-push` | a minute or more | a push whose source checks, network checks, bundled fonts or host tests fail |
 
 `pre-push` does not run the iOS tests, because they take minutes. If you changed shared code or
@@ -71,12 +72,14 @@ the pull request can be merged.
 <type>: <what changed, in the present tense, no full stop>
 ```
 
-Types: `feat`, `fix`, `chore`, `docs`, `test`, `refactor`, `build`. Keep the title under 72
-characters, and say what changed and why.
+Types: `feat`, `fix`, `chore`, `docs`, `test`, `refactor`, `build`, `style`, `ci`, `perf`. Add `!`
+after the type (`feat!:`) for a change that breaks something people rely on. Keep the title under
+72 characters, and say what changed and why.
 
 The pull request title becomes the commit message on `main` when it is squashed, so write it in the
-same format. If the change is visible to users, add a line under `[Unreleased]` in
-[CHANGELOG.md](CHANGELOG.md).
+same format. The prefix sets the next version, and every `feat:` and `fix:` title, and every
+breaking one, is a line in the release notes, so write those for the people who use the app. A
+commit that only touches tests, CI, scripts or docs stays out of the notes and makes no tester build.
 
 ## License
 
@@ -87,17 +90,37 @@ contribution is licensed under GPL-3.0 too.
 
 ### Releases
 
-Releases are tags on `main`. Pushing a tag starts the **Release** workflow: it runs the same
-checks as a pull request, builds a signed APK and AAB with the version taken from the tag, and
-creates the GitHub release with the APK. There are no release branches until one is needed.
+Releases are tags on `main`, and the **Cut release** workflow makes them; nobody numbers a release
+by hand. The tag starts the **Release** workflow: it runs the same checks as a pull request,
+builds a signed APK and AAB with the version taken from the tag, and creates the GitHub release with
+the APK. There are no release branches until one is needed.
 
 | Tag | Release | Notes come from | versionCode |
 |---|---|---|---|
-| `v0.2.0-rc.1` | pre-release (beta) | `## [Unreleased]` | 20001 |
-| `v0.2.0` | release (production) | `## [0.2.0]` | 20099 |
+| `v0.2.0-rc.1` | pre-release (beta) | `feat:` and `fix:` titles since the tag before it | 20001 |
+| `v0.2.0` | release (production) | `feat:` and `fix:` titles since the last production release | 20099 |
 
 versionCode = MAJOR × 1,000,000 + MINOR × 10,000 + PATCH × 100 + the rc number (99 for
 production). Don't edit `versionName` or `versionCode` in `androidApp/build.gradle.kts`.
+
+**Which number goes up** follows [SemVer](https://semver.org) and the commit prefixes, and
+`scripts/release/next-version.sh` works it out:
+
+| Since the last tag | The next tag |
+|---|---|
+| a `feat:` commit | MINOR: `0.2.0` → `0.3.0-rc.1` |
+| only `fix:`, `style:`, `build:`, `docs:`, `test:`, `chore:` or `refactor:` | PATCH: `0.2.0` → `0.2.1-rc.1`, or the next rc of a candidate: `0.2.0-rc.1` → `0.2.0-rc.2` |
+| `feat!:` or a `BREAKING CHANGE:` line, from `1.0.0` on | MAJOR: `1.4.0` → `2.0.0-rc.1` |
+
+- A candidate freezes its version's features: a `feat:` after the first `vX.Y.Z-rc` makes the next
+  tag `X.(Y+1).0-rc.1`, not another rc of `X.Y.Z`.
+- Below `1.0.0` anything may change, so a breaking change is MINOR there. `1.0.0` is chosen on
+  purpose with `--bump major`.
+- `--final` prints `vX.Y.Z` for the latest candidate, and the tag goes on that candidate's own
+  commit, so production ships exactly what testers had. It refuses when a feature landed between
+  the version's first candidate and its latest one, since that feature belongs to the next minor.
+- It refuses a shallow clone, and a commit no release tag reaches unless `--first` is given, rather
+  than guess without the tags.
 
 After the GitHub release, each target runs only when its repository variable is `true`
 (**Settings → Secrets and variables → Actions → Variables**):
@@ -113,33 +136,51 @@ After the GitHub release, each target runs only when its repository variable is 
 Play gets the notes cut to 500 characters, with a link to the full notes on GitHub.
 `PLAY_BETA_TRACK` must be `internal`, `alpha` or `beta`; the workflow refuses anything else.
 
-1. For a beta, check that `## [Unreleased]` in `CHANGELOG.md` says what changed. For production,
-   rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD` and add a new empty `[Unreleased]` above it.
-2. Commit, push, and wait for CI to pass.
-3. Tag and push the tag:
+1. **Candidates are automatic.** When CI passes on a push to `main` that holds a `feat:` or `fix:`
+   since the last tag, **Cut release** tags the next candidate on that commit and starts
+   **Release**. A push of only docs, tests or build changes waits for the next one.
+2. **Production is a button.** **Actions → Cut release → Run workflow → production** tags the latest
+   candidate as `vX.Y.Z` on its own commit and starts **Release**. Play production still waits for
+   your approval in the `production` environment.
+3. **A candidate by hand**, for a build-only change or for `1.0.0`: the same button with
+   `candidate`, and a bump if the commits cannot say it.
+   Without the workflow, the same tags come from a full clone with its tags:
 
    ```bash
-   git tag -a v0.2.0-rc.1 -m "v0.2.0-rc.1"
-   git push origin v0.2.0-rc.1
+   tag=$(scripts/release/next-version.sh)   # a candidate on this commit; --bump major for 1.0.0
+   git tag -a "$tag" -m "$tag"
+   git push origin "$tag"
    ```
 
+   Production goes on the latest candidate's own commit:
+
+   ```bash
+   tag=$(scripts/release/next-version.sh --final)
+   git tag -a "$tag" -m "$tag" "$(scripts/release/next-version.sh --latest)^{}"
+   git push origin "$tag"
+   ```
+
+   If **Cut release** made the tag but **Release** did not start, the run's summary says so: start
+   it by hand with **Actions → Release → Run workflow → Use workflow from** that tag.
 4. The APK is on the GitHub release, and so is the unsigned IPA when `IOS_SIDELOAD_ENABLED` is on.
    The AAB for Play is in the workflow run's artifacts (7 days).
 5. With `IOS_ENABLED`, a beta tag also builds an ad hoc IPA: `v0.2.0-rc.1` becomes version 0.2.0,
    build 20001. Only the iPhones in the ad hoc profile can install it. To add a tester's iPhone,
    register it in the Apple Developer portal, make the profile again, and replace
-   `IOS_ADHOC_PROFILE_BASE64`. A build from Xcode keeps the `MARKETING_VERSION` and
-   `CURRENT_PROJECT_VERSION` set there. Before an iOS release, run `./gradlew :composeApp:verifyNoNetworkSymbols` on your Mac. It links
+   `IOS_ADHOC_PROFILE_BASE64`. A build from Xcode keeps the `MARKETING_VERSION` (0.1.0) and
+   `CURRENT_PROJECT_VERSION` (1) set there, as a local Android build keeps 0.1.0 (1). Before an iOS release, run `./gradlew :composeApp:verifyNoNetworkSymbols` on your Mac. It links
    the release framework (about 7 minutes) and checks it uses no networking API outside sync.
 
 **Hotfix for a version already in the store**, while `main` has work that is not ready: branch
-from the tag, fix, tag, and bring the fix back to `main`.
+from the tag, fix, and bring the fix back to `main`. Candidates are automatic on `main` only, so
+on the branch use the button: **Run workflow**, **Use workflow from** `release/0.1`, `candidate`,
+then `production` once testers are happy. The rule reads only that branch's tags, so the next tag
+is `v0.1.1-rc.1`.
 
 ```bash
 git switch -c release/0.1 v0.1.0
 # fix and commit
-git tag -a v0.1.1 -m "v0.1.1"
-git push origin release/0.1 v0.1.1
+git push origin release/0.1
 git switch main
 git cherry-pick <fix-commit>
 ```
@@ -156,4 +197,4 @@ import each file.
 |---|---|---|
 | `main: no rewrites` | no deletion, no force push, linear history | nobody |
 | `main: checks` | pull request (0 approvals, squash or rebase), both CI jobs green | repository admins, so the maintainer can push small fixes directly |
-| `release tags` | `v*` tags can't be created, moved or deleted | repository admins, so only the maintainer can start a release |
+| `release tags` | `v*` tags can't be created, moved or deleted | repository admins and GitHub Actions, so the maintainer and **Cut release** can start a release |
