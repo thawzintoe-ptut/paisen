@@ -816,14 +816,14 @@ private fun PaymentRow(row: GroupFeedRow.Payment, onClick: () -> Unit) {
     }
 }
 
-/** p27: a floating ink add button that keeps the group as context. */
+/** p27: a floating add button that keeps the group as context, in ruby like every Add. */
 @Composable
 private fun AddButton(glass: GlassBackdrop, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val label = LocalCopy.current.shared.detail.addAnExpense
     GlassSurface(
         backdrop = glass,
         shape = CircleShape,
-        fill = MaterialTheme.colorScheme.primary,
+        fill = MaterialTheme.ptut.signature,
         tint = ADD_GLASS_TINT,
         contentAlignment = Alignment.Center,
         modifier = modifier
@@ -831,12 +831,12 @@ private fun AddButton(glass: GlassBackdrop, onClick: () -> Unit, modifier: Modif
             .tappable(CircleShape, Role.Button, onClick = onClick)
             .semantics { contentDescription = label },
     ) {
-        Icon(PtutIcon.Add.image, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(SkySizes.barGlyph))
+        Icon(PtutIcon.Add.image, contentDescription = null, tint = MaterialTheme.ptut.onSignature, modifier = Modifier.size(SkySizes.barGlyph))
     }
 }
 
-/** Ink glass over the feed: the plus keeps 6.11:1 (day) and 9.67:1 (night) over anything under it. */
-private const val ADD_GLASS_TINT = 0.7f
+/** Ruby glass over the feed: the white plus keeps 6.68:1 (day) and 4.70:1 (night) even over white. */
+private const val ADD_GLASS_TINT = 0.9f
 
 /** A row another member added since the last visit (research finding 5). Ruby: something waits for you. */
 @Composable

@@ -336,7 +336,7 @@ Choices to check in this area:
 | ≈ {baht} at ฿{rate} per {per}, saved with the expense | ≈ {baht} ที่อัตรา ฿{rate} ต่อ {per} บันทึกพร้อมค่าใช้จ่าย | SharedExpenseCopy.kt `bahtAtRate` |
 | ฿ per {unit} {code} | ฿ ต่อ {unit} {code} | SharedExpenseCopy.kt `ratePer` |
 | {mode} · {n} people | {mode} · {n} คน | SharedExpenseCopy.kt `splitLabel` |
-| From your History. Change the amount, date or category there. | มาจากประวัติของคุณ แก้จำนวนเงิน วันที่ หรือหมวดหมู่ได้ที่นั่น | SharedExpenseCopy.kt `locked` |
+| From your History. Change the amount or date there. | มาจากประวัติของคุณ แก้จำนวนเงินหรือวันที่ได้ที่นั่น | SharedExpenseCopy.kt `locked` |
 | Someone changed this expense on another phone. Save again to keep yours. | มีคนแก้ไขค่าใช้จ่ายนี้ในโทรศัพท์อีกเครื่อง บันทึกอีกครั้งเพื่อใช้ของคุณ | SharedExpenseCopy.kt `changedElsewhere` |
 | Someone removed this expense. Save again to bring it back with your changes. | มีคนนำค่าใช้จ่ายนี้ออก บันทึกอีกครั้งเพื่อนำกลับมาพร้อมการแก้ไขของคุณ | SharedExpenseCopy.kt `removedElsewhere` |
 | This expense was removed. Save to bring it back. | ค่าใช้จ่ายนี้ถูกนำออกแล้ว บันทึกเพื่อนำกลับมา | SharedExpenseCopy.kt `openedRemoved` |

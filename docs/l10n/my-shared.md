@@ -163,7 +163,7 @@ These Burmese strings for the Shared tab, groups, splits, payments, people, join
 | ≈ {baht} at ฿{rate} per {per}, saved with the expense | ≈ {baht} · {per} ကို ฿{rate} နှုန်း၊ စရိတ်နဲ့အတူ သိမ်းထားမယ် | `SharedExpenseCopy.kt:65` |
 | ฿ per {unit} {code} | {unit} {code} ကို ฿ | `SharedExpenseCopy.kt:66` |
 | {mode} · {n} person/people | {mode} · {n} ယောက် | `SharedExpenseCopy.kt:67` |
-| From your History. Change the amount, date or category there. | မှတ်တမ်းကနေ လာတာ။ ပမာဏ၊ ရက်စွဲ ဒါမှမဟုတ် အမျိုးအစားကို အဲဒီမှာ ပြင်ပါ။ | `SharedExpenseCopy.kt:68` |
+| From your History. Change the amount or date there. | မှတ်တမ်းကနေ လာတာ။ ပမာဏ ဒါမှမဟုတ် ရက်စွဲကို အဲဒီမှာ ပြင်ပါ။ | `SharedExpenseCopy.kt:68` |
 | Someone changed this expense on another phone. Save again to keep yours. | တခြားဖုန်းကနေ ဒီစရိတ်ကို ပြင်ထားတယ်။ သင့်ဟာကို ထားချင်ရင် ထပ်သိမ်းပါ။ | `SharedExpenseCopy.kt:31` |
 | Someone removed this expense. Save again to bring it back with your changes. | တခြားဖုန်းကနေ ဒီစရိတ်ကို ဖယ်ထားတယ်။ သင်ပြင်ထားတာနဲ့ ပြန်ထည့်ချင်ရင် ထပ်သိမ်းပါ။ | `SharedExpenseCopy.kt:32` |
 | This expense was removed. Save to bring it back. | ဒီစရိတ်ကို ဖယ်ထားပြီးပြီ။ ပြန်ထည့်ချင်ရင် သိမ်းပါ။ | `SharedExpenseCopy.kt:33` |

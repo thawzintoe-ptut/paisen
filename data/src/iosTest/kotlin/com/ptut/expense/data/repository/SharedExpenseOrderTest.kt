@@ -15,6 +15,7 @@ import com.ptut.expense.domain.shared.PaymentDraft
 import com.ptut.expense.domain.shared.PaymentMethod
 import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SplitMode
+import com.ptut.expense.domain.shared.TitleChange
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -93,8 +94,45 @@ class SharedExpenseOrderTest {
 
         editInHistory(row, before = 30_000, edit = TransactionEdit(Satang(30_000), "food", memo = "late"))
 
-        assertEquals(32_000L, dao.latestVersion(expenseId)!!.amountMinor)
-        assertEquals(2, dao.versionsOf(expenseId).size)
+        val latest = dao.latestVersion(expenseId)!!
+        assertEquals(32_000L, latest.amountMinor)
+        assertEquals("late", latest.note)
+    }
+
+    @Test
+    fun aCategoryEditInHistoryRenamesATitleThatWasOnlyTheOldCategoryName() = withPhone {
+        val group = shared.groupWith("Aye")
+        val expenseId = shared.saveExpense(dinner(group, 30_000).copy(description = "Food & drink"))
+        val row = ownRow()
+
+        editInHistory(row, before = 30_000, edit = TransactionEdit(Satang(30_000), "travel", memo = null), TitleChange("Food & drink", "Travel"))
+
+        val latest = dao.latestVersion(expenseId)!!
+        assertEquals("travel", latest.categoryId)
+        assertEquals("Travel", latest.description)
+    }
+
+    @Test
+    fun aCategoryChangedInTheGroupReachesYourHistoryRow() = withPhone {
+        val group = shared.groupWith("Aye")
+        val expenseId = shared.saveExpense(dinner(group, 30_000))
+        ownRow()
+
+        shared.saveExpense(dinner(group, 30_000).copy(expenseId = expenseId, categoryId = "transport"))
+
+        assertEquals("transport", dao.latestVersion(expenseId)!!.categoryId)
+        assertEquals("transport", transactions.all().single().categoryId)
+    }
+
+    @Test
+    fun aCategoryEditInHistoryKeepsATypedTitle() = withPhone {
+        val group = shared.groupWith("Aye")
+        val expenseId = shared.saveExpense(dinner(group, 30_000))
+        val row = ownRow()
+
+        editInHistory(row, before = 30_000, edit = TransactionEdit(Satang(30_000), "travel", memo = null), TitleChange("Food & drink", "Travel"))
+
+        assertEquals("Dinner", dao.latestVersion(expenseId)!!.description)
     }
 
     @Test
@@ -189,9 +227,9 @@ class SharedExpenseOrderTest {
     }
 
     /** What EditTransactionViewModel.save does: the row changes, then the shared copy follows. */
-    private suspend fun Phone.editInHistory(rowId: String, before: Long, edit: TransactionEdit) {
+    private suspend fun Phone.editInHistory(rowId: String, before: Long, edit: TransactionEdit, titleChange: TitleChange? = null) {
         ledger.applyEdit(rowId, edit)
-        shared.followTransaction(rowId, before = TransactionEdit(Satang(before), "food", memo = null, occurredAtEpochMillis = 0))
+        shared.followTransaction(rowId, before = TransactionEdit(Satang(before), "food", memo = null, occurredAtEpochMillis = 0), titleChange)
     }
 
     /** A version written on Aye's phone, as a pull stores it. */

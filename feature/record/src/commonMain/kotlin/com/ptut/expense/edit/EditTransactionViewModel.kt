@@ -16,6 +16,7 @@ import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.ledger.rowWithId
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
+import com.ptut.expense.domain.shared.TitleChange
 import com.ptut.expense.domain.shared.sharedExpenseOf
 import com.ptut.expense.domain.under
 import com.ptut.expense.locale.AppText
@@ -147,12 +148,20 @@ class EditTransactionViewModel(
         viewModelScope.launch {
             ledger.applyEdit(record.id, edit)
             // O4: the change flows one way, from History to the shared copy.
-            shared?.followTransaction(record.id, before = record.asEdit())
+            shared?.followTransaction(record.id, before = record.asEdit(), titleChange = titleChange(record.categoryId, edit.categoryId))
             haptics.saved()
             val edited = record.copy(categoryId = edit.categoryId, subCategoryId = edit.subCategoryId, memo = edit.memo)
             toasts?.show(ToastMessage(AppText.copy.record.updated(edited.displayName(known, subCategories))))
             stored.value = true
         }
+    }
+
+    /** The old and new category names, for a shared copy whose title was only the old name. Null when the category stayed. */
+    private fun titleChange(before: String?, after: String?): TitleChange? {
+        if (before == after) return null
+        val from = known.firstOrNull { it.id == before }?.name ?: return null
+        val to = known.firstOrNull { it.id == after }?.name ?: return null
+        return TitleChange(from, to)
     }
 
     /**

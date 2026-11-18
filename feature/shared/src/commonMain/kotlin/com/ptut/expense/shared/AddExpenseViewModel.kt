@@ -65,8 +65,10 @@ data class ExpenseForm(
     val lastEdited: String? = null,
     val splitOpen: Boolean = false,
     val loaded: Boolean = false,
-    /** #186 (O4): amount, currency, date, payer and category come from History. The description stays editable. */
+    /** #186 (O4): amount, currency, date and payer come from History. The description and category stay editable. */
     val locked: Boolean = false,
+    /** A purchase shared from History keeps History's category until its first save links the two. */
+    val categoryLocked: Boolean = false,
     val subCategoryId: String? = null,
     /** #214: true from the tap until the screen leaves, so two fast taps save one expense. */
     val saving: Boolean = false,
@@ -203,6 +205,7 @@ class AddExpenseViewModel(
                 subCategoryId = seed.subCategoryId,
                 payerMemberId = group.meMemberId,
                 locked = true,
+                categoryLocked = true,
                 loaded = true,
             )
             if (home.code != group.currency) prefillRate(home, group)
@@ -243,7 +246,8 @@ class AddExpenseViewModel(
                 }
             },
             loaded = true,
-            // O4: a linked expense's amount, date, payer and category change in History only.
+            // O4: a linked expense's amount, date and payer change in History only. Its category
+            // changes here too, and saving copies it to your History row (#32).
             locked = existing.id in snapshot.links,
             subCategoryId = existing.subCategoryId,
         )
@@ -282,7 +286,7 @@ class AddExpenseViewModel(
 
     fun setTime(epochMillis: Long) = unlocked { it.copy(occurredAtEpochMillis = epochMillis) }
 
-    fun setCategory(id: String) = unlocked { it.copy(categoryId = id, subCategoryId = null) }
+    fun setCategory(id: String) = form.update { if (it.categoryLocked) it else it.copy(categoryId = id, subCategoryId = null) }
 
     fun setPayer(memberId: String) = unlocked { it.copy(payerMemberId = memberId) }
 

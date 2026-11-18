@@ -11,6 +11,7 @@ import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.ExpenseTitle
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.NewMember
 import com.ptut.expense.domain.shared.PaymentMethod
@@ -448,7 +449,7 @@ class GroupDetailViewModel(
         return GroupFeedRow.Expense(
             id_ = id,
             icon = categories.firstOrNull { it.id == categoryId }?.icon ?: DEFAULT_ICON,
-            title = description,
+            title = ExpenseTitle.shown(note, description, categories.firstOrNull { it.id == categoryId }?.name),
             detail = text.detail.payerPaid(group.displayName(payerMemberId), formatMinor(amountMinor, Currencies.of(currency))),
             word = when {
                 !involved -> text.detail.notInvolved

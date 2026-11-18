@@ -62,6 +62,43 @@ class AddExpenseViewModelTest : ViewModelTest() {
         assertEquals("Lunch out", titleSavedWithNoDescription(renamed))
     }
 
+    /** #186: the amount stays History's, the category can change here and is saved with the expense. */
+    @Test
+    fun `an expense you paid from History takes a new category and keeps its amount`() = runTest {
+        val viewModel = editingYourLinkedDinner()
+        viewModel.model.setAmount("999")
+        viewModel.model.setCategory("transport")
+        runCurrent()
+
+        val repository = viewModel.savedTo
+        viewModel.model.save {}
+        repository.gate.complete(Unit)
+        runCurrent()
+
+        val saved = repository.expenses.single()
+        assertEquals("transport", saved.categoryId)
+        assertEquals(30_000L, saved.amountMinor)
+    }
+
+    @Test
+    fun `the locked line no longer sends a category change to History`() = runTest {
+        val viewModel = editingYourLinkedDinner()
+
+        assertEquals("From your History. Change the amount or date there.", viewModel.model.ready().lockedLine)
+    }
+
+    private class Editing(val model: AddExpenseViewModel, val savedTo: FakeSharedRepository)
+
+    private fun TestScope.editingYourLinkedDinner(): Editing {
+        val dinner = flat12.dinner(paidBy = "me", wholeMinor = 30_000).copy(categoryId = "food")
+        val repository = FakeSharedRepository()
+        repository.snapshot.value = repository.snapshot.value.copy(expenseVersions = listOf(dinner), links = mapOf(dinner.id to "tx-1"))
+        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = dinner.id, repository = repository, categories = Category.seed())
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        return Editing(viewModel, repository)
+    }
+
     /** #48: the home stays baht here, and the group's kyat writes every amount. */
     @Test
     fun `a new expense in a kyat group starts in kyat with no rate`() = runTest {

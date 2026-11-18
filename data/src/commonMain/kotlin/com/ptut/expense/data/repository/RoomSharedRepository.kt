@@ -26,6 +26,7 @@ import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.ExpenseCause
 import com.ptut.expense.domain.shared.ExpenseChanged
 import com.ptut.expense.domain.shared.ExpenseDraft
+import com.ptut.expense.domain.shared.ExpenseTitle
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.Member
 import com.ptut.expense.domain.shared.NewMember
@@ -45,6 +46,7 @@ import com.ptut.expense.domain.shared.SharedPayment
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.SplitMode
+import com.ptut.expense.domain.shared.TitleChange
 import com.ptut.expense.domain.shared.TransactionSeed
 import com.ptut.expense.domain.shared.convert
 import com.ptut.expense.domain.shared.due
@@ -331,7 +333,7 @@ class RoomSharedRepository(
         )
     }
 
-    override suspend fun followTransaction(transactionId: String, before: TransactionEdit) {
+    override suspend fun followTransaction(transactionId: String, before: TransactionEdit, titleChange: TitleChange?) {
         val expenseId = snapshot.value.links.entries.firstOrNull { it.value == transactionId }?.key ?: return
         val last = dao.latestVersion(expenseId)?.takeUnless { it.removed } ?: return
         val row = dao.transaction(transactionId) ?: return
@@ -350,8 +352,12 @@ class RoomSharedRepository(
         val occurredAt = if (dateMoved) row.occurredAtEpochMillis else last.occurredAtEpochMillis
         val categoryId = if (categoryMoved) row.categoryId else last.categoryId
         val subCategoryId = if (categoryMoved) row.subCategoryId else last.subCategoryId
+        val memo = row.memo?.trim()?.ifEmpty { null }
+        val note = if (memo != before.memo?.trim()?.ifEmpty { null }) memo else last.note
+        val description = if (categoryMoved) ExpenseTitle.followed(last.description, titleChange) else last.description
         if (amountMinor == last.amountMinor && occurredAt == last.occurredAtEpochMillis &&
-            categoryId == last.categoryId && subCategoryId == last.subCategoryId
+            categoryId == last.categoryId && subCategoryId == last.subCategoryId &&
+            note == last.note && description == last.description
         ) {
             return
         }
@@ -379,6 +385,8 @@ class RoomSharedRepository(
                 occurredAtEpochMillis = occurredAt,
                 categoryId = categoryId,
                 subCategoryId = subCategoryId,
+                description = description,
+                note = note,
                 amountMinor = amountMinor,
                 amountSatang = satang.toMinorUnits(),
                 splitMode = keptMode.name,

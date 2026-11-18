@@ -171,9 +171,9 @@ private fun Form(state: AddExpenseUiState.Ready, actions: AddExpenseActions, mod
             }
             // #186: a locked date still shows; it only stops opening the picker.
             SkyDateTimeRow(epochMillis = form.occurredAtEpochMillis, onPick = actions.onTime, enabled = !form.locked)
-            IconRow(icon = state.categoryIcon?.let { PtutIcon.named(it) } ?: PtutIcon.ReceiptLong, onClick = if (form.locked) null else ({ sheet = SHEET_CATEGORY })) {
+            IconRow(icon = state.categoryIcon?.let { PtutIcon.named(it) } ?: PtutIcon.ReceiptLong, onClick = if (form.categoryLocked) null else ({ sheet = SHEET_CATEGORY })) {
                 Text(state.categoryName ?: words.pickCategory, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-                if (!form.locked) Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.cardGlyph))
+                if (!form.categoryLocked) Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.cardGlyph))
             }
             IconRow(icon = PtutIcon.ListAlt) {
                 SharedTextField(value = form.note, onValueChange = actions.onNote, label = text.common.note, placeholder = words.addNote)

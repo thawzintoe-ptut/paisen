@@ -15,6 +15,7 @@ import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.SplitMode
+import com.ptut.expense.domain.shared.TitleChange
 import com.ptut.expense.domain.shared.TransactionSeed
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -133,7 +134,7 @@ internal class FakeSharedRepository(group: SharedGroup = flat12) : SharedReposit
 
     override suspend fun removeExpense(expenseId: String) = notThisTest<Unit>()
 
-    override suspend fun followTransaction(transactionId: String, before: TransactionEdit) = notThisTest<Unit>()
+    override suspend fun followTransaction(transactionId: String, before: TransactionEdit, titleChange: TitleChange?) = notThisTest<Unit>()
 
     override suspend fun removePayment(paymentId: String) = notThisTest<Unit>()
 

@@ -76,10 +76,11 @@ interface SharedRepository {
      */
 
     /**
-     * Only the fields [before] shows were changed in History travel, and only while this phone's
-     * member still pays the expense: an edit another phone made to the rest stays.
+     * Only the fields [before] shows were changed in History travel, the note among them, and only
+     * while this phone's member still pays the expense: an edit another phone made to the rest stays.
+     * [titleChange] renames a title that was only the old category's name.
      */
-    suspend fun followTransaction(transactionId: String, before: TransactionEdit)
+    suspend fun followTransaction(transactionId: String, before: TransactionEdit, titleChange: TitleChange? = null)
 
     /**
      * #218: takes a payment out of the balances, also as Undo right after recording it. In a group
