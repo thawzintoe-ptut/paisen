@@ -101,6 +101,12 @@ sealed interface GroupFeedRow {
 
 data class GroupDay(val label: String, val rows: List<GroupFeedRow>)
 
+/** #64: the group screen opens on Expenses. */
+enum class GroupTab { Expenses, Balances, Activity }
+
+/** #63: "with Aye · ฿350", and the payment Record payment opens with. */
+data class SettleUpUiModel(val fromId: String, val toId: String, val line: String)
+
 sealed interface GroupDetailUiState {
     data object Missing : GroupDetailUiState
 
@@ -115,8 +121,14 @@ sealed interface GroupDetailUiState {
         /** #48: what [balance] and every row count in. */
         val money: HomeMoney,
         val settled: Boolean,
-        /** Where SETTLE UP goes: the first payment that involves you, or null to show Who pays whom. */
-        val settleWith: Pair<String, String>?,
+        /** #63: the one main action, the largest debt that involves you; null when you have nothing to settle. */
+        val settleUp: SettleUpUiModel?,
+        /** #63: "Nothing to settle yet" or "All settled up" in place of Settle up, or null when [settleUp] shows. */
+        val balanceChip: String?,
+        /** #63: a new group shows no ฿0.00, only the chip. */
+        val hasActivity: Boolean,
+        /** #62: "3 people", or "Just you so far". */
+        val memberLine: String,
         val days: List<GroupDay>,
         /** #189: "Up to date", "Offline · 3 changes waiting", or null for a group not shared yet. */
         val syncLine: String? = null,
@@ -221,6 +233,22 @@ class GroupDetailViewModel(
 
     private val groupAction = MutableStateFlow(GroupActionState())
     val groupActionState: StateFlow<GroupActionState> = groupAction
+
+    private val tabState = MutableStateFlow(GroupTab.Expenses)
+    val tab: StateFlow<GroupTab> = tabState
+
+    private val activityLooked = MutableStateFlow<Long?>(null)
+
+    /** #64: Activity counts what others did after this; leaving the tab moves it to now and clears the count. */
+    val activitySince: StateFlow<Long?> = combine(seenBefore, activityLooked) { seen, looked -> looked ?: seen }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun showTab(next: GroupTab) {
+        if (tabState.value == GroupTab.Activity && next != GroupTab.Activity) {
+            activityLooked.value = clock.now().toEpochMilliseconds()
+        }
+        tabState.value = next
+    }
 
     private val removed = MutableStateFlow(false)
 
@@ -401,6 +429,13 @@ class GroupDetailViewModel(
             .sortedByDescending { it.first }
             .groupBy { (at, _) -> Instant.fromEpochMilliseconds(at).dateIn(HomeTime) }
             .map { (date, rows) -> GroupDay(if (date == today) AppText.copy.common.today.uppercase() else date.dayLabel().uppercase(), rows.map { it.second }) }
+        val settleUp = settlement.transfers
+            .filter { it.fromMemberId == me || it.toMemberId == me }
+            .maxByOrNull { it.amount }
+            ?.let { transfer ->
+                val other = if (transfer.fromMemberId == me) transfer.toMemberId else transfer.fromMemberId
+                SettleUpUiModel(transfer.fromMemberId, transfer.toMemberId, text.detail.settleWith(group.displayName(other), transfer.amount.formatCompact(money)))
+            }
 
         return GroupDetailUiState.Loaded(
             groupId = group.id,
@@ -416,11 +451,22 @@ class GroupDetailViewModel(
             },
             balance = net.magnitude(),
             tone = net.tone(),
-            spendLine = text.detail.spendLine(group.type == GroupType.Trip, totalSpend(group.id).formatCompact(money), group.currency),
+            spendLine = if (days.isEmpty()) {
+                text.detail.nothingSpent(group.currency)
+            } else {
+                text.detail.spendLine(group.type == GroupType.Trip, totalSpend(group.id).formatCompact(money), group.currency)
+            },
             money = money,
             settled = balances.values.all { it == Satang.Zero },
-            settleWith = settlement.transfers.firstOrNull { it.fromMemberId == me || it.toMemberId == me }
-                ?.let { it.fromMemberId to it.toMemberId },
+            settleUp = settleUp,
+            balanceChip = when {
+                days.isEmpty() -> text.detail.nothingToSettle
+                settleUp != null -> null
+                balances.values.all { it == Satang.Zero } -> text.detail.allSettledUp
+                else -> text.detail.settledHere
+            },
+            hasActivity = days.isNotEmpty(),
+            memberLine = if (group.activeMembers.size <= 1) text.detail.justYou else text.home.peopleCount(group.activeMembers.size),
             days = days,
             type = group.type,
             icon = group.icon,

@@ -361,7 +361,7 @@ class AddExpenseViewModel(
         this.form.update { it.copy(saving = true) }
         viewModelScope.launch {
             val text = AppText.copy.shared.expense
-            try {
+            val savedId = try {
                 repository.saveExpense(
                     ExpenseDraft(
                         expenseId = expenseId,
@@ -398,6 +398,8 @@ class AddExpenseViewModel(
                     } else {
                         listOfNotNull(text.added(title), meaning).joinToString(" · ")
                     },
+                    // #66: Undo takes back only a new expense; an edit has no version to step back to here.
+                    action = if (expenseId == null) ToastAction(AppText.copy.common.undo) { repository.removeExpense(savedId) } else null,
                 ),
             )
             onSaved()

@@ -44,11 +44,20 @@ data class SharedEntryUiModel(
     val after: String?,
     val line: String,
     val tone: BalanceTone,
+    /** #64: what a tap opens. Null for a removal, whose row already says what it was. */
+    val expenseId: String? = null,
+    val paymentId: String? = null,
 )
 
 data class SharedActivityDay(val label: String, val entries: List<SharedEntryUiModel>)
 
-data class SharedActivityUiState(val title: String, val filter: ActivityFilter, val days: List<SharedActivityDay>)
+/** [fresh] is #64's "New since you last looked": others' changes after the mark, kept out of [days]. */
+data class SharedActivityUiState(
+    val title: String,
+    val filter: ActivityFilter,
+    val days: List<SharedActivityDay>,
+    val fresh: List<SharedEntryUiModel> = emptyList(),
+)
 
 /**
  * #140: one timeline of everything shared, newest first. Edits keep the old value beside the new
@@ -61,8 +70,9 @@ class SharedActivityViewModel(
 ) : ViewModel() {
 
     private val filter = MutableStateFlow(ActivityFilter.All)
+    private val seenMark = MutableStateFlow<Long?>(null)
 
-    val uiState: StateFlow<SharedActivityUiState> = combine(repository.snapshot, filter) { snapshot, filter ->
+    val uiState: StateFlow<SharedActivityUiState> = combine(repository.snapshot, filter, seenMark) { snapshot, filter, since ->
         val today = clock.now().toLocalDateTime(HomeTime).date
         val text = AppText.copy.shared
         val entries = snapshot.events(groupId)
@@ -75,10 +85,12 @@ class SharedActivityViewModel(
                 }
             }
             .mapNotNull { event -> snapshot.group(event.groupId)?.let { event to it } }
+        val (fresh, earlier) = entries.partition { (event, group) -> event.isNewTo(group, since) }
         SharedActivityUiState(
             title = groupId?.let { snapshot.group(it)?.name?.let(text.log.groupTitle) } ?: text.activity,
             filter = filter,
-            days = entries
+            fresh = fresh.map { (event, group) -> event.entry(group) },
+            days = earlier
                 .groupBy { (event, _) -> Instant.fromEpochMilliseconds(event.atEpochMillis).dateIn(HomeTime) }
                 .map { (date, rows) ->
                     SharedActivityDay(
@@ -91,6 +103,16 @@ class SharedActivityViewModel(
 
     fun show(filter: ActivityFilter) {
         this.filter.value = filter
+    }
+
+    /** #64: the group screen's mark; null, as on a first visit, makes nothing new. */
+    fun since(mark: Long?) {
+        seenMark.value = mark
+    }
+
+    private fun SharedEvent.isNewTo(group: SharedGroup, mark: Long?): Boolean {
+        val author = authorMemberId
+        return mark != null && author != null && !group.isMe(author) && atEpochMillis > mark
     }
 
     private fun SharedEvent.entry(group: SharedGroup): SharedEntryUiModel {
@@ -115,6 +137,7 @@ class SharedActivityViewModel(
                     after = null,
                     line = listOfNotNull(said ?: text.notInvolved, time).joinToString(" · "),
                     tone = tone,
+                    expenseId = expense.id,
                 )
             }
 
@@ -139,6 +162,7 @@ class SharedActivityViewModel(
                         else -> time
                     },
                     tone = BalanceTone.Settled,
+                    expenseId = after.id,
                 )
             }
 
@@ -168,6 +192,7 @@ class SharedActivityViewModel(
                     after = null,
                     line = text.recordedBy(author, time),
                     tone = if (group.isMe(payment.toMemberId)) BalanceTone.Owed else BalanceTone.Settled,
+                    paymentId = payment.id,
                 )
             }
 

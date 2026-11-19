@@ -132,7 +132,11 @@ internal class FakeSharedRepository(group: SharedGroup = flat12) : SharedReposit
 
     override suspend fun removeMember(groupId: String, memberId: String) = notThisTest<Unit>()
 
-    override suspend fun removeExpense(expenseId: String) = notThisTest<Unit>()
+    val removedExpenses = mutableListOf<String>()
+
+    override suspend fun removeExpense(expenseId: String) {
+        removedExpenses += expenseId
+    }
 
     override suspend fun followTransaction(transactionId: String, before: TransactionEdit, titleChange: TitleChange?) = notThisTest<Unit>()
 

@@ -61,6 +61,22 @@ data class SharedDetailCopy(
         "$n ${if (n == 1) "change has" else "changes have"} not been sent yet. If you leave now, the others never see ${if (n == 1) "it" else "them"}."
     },
     val leaveAnyway: String = "Leave anyway",
+    val justYou: String = "Just you so far",
+    val settleWith: (String, String) -> String = { name, amount -> "with $name · $amount" },
+    val allSettledUp: String = "All settled up",
+    val nothingToSettle: String = "Nothing to settle yet",
+    val nothingSpent: (String) -> String = { code -> "Nothing spent yet · counts in $code" },
+    val newActivity: (Int) -> String = { n -> "$n new" },
+    /** The number on the Activity tab. */
+    val badgeCount: (Int) -> String = { n -> "$n" },
+    val newSinceLooked: String = "New since you last looked",
+    val activityEmpty: String = "Changes anyone makes in this group show here.",
+    val everyoneSquare: String = "Everyone's square",
+    val whoIsIn: String = "Who's in the group",
+    val noExpensesTitle: String = "No expenses yet",
+    val noExpensesBody: String = "Add what someone paid for, and it's split between everyone here.",
+    val ledgerUnchanged: String = "Your own ledger is unchanged.",
+    val backToShared: String = "Back to Shared",
 )
 
 val BurmeseSharedDetail = SharedDetailCopy(
@@ -119,6 +135,21 @@ val BurmeseSharedDetail = SharedDetailCopy(
     removeUnsettled = { name -> "$name မှာ ဒီအဖွဲ့ထဲ မရှင်းရသေးတဲ့ ကျန်ငွေ ရှိသေးတယ်။ ရှင်းတဲ့အထိ ကျန်နေမယ်။" },
     notSent = { n -> "ပြောင်းထားတာ ${n.inMyanmarDigits()} ခု မပို့ရသေးဘူး။ အခု ထွက်ရင် ကျန်တဲ့သူတွေ ဘယ်တော့မှ မမြင်ရဘူး။" },
     leaveAnyway = "ဘာဖြစ်ဖြစ် ထွက်မယ်",
+    justYou = "အခုထိ သင်တစ်ယောက်တည်း",
+    settleWith = { name, amount -> "$name နဲ့ · $amount" },
+    allSettledUp = "အားလုံး ရှင်းပြီး",
+    nothingToSettle = "ရှင်းစရာ မရှိသေးဘူး",
+    nothingSpent = { code -> "ဘာမှ မသုံးရသေးဘူး · $code နဲ့ တွက်တယ်" },
+    newActivity = { n -> "အသစ် ${n.inMyanmarDigits()} ခု" },
+    badgeCount = { n -> n.inMyanmarDigits() },
+    newSinceLooked = "နောက်ဆုံး ကြည့်ပြီးကတည်းက အသစ်",
+    activityEmpty = "ဒီအဖွဲ့ထဲ ဘယ်သူ ပြောင်းပြောင်း ဒီမှာ ပေါ်မယ်။",
+    everyoneSquare = "လူတိုင်း ရှင်းပြီး",
+    whoIsIn = "အဖွဲ့ထဲမှာ ဘယ်သူတွေ ရှိလဲ",
+    noExpensesTitle = "စရိတ် မရှိသေးဘူး",
+    noExpensesBody = "တစ်ယောက်ယောက် ပေးခဲ့တာကို ထည့်ပါ၊ ဒီမှာရှိတဲ့ လူတိုင်းကြား ခွဲပေးမယ်။",
+    ledgerUnchanged = "သင့်ကိုယ်ပိုင် စာရင်းက မပြောင်းဘူး။",
+    backToShared = "မျှသုံး ကို ပြန်သွားမယ်",
 )
 
 /** Who pays whom: the payments that settle one group. */
@@ -293,6 +324,21 @@ val ThaiSharedDetail = SharedDetailCopy(
     removeUnsettled = { name -> "$name ยังมียอดคงค้างในกลุ่มนี้ ยอดจะอยู่จนกว่าจะเคลียร์" },
     notSent = { n -> "การเปลี่ยนแปลง $n รายการยังไม่ได้ส่ง ถ้าออกตอนนี้ คนอื่นจะไม่เห็นเลย" },
     leaveAnyway = "ออกเลย",
+    justYou = "ตอนนี้มีแค่คุณ",
+    settleWith = { name, amount -> "กับ $name · $amount" },
+    allSettledUp = "เคลียร์ครบแล้ว",
+    nothingToSettle = "ยังไม่มีอะไรต้องเคลียร์",
+    nothingSpent = { code -> "ยังไม่มีค่าใช้จ่าย · นับเป็น $code" },
+    newActivity = { n -> "ใหม่ $n รายการ" },
+    badgeCount = { n -> "$n" },
+    newSinceLooked = "ใหม่ตั้งแต่ที่คุณดูครั้งล่าสุด",
+    activityEmpty = "การเปลี่ยนแปลงของทุกคนในกลุ่มนี้จะแสดงที่นี่",
+    everyoneSquare = "ทุกคนเคลียร์กันแล้ว",
+    whoIsIn = "ใครอยู่ในกลุ่มนี้",
+    noExpensesTitle = "ยังไม่มีค่าใช้จ่าย",
+    noExpensesBody = "เพิ่มสิ่งที่ใครสักคนจ่ายไป แล้วจะหารกับทุกคนที่นี่",
+    ledgerUnchanged = "บัญชีของคุณเองไม่เปลี่ยน",
+    backToShared = "กลับไปที่กลุ่ม",
 )
 
 val ThaiSharedSettle = SharedSettleCopy(

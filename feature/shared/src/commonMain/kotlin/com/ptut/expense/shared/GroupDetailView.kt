@@ -11,12 +11,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,7 +32,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -61,17 +58,12 @@ import com.ptut.expense.ui.sky.SkyBarIconAction
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
-import com.ptut.expense.ui.sky.SkyChange
 import com.ptut.expense.ui.sky.SkyChip
 import com.ptut.expense.ui.sky.SkyEmptyState
 import com.ptut.expense.ui.sky.SkyGroupedCard
-import com.ptut.expense.ui.sky.SkyKeyValueRow
-import com.ptut.expense.ui.sky.SkyPageSheet
 import com.ptut.expense.ui.sky.SkyProgress
-import com.ptut.expense.ui.sky.SkySectionHeader
 import com.ptut.expense.ui.sky.SkyTextAction
 import com.ptut.expense.ui.sky.SkyTopBar
-import com.ptut.expense.ui.sky.skyItem
 
 /** #137: p27's sky field over a white sheet of expenses and payments, with the ink add button. */
 @Composable
@@ -82,7 +74,6 @@ fun GroupDetailView(
     onBalances: () -> Unit,
     onAddExpense: () -> Unit,
     onOpenExpense: (String) -> Unit,
-    onActivity: () -> Unit,
     modifier: Modifier = Modifier,
     invite: GroupInvite = GroupInvite(),
     /** #185: set up a repeat, or open one to change or stop it. */
@@ -93,6 +84,8 @@ fun GroupDetailView(
     /** Pull down on a shared group to sync now, not at the next tick. */
     refreshing: Boolean = false,
     onRefresh: () -> Unit = {},
+    /** #64: Expenses, Balances and Activity. */
+    tabs: GroupTabsState = GroupTabsState(),
 ) {
     val text = LocalCopy.current.shared
     when (uiState) {
@@ -100,15 +93,17 @@ fun GroupDetailView(
             SkyTopBar(title = text.group, onBack = onBack)
             SkyEmptyState(
                 headline = text.thisGroupIsGone,
-                body = text.detail.goneBody,
+                body = "${text.detail.goneBody} ${text.detail.ledgerUnchanged}",
                 status = text.detail.goneStatus,
                 statusIcon = PtutIcon.Check.image,
+                cta = text.detail.backToShared,
+                onCta = onBack,
                 modifier = Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.md),
             )
         }
 
         is GroupDetailUiState.Loaded -> Loaded(
-            uiState, onBack, onSettleUp, onBalances, onAddExpense, onOpenExpense, onActivity, invite, onRepeat, onOpenRepeat, manage, refreshing, onRefresh, modifier,
+            uiState, onBack, onSettleUp, onBalances, onAddExpense, onOpenExpense, invite, onRepeat, onOpenRepeat, manage, refreshing, onRefresh, tabs, modifier,
         )
     }
 }
@@ -121,13 +116,13 @@ private fun Loaded(
     onBalances: () -> Unit,
     onAddExpense: () -> Unit,
     onOpenExpense: (String) -> Unit,
-    onActivity: () -> Unit,
     invite: GroupInvite,
     onRepeat: () -> Unit,
     onOpenRepeat: (String) -> Unit,
     manage: GroupManage,
     refreshing: Boolean,
     onRefresh: () -> Unit,
+    tabs: GroupTabsState,
     modifier: Modifier = Modifier,
 ) {
     val text = LocalCopy.current.shared
@@ -153,6 +148,15 @@ private fun Loaded(
             inviteStep = if (invite.signedIn) STEP_SHEET else STEP_SIGN_IN
         }
     }
+    val startInvite: () -> Unit = {
+        askFirst = false
+        if (invite.signedIn) {
+            invite.onInvite()
+            inviteStep = STEP_SHEET
+        } else {
+            inviteStep = STEP_SIGN_IN
+        }
+    }
     // The feed scrolls under the add button, which shows it through iOS glass (#123).
     val glass = rememberGlassBackdrop()
     val pull = rememberPullToRefreshState()
@@ -163,118 +167,37 @@ private fun Loaded(
             .pullToRefresh(isRefreshing = refreshing, state = pull, enabled = state.canRefresh, onRefresh = onRefresh),
     ) {
         LazyColumn(Modifier.fillMaxSize().glassSource(glass)) {
-            item {
+            item(key = "header") {
                 Column(Modifier.fillMaxWidth().background(MaterialTheme.ptut.heroBg).padding(bottom = Spacing.lg)) {
                     SkyTopBar(
-                        title = state.name,
+                        title = "",
                         onBack = onBack,
                         trailing = { SkyBarIconAction(icon = PtutIcon.MoreHoriz, label = text.detail.more, onClick = { menu = true }) },
                     )
-                    Column(Modifier.padding(horizontal = Spacing.md)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                            state.members.forEach { member ->
-                                // #190: a name nobody has claimed yet is drawn faint until they join.
-                                MemberAvatar(
-                                    label = member.label,
-                                    isMe = member.isMe,
-                                    size = SkySizes.chip,
-                                    modifier = Modifier
-                                        .semantics { contentDescription = if (member.joined) member.name else text.detail.notJoined(member.name) }
-                                        .then(if (member.joined) Modifier else Modifier.alpha(NOT_JOINED_ALPHA)),
-                                )
-                            }
-                        }
-                        // #201: the fade is said in words too, so it never depends on contrast alone.
-                        state.notJoinedLine?.let {
-                            Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.ptut.heroOn, modifier = Modifier.padding(top = Spacing.xxs))
-                        }
-                        SharedHero(
-                            label = state.balanceLabel,
-                            amount = state.balance,
-                            tint = MaterialTheme.ptut.heroOn,
-                            labelColor = MaterialTheme.ptut.heroOn,
-                            money = state.money,
-                            modifier = Modifier.padding(top = Spacing.md),
-                        )
-                        Text(
-                            state.spendLine,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.ptut.heroOn,
-                            modifier = Modifier.padding(top = Spacing.xs),
-                        )
-                        SkyChange(target = state.syncLine) { line ->
-                            line?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.ptut.heroOn, modifier = Modifier.padding(top = Spacing.xxs)) }
-                        }
-                        if (state.signedOut) {
-                            SkyTextAction(
-                                label = text.signIn,
-                                onClick = { inviteStep = STEP_SIGN_IN_AGAIN },
-                                enabled = true,
-                                ink = MaterialTheme.ptut.heroOn,
-                                modifier = Modifier.offset(x = -Spacing.xs),
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
-                        ) {
-                            if (!state.settled) {
-                                SkyButton(
-                                    text.detail.settleUp,
-                                    onClick = { state.settleWith?.let { (from, to) -> onSettleUp(from, to) } ?: onBalances() },
-                                    modifier = Modifier.weight(1.3f),
-                                )
-                            }
-                            SkyButton(text.detail.balances, onClick = onBalances, kind = SkyButtonKind.Outline, modifier = Modifier.weight(1f))
-                        }
-                    }
+                    GroupHeader(state, onSignIn = { inviteStep = STEP_SIGN_IN_AGAIN }, onSettleUp = onSettleUp)
                 }
             }
-            item {
-                SkyPageSheet(modifier = Modifier.padding(top = Spacing.none)) {
-                    // #182: what adds itself, above what was added.
-                    if (state.repeats.isNotEmpty()) {
-                        SkySectionHeader(text = text.detail.repeats)
-                        state.repeats.forEach { repeat ->
-                            SkyKeyValueRow(
-                                label = repeat.name,
-                                value = repeat.line,
-                                modifier = Modifier.tappable(PtutRadii.r12, Role.Button) { onOpenRepeat(repeat.id) },
-                            )
-                        }
-                    }
-                    SkySectionHeader(text = text.detail.expenses)
-                    if (state.days.isEmpty()) {
-                        Text(
-                            text.detail.noExpenses,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = Spacing.xs),
-                        )
-                    }
-                }
-            }
-            state.days.forEach { day ->
-                item(key = "day-${day.label}") {
-                    Text(
-                        day.label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = skyItem().padding(horizontal = Spacing.s20).padding(top = Spacing.sm, bottom = Spacing.xxs),
-                    )
-                }
-                items(day.rows, key = { it.id }) { row ->
-                    Box(skyItem()) {
-                        when (row) {
-                            is GroupFeedRow.Expense -> ExpenseRow(row, onClick = { onOpenExpense(row.id) })
-                            is GroupFeedRow.Payment -> PaymentRow(row, onClick = { openPayment = row.id })
-                        }
-                    }
-                }
+            item(key = "tabs") { GroupTabRow(tabs.selected, activityCount = tabs.activity?.fresh?.size ?: 0, onSelect = tabs.onSelect) }
+            when (tabs.selected) {
+                GroupTab.Expenses -> expensesTab(
+                    state,
+                    onOpenRepeat = onOpenRepeat,
+                    onOpenExpense = onOpenExpense,
+                    onOpenPayment = { openPayment = it },
+                    onAddExpense = onAddExpense,
+                    onInvite = startInvite,
+                )
+
+                GroupTab.Balances -> balancesTab(state, tabs.balances, onSimplify = tabs.onSimplify, onSettle = onSettleUp)
+
+                GroupTab.Activity -> activityTab(tabs.activity, onOpenExpense = onOpenExpense, onOpenPayment = { openPayment = it })
             }
             item { Spacer(Modifier.height(SkySizes.pillClearance)) }
         }
-        AddButton(glass, onClick = onAddExpense, modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.md))
+        // #65: an empty group asks for its first expense in place, so the + waits until there is one.
+        if (state.hasActivity) {
+            AddButton(glass, onClick = onAddExpense, modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.md))
+        }
         // Below the status bar, so the spinner never sits under the clock.
         PullToRefreshDefaults.Indicator(
             state = pull,
@@ -304,15 +227,7 @@ private fun Loaded(
             if (state.canInvite) {
                 SkyButton(
                     text.invitePeople,
-                    onClick = pick {
-                        askFirst = false
-                        if (invite.signedIn) {
-                            invite.onInvite()
-                            inviteStep = STEP_SHEET
-                        } else {
-                            inviteStep = STEP_SIGN_IN
-                        }
-                    },
+                    onClick = pick(startInvite),
                     modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
                 )
             }
@@ -320,7 +235,6 @@ private fun Loaded(
                 rows = listOf(
                     { MenuRow(PtutIcon.Payments, text.whoPaysWhom, onClick = pick(onBalances)) },
                     { MenuRow(PtutIcon.Sync, text.detail.repeatAnExpense, onClick = pick(onRepeat)) },
-                    { MenuRow(PtutIcon.History, text.activity, onClick = pick(onActivity)) },
                 ),
                 color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.padding(top = Spacing.md),
@@ -724,10 +638,10 @@ private const val STEP_REMOVE = "remove"
 private const val STEP_SHEET = "sheet"
 
 /** A member who has not joined yet, still only a name. */
-private const val NOT_JOINED_ALPHA = 0.6f
+internal const val NOT_JOINED_ALPHA = 0.6f
 
 @Composable
-private fun ExpenseRow(row: GroupFeedRow.Expense, onClick: () -> Unit) {
+internal fun ExpenseRow(row: GroupFeedRow.Expense, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -788,7 +702,7 @@ private fun RemovePaymentSheet(shared: Boolean, onConfirm: () -> Unit, onDismiss
 
 /** p27: a settlement sits in the same feed with a neutral tile and no word. Tapping it opens it (#218). */
 @Composable
-private fun PaymentRow(row: GroupFeedRow.Payment, onClick: () -> Unit) {
+internal fun PaymentRow(row: GroupFeedRow.Payment, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -840,7 +754,7 @@ private const val ADD_GLASS_TINT = 0.9f
 
 /** A row another member added since the last visit (research finding 5). Ruby: something waits for you. */
 @Composable
-private fun NewDot() {
+internal fun NewDot() {
     val label = LocalCopy.current.shared.detail.newRow
     Box(
         Modifier

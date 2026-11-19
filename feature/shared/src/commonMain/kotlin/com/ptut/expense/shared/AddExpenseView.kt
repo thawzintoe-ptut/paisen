@@ -25,8 +25,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -34,6 +36,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -147,7 +151,14 @@ private fun Form(state: AddExpenseUiState.Ready, actions: AddExpenseActions, mod
                 sky = true,
                 modifier = Modifier.padding(top = Spacing.md),
             )
-            AmountField(symbol = form.currency.symbol, text = form.amountText, onText = actions.onAmount, readOnly = form.locked, modifier = Modifier.padding(top = Spacing.sm))
+            AmountField(
+                symbol = form.currency.symbol,
+                text = form.amountText,
+                onText = actions.onAmount,
+                readOnly = form.locked,
+                focusFirst = !form.locked && !state.isEdit,
+                modifier = Modifier.padding(top = Spacing.sm),
+            )
             state.lockedLine?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(top = Spacing.xs))
             }
@@ -474,8 +485,24 @@ private fun Progress(fraction: Float, modifier: Modifier = Modifier) {
 
 /** p28's centre: the amount in its own currency, typed with the number keyboard. */
 @Composable
-private fun AmountField(symbol: String, text: String, onText: (String) -> Unit, modifier: Modifier = Modifier, readOnly: Boolean = false) {
+private fun AmountField(
+    symbol: String,
+    text: String,
+    onText: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    readOnly: Boolean = false,
+    focusFirst: Boolean = false,
+) {
     val label = LocalCopy.current.common.amount
+    val focus = remember { FocusRequester() }
+    var focusedOnce by rememberSaveable { mutableStateOf(false) }
+    // #66: once per screen, so a rotation or a closed sheet does not pull the keyboard back up.
+    LaunchedEffect(focusFirst) {
+        if (focusFirst && !focusedOnce) {
+            focus.requestFocus()
+            focusedOnce = true
+        }
+    }
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(symbol, style = MaterialTheme.ptutType.heroSymbol, color = MaterialTheme.colorScheme.onSurface)
         Box(contentAlignment = Alignment.CenterStart) {
@@ -488,7 +515,7 @@ private fun AmountField(symbol: String, text: String, onText: (String) -> Unit, 
                 textStyle = MaterialTheme.ptutType.hero.copy(color = MaterialTheme.colorScheme.onSurface),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.width(SkySizes.amountField).semantics { contentDescription = label },
+                modifier = Modifier.width(SkySizes.amountField).focusRequester(focus).semantics { contentDescription = label },
             )
         }
     }

@@ -67,45 +67,9 @@ fun WhoPaysWhomView(
         SkyTopBar(title = text.whoPaysWhom, onBack = onBack)
         val state = uiState as? WhoPaysWhomUiState.Loaded ?: return@Column GroupGone(status = text.detail.goneStatus)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.tertiaryContainer).padding(horizontal = Spacing.md).padding(bottom = Spacing.md)) {
-                Text(text.settle.toSettle(state.groupName), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    state.headline,
-                    style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Light),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = Spacing.xs),
-                )
-                if (state.simplify && state.pairwiseCount > state.simplifiedCount) {
-                    Row(Modifier.padding(top = Spacing.xs), horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text.settle.between(state.pairwiseCount),
-                            style = MaterialTheme.typography.bodyMedium.copy(textDecoration = TextDecoration.LineThrough),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Icon(PtutIcon.ChevronRight.image, contentDescription = text.settle.then, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(SkySizes.cardGlyph))
-                        Text(text.settle.afterSimplifying(state.simplifiedCount), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
-            }
-            Column(Modifier.padding(horizontal = Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.s12)) {
-                Spacer(Modifier.height(Spacing.xs))
-                state.cards.forEach { card ->
-                    PaymentCard(card, onClick = { onSettle(card.fromId, card.toId) })
-                    if (offerPayMe && card.toIsMe) {
-                        SkyButton(text.settle.askToPay(card.fromName), onClick = { askingFrom = card.fromId }, kind = SkyButtonKind.Outline, modifier = Modifier.fillMaxWidth())
-                    }
-                }
-                state.currencyNote?.let { SkyNoticeCard(text = it, icon = PtutIcon.Info.image) }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(PtutRadii.r22)
-                        .background(MaterialTheme.colorScheme.tertiaryContainer)
-                        .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(text.settle.simplify, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-                    SkySwitch(checked = state.simplify, onCheckedChange = onSimplify, label = text.settle.simplify)
+            WhoPaysWhomContent(state, onSimplify = onSimplify, onSettle = onSettle) { card ->
+                if (offerPayMe && card.toIsMe) {
+                    SkyButton(text.settle.askToPay(card.fromName), onClick = { askingFrom = card.fromId }, kind = SkyButtonKind.Outline, modifier = Modifier.fillMaxWidth())
                 }
             }
         }
@@ -123,6 +87,59 @@ fun WhoPaysWhomView(
                 onClick = { onSettle(card.fromId, card.toId) },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md).padding(bottom = Spacing.md),
             )
+        }
+    }
+}
+
+/** p30's count, cards and Simplify switch; also the group screen's Balances tab (#64). */
+@Composable
+internal fun WhoPaysWhomContent(
+    state: WhoPaysWhomUiState.Loaded,
+    onSimplify: (Boolean) -> Unit,
+    onSettle: (from: String, to: String) -> Unit,
+    modifier: Modifier = Modifier,
+    belowCard: @Composable (PaymentCardUiModel) -> Unit = {},
+) {
+    val text = LocalCopy.current.shared
+    Column(modifier) {
+        Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.tertiaryContainer).padding(horizontal = Spacing.md).padding(bottom = Spacing.md)) {
+            Text(text.settle.toSettle(state.groupName), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                state.headline,
+                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Light),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = Spacing.xs),
+            )
+            if (state.simplify && state.pairwiseCount > state.simplifiedCount) {
+                Row(Modifier.padding(top = Spacing.xs), horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text.settle.between(state.pairwiseCount),
+                        style = MaterialTheme.typography.bodyMedium.copy(textDecoration = TextDecoration.LineThrough),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Icon(PtutIcon.ChevronRight.image, contentDescription = text.settle.then, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(SkySizes.cardGlyph))
+                    Text(text.settle.afterSimplifying(state.simplifiedCount), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        }
+        Column(Modifier.padding(horizontal = Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.s12)) {
+            Spacer(Modifier.height(Spacing.xs))
+            state.cards.forEach { card ->
+                PaymentCard(card, onClick = { onSettle(card.fromId, card.toId) })
+                belowCard(card)
+            }
+            state.currencyNote?.let { SkyNoticeCard(text = it, icon = PtutIcon.Info.image) }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(PtutRadii.r22)
+                    .background(MaterialTheme.colorScheme.tertiaryContainer)
+                    .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(text.settle.simplify, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                SkySwitch(checked = state.simplify, onCheckedChange = onSimplify, label = text.settle.simplify)
+            }
         }
     }
 }

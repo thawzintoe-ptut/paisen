@@ -129,6 +129,7 @@ import com.ptut.expense.shared.GroupDetailView
 import com.ptut.expense.shared.GroupDetailViewModel
 import com.ptut.expense.shared.GroupInvite
 import com.ptut.expense.shared.GroupManage
+import com.ptut.expense.shared.GroupTabsState
 import com.ptut.expense.shared.JoinView
 import com.ptut.expense.shared.JoinViewModel
 import com.ptut.expense.shared.PeopleView
@@ -548,6 +549,13 @@ private fun LedgerShell() {
                 val groupAction by group.groupActionState.collectAsStateWithLifecycle()
                 val groupRemoved by group.isRemoved.collectAsStateWithLifecycle()
                 val refreshing by group.isRefreshing.collectAsStateWithLifecycle()
+                val tab by group.tab.collectAsStateWithLifecycle()
+                val who = koinViewModel<WhoPaysWhomViewModel> { parametersOf(groupId) }
+                val balances by who.uiState.collectAsStateWithLifecycle()
+                val activity = koinViewModel<SharedActivityViewModel> { parametersOf(groupId) }
+                val activityState by activity.uiState.collectAsStateWithLifecycle()
+                val activitySince by group.activitySince.collectAsStateWithLifecycle()
+                LaunchedEffect(activitySince) { activity.since(activitySince) }
                 LaunchedEffect(groupRemoved) { if (groupRemoved) navController.popBackStack() }
                 GroupDetailView(
                     uiState = state,
@@ -556,7 +564,6 @@ private fun LedgerShell() {
                     onBalances = { navController.navigate(PtutRoute.WhoPaysWhom(groupId)) { launchSingleTop = true } },
                     onAddExpense = { navController.navigate(PtutRoute.AddSharedExpense(groupId)) { launchSingleTop = true } },
                     onOpenExpense = { navController.navigate(PtutRoute.AddSharedExpense(groupId, it)) { launchSingleTop = true } },
-                    onActivity = { navController.navigate(PtutRoute.SharedActivity(groupId)) { launchSingleTop = true } },
                     onRepeat = { navController.navigate(PtutRoute.RepeatExpense(groupId)) { launchSingleTop = true } },
                     onOpenRepeat = { navController.navigate(PtutRoute.RepeatExpense(groupId, it)) { launchSingleTop = true } },
                     manage = GroupManage(
@@ -579,6 +586,13 @@ private fun LedgerShell() {
                     ),
                     refreshing = refreshing,
                     onRefresh = group::refresh,
+                    tabs = GroupTabsState(
+                        selected = tab,
+                        onSelect = group::showTab,
+                        balances = balances,
+                        onSimplify = who::setSimplify,
+                        activity = activityState,
+                    ),
                 )
             }
 

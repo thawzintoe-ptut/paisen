@@ -360,3 +360,22 @@ A group counts in its own money, so "baht" and "THB" in these lines became the g
 | Type the {code} rate to save | သိမ်းဖို့ {code} နှုန်း ရိုက်ပါ | `SharedExpenseCopy` hintRate |
 | Total trip spend {amount} · shown in {code} | ခရီး စုစုပေါင်း သုံးငွေ {amount} · {code} နဲ့ ပြထားတယ် | `SharedDetailCopy` spendLine |
 | Amounts in {codes, joined by "and"} were converted to {code} at the rate saved on each expense, so nobody's total moves with the market. | {codes, joined by "နဲ့"} ပမာဏတွေကို စရိတ်တစ်ခုချင်းမှာ သိမ်းထားတဲ့ နှုန်းနဲ့ {code} ပြောင်းထားတယ်၊ ဒါကြောင့် ဈေးကွက် ပြောင်းလည်း ဘယ်သူ့ စုစုပေါင်းမှ မပြောင်းဘူး။ | `SharedSettleCopy` converted |
+
+## Group screen redesign (#61), not reviewed yet
+
+| English | Burmese | Where |
+|---|---|---|
+| Just you so far | အခုထိ သင်တစ်ယောက်တည်း | `SharedDetailCopy` justYou |
+| with {name} · {amount} | {name} နဲ့ · {amount} | `SharedDetailCopy` settleWith |
+| All settled up | အားလုံး ရှင်းပြီး | `SharedDetailCopy` allSettledUp |
+| Nothing to settle yet | ရှင်းစရာ မရှိသေးဘူး | `SharedDetailCopy` nothingToSettle |
+| Nothing spent yet · counts in {code} | ဘာမှ မသုံးရသေးဘူး · {code} နဲ့ တွက်တယ် | `SharedDetailCopy` nothingSpent |
+| {n} new | အသစ် {n} ခု | `SharedDetailCopy` newActivity |
+| New since you last looked | နောက်ဆုံး ကြည့်ပြီးကတည်းက အသစ် | `SharedDetailCopy` newSinceLooked |
+| Changes anyone makes in this group show here. | ဒီအဖွဲ့ထဲ ဘယ်သူ ပြောင်းပြောင်း ဒီမှာ ပေါ်မယ်။ | `SharedDetailCopy` activityEmpty |
+| Everyone's square | လူတိုင်း ရှင်းပြီး | `SharedDetailCopy` everyoneSquare |
+| Who's in the group | အဖွဲ့ထဲမှာ ဘယ်သူတွေ ရှိလဲ | `SharedDetailCopy` whoIsIn |
+| No expenses yet | စရိတ် မရှိသေးဘူး | `SharedDetailCopy` noExpensesTitle |
+| Add what someone paid for, and it's split between everyone here. | တစ်ယောက်ယောက် ပေးခဲ့တာကို ထည့်ပါ၊ ဒီမှာရှိတဲ့ လူတိုင်းကြား ခွဲပေးမယ်။ | `SharedDetailCopy` noExpensesBody |
+| Your own ledger is unchanged. | သင့်ကိုယ်ပိုင် စာရင်းက မပြောင်းဘူး။ | `SharedDetailCopy` ledgerUnchanged |
+| Back to Shared | မျှသုံး ကို ပြန်သွားမယ် | `SharedDetailCopy` backToShared |

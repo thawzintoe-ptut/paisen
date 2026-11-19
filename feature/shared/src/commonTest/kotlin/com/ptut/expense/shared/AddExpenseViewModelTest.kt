@@ -5,8 +5,11 @@ import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.inAppLanguage
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Rate
+import com.ptut.expense.domain.shared.SplitMode
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.Language
+import com.ptut.expense.ui.ToastMessages
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -15,6 +18,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class AddExpenseViewModelTest : ViewModelTest() {
@@ -160,6 +164,49 @@ class AddExpenseViewModelTest : ViewModelTest() {
         runCurrent()
 
         assertEquals(false, viewModel.ready().canSave)
+    }
+
+    @Test
+    fun `a new expense starts with You paying and an equal split`() = runTest {
+        val ready = viewModel(FakeSharedRepository()).ready()
+
+        assertEquals("me", ready.form.payerMemberId)
+        assertEquals(SplitMode.Equally, ready.form.splitMode)
+    }
+
+    @Test
+    fun `a new expense saved offers Undo and Undo removes it`() = runTest {
+        val repository = FakeSharedRepository()
+        val toasts = ToastMessages()
+        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed(), toasts = toasts)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        viewModel.setAmount("240")
+        viewModel.setDescription("Groceries")
+        runCurrent()
+        repository.gate.complete(Unit)
+        viewModel.save {}
+        runCurrent()
+
+        val undo = assertNotNull(toasts.messages.first().action)
+        assertEquals(AppText.copy.common.undo, undo.label)
+        undo.onAction()
+
+        assertEquals(listOf("expense-1"), repository.removedExpenses)
+    }
+
+    @Test
+    fun `exact shares that miss the total say so`() = runTest {
+        val viewModel = viewModel(FakeSharedRepository())
+        viewModel.setAmount("100")
+        viewModel.setSplitMode(SplitMode.Exact)
+        viewModel.setWeight("me", "30")
+        viewModel.setWeight("aye", "30")
+        runCurrent()
+
+        val split = viewModel.ready().split
+        assertNotNull(split.leftTitle)
+        assertEquals(false, split.complete)
     }
 
     private fun TestScope.viewModel(repository: FakeSharedRepository): AddExpenseViewModel {

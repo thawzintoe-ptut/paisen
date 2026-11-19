@@ -23,12 +23,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import com.ptut.expense.design.PtutIcon
+import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
+import com.ptut.expense.design.tappable
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.SharedLogCopy
 import com.ptut.expense.ui.sky.SkyChip
@@ -76,14 +79,15 @@ fun SharedActivityView(uiState: SharedActivityUiState, onBack: () -> Unit, onFil
                     modifier = Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.md, bottom = Spacing.xxs),
                 )
             }
-            items(day.entries, key = { it.id }) { entry -> EntryRow(entry) }
+            items(day.entries, key = { it.id }) { entry -> ActivityEntryRow(entry) }
         }
         item { Spacer(Modifier.height(SkySizes.pillClearance)) }
     }
 }
 
+/** One change. On the group's Activity tab (#64) it can be new and open what it is about. */
 @Composable
-private fun EntryRow(entry: SharedEntryUiModel) {
+internal fun ActivityEntryRow(entry: SharedEntryUiModel, isNew: Boolean = false, onClick: (() -> Unit)? = null) {
     val changedTo = LocalCopy.current.shared.log.changedTo
     val (fill, ink) = when (entry.kind) {
         SharedEntryKind.Added -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.onPrimary
@@ -92,7 +96,12 @@ private fun EntryRow(entry: SharedEntryUiModel) {
     }
     Column(Modifier.padding(horizontal = Spacing.md)) {
         Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = SkySizes.transactionRow).semantics(mergeDescendants = true) {}.padding(vertical = Spacing.s12),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = SkySizes.transactionRow)
+                .then(if (onClick != null) Modifier.tappable(PtutRadii.r12, Role.Button, onClick = onClick) else Modifier)
+                .semantics(mergeDescendants = true) {}
+                .padding(vertical = Spacing.s12),
             horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
             verticalAlignment = Alignment.Top,
         ) {
@@ -100,7 +109,10 @@ private fun EntryRow(entry: SharedEntryUiModel) {
                 Icon(PtutIcon.named(entry.icon).image, contentDescription = null, tint = ink, modifier = Modifier.size(SkySizes.rowGlyph))
             }
             Column(Modifier.weight(1f)) {
-                Text(entry.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isNew) NewDot()
+                    Text(entry.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                     entry.before?.let {
                         Text(it, style = MaterialTheme.typography.bodyMedium.copy(textDecoration = TextDecoration.LineThrough), color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -440,3 +440,22 @@ Choices to check in this area:
 | Balances drop it and Activity keeps a line saying you removed it. | ยอดคงค้างจะไม่นับรายการนี้ และกิจกรรมจะมีบรรทัดบอกว่าคุณนำออก | SharedPaymentCopy.kt `removeBodyShared` |
 | Balances drop it. | ยอดคงค้างจะไม่นับรายการนี้ | SharedPaymentCopy.kt `removeBodyLocal` |
 | Payment removed | นำการจ่ายเงินออกแล้ว | SharedPaymentCopy.kt `removed` |
+
+## Group screen redesign (#61), not reviewed yet
+
+| English | Thai | Where |
+|---|---|---|
+| Just you so far | ตอนนี้มีแค่คุณ | SharedGroupCopy.kt `justYou` |
+| with {name} · {amount} | กับ {name} · {amount} | SharedGroupCopy.kt `settleWith` |
+| All settled up | เคลียร์ครบแล้ว | SharedGroupCopy.kt `allSettledUp` |
+| Nothing to settle yet | ยังไม่มีอะไรต้องเคลียร์ | SharedGroupCopy.kt `nothingToSettle` |
+| Nothing spent yet · counts in {code} | ยังไม่มีค่าใช้จ่าย · นับเป็น {code} | SharedGroupCopy.kt `nothingSpent` |
+| {n} new | ใหม่ {n} รายการ | SharedGroupCopy.kt `newActivity` |
+| New since you last looked | ใหม่ตั้งแต่ที่คุณดูครั้งล่าสุด | SharedGroupCopy.kt `newSinceLooked` |
+| Changes anyone makes in this group show here. | การเปลี่ยนแปลงของทุกคนในกลุ่มนี้จะแสดงที่นี่ | SharedGroupCopy.kt `activityEmpty` |
+| Everyone's square | ทุกคนเคลียร์กันแล้ว | SharedGroupCopy.kt `everyoneSquare` |
+| Who's in the group | ใครอยู่ในกลุ่มนี้ | SharedGroupCopy.kt `whoIsIn` |
+| No expenses yet | ยังไม่มีค่าใช้จ่าย | SharedGroupCopy.kt `noExpensesTitle` |
+| Add what someone paid for, and it's split between everyone here. | เพิ่มสิ่งที่ใครสักคนจ่ายไป แล้วจะหารกับทุกคนที่นี่ | SharedGroupCopy.kt `noExpensesBody` |
+| Your own ledger is unchanged. | บัญชีของคุณเองไม่เปลี่ยน | SharedGroupCopy.kt `ledgerUnchanged` |
+| Back to Shared | กลับไปที่กลุ่ม | SharedGroupCopy.kt `backToShared` |
