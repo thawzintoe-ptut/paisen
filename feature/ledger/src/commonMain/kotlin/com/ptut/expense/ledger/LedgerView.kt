@@ -45,7 +45,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.Sizes
 import com.ptut.expense.design.SkySizes
@@ -106,7 +105,7 @@ private fun LoadedLedger(
     val listState = rememberLazyListState()
     val scroller = rememberCoroutineScope()
     val density = LocalDensity.current
-    var railWidth by remember { mutableStateOf(0.dp) }
+    var railWidthPx by remember { mutableIntStateOf(0) }
     var lineHeight by remember { mutableIntStateOf(0) }
     // The items above the first day header: top bar, scope line, search row, and the pinned line.
     val leading = 2 + (if (state.scope != null) 1 else 0) + (if (state.hasMonthIndex) 1 else 0) + (if (state.isEmpty) 1 else 0)
@@ -117,7 +116,8 @@ private fun LoadedLedger(
             state.monthAt((under?.index ?: 0) - leading)
         }
     }
-    val rowEnd = if (state.hasMonthIndex) maxOf(Spacing.md, railWidth) else Spacing.md
+    val railWidth = with(density) { railWidthPx.toDp() } + Spacing.xxs
+    val rowEnd = if (state.hasMonthIndex && railWidthPx > 0) maxOf(Spacing.md, railWidth) else Spacing.md
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
@@ -216,7 +216,7 @@ private fun LoadedLedger(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(top = SkySizes.topBar + SkySizes.search + Spacing.sm, bottom = SkySizes.pillClearance, end = Spacing.xxs)
-                    .onSizeChanged { railWidth = with(density) { it.width.toDp() } + Spacing.xxs },
+                    .onSizeChanged { railWidthPx = it.width },
             )
         }
     }
