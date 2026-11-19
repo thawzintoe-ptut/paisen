@@ -54,6 +54,7 @@ import com.ptut.expense.domain.thisWeek
 import com.ptut.expense.domain.usualDay
 import com.ptut.expense.domain.weeklyCheckIn
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.Language
 import com.ptut.expense.locale.NoteTone
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.locale.noteCopy
@@ -87,10 +88,21 @@ sealed interface ImportStatusUiModel {
     data class Broken(val since: String) : ImportStatusUiModel
 
     /** The newest scan failed. A success an hour ago says nothing about the scans since (US-8). */
-    data object Failing : ImportStatusUiModel
+    data class Failing(val reason: ImportStopReason) : ImportStatusUiModel
 
     /** Android's "Select photos": scans succeed, but a new slip stays hidden until it is picked. */
     data object OnlyPicked : ImportStatusUiModel
+}
+
+/** #69: why the newest scan stopped, so Today names it and offers the fix that matches. */
+sealed interface ImportStopReason {
+    data object PhotoAccessOff : ImportStopReason
+
+    /** The library gave no answer; the next scan asks again, so nothing waits on the reader. */
+    data object LibraryNoAnswer : ImportStopReason
+
+    /** Any other stop, in the journal's own words, as Activity shows them. */
+    data class Other(val said: String) : ImportStopReason
 }
 
 /** Home's three spans (#157, p05). The ranges are Reports' own, on Asia/Bangkok. */
@@ -138,6 +150,8 @@ sealed interface HomeUiState {
          * assumes: "a still dot and a scanning dot must not look the same".
          */
         val isScanning: Boolean,
+        /** #68: blank rows at the top of the list while a scan runs, where its rows will land. */
+        val placeholderRows: Int = 0,
         /** Null while the importer is healthy enough that offering an action would overstate it. */
         val importFix: ImportFix?,
         /** Null when the queue is empty — an empty queue has nothing to offer the reader. */
@@ -243,14 +257,14 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> =
         combine(
             ledger.todaysTransactions,
-            combine(ledger.sinceLastImportMillis, ledger.importRuns) { since, runs -> since to runs.latestRunFailed() },
+            combine(ledger.sinceLastImportMillis, ledger.importRuns) { since, runs -> since to runs.latestStop() },
             combine(ledger.queuedSlips, pendingDiscards) { slips, pending -> slips.filterNot { it.id in pending } },
             combine(isScanning, watchedFolders, moodByTimeOfDay, combine(weeklyCheckIn, weeklyTarget, weeklyNote, ::Triple), clockTicks) { scanning, folders, mood, weekly, _ ->
                 Extras(scanning, folders, mood, weekly.first, weekly.second, weekly.third)
             },
             // ShopNames too: naming a shop read as noise retitles its rows here without a restart.
             combine(ledger.allTransactions, combine(categoryUpdates, subCategoryUpdates, ShopNames.names) { c, s, _ -> c to s }, period, ::Triple),
-        ) { snapshot, (sinceLastImportMillis, failed), queued, (scanning, folders, mood, weekly, target, note), (ledgerRows, filing, chosen) ->
+        ) { snapshot, (sinceLastImportMillis, stopped), queued, (scanning, folders, mood, weekly, target, note), (ledgerRows, filing, chosen) ->
             val (categories, subCategories) = filing
             val todays = when (snapshot) {
                 LedgerSnapshot.Unanswered -> return@combine HomeUiState.Loading
@@ -275,13 +289,19 @@ class HomeViewModel(
                 summary = transactions.summarise(),
                 transactions = transactions.map { it.asRow(categories, subCategories) },
                 importStatus = when {
-                    failed -> ImportStatusUiModel.Failing
+                    stopped != null -> ImportStatusUiModel.Failing(stopped)
                     picked -> ImportStatusUiModel.OnlyPicked
                     else -> sinceLastImportMillis.asImportStatus()
                 },
                 watchLine = folders.watchLine(sinceLastImportMillis),
                 isScanning = scanning,
-                importFix = if (failed || picked) ImportFix.AllowAllPhotos else importFix(sinceLastImportMillis),
+                // An empty period keeps its empty state, which already shows the scan waiting.
+                placeholderRows = if (scanning && transactions.isNotEmpty()) PLACEHOLDER_ROWS else 0,
+                importFix = when {
+                    stopped != null -> stopped.fix()
+                    picked -> ImportFix.AllowAllPhotos
+                    else -> importFix(sinceLastImportMillis)
+                },
                 review = queued.asReviewCard(),
                 savedToday = saved.take(SAVED_TODAY_SHOWN).map { it.asSavedRow(categories, subCategories) },
                 savedTodayMore = (saved.size - SAVED_TODAY_SHOWN).coerceAtLeast(0),
@@ -317,6 +337,9 @@ class HomeViewModel(
 
 /** Home shows a few. History holds the rest, each under its own day. */
 private const val SAVED_TODAY_SHOWN = 3
+
+/** #68: enough to show where rows land without promising how many a scan will find. */
+private const val PLACEHOLDER_ROWS = 2
 
 /** p05 draws three tiles. */
 private const val TOP_CATEGORIES = 3
@@ -358,9 +381,25 @@ private fun Long?.asImportStatus(): ImportStatusUiModel {
     }
 }
 
-/** Newest first, as the journal lists them. A run still going has not answered yet. */
-private fun List<ImportRun>.latestRunFailed(): Boolean =
-    firstOrNull { it.outcome != ImportOutcome.Running }?.outcome == ImportOutcome.Failure
+/** Newest first, as the journal lists them. A run still going has not answered yet. Null unless the newest failed. */
+private fun List<ImportRun>.latestStop(): ImportStopReason? {
+    val latest = firstOrNull { it.outcome != ImportOutcome.Running } ?: return null
+    if (latest.outcome != ImportOutcome.Failure) return null
+    val said = latest.failureReason?.takeIf { it.isNotBlank() } ?: return ImportStopReason.Other(AppText.copy.slips.importerStopped)
+    // The journal keeps the words in the language the scan ran in, so every language is checked.
+    val folders = Language.entries.map { it.copy.folders }
+    return when (said) {
+        in folders.flatMap { listOf(it.androidAccessDenied, it.iosAccessDenied) } -> ImportStopReason.PhotoAccessOff
+        in folders.map { it.libraryNoAnswer } -> ImportStopReason.LibraryNoAnswer
+        else -> ImportStopReason.Other(said)
+    }
+}
+
+/** Access goes back on in the system's page; a library that did not answer is asked again by the next scan. */
+private fun ImportStopReason.fix(): ImportFix? = when (this) {
+    ImportStopReason.PhotoAccessOff, is ImportStopReason.Other -> ImportFix.AllowAllPhotos
+    ImportStopReason.LibraryNoAnswer -> null
+}
 
 private fun List<QueuedSlip>.asReviewCard(): ReviewCardUiModel? {
     if (isEmpty()) return null

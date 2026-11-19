@@ -109,6 +109,50 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         assertEquals("Amount · not read", state.amountLabel)
     }
 
+    // #72
+
+    @Test
+    fun `a slip still being read keeps Confirm waiting until its amount is in`() = runTest {
+        val store = InMemoryImportStore()
+        val ledger = FakeLedger(emptyList())
+        val viewModel = ConfirmSlipViewModel(
+            slipId = "q1",
+            ledger = ledger,
+            importer = SlipImporter(FakeSlipSource(), FakeSlipTextReader(), store),
+            toasts = ToastMessages(),
+            discards = SlipDiscards(SlipImporter(FakeSlipSource(), FakeSlipTextReader(), store), ToastMessages(), CoroutineScope(Dispatchers.Main)) { Duration.ZERO },
+            newId = { "generated" },
+        )
+        runCurrent()
+
+        val reading = viewModel.uiState.value
+        assertTrue(reading.reading)
+        assertFalse(reading.canSave)
+        assertEquals("Reading…", reading.confirmLabel)
+        viewModel.choose(food)
+        viewModel.save()
+        runCurrent()
+        assertTrue(store.confirmed.isEmpty())
+
+        ledger.queue.value = listOf(slip(amount = Satang(48_500)))
+        runCurrent()
+
+        val read = viewModel.uiState.value
+        assertFalse(read.reading)
+        assertTrue(read.canSave)
+        assertEquals("Confirm", read.confirmLabel)
+        assertEquals("485.00", read.entry.display)
+    }
+
+    @Test
+    fun `a slip already read opens with Confirm ready`() = runTest {
+        val viewModel = viewModel(slip(amount = Satang(48_500)))
+
+        val state = viewModel.uiState.value
+        assertFalse(state.reading)
+        assertEquals("Confirm", state.confirmLabel)
+    }
+
     // FR-13
 
     @Test
@@ -567,7 +611,8 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         override val sinceLastImportMillis: StateFlow<Long?> = MutableStateFlow(0L)
         override val importRuns: StateFlow<List<ImportRun>> = MutableStateFlow(emptyList())
 
-        override val queuedSlips: StateFlow<List<QueuedSlip>> = MutableStateFlow(queued)
+        val queue = MutableStateFlow(queued)
+        override val queuedSlips: StateFlow<List<QueuedSlip>> = queue
 
         /** Confirm slip never deletes, so a call here is a screen reaching past its job. */
 

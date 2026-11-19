@@ -98,7 +98,14 @@ internal class FakeSharedRepository(group: SharedGroup = flat12) : SharedReposit
         return "expense-${expenses.size}"
     }
 
+    /** #76: the next recordPayment throws, as a failed write would. */
+    var failNextPayment = false
+
     override suspend fun recordPayment(draft: PaymentDraft): String {
+        if (failNextPayment) {
+            failNextPayment = false
+            error("write failed")
+        }
         payments += draft
         gate.await()
         return "payment-${payments.size}"

@@ -171,3 +171,10 @@ Choices to check in this area:
 | Allow photos | อนุญาตการเข้าถึงรูป | OnboardingCopy.kt `allowPhotos` |
 | I'll add expenses by hand | ฉันจะเพิ่มรายจ่ายเอง | OnboardingCopy.kt `byHand` |
 | That file could not be read. Nothing was changed. | อ่านไฟล์นั้นไม่ได้ ไม่มีอะไรเปลี่ยนแปลง | OnboardingCopy.kt `restoreFailed` |
+
+## Design v2 (#72), not reviewed yet
+
+| English | Thai | Where |
+|---|---|---|
+| Reading the slip… | กำลังอ่านสลิป… | `SlipsCopy` readingSlip |
+| Reading… | กำลังอ่าน… | `SlipsCopy` reading |

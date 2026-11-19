@@ -170,3 +170,10 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | Set the rate for {code} | {code} နှုန်း ထည့်ပါ | `CurrencyCopy` setRate |
 | {baht} · ฿{rate} per {unit} | {baht} · {unit} ကို ฿{rate} | `CurrencyCopy` converted |
 | ฿{rate} per {unit} | {unit} ကို ฿{rate} | `CurrencyCopy` rateOnly |
+
+## Design v2 (#72), not reviewed yet
+
+| English | Burmese | Where |
+|---|---|---|
+| Reading the slip… | စလစ်ကို ဖတ်နေတယ်… | `SlipsCopy` readingSlip |
+| Reading… | ဖတ်နေတယ်… | `SlipsCopy` reading |

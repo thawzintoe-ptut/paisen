@@ -157,8 +157,21 @@ sealed interface GroupDetailUiState {
         val isShared: Boolean = false,
         /** Pull-to-refresh: only a shared group in a build that syncs has anything to pull. */
         val canRefresh: Boolean = false,
+        /** #74: Try again beside [syncLine], while changes wait or the last sync failed. */
+        val canRetrySync: Boolean = false,
+        /** #75: the header's avatars, you first, at most three; [moreMembers] counts the rest. */
+        val headerMembers: List<MemberChipUiModel> = members.take(HEADER_AVATARS),
+        val moreMembers: MoreMembersUiModel? = null,
     ) : GroupDetailUiState
 }
+
+/** #75: "+9" beside the header's avatars, read out as "9 more people". */
+data class MoreMembersUiModel(val label: String, val description: String)
+
+/** #74: a failed sync, or changes still waiting, offer Try again; signed out asks to sign in instead. */
+internal fun GroupSyncStatus.offersRetry(): Boolean = health == SyncHealth.Offline || health == SyncHealth.Waiting
+
+internal const val HEADER_AVATARS = 3
 
 /** One name in the group besides yours. [settled] is false while they owe or are owed here. */
 data class GroupPersonUiModel(val id: String, val name: String, val settled: Boolean)
@@ -369,8 +382,22 @@ class GroupDetailViewModel(
         }
     }
 
-    private fun GroupDetailUiState.Loaded.withSync(group: SharedGroup, status: GroupSyncStatus): GroupDetailUiState.Loaded = copy(
-        members = members.map { chip -> chip.copy(joined = !group.remote || chip.isMe || group.member(chip.id)?.claimedByUid != null) },
+    private fun GroupDetailUiState.Loaded.withSync(group: SharedGroup, status: GroupSyncStatus): GroupDetailUiState.Loaded {
+        val chips = members.map { chip -> chip.copy(joined = !group.remote || chip.isMe || group.member(chip.id)?.claimedByUid != null) }
+        return withChips(chips).withStatus(group, status)
+    }
+
+    private fun GroupDetailUiState.Loaded.withChips(chips: List<MemberChipUiModel>): GroupDetailUiState.Loaded {
+        val more = chips.size - HEADER_AVATARS
+        val text = AppText.copy.shared.detail
+        return copy(
+            members = chips,
+            headerMembers = chips.take(HEADER_AVATARS),
+            moreMembers = if (more > 0) MoreMembersUiModel(text.moreAvatars(more), text.morePeople(more)) else null,
+        )
+    }
+
+    private fun GroupDetailUiState.Loaded.withStatus(group: SharedGroup, status: GroupSyncStatus): GroupDetailUiState.Loaded = copy(
         notJoinedLine = members
             .filterNot { chip -> !group.remote || chip.isMe || group.member(chip.id)?.claimedByUid != null }
             .map { it.name }
@@ -391,6 +418,7 @@ class GroupDetailViewModel(
         },
         canInvite = sync?.available == true,
         canRefresh = group.remote && sync?.available == true,
+        canRetrySync = group.remote && sync?.available == true && status.offersRetry(),
         isCreator = !group.remote || group.creatorUid == null || group.creatorUid == group.member(group.meMemberId.orEmpty())?.claimedByUid,
         removal = when {
             !group.remote -> GroupRemoval.DeleteHere

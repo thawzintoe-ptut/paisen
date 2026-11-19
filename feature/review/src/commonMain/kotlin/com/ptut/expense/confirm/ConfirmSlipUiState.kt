@@ -132,5 +132,10 @@ data class ConfirmSlipUiState(
      * pressing it can say what is missing — a dark key with no sentence beside it reads as a
      * broken app, and refusing out loud is this screen's whole job.
      */
-    val canSave: Boolean get() = !entry.isEmpty && !saving
+    val canSave: Boolean get() = !reading && !entry.isEmpty && !saving
+
+    /** #72: the slip is still being read, so nothing half-read can be saved or thrown away yet. */
+    val reading: Boolean get() = phase == ConfirmSlipPhase.Loading
+
+    val confirmLabel: String get() = if (reading) AppText.copy.slips.reading else AppText.copy.slips.confirm
 }

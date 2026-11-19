@@ -171,3 +171,12 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | The Add sheet opens on this currency. Totals still count in {home}. | ထည့်တဲ့ စာမျက်နှာက ဒီငွေနဲ့ စမယ်။ စုစုပေါင်းကတော့ {home} နဲ့ပဲ တွက်တယ်။ | `CurrencyCopy` startsInIntro (was "ဘတ်", now the home code) |
 | Saved as {home} | {home} အဖြစ် သိမ်းမယ် | `CurrencyCopy` savedAs (was inBaht) |
 | Every total counts in this currency. Days start at midnight, {zone} time. | (unchanged) {zone} is now the place, "ရန်ကုန်", not "Asia/Yangon" | `CurrencyCopy` homeIntro |
+
+## Design v2 (#73), not reviewed yet
+
+| English | Burmese | Where |
+|---|---|---|
+| This file was refused. | ဒီဖိုင်ကို လက်မခံဘူး။ | `SettingsCopy` fileRefused |
+| Your ledger is untouched. | သင့်မှတ်တမ်းကို ဘာမှ မထိဘူး။ | `SettingsCopy` ledgerUntouched |
+| Nothing from this file was imported. | ဒီဖိုင်ထဲက ဘာမှ မထည့်ဘူး။ | `SettingsCopy` nothingImported |
+| Choose another file | နောက်ဖိုင် ရွေးမယ် | `SettingsCopy` chooseAnotherFile |

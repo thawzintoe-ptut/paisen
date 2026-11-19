@@ -17,14 +17,18 @@ import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.TransactionSource
 import com.ptut.expense.domain.ledger.FakeLedger
+import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.Language
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.toInstant
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class LedgerViewModelTest : ViewModelTest() {
@@ -57,6 +61,15 @@ class LedgerViewModelTest : ViewModelTest() {
     )
 
     private val everything = listOf(autoGroceries, byHandCoffee, correctedTaxi, salary)
+
+    private val julyRent = row("t5", day = 2, hour = 9, merchant = "Rent", amount = 900_000, month = 7)
+    private val newYearsEve = row("t6", day = 31, hour = 20, merchant = "Party", amount = 50_000, month = 12, year = 2025)
+    private val threeMonths = everything + listOf(julyRent, newYearsEve)
+
+    @AfterTest
+    fun englishAgain() {
+        AppText.use(Language.English)
+    }
 
     @Test
     fun `days read newest first and each header carries a signed net`() = runTest {
@@ -200,6 +213,86 @@ class LedgerViewModelTest : ViewModelTest() {
         }
     }
 
+    @Test
+    fun `the month index lists each month newest first and marks where the year changes`() = runTest {
+        loaded(threeMonths) { state ->
+            assertTrue(state.hasMonthIndex)
+            assertEquals(listOf("Aug", "Jul", "Dec"), state.months.map { it.label })
+            assertEquals(listOf("2026", null, "2025"), state.months.map { it.year })
+            assertEquals("Go to August 2026", state.months[0].spoken)
+            assertEquals("Go to December 2025", state.months[2].spoken)
+        }
+    }
+
+    /** Two August days of two rows each sit above July: two headers and four rows. */
+    @Test
+    fun `a month points at its first day header past every header and row above it`() = runTest {
+        loaded(threeMonths) { state ->
+            assertEquals(listOf(0, 6, 8), state.months.map { it.firstItem })
+            assertEquals("Aug", state.monthAt(5)?.label)
+            assertEquals("Jul", state.monthAt(6)?.label)
+            assertEquals("Dec", state.monthAt(100)?.label)
+            assertEquals("Aug", state.monthAt(-3)?.label)
+        }
+    }
+
+    @Test
+    fun `the top line counts the whole span then what sits above the month in view`() = runTest {
+        loaded(threeMonths) { state ->
+            assertEquals(
+                listOf(
+                    "6 transactions over 3 months",
+                    "4 newer transactions above, from 1 month",
+                    "5 newer transactions above, from 2 months",
+                ),
+                state.months.map { it.behind },
+            )
+        }
+    }
+
+    @Test
+    fun `one month of rows shows no month index`() = runTest {
+        loaded(everything) { state ->
+            assertEquals(1, state.months.size)
+            assertFalse(state.hasMonthIndex)
+        }
+    }
+
+    @Test
+    fun `a filter that leaves one month hides the index`() = runTest {
+        val viewModel = viewModel(threeMonths)
+
+        viewModel.uiState.test {
+            assertTrue(awaitSuccess().hasMonthIndex)
+
+            viewModel.search("rent")
+            assertFalse(awaitSuccess().hasMonthIndex)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `Thai months carry the Buddhist Era year`() = runTest {
+        AppText.use(Language.Thai)
+
+        loaded(threeMonths) { state ->
+            assertEquals(listOf("ส.ค.", "ก.ค.", "ธ.ค."), state.months.map { it.label })
+            assertEquals(listOf("2569", null, "2568"), state.months.map { it.year })
+            assertEquals("ไปที่ สิงหาคม 2569", state.months[0].spoken)
+        }
+    }
+
+    @Test
+    fun `Burmese months count in Burmese digits`() = runTest {
+        AppText.use(Language.Burmese)
+
+        loaded(threeMonths) { state ->
+            assertEquals("သြဂုတ်", state.months[0].label)
+            assertEquals("၂၀၂၆", state.months[0].year)
+            assertEquals("၃ လအတွင်း ၆ ခု", state.months[0].behind)
+        }
+    }
+
     private fun viewModel(rows: List<Transaction>) = LedgerViewModel(FakeLedger(rows))
 
     /**
@@ -231,9 +324,11 @@ class LedgerViewModelTest : ViewModelTest() {
         direction: Direction = Direction.Expense,
         source: TransactionSource = TransactionSource.Scan,
         editedAt: Long? = null,
+        month: Int = 8,
+        year: Int = 2026,
     ) = Transaction(
         id = id,
-        occurredAtEpochMillis = LocalDateTime(2026, 8, day, hour, 0)
+        occurredAtEpochMillis = LocalDateTime(year, month, day, hour, 0)
             .toInstant(BangkokTime)
             .toEpochMilliseconds(),
         amount = Satang(amount),

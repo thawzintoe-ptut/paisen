@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeTime
+import com.ptut.expense.domain.backup.BackupUnreadable
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.phrase
 import com.ptut.expense.domain.dateIn
@@ -42,6 +43,11 @@ data class LedgerBackupUiState(
      * until a file is chosen, and again once it is imported or let go. Nothing is merged before Import.
      */
     val preview: String? = null,
+    /**
+     * #73: why the chosen file was refused, said on the screen with the ledger untouched and a way
+     * to pick again. Null until a file is refused, and again once another file reads.
+     */
+    val refused: String? = null,
 )
 
 /** A file read and counted, held until the reader says Import or Cancel (#220). */
@@ -71,15 +77,18 @@ class LedgerBackupViewModel(
 
     private val chosen = MutableStateFlow<ChosenFile?>(null)
 
+    private val refused = MutableStateFlow<String?>(null)
+
     val uiState: StateFlow<LedgerBackupUiState> = combine(
         ledger.allTransactions,
         busy,
         chosen,
-    ) { snapshot, working, file -> state(snapshot, working, file?.holds) }
+        refused,
+    ) { snapshot, working, file, reason -> state(snapshot, working, file?.holds, reason) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = state(LedgerSnapshot.Unanswered, working = false, preview = null),
+            initialValue = state(LedgerSnapshot.Unanswered, working = false, preview = null, refused = null),
         )
 
     /** FR-22 out. Nothing is said when the picker is cancelled — backing out is not a failure. */
@@ -91,10 +100,12 @@ class LedgerBackupViewModel(
     /**
      * FR-22 in, first half (#220): read the file and say what it holds. Nothing is merged yet, and
      * a file this build cannot place is refused here, before the reader is asked anything.
+     * Backing out of the picker keeps a refusal on screen, since nothing new was chosen.
      */
     fun chooseFile() = whileFree {
         val text = files.read() ?: return@whileFree
-        chosen.value = ChosenFile(text = text, holds = archive.preview(text).phrase())
+        refused.value = null
+        refusing { chosen.value = ChosenFile(text = text, holds = archive.preview(text).phrase()) }
     }
 
     /**
@@ -104,12 +115,21 @@ class LedgerBackupViewModel(
     fun restore() = whileFree {
         val file = chosen.value ?: return@whileFree
         chosen.value = null
-        toasts.show(ToastMessage(Home.fromSettings { archive.restore(file.text) }.phrase()))
+        refusing { toasts.show(ToastMessage(Home.fromSettings { archive.restore(file.text) }.phrase())) }
     }
 
     /** Cancel on the preview: the file is let go and nothing has changed. */
     fun cancelRestore() {
         chosen.value = null
+    }
+
+    /** #73: a file the archive refuses gets the refused state, not a toast; it wrote nothing. */
+    private suspend fun refusing(work: suspend () -> Unit) {
+        try {
+            work()
+        } catch (refusal: BackupUnreadable) {
+            refused.value = refusal.message ?: AppText.copy.phrases.backupNotReadable
+        }
     }
 
     private fun whileFree(work: suspend () -> Unit) {
@@ -139,12 +159,13 @@ class LedgerBackupViewModel(
         return "ptut-ledger-$today.json"
     }
 
-    private fun state(snapshot: LedgerSnapshot, working: Boolean, preview: String?) = LedgerBackupUiState(
+    private fun state(snapshot: LedgerSnapshot, working: Boolean, preview: String?, refused: String?) = LedgerBackupUiState(
         holding = snapshot.holding(),
         fileName = fileName(),
         busy = working,
         exportable = snapshot is LedgerSnapshot.Rows && snapshot.transactions.isNotEmpty(),
         preview = preview,
+        refused = refused,
     )
 
     /**

@@ -18,7 +18,15 @@ data class HistoryCopy(
     val hiddenByFilter: (Int) -> String = { n -> "$n transactions outside this filter" },
     val clearFilters: String = "Clear filters",
     val clearSearch: String = "Clear search",
+    /** #70: the top line while the newest month is at the top, and the month index's spoken name. */
+    val monthsTotal: (Int, Int) -> String = { n, months -> "${transactions(n)} over $months months" },
+    val monthsAbove: (Int, Int) -> String = { n, months ->
+        "${transactions(n, "newer ")} above, from $months ${if (months == 1) "month" else "months"}"
+    },
+    val goToMonth: (String) -> String = { month -> "Go to $month" },
 )
+
+private fun transactions(n: Int, kind: String = ""): String = "$n $kind${if (n == 1) "transaction" else "transactions"}"
 
 val BurmeseHistory = HistoryCopy(
     title = "မှတ်တမ်း",
@@ -37,6 +45,9 @@ val BurmeseHistory = HistoryCopy(
     hiddenByFilter = { n -> "ဒီစစ်ထုတ်မှု အပြင်မှာ ${n.inMyanmarDigits()} ခု ရှိတယ်" },
     clearFilters = "စစ်ထုတ်တာ ဖြုတ်မယ်",
     clearSearch = "ရှာထားတာ ဖျက်မယ်",
+    monthsTotal = { n, months -> "${months.inMyanmarDigits()} လအတွင်း ${n.inMyanmarDigits()} ခု" },
+    monthsAbove = { n, months -> "အပေါ်မှာ ပိုသစ်တဲ့ ${n.inMyanmarDigits()} ခု၊ ${months.inMyanmarDigits()} လစာ ရှိတယ်" },
+    goToMonth = { month -> "$month ကို သွားမယ်" },
 )
 
 val ThaiHistory = HistoryCopy(
@@ -56,4 +67,7 @@ val ThaiHistory = HistoryCopy(
     hiddenByFilter = { n -> "อีก $n รายการอยู่นอกตัวกรองนี้" },
     clearFilters = "ล้างตัวกรอง",
     clearSearch = "ล้างคำค้นหา",
+    monthsTotal = { n, months -> "$n รายการใน $months เดือน" },
+    monthsAbove = { n, months -> "รายการใหม่กว่า $n รายการด้านบน จาก $months เดือน" },
+    goToMonth = { month -> "ไปที่ $month" },
 )

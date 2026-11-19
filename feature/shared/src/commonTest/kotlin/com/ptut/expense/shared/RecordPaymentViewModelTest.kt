@@ -133,6 +133,38 @@ class RecordPaymentViewModelTest : ViewModelTest() {
         assertTrue(viewModel.ready().changed)
     }
 
+    /** #76: the write throws; nothing closes, the amount stays, and the button retries. */
+    @Test
+    fun `a failed save keeps the amount and the next tap tries again`() = runTest {
+        val repository = FakeSharedRepository()
+        repository.failNextPayment = true
+        val viewModel = RecordPaymentViewModel(groupId = "g1", fromMemberId = "aye", toMemberId = "me", repository = repository)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        viewModel.setAmount("240")
+        runCurrent()
+
+        var closed = 0
+        viewModel.record { closed++ }
+        runCurrent()
+
+        val failed = viewModel.ready()
+        assertEquals(0, closed)
+        assertEquals("240", failed.form.amountText)
+        assertEquals("Couldn't record this payment", failed.failedTitle)
+        assertEquals("Try again", failed.buttonLabel)
+        assertTrue(failed.canSave)
+
+        viewModel.record { closed++ }
+        runCurrent()
+        repository.gate.complete(Unit)
+        runCurrent()
+
+        assertEquals(1, repository.payments.size)
+        assertEquals(1, closed)
+        assertNull(viewModel.ready().failedTitle)
+    }
+
     private fun TestScope.ready(expense: SharedExpense?, from: String, to: String, myPromptPay: String? = null): RecordPaymentUiState.Ready =
         viewModel(expense, from, to, myPromptPay).ready()
 

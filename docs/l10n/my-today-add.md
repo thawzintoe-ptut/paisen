@@ -109,3 +109,12 @@ Burmese for Today, the Add sheet and the day receipt that the Sky MY design does
 | That's not right / What's off? | ဒါ မမှန်ဘူး / ဘာမှားနေလဲ | `notRight`, `whatsOff` |
 | Some of it was planned / A category is wrong / Just hide this week | တချို့က စီစဉ်ထားပြီးသား / အမျိုးအစား မှားနေတယ် / ဒီအပတ် ဖျောက်ထားမယ် | sheet choices |
 | Note tone / Plain / Playful | မှတ်ချက် လေသံ / ရိုးရိုး / ပေါ့ပေါ့ပါးပါး | `toneTitle`, `tonePlain`, `tonePlayful` |
+
+## Design v2 (#68, #69), not reviewed yet
+
+| English | Burmese | Where |
+|---|---|---|
+| Photo access is off, so new slips wait until you allow it. | ဓာတ်ပုံ ကြည့်ခွင့် ပိတ်ထားလို့ ခွင့်ပေးမှ စလစ်အသစ်တွေ ဝင်လာမယ်။ | `HomeCopy` stopAccessOff |
+| The photo library didn't answer. The next scan tries again. | ဓာတ်ပုံတွေဆီက အဖြေ မရဘူး။ နောက်တစ်ခါ စစ်ရင် ထပ်ကြိုးစားမယ်။ | `HomeCopy` stopNoAnswer |
+| Purchases already here still count. | ဒီမှာ ရှိပြီးသား အသုံးတွေကို ဆက်တွက်ထားတယ်။ | `HomeCopy` stillCounts |
+| Reading new slips | စလစ်အသစ်တွေ ဖတ်နေတယ် | `HomeCopy` readingSlips |

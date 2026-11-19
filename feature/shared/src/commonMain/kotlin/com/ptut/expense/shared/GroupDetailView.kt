@@ -174,7 +174,13 @@ private fun Loaded(
                         onBack = onBack,
                         trailing = { SkyBarIconAction(icon = PtutIcon.MoreHoriz, label = text.detail.more, onClick = { menu = true }) },
                     )
-                    GroupHeader(state, onSignIn = { inviteStep = STEP_SIGN_IN_AGAIN }, onSettleUp = onSettleUp)
+                    GroupHeader(
+                        state,
+                        onSignIn = { inviteStep = STEP_SIGN_IN_AGAIN },
+                        onSettleUp = onSettleUp,
+                        refreshing = refreshing,
+                        onRetrySync = onRefresh,
+                    )
                 }
             }
             item(key = "tabs") { GroupTabRow(tabs.selected, activityCount = tabs.activity?.fresh?.size ?: 0, onSelect = tabs.onSelect) }

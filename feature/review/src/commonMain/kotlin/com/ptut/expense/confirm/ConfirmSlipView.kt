@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,6 +61,7 @@ import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.KeyboardAmountField
 import com.ptut.expense.ui.SlipPicture
 import com.ptut.expense.ui.SlipPictureViewer
+import com.ptut.expense.ui.SlipPlaceholder
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyChip
@@ -87,7 +89,8 @@ import com.ptut.expense.ui.sky.SkyTopBar
  * Stateless: [ConfirmSlipViewModel] holds what is typed, so a rotation does not lose the amount
  * someone read off a slip they may no longer have in front of them.
  *
- * #217: only the bar while the slip is awaited, and a message with a way back once it has gone.
+ * #217, #72: a reading bar with Confirm waiting while the slip is awaited, and a message with a way
+ * back once it has gone.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -132,7 +135,11 @@ fun ConfirmSlipView(
             backLabel = text.closeWithoutSaving,
         )
         when (uiState.phase) {
-            ConfirmSlipPhase.Loading -> return@Column
+            ConfirmSlipPhase.Loading -> {
+                ReadingSlip(modifier = Modifier.weight(1f))
+                ConfirmButtons(uiState, onSave = onSave, onNotMine = onNotMine)
+                return@Column
+            }
 
             ConfirmSlipPhase.Missing -> {
                 SkyEmptyState(
@@ -271,26 +278,60 @@ fun ConfirmSlipView(
                     .semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(Spacing.md),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SkyButton(
-                label = text.notMine,
-                onClick = onNotMine,
-                kind = SkyButtonKind.Outline,
-                enabled = !uiState.saving,
-                modifier = Modifier.weight(1f),
+        ConfirmButtons(uiState, onSave = onSave, onNotMine = onNotMine)
+    }
+}
+
+/** #72: the slip's place and a moving bar while it is read; Confirm below waits. */
+@Composable
+private fun ReadingSlip(modifier: Modifier = Modifier) {
+    val text = LocalCopy.current.slips
+    Row(
+        modifier = modifier.fillMaxWidth().padding(horizontal = Spacing.md),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+    ) {
+        SlipPlaceholder(
+            shape = PtutRadii.r20,
+            modifier = Modifier.width(Sizes.slipPanelWidth).height(Sizes.slipPanelHeight),
+        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            Text(
+                text = text.readingSlip,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
-            // Live without a category, so the press can say what is missing (FR-11).
-            SkyButton(
-                label = text.confirm,
-                onClick = onSave,
-                enabled = uiState.canSave,
-                modifier = Modifier.weight(1.6f),
+            LinearProgressIndicator(
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs),
             )
         }
+    }
+}
+
+@Composable
+private fun ConfirmButtons(uiState: ConfirmSlipUiState, onSave: () -> Unit, onNotMine: () -> Unit) {
+    val text = LocalCopy.current.slips
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(Spacing.md),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SkyButton(
+            label = text.notMine,
+            onClick = onNotMine,
+            kind = SkyButtonKind.Outline,
+            enabled = !uiState.saving && !uiState.reading,
+            modifier = Modifier.weight(1f),
+        )
+        // Live without a category, so the press can say what is missing (FR-11).
+        SkyButton(
+            label = uiState.confirmLabel,
+            onClick = onSave,
+            enabled = uiState.canSave,
+            modifier = Modifier.weight(1.6f),
+        )
     }
 }
 

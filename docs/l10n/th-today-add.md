@@ -148,3 +148,12 @@ Plain amounts only: the target never says "over budget" and is never red.
 | That's not right / What's off? | ไม่ถูกต้อง / อะไรไม่ถูก | `notRight`, `whatsOff` |
 | Some of it was planned / A category is wrong / Just hide this week | บางส่วนวางแผนไว้แล้ว / หมวดหมู่ไม่ถูก / ซ่อนสัปดาห์นี้ | sheet choices |
 | Note tone / Plain / Playful | น้ำเสียงของบันทึก / เรียบ ๆ / สนุก ๆ | `toneTitle`, `tonePlain`, `tonePlayful` |
+
+## Design v2 (#68, #69), not reviewed yet
+
+| English | Thai | Where |
+|---|---|---|
+| Photo access is off, so new slips wait until you allow it. | ปิดการเข้าถึงรูปอยู่ สลิปใหม่จะรอจนกว่าคุณจะอนุญาต | `HomeCopy` stopAccessOff |
+| The photo library didn't answer. The next scan tries again. | คลังรูปไม่ตอบสนอง การสแกนครั้งถัดไปจะลองใหม่ | `HomeCopy` stopNoAnswer |
+| Purchases already here still count. | รายการที่มีอยู่แล้วยังนับตามเดิม | `HomeCopy` stillCounts |
+| Reading new slips | กำลังอ่านสลิปใหม่ | `HomeCopy` readingSlips |

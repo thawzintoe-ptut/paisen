@@ -69,6 +69,9 @@ data class SharedDetailCopy(
     val newActivity: (Int) -> String = { n -> "$n new" },
     /** The number on the Activity tab. */
     val badgeCount: (Int) -> String = { n -> "$n" },
+    /** #75: the people past the header's three avatars, shown, then read out. */
+    val moreAvatars: (Int) -> String = { n -> "+$n" },
+    val morePeople: (Int) -> String = { n -> "$n more ${if (n == 1) "person" else "people"}" },
     val newSinceLooked: String = "New since you last looked",
     val activityEmpty: String = "Changes anyone makes in this group show here.",
     val everyoneSquare: String = "Everyone's square",
@@ -142,6 +145,8 @@ val BurmeseSharedDetail = SharedDetailCopy(
     nothingSpent = { code -> "ဘာမှ မသုံးရသေးဘူး · $code နဲ့ တွက်တယ်" },
     newActivity = { n -> "အသစ် ${n.inMyanmarDigits()} ခု" },
     badgeCount = { n -> n.inMyanmarDigits() },
+    moreAvatars = { n -> "+${n.inMyanmarDigits()}" },
+    morePeople = { n -> "နောက်ထပ် ${n.inMyanmarDigits()} ယောက်" },
     newSinceLooked = "နောက်ဆုံး ကြည့်ပြီးကတည်းက အသစ်",
     activityEmpty = "ဒီအဖွဲ့ထဲ ဘယ်သူ ပြောင်းပြောင်း ဒီမှာ ပေါ်မယ်။",
     everyoneSquare = "လူတိုင်း ရှင်းပြီး",
@@ -331,6 +336,8 @@ val ThaiSharedDetail = SharedDetailCopy(
     nothingSpent = { code -> "ยังไม่มีค่าใช้จ่าย · นับเป็น $code" },
     newActivity = { n -> "ใหม่ $n รายการ" },
     badgeCount = { n -> "$n" },
+    moreAvatars = { n -> "+$n" },
+    morePeople = { n -> "อีก $n คน" },
     newSinceLooked = "ใหม่ตั้งแต่ที่คุณดูครั้งล่าสุด",
     activityEmpty = "การเปลี่ยนแปลงของทุกคนในกลุ่มนี้จะแสดงที่นี่",
     everyoneSquare = "ทุกคนเคลียร์กันแล้ว",

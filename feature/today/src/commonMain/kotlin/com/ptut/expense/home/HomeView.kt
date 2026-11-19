@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -230,6 +231,10 @@ private fun LoadedHome(
                     }
                 }
             }
+            // #68: where a scan's rows will land, so nothing above them moves when they do.
+            items(state.placeholderRows, key = { "placeholder-$it" }) {
+                SheetRow { PlaceholderRow(contentDescription = text.readingSlips) }
+            }
             items(state.transactions, key = { it.id }) { row ->
                 SheetRow { SkyRow(row = row, onOpenTransaction = onOpenTransaction) }
             }
@@ -347,10 +352,10 @@ private fun ImportStatus(
             modifier = modifier,
         )
 
-        // The reason stays in Activity: the journal keeps the language the scan ran in.
-        ImportStatusUiModel.Failing -> SkyWarningBanner(
+        // What stopped, then what still counts (#69).
+        is ImportStatusUiModel.Failing -> SkyWarningBanner(
             title = text.scansFailing,
-            body = null,
+            body = "${status.reason.line(text)}\n${text.stillCounts}",
             actionLabel = fix?.let { text.fix },
             onAction = fix?.let { { onFixImport(it) } },
             modifier = modifier,
@@ -365,6 +370,37 @@ private fun ImportStatus(
         )
     }
 }
+
+private fun ImportStopReason.line(text: HomeCopy): String = when (this) {
+    ImportStopReason.PhotoAccessOff -> text.stopAccessOff
+    ImportStopReason.LibraryNoAnswer -> text.stopNoAnswer
+    is ImportStopReason.Other -> said.replaceFirstChar { it.uppercase() }
+}
+
+/** #68: a transaction row's shape in the quiet fill. Still on purpose: the pulse dot already moves. */
+@Composable
+private fun PlaceholderRow(contentDescription: String) {
+    val fill = MaterialTheme.colorScheme.surfaceVariant
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = SkySizes.transactionRow)
+            .padding(vertical = Spacing.xs)
+            .semantics(mergeDescendants = true) { this.contentDescription = contentDescription },
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(SkySizes.rowCircle).clip(CircleShape).background(fill))
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            Box(Modifier.fillMaxWidth(PLACEHOLDER_NAME_WIDTH).height(Spacing.s12).clip(PtutRadii.r12).background(fill))
+            Box(Modifier.fillMaxWidth(PLACEHOLDER_META_WIDTH).height(Spacing.xs).clip(PtutRadii.r12).background(fill))
+        }
+        Box(Modifier.size(width = SkySizes.rowCircle, height = Spacing.s12).clip(PtutRadii.r12).background(fill))
+    }
+}
+
+private const val PLACEHOLDER_NAME_WIDTH = 0.6f
+private const val PLACEHOLDER_META_WIDTH = 0.35f
 
 /** #21: one line and a thin bar in the quiet ink. Past the target the bar is full and still not red. */
 @Composable

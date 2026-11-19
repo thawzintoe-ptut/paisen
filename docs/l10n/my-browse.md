@@ -110,3 +110,11 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | English | Burmese | Where |
 | --- | --- | --- |
 | You can undo it until you do something else. | နောက်တစ်ခု မလုပ်ခင်အထိ ပြန်ယူလို့ ရသေးတယ်။ | `RecordCopy.kt:108` |
+
+## Design v2 (#70, #71), not reviewed yet
+
+| English | Burmese | Where |
+|---|---|---|
+| {n} transactions over {months} months | {months} လအတွင်း {n} ခု | `HistoryCopy` monthsTotal |
+| {n} newer transactions above, from {months} months | အပေါ်မှာ ပိုသစ်တဲ့ {n} ခု၊ {months} လစာ ရှိတယ် | `HistoryCopy` monthsAbove |
+| Go to {month} | {month} ကို သွားမယ် | `HistoryCopy` goToMonth |

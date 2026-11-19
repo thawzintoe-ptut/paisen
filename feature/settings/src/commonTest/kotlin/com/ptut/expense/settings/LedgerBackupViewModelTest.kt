@@ -15,6 +15,7 @@ import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -24,6 +25,7 @@ import kotlinx.datetime.toInstant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -140,13 +142,81 @@ class LedgerBackupViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `a file this build cannot read refuses in the error tone and gives the reason`() = runTest {
+    fun `a file from a newer version gets the refused state with its reason and no toast`() = runTest {
         val backup = viewModel(
             files = RecordingFiles(reads = "not a ledger"),
-            archive = FakeArchive(
-                failsWith = BackupUnreadable("This file was written by a different version of the app (format 2)"),
-            ),
+            archive = FakeArchive(failsWith = BackupUnreadable(NEWER_FORMAT)),
         )
+        val uiState = collected(backup)
+
+        toasts.messages.test {
+            backup.chooseFile()
+            runCurrent()
+
+            assertEquals(NEWER_FORMAT, uiState.value.refused)
+            assertNull(uiState.value.preview)
+            assertFalse(uiState.value.busy)
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `choosing another file that reads clears the refusal and shows its preview`() = runTest {
+        val archive = FakeArchive(failsWith = BackupUnreadable(NEWER_FORMAT))
+        val backup = viewModel(files = RecordingFiles(reads = "a file"), archive = archive)
+        val uiState = collected(backup)
+
+        backup.chooseFile()
+        runCurrent()
+        archive.failsWith = null
+        backup.chooseFile()
+        runCurrent()
+
+        assertNull(uiState.value.refused)
+        assertEquals("No transactions", uiState.value.preview)
+    }
+
+    @Test
+    fun `backing out of the picker keeps the refusal on screen`() = runTest {
+        val files = RecordingFiles(reads = "not a ledger")
+        val backup = viewModel(files = files, archive = FakeArchive(failsWith = BackupUnreadable(NEWER_FORMAT)))
+        val uiState = collected(backup)
+
+        backup.chooseFile()
+        runCurrent()
+        files.reads = null
+        backup.chooseFile()
+        runCurrent()
+
+        assertEquals(NEWER_FORMAT, uiState.value.refused)
+    }
+
+    @Test
+    fun `a file refused at import gets the refused state rather than a toast`() = runTest {
+        val archive = FakeArchive()
+        val backup = viewModel(files = RecordingFiles(reads = "a file"), archive = archive)
+        val uiState = collected(backup)
+
+        toasts.messages.test {
+            backup.chooseFile()
+            runCurrent()
+            archive.failsOnRestoreWith = BackupUnreadable("This file counts in MMK")
+            backup.restore()
+            runCurrent()
+
+            assertEquals("This file counts in MMK", uiState.value.refused)
+            assertNull(uiState.value.preview)
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a failure that is not a refusal of the file stays an error toast`() = runTest {
+        val backup = viewModel(
+            files = RecordingFiles(reads = "a file"),
+            archive = FakeArchive(failsWith = IllegalStateException("The disk is full")),
+        )
+        val uiState = collected(backup)
 
         toasts.messages.test {
             backup.chooseFile()
@@ -154,7 +224,8 @@ class LedgerBackupViewModelTest : ViewModelTest() {
 
             val toast = awaitItem()
             assertEquals(ToastTone.Error, toast.tone)
-            assertTrue(toast.text.contains("format 2"), toast.text)
+            assertEquals("The disk is full", toast.text)
+            assertNull(uiState.value.refused)
         }
     }
 
@@ -181,6 +252,12 @@ class LedgerBackupViewModelTest : ViewModelTest() {
         return uiState.value
     }
 
+    private fun TestScope.collected(backup: LedgerBackupViewModel): StateFlow<LedgerBackupUiState> {
+        backgroundScope.launch { backup.uiState.collect { } }
+        runCurrent()
+        return backup.uiState
+    }
+
     private fun row(id: String, day: Int) = Transaction(
         id = id,
         occurredAtEpochMillis = LocalDateTime(2026, 8, day, 12, 0).toInstant(BangkokTime).toEpochMilliseconds(),
@@ -205,24 +282,30 @@ class LedgerBackupViewModelTest : ViewModelTest() {
     private class FixedClock(private val at: Instant) : Clock {
         override fun now(): Instant = at
     }
+
+    private companion object {
+        const val NEWER_FORMAT = "This file was written by a different version of the app (format 9)"
+    }
 }
 
 private class FakeArchive(
     private val report: MergeReport = MergeReport(added = 0, alreadyHeld = 0),
-    private val failsWith: Exception? = null,
+    var failsWith: Exception? = null,
 ) : LedgerArchive {
+
+    var failsOnRestoreWith: Exception? = null
 
     override suspend fun export(): String = "the ledger as json"
 
     override suspend fun preview(json: String): BackupPreview =
         failsWith?.let { throw it } ?: BackupPreview(transactions = 0, oldestEpochMillis = null, groups = 0, categories = 0, subCategories = 0, shopRules = 0)
 
-    override suspend fun restore(json: String): MergeReport = failsWith?.let { throw it } ?: report
+    override suspend fun restore(json: String): MergeReport = (failsOnRestoreWith ?: failsWith)?.let { throw it } ?: report
 }
 
 private class RecordingFiles(
     private val writeLandsAt: String? = "somewhere.json",
-    private val reads: String? = null,
+    var reads: String? = null,
 ) : LedgerFileStore {
 
     var written: String? = null

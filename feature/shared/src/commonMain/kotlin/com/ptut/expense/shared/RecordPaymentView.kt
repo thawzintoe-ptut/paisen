@@ -31,7 +31,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -53,6 +55,7 @@ import com.ptut.expense.ui.sky.SkyDiscardSheet
 import com.ptut.expense.ui.sky.SkyHairline
 import com.ptut.expense.ui.sky.SkyKeyValueRow
 import com.ptut.expense.ui.sky.SkyTopBar
+import com.ptut.expense.ui.sky.SkyWarningBanner
 import io.github.alexzhirkevich.qrose.rememberQrCodePainter
 import kotlinx.coroutines.launch
 
@@ -151,6 +154,13 @@ fun RecordPaymentView(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = Spacing.sm),
             )
+            state.failedTitle?.let { title ->
+                SkyWarningBanner(
+                    title = title,
+                    body = state.failedBody,
+                    modifier = Modifier.padding(top = Spacing.md).semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
         }
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md).padding(bottom = Spacing.md),

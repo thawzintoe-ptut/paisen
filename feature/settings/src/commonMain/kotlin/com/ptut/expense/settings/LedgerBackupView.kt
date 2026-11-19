@@ -55,6 +55,7 @@ fun ExportDataView(
  * The merge promise is on the screen rather than in a toast afterwards, because it is the answer
  * to the question that stops people tapping — whether this replaces what they already have.
  * Once a file is chosen the card says what it holds, and nothing merges until Import (#220).
+ * A refused file says why, that the ledger is untouched, and offers the picker again (#73).
  */
 @Composable
 fun ImportDataView(
@@ -68,6 +69,25 @@ fun ImportDataView(
     val copy = LocalCopy.current
     val text = copy.settings
     val preview = uiState.preview
+    val refused = uiState.refused
+    if (refused != null) {
+        BackupScreen(
+            title = text.importLedger,
+            intro = text.importIntro,
+            cardTitle = text.fileRefused,
+            cardText = refused,
+            cardIcon = PtutIcon.Error,
+            noteTitle = text.ledgerUntouched,
+            noteText = text.nothingImported,
+            action = text.chooseAnotherFile,
+            onAction = onChooseFile,
+            enabled = !uiState.busy,
+            footnote = text.importFootnote,
+            onBack = onBack,
+            modifier = modifier,
+        )
+        return
+    }
     BackupScreen(
         title = text.importLedger,
         intro = text.importIntro,
@@ -107,6 +127,8 @@ private fun BackupScreen(
     modifier: Modifier = Modifier,
     secondary: String? = null,
     onSecondary: () -> Unit = {},
+    noteTitle: String? = null,
+    noteText: String = "",
 ) {
     SkyListScreen(
         title = title,
@@ -146,6 +168,16 @@ private fun BackupScreen(
                 icon = cardIcon.image,
                 modifier = Modifier.padding(horizontal = Spacing.sm),
             )
+        }
+        if (noteTitle != null) {
+            item {
+                SkyNoticeCard(
+                    title = noteTitle,
+                    text = noteText,
+                    icon = PtutIcon.VerifiedUser.image,
+                    modifier = Modifier.padding(horizontal = Spacing.sm),
+                )
+            }
         }
         item {
             Text(

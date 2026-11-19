@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +33,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.SkySizes
@@ -159,6 +161,9 @@ private fun Record(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
+                // #71: a long name takes two lines at most, so the amount below keeps its place.
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = Spacing.s12),
             )
             SignedAmount(state)
@@ -228,7 +233,11 @@ private fun SignedAmount(state: TransactionDetailUiState.Loaded) {
         fraction = state.amount.fraction,
         color = if (state.isIncome) MaterialTheme.ptut.ok else MaterialTheme.ptut.signatureInk,
         fractionColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = Spacing.xs).clearAndSetSemantics { contentDescription = state.spoken },
+        // #71: measured at its own width, so the figure never shrinks or breaks onto a second line.
+        modifier = Modifier
+            .padding(top = Spacing.xs)
+            .wrapContentWidth(unbounded = true)
+            .clearAndSetSemantics { contentDescription = state.spoken },
     )
 }
 

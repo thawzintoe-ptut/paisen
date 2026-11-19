@@ -220,3 +220,12 @@ Choices to check in this area:
 | The Add sheet opens on this currency. Totals still count in {home}. | หน้าเพิ่มรายการเปิดที่สกุลนี้ ยอดรวมยังนับเป็น {home} | `CurrencyCopy` startsInIntro (was "บาท", now the home code) |
 | Saved as {home} | บันทึกเป็น {home} | `CurrencyCopy` savedAs (was inBaht) |
 | Every total counts in this currency. Days start at midnight, {zone} time. | (unchanged) {zone} is now the place, "ย่างกุ้ง", not "Asia/Yangon" | `CurrencyCopy` homeIntro |
+
+## Design v2 (#73), not reviewed yet
+
+| English | Thai | Where |
+|---|---|---|
+| This file was refused. | ไฟล์นี้ถูกปฏิเสธ | `SettingsCopy` fileRefused |
+| Your ledger is untouched. | ประวัติของคุณไม่ถูกแตะต้อง | `SettingsCopy` ledgerUntouched |
+| Nothing from this file was imported. | ไม่มีอะไรจากไฟล์นี้ถูกนำเข้า | `SettingsCopy` nothingImported |
+| Choose another file | เลือกไฟล์อื่น | `SettingsCopy` chooseAnotherFile |

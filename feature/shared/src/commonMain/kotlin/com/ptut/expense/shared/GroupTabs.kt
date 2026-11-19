@@ -60,7 +60,14 @@ data class GroupTabsState(
 
 /** #62 and #63: icon, name, people, the balance in words, the sync line and the one main action. */
 @Composable
-internal fun GroupHeader(state: GroupDetailUiState.Loaded, onSignIn: () -> Unit, onSettleUp: (String, String) -> Unit, modifier: Modifier = Modifier) {
+internal fun GroupHeader(
+    state: GroupDetailUiState.Loaded,
+    onSignIn: () -> Unit,
+    onSettleUp: (String, String) -> Unit,
+    modifier: Modifier = Modifier,
+    refreshing: Boolean = false,
+    onRetrySync: () -> Unit = {},
+) {
     val text = LocalCopy.current.shared
     val on = MaterialTheme.ptut.heroOn
     Column(modifier.padding(horizontal = Spacing.md)) {
@@ -72,7 +79,7 @@ internal fun GroupHeader(state: GroupDetailUiState.Loaded, onSignIn: () -> Unit,
                 Text(state.memberLine, style = MaterialTheme.typography.bodyLarge, color = on)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                state.members.forEach { member ->
+                state.headerMembers.forEach { member ->
                     MemberAvatar(
                         label = member.label,
                         isMe = member.isMe,
@@ -80,6 +87,14 @@ internal fun GroupHeader(state: GroupDetailUiState.Loaded, onSignIn: () -> Unit,
                         modifier = Modifier
                             .semantics { contentDescription = if (member.joined) member.name else text.detail.notJoined(member.name) }
                             .then(if (member.joined) Modifier else Modifier.alpha(NOT_JOINED_ALPHA)),
+                    )
+                }
+                state.moreMembers?.let { more ->
+                    MemberAvatar(
+                        label = more.label,
+                        isMe = false,
+                        size = SkySizes.chip,
+                        modifier = Modifier.semantics { contentDescription = more.description },
                     )
                 }
             }
@@ -101,7 +116,14 @@ internal fun GroupHeader(state: GroupDetailUiState.Loaded, onSignIn: () -> Unit,
             BalanceChip(state.balanceChip, Modifier.padding(top = Spacing.md))
         }
         Text(state.spendLine, style = MaterialTheme.typography.bodyMedium, color = on, modifier = Modifier.padding(top = Spacing.xs))
-        state.syncLine?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = on, modifier = Modifier.padding(top = Spacing.xxs)) }
+        state.syncLine?.let { line ->
+            Row(Modifier.padding(top = Spacing.xxs), verticalAlignment = Alignment.CenterVertically) {
+                Text(line, style = MaterialTheme.typography.labelMedium, color = on, modifier = Modifier.weight(1f, fill = false))
+                if (state.canRetrySync) {
+                    SkyTextAction(label = LocalCopy.current.common.tryAgain, onClick = onRetrySync, enabled = !refreshing, ink = on)
+                }
+            }
+        }
         if (state.signedOut) {
             SkyTextAction(label = text.signIn, onClick = onSignIn, enabled = true, ink = on, modifier = Modifier.offset(x = -Spacing.xs))
         }

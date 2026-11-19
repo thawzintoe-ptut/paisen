@@ -379,3 +379,17 @@ A group counts in its own money, so "baht" and "THB" in these lines became the g
 | Add what someone paid for, and it's split between everyone here. | တစ်ယောက်ယောက် ပေးခဲ့တာကို ထည့်ပါ၊ ဒီမှာရှိတဲ့ လူတိုင်းကြား ခွဲပေးမယ်။ | `SharedDetailCopy` noExpensesBody |
 | Your own ledger is unchanged. | သင့်ကိုယ်ပိုင် စာရင်းက မပြောင်းဘူး။ | `SharedDetailCopy` ledgerUnchanged |
 | Back to Shared | မျှသုံး ကို ပြန်သွားမယ် | `SharedDetailCopy` backToShared |
+
+## Record payment didn't save (#76), not reviewed yet
+
+| English | Burmese | Where |
+|---|---|---|
+| Couldn't record this payment | ဒီပေးချေမှုကို မမှတ်နိုင်ဘူး | `SharedPaymentCopy` didntSave |
+| Nothing was saved. What you typed is still here, so try again. | ဘာမှ မသိမ်းရသေးဘူး။ ရိုက်ထားတာတွေ ဒီမှာ ရှိနေတုန်းပဲ၊ ထပ်ကြိုးစားပါ။ | `SharedPaymentCopy` keptTyped |
+
+## Design v2 (#75), not reviewed yet
+
+| English | Burmese | Where |
+|---|---|---|
+| +{n} | +{n} | `SharedDetailCopy` moreAvatars |
+| {n} more people | နောက်ထပ် {n} ယောက် | `SharedDetailCopy` morePeople |

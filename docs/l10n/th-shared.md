@@ -459,3 +459,17 @@ Choices to check in this area:
 | Add what someone paid for, and it's split between everyone here. | เพิ่มสิ่งที่ใครสักคนจ่ายไป แล้วจะหารกับทุกคนที่นี่ | SharedGroupCopy.kt `noExpensesBody` |
 | Your own ledger is unchanged. | บัญชีของคุณเองไม่เปลี่ยน | SharedGroupCopy.kt `ledgerUnchanged` |
 | Back to Shared | กลับไปที่กลุ่ม | SharedGroupCopy.kt `backToShared` |
+
+## Record payment didn't save (#76), not reviewed yet
+
+| English | Thai | Where |
+|---|---|---|
+| Couldn't record this payment | บันทึกการจ่ายเงินนี้ไม่ได้ | SharedPaymentCopy.kt `didntSave` |
+| Nothing was saved. What you typed is still here, so try again. | ยังไม่ได้บันทึกอะไร สิ่งที่คุณพิมพ์ยังอยู่ ลองอีกครั้ง | SharedPaymentCopy.kt `keptTyped` |
+
+## Design v2 (#75), not reviewed yet
+
+| English | Thai | Where |
+|---|---|---|
+| +{n} | +{n} | `SharedDetailCopy` moreAvatars |
+| {n} more people | อีก {n} คน | `SharedDetailCopy` morePeople |

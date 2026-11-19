@@ -20,7 +20,10 @@ import com.ptut.expense.domain.TransactionSource
 import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.locale.BurmeseCopy
+import com.ptut.expense.locale.EnglishCopy
 import com.ptut.expense.locale.NoteTone
+import com.ptut.expense.locale.ThaiCopy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -147,8 +150,118 @@ class HomeViewModelTest : ViewModelTest() {
             assertEquals(HomeUiState.Loading, awaitItem())
 
             val state = awaitItem() as HomeUiState.Success
-            assertEquals(ImportStatusUiModel.Failing, state.importStatus)
+            assertEquals(ImportStatusUiModel.Failing(ImportStopReason.Other(EnglishCopy.slips.importerStopped)), state.importStatus)
             assertEquals(ImportFix.AllowAllPhotos, state.importFix)
+        }
+    }
+
+    @Test
+    fun photoAccessTurnedOffIsNamedAndOffersTheSystemPage() = runTest {
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            sinceLastImportMillis = FIVE_MINUTES,
+            runs = listOf(scan(ImportOutcome.Failure, reason = EnglishCopy.folders.androidAccessDenied)),
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            val state = awaitItem() as HomeUiState.Success
+            assertEquals(ImportStatusUiModel.Failing(ImportStopReason.PhotoAccessOff), state.importStatus)
+            assertEquals(ImportFix.AllowAllPhotos, state.importFix)
+        }
+    }
+
+    @Test
+    fun aStopWrittenInAnotherLanguageIsStillRecognised() = runTest {
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            sinceLastImportMillis = FIVE_MINUTES,
+            runs = listOf(scan(ImportOutcome.Failure, reason = BurmeseCopy.folders.iosAccessDenied)),
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            assertEquals(ImportStatusUiModel.Failing(ImportStopReason.PhotoAccessOff), (awaitItem() as HomeUiState.Success).importStatus)
+        }
+    }
+
+    @Test
+    fun aLibraryThatDidNotAnswerOffersNoFixSinceTheNextScanAsksAgain() = runTest {
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            sinceLastImportMillis = FIVE_MINUTES,
+            runs = listOf(scan(ImportOutcome.Failure, reason = ThaiCopy.folders.libraryNoAnswer)),
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            val state = awaitItem() as HomeUiState.Success
+            assertEquals(ImportStatusUiModel.Failing(ImportStopReason.LibraryNoAnswer), state.importStatus)
+            assertNull(state.importFix)
+        }
+    }
+
+    @Test
+    fun anUnknownStopKeepsTheJournalsWords() = runTest {
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            sinceLastImportMillis = FIVE_MINUTES,
+            runs = listOf(scan(ImportOutcome.Failure, reason = "the folder could not be read")),
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            val state = awaitItem() as HomeUiState.Success
+            assertEquals(ImportStatusUiModel.Failing(ImportStopReason.Other("the folder could not be read")), state.importStatus)
+            assertEquals(ImportFix.AllowAllPhotos, state.importFix)
+        }
+    }
+
+    @Test
+    fun aRunningScanShowsPlaceholderRowsAboveTheDaysRows() = runTest {
+        val viewModel = viewModel(
+            transactions = listOf(transaction(Satang(12_875), Direction.Expense)),
+            scanning = flowOf(true),
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            val state = awaitItem() as HomeUiState.Success
+            assertEquals(2, state.placeholderRows)
+            assertEquals(Satang(12_875), state.summary.expense)
+        }
+    }
+
+    @Test
+    fun placeholdersGoWhenTheScanEnds() = runTest {
+        val scanning = MutableStateFlow(true)
+        val viewModel = viewModel(transactions = listOf(transaction(Satang(12_875), Direction.Expense)), scanning = scanning)
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+            assertEquals(2, (awaitItem() as HomeUiState.Success).placeholderRows)
+
+            scanning.value = false
+
+            assertEquals(0, (awaitItem() as HomeUiState.Success).placeholderRows)
+        }
+    }
+
+    @Test
+    fun anEmptyDayKeepsItsEmptyStateWhileAScanRuns() = runTest {
+        val viewModel = viewModel(transactions = emptyList(), scanning = flowOf(true))
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            val state = awaitItem() as HomeUiState.Success
+            assertTrue(state.isScanning)
+            assertEquals(0, state.placeholderRows)
         }
     }
 
@@ -326,7 +439,7 @@ class HomeViewModelTest : ViewModelTest() {
         viewModel.uiState.test {
             assertEquals(HomeUiState.Loading, awaitItem())
 
-            assertEquals(ImportStatusUiModel.Failing, (awaitItem() as HomeUiState.Success).importStatus)
+            assertEquals(ImportStatusUiModel.Failing(ImportStopReason.Other(EnglishCopy.slips.importerStopped)), (awaitItem() as HomeUiState.Success).importStatus)
         }
     }
 
@@ -353,13 +466,13 @@ class HomeViewModelTest : ViewModelTest() {
         }
     }
 
-    private fun scan(outcome: ImportOutcome) = ImportRun(
+    private fun scan(outcome: ImportOutcome, reason: String? = null) = ImportRun(
         id = outcome.name,
         startedAtEpochMillis = 0L,
         finishedAtEpochMillis = null,
         outcome = outcome,
         slipsFound = 0,
-        failureReason = null,
+        failureReason = reason,
     )
 
     private suspend fun importFixFor(sinceLastImportMillis: Long?): ImportFix? {
@@ -601,8 +714,10 @@ class HomeViewModelTest : ViewModelTest() {
         weeklyCheckIn: Boolean = false,
         target: WeeklyTarget? = null,
         note: WeeklyNoteSettings = WeeklyNoteSettings(),
+        scanning: Flow<Boolean> = flowOf(false),
     ) = HomeViewModel(
         ledger = FakeLedger(transactions, sinceLastImportMillis, queued, all = transactions + saved, runs = runs),
+        isScanning = scanning,
         subCategoryUpdates = subCategories,
         onlyPickedPhotos = onlyPickedPhotos,
         weeklyCheckIn = flowOf(weeklyCheckIn),

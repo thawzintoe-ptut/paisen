@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.DateRange
+import com.ptut.expense.domain.DayBucket
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.LedgerFilter
@@ -26,8 +27,10 @@ import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.matches
 import com.ptut.expense.domain.metaLine
 import com.ptut.expense.domain.metaParts
+import com.ptut.expense.domain.monthShort
 import com.ptut.expense.domain.rules.ShopNames
 import com.ptut.expense.domain.weekdayAndDay
+import com.ptut.expense.domain.yearLabel
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +40,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 
@@ -57,6 +61,19 @@ data class LedgerDayUiModel(
     val date: String,
     val total: String,
     val rows: List<LedgerRowUiModel>,
+)
+
+/**
+ * One month on History's edge index (#70), newest first. [firstItem] counts the day headers and rows
+ * above the month's first day header, so the list can jump there; [behind] is the top line meanwhile.
+ */
+data class LedgerMonthUiModel(
+    val label: String,
+    /** Shown on the newest month and wherever the year changes. */
+    val year: String?,
+    val spoken: String,
+    val firstItem: Int,
+    val behind: String,
 )
 
 /**
@@ -85,8 +102,15 @@ sealed interface LedgerUiState {
         val hiddenByFilter: Int,
         /** Null on the History Home opens, which shows the whole table. */
         val scope: LedgerScopeUiModel? = null,
+        val months: List<LedgerMonthUiModel> = emptyList(),
     ) : LedgerUiState {
         val isEmpty: Boolean get() = days.isEmpty()
+
+        /** One month has nothing to jump between. */
+        val hasMonthIndex: Boolean get() = months.size > 1
+
+        /** The month whose rows hold [item], counted the way [LedgerMonthUiModel.firstItem] counts. */
+        fun monthAt(item: Int): LedgerMonthUiModel? = months.lastOrNull { it.firstItem <= item } ?: months.firstOrNull()
 
         /** Nothing is hidden and nothing shows: the ledger itself is empty. */
         val ledgerIsEmpty: Boolean get() = isEmpty && hiddenByFilter == 0
@@ -137,10 +161,11 @@ class LedgerViewModel(
             val visible = inScope.filter { filter.accepts(it) && it.matches(text) }
             val today = clock.now().toLocalDateTime(HomeTime).date
 
+            val buckets = visible.bucketByDay(newestFirst = true)
             LedgerUiState.Success(
                 query = text,
                 filter = filter,
-                days = visible.bucketByDay(newestFirst = true).map { bucket ->
+                days = buckets.map { bucket ->
                     LedgerDayUiModel(
                         date = if (bucket.date == today) "${AppText.copy.common.today} · ${bucket.date.weekdayAndDay()}" else bucket.date.dayLabel(),
                         total = bucket.summary.net.formatNet(),
@@ -151,6 +176,7 @@ class LedgerViewModel(
                 },
                 hiddenByFilter = inScope.size - visible.size,
                 scope = scope?.heading(categories),
+                months = buckets.monthIndex(),
             )
         }.stateIn(
             scope = viewModelScope,
@@ -177,6 +203,32 @@ class LedgerViewModel(
         color = colorName(categories),
         direction = direction,
     )
+}
+
+private fun List<DayBucket>.monthIndex(): List<LedgerMonthUiModel> {
+    class Start(val date: LocalDate, val firstItem: Int, val rowsAbove: Int)
+    val starts = mutableListOf<Start>()
+    var item = 0
+    var rows = 0
+    forEach { bucket ->
+        val last = starts.lastOrNull()?.date
+        if (last == null || last.year != bucket.date.year || last.month != bucket.date.month) {
+            starts += Start(bucket.date, item, rows)
+        }
+        item += 1 + bucket.transactions.size
+        rows += bucket.transactions.size
+    }
+    val text = AppText.copy.history
+    return starts.mapIndexed { index, start ->
+        val date = start.date
+        LedgerMonthUiModel(
+            label = date.monthShort(),
+            year = date.yearLabel().takeIf { index == 0 || starts[index - 1].date.year != date.year },
+            spoken = text.goToMonth("${AppText.copy.calendar.months[date.month.number - 1]} ${date.yearLabel()}"),
+            firstItem = start.firstItem,
+            behind = if (index == 0) text.monthsTotal(rows, starts.size) else text.monthsAbove(start.rowsAbove, index),
+        )
+    }
 }
 
 private fun LedgerScope.holds(transaction: Transaction, categories: List<Category>): Boolean {

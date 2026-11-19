@@ -125,3 +125,11 @@ Choices to check in this area:
 | The shop came from the slip and stays as read. Your edit is kept beside them. | ชื่อร้านมาจากสลิปและคงตามที่อ่านได้ สิ่งที่คุณแก้จะเก็บไว้คู่กัน | RecordCopy.kt `shopStays` |
 | Shop and reference came from the slip and stay as read. Your edit is kept beside them. | ชื่อร้านและเลขอ้างอิงมาจากสลิปและคงตามที่อ่านได้ สิ่งที่คุณแก้จะเก็บไว้คู่กัน | RecordCopy.kt `bothStay` |
 | Changing the category here does not change how {shop} is sorted. | การเปลี่ยนหมวดหมู่ที่นี่ไม่เปลี่ยนวิธีจัดหมวดของ {shop} | RecordCopy.kt `sortingStays` |
+
+## Design v2 (#70, #71), not reviewed yet
+
+| English | Thai | Where |
+|---|---|---|
+| {n} transactions over {months} months | {n} รายการใน {months} เดือน | `HistoryCopy` monthsTotal |
+| {n} newer transactions above, from {months} months | รายการใหม่กว่า {n} รายการด้านบน จาก {months} เดือน | `HistoryCopy` monthsAbove |
+| Go to {month} | ไปที่ {month} | `HistoryCopy` goToMonth |

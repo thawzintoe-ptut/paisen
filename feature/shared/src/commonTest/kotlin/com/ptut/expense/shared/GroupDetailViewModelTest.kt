@@ -9,6 +9,9 @@ import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.SplitMode
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.BurmeseSharedDetail
+import com.ptut.expense.sync.GroupSyncStatus
+import com.ptut.expense.sync.SyncHealth
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -113,6 +116,47 @@ class GroupDetailViewModelTest : ViewModelTest() {
         runCurrent()
 
         assertEquals(SEEN, viewModel.activitySince.value)
+    }
+
+    @Test
+    fun `A twelve person group shows you and two others then plus nine`() = runTest {
+        val big = flatOfThree.copy(members = flatOfThree.members + (1..9).map { Member(id = "m$it", groupId = "g1", name = "Person $it", personId = null) })
+        val state = loaded(group = big)
+
+        assertEquals(12, state.members.size)
+        assertEquals(3, state.headerMembers.size)
+        assertTrue(state.headerMembers.first().isMe)
+        val more = assertNotNull(state.moreMembers)
+        assertEquals("+9", more.label)
+        assertEquals("9 more people", more.description)
+    }
+
+    @Test
+    fun `A group of three shows every avatar and no count`() = runTest {
+        val state = loaded()
+
+        assertEquals(state.members, state.headerMembers)
+        assertNull(state.moreMembers)
+    }
+
+    @Test
+    fun `The Burmese count uses Burmese digits`() {
+        assertEquals("+၉", BurmeseSharedDetail.moreAvatars(9))
+        assertTrue(BurmeseSharedDetail.morePeople(9).contains("၉"))
+    }
+
+    @Test
+    fun `Try again shows only while changes wait or the last sync failed`() {
+        assertTrue(GroupSyncStatus(SyncHealth.Offline, 0).offersRetry())
+        assertTrue(GroupSyncStatus(SyncHealth.Waiting, 3).offersRetry())
+        assertFalse(GroupSyncStatus(SyncHealth.UpToDate, 0).offersRetry())
+        assertFalse(GroupSyncStatus(SyncHealth.Local, 0).offersRetry())
+        assertFalse(GroupSyncStatus(SyncHealth.SignedOut, 2).offersRetry())
+    }
+
+    @Test
+    fun `A group only on this phone never offers Try again`() = runTest {
+        assertFalse(loaded().canRetrySync)
     }
 
     private fun TestScope.loaded(vararg expenses: SharedExpense, group: SharedGroup = flatOfThree): GroupDetailUiState.Loaded =

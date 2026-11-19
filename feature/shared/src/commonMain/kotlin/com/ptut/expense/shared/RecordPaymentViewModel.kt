@@ -22,6 +22,7 @@ import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastAction
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,9 +40,11 @@ data class PaymentForm(
     val loaded: Boolean = false,
     /** #214: true from the tap until the screen leaves, so two fast taps record one payment. */
     val saving: Boolean = false,
+    /** #76: the last save threw; what was typed stays, and the button retries. */
+    val failed: Boolean = false,
 ) {
     /** What the person can change, so a close can tell whether anything would be lost (#6). */
-    val content: PaymentForm get() = copy(saving = false)
+    val content: PaymentForm get() = copy(saving = false, failed = false)
 }
 
 /** The share sheet's button and text when the money comes to you: "Ask Thaw to pay". */
@@ -72,6 +75,9 @@ sealed interface RecordPaymentUiState {
         val askToPay: AskToPayUiModel? = null,
         /** #6: something differs from how the screen opened, so leaving asks first. */
         val changed: Boolean = false,
+        /** #76: why the last save didn't land, or null. */
+        val failedTitle: String? = null,
+        val failedBody: String? = null,
     ) : RecordPaymentUiState
 }
 
@@ -128,12 +134,14 @@ class RecordPaymentViewModel(
                 left > Satang.Zero -> text.stillOwes(fromName, toName, left.formatCompact(money))
                 else -> text.owes(toName, fromName, (-left).formatCompact(money))
             },
-            buttonLabel = text.record((paying ?: Satang.Zero).formatCompact(money)),
+            buttonLabel = if (form.failed) AppText.copy.common.tryAgain else text.record((paying ?: Satang.Zero).formatCompact(money)),
             canSave = form.loaded && !form.saving && paying != null && paying > Satang.Zero,
             promptPayQr = payeePromptPay(group)?.takeIf { paying != null && paying > Satang.Zero }?.let { PromptPay.payload(it, paying ?: Satang.Zero) },
             promptPayLine = payeePromptPay(group)?.let { text.payBy(toName, PromptPay.masked(it)) },
             askToPay = askToPay(group, owed, fromName),
             changed = opened != null && form.content != opened,
+            failedTitle = if (form.failed) text.didntSave else null,
+            failedBody = if (form.failed) text.keptTyped else null,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecordPaymentUiState.Missing)
 
@@ -150,18 +158,25 @@ class RecordPaymentViewModel(
         val group = repository.snapshot.value.group(groupId) ?: return
         val amount = amountOf(state.form, group) ?: return
         val repository = repository
-        form.update { it.copy(saving = true) }
+        form.update { it.copy(saving = true, failed = false) }
         viewModelScope.launch {
-            val id = repository.recordPayment(
-                PaymentDraft(
-                    groupId = groupId,
-                    fromMemberId = fromMemberId,
-                    toMemberId = toMemberId,
-                    amount = amount,
-                    method = state.form.method,
-                    occurredAtEpochMillis = state.form.occurredAtEpochMillis ?: clock.now().toEpochMilliseconds(),
-                ),
-            )
+            val id = try {
+                repository.recordPayment(
+                    PaymentDraft(
+                        groupId = groupId,
+                        fromMemberId = fromMemberId,
+                        toMemberId = toMemberId,
+                        amount = amount,
+                        method = state.form.method,
+                        occurredAtEpochMillis = state.form.occurredAtEpochMillis ?: clock.now().toEpochMilliseconds(),
+                    ),
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                form.update { it.copy(saving = false, failed = true) }
+                return@launch
+            }
             haptics?.saved()
             toasts?.show(
                 ToastMessage(

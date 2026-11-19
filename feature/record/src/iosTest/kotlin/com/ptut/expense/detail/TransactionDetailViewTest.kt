@@ -1,5 +1,9 @@
 package com.ptut.expense.detail
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithText
@@ -7,11 +11,15 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.dp
 import com.ptut.expense.domain.DEFAULT_COLOR
 import com.ptut.expense.domain.MoneyParts
 import com.ptut.expense.ui.TransactionMetaRow
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -136,6 +144,34 @@ class TransactionDetailViewTest {
         onNodeWithContentDescription("Keep it").performClick()
         assertTrue(kept, "the calm option reported nothing")
         assertFalse(confirmed, "keeping it went on to delete")
+    }
+
+    /** #71: a long name stops at two lines and ends with an ellipsis. */
+    @Test
+    fun aLongNameWrapsToTwoLinesThenEndsWithAnEllipsis() = runComposeUiTest {
+        // Twice the ticket's 60 characters, so it overflows two lines whatever the font measures.
+        val long = "Central Food Hall Chidlom Branch Ground Floor Gourmet Market ".repeat(2).trim()
+        setContent {
+            Box(Modifier.width(360.dp)) {
+                TransactionDetailView(
+                    uiState = loaded.copy(merchant = long),
+                    onBack = {},
+                    onEdit = {},
+                    onAskToDelete = {},
+                    onKeepIt = {},
+                    onConfirmDelete = {},
+                    onOpenShopRule = {},
+                )
+            }
+        }
+
+        val layouts = mutableListOf<TextLayoutResult>()
+        onNodeWithText(long).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single()
+        assertEquals(2, layout.lineCount)
+        // isLineEllipsized reads false on iOS even when cut; the visible end shows the name was cut.
+        assertTrue(layout.getLineEnd(1, visibleEnd = true) < long.length, "the name was not cut after two lines")
+        onNodeWithContentDescription(loaded.spoken).assertIsDisplayed()
     }
 
     /** No dialog until the reader asks for one. */
