@@ -92,7 +92,14 @@ internal class FakeSharedRepository(group: SharedGroup = flat12) : SharedReposit
     val payments = mutableListOf<PaymentDraft>()
     val repeats = mutableListOf<RepeatRule>()
 
+    /** The next saveExpense throws this, as a failed write or another phone's change would. */
+    var failNextExpenseWith: Throwable? = null
+
     override suspend fun saveExpense(draft: ExpenseDraft): String {
+        failNextExpenseWith?.let { failure ->
+            failNextExpenseWith = null
+            throw failure
+        }
         expenses += draft
         gate.await()
         return "expense-${expenses.size}"
@@ -111,7 +118,14 @@ internal class FakeSharedRepository(group: SharedGroup = flat12) : SharedReposit
         return "payment-${payments.size}"
     }
 
+    /** The next saveRepeat throws, as a failed write would. */
+    var failNextRepeat = false
+
     override suspend fun saveRepeat(rule: RepeatRule): String {
+        if (failNextRepeat) {
+            failNextRepeat = false
+            error("write failed")
+        }
         repeats += rule
         gate.await()
         return "repeat-${repeats.size}"
@@ -131,9 +145,17 @@ internal class FakeSharedRepository(group: SharedGroup = flat12) : SharedReposit
 
     override suspend fun setPromptPay(groupId: String, promptPayId: String?) = notThisTest<Unit>()
 
-    override suspend fun editGroup(groupId: String, name: String, type: GroupType, icon: String) = notThisTest<Unit>()
+    val editedGroups = mutableListOf<String>()
 
-    override suspend fun deleteGroup(groupId: String) = notThisTest<Unit>()
+    override suspend fun editGroup(groupId: String, name: String, type: GroupType, icon: String) {
+        editedGroups += name
+    }
+
+    val deletedGroups = mutableListOf<String>()
+
+    override suspend fun deleteGroup(groupId: String) {
+        deletedGroups += groupId
+    }
 
     override suspend fun setPersonArchived(personId: String, archived: Boolean) = notThisTest<Unit>()
 

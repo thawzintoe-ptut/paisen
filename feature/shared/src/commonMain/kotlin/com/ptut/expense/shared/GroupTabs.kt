@@ -249,7 +249,7 @@ internal fun LazyListScope.expensesTab(
         item(key = "empty") { NoExpensesYet(canInvite = state.canInvite, onAddExpense = onAddExpense, onInvite = onInvite, modifier = skyItem()) }
     }
     state.days.forEach { day ->
-        item(key = "day-${day.label}") {
+        item(key = "day-${day.date}") {
             Text(
                 day.label,
                 style = MaterialTheme.typography.labelMedium,
@@ -332,18 +332,5 @@ internal fun LazyListScope.activityTab(activity: SharedActivityUiState?, onOpenE
         item(key = "activity-new") { ActivityHeading(LocalCopy.current.shared.detail.newSinceLooked.uppercase(), skyItem()) }
         items(state.fresh, key = { "new-${it.id}" }) { entry -> Box(skyItem()) { ActivityEntryRow(entry, isNew = true, onClick = open(entry)) } }
     }
-    state.days.forEach { day ->
-        item(key = "activity-day-${day.label}") { ActivityHeading(day.label, skyItem()) }
-        items(day.entries, key = { "entry-${it.id}" }) { entry -> Box(skyItem()) { ActivityEntryRow(entry, onClick = open(entry)) } }
-    }
-}
-
-@Composable
-private fun ActivityHeading(label: String, modifier: Modifier = Modifier) {
-    Text(
-        label,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(horizontal = Spacing.md).padding(top = Spacing.md, bottom = Spacing.xxs),
-    )
+    activityDays(state.days, itemModifier = { skyItem() }, open = ::open)
 }

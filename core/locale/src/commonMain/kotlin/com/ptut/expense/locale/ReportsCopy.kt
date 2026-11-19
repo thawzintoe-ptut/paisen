@@ -39,6 +39,7 @@ data class ReportsCopy(
     val showInHistory: String = "Show in History",
 )
 
+/** The period tabs and both axes' letters stay Latin on purpose, as the design draws them (docs/l10n/my-browse.md). */
 val BurmeseReports = ReportsCopy(
     title = "အသုံးစရိတ်",
     spent = { range -> "$range သုံးထားတာ" },

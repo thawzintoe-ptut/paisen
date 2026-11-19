@@ -71,7 +71,7 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         PaymentRemovalEntity::class,
         LedgerMetaEntity::class,
     ],
-    version = 22,
+    version = 23,
     // Schema 2 adds the nullable transactions.editedAt, and schema 4 the nullable memo and
     // slipAmountMinor beside it. Schema 5 adds the watched_folder table whole. A nullable column
     // with no default, and a new table, are the shapes Room migrates on its own. Schema 6 is
@@ -108,6 +108,8 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         // #41 adds ledger_meta whole; #44 keys currency_rate by (currency, home), and every rate
         // already saved was baht per unit, which the column's default says.
         AutoMigration(from = 21, to = 22),
+        // import_run.failureKind is nullable, so rows journalled before it keep their text alone.
+        AutoMigration(from = 22, to = 23),
     ],
     exportSchema = true,
 )

@@ -40,7 +40,7 @@ class SharedExpenseOrderTest {
     }
 
     /** One phone: its group copy, its ledger, the two tables read back, and the clock it stamps with. */
-    private class Phone(val shared: RoomSharedRepository, val ledger: DefaultLedgerRepository, val dao: SharedDao, val transactions: TransactionDao, val clock: SetClock)
+    private class Phone(val shared: RoomSharedRepository, val ledger: RoomLedgerRepository, val dao: SharedDao, val transactions: TransactionDao, val clock: SetClock)
 
     // C1
 
@@ -252,7 +252,7 @@ class SharedExpenseOrderTest {
         // database, which on iOS is a segfault rather than an exception.
         val reads = CoroutineScope(backgroundScope.coroutineContext + Job())
         val clock = SetClock(at = 1_763_300_000_000)
-        val ledger = DefaultLedgerRepository(
+        val ledger = RoomLedgerRepository(
             transactionDao = database.transactionDao(),
             queuedSlipDao = database.queuedSlipDao(),
             importRunDao = database.importRunDao(),

@@ -2,19 +2,23 @@ package com.ptut.expense.settings
 
 import app.cash.turbine.test
 import com.ptut.expense.ViewModelTest
+import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.ledger.FakeLedger
-import com.ptut.expense.domain.settings.ImportChoices
-import com.ptut.expense.domain.settings.ImportSettings
-import com.ptut.expense.domain.settings.importSettings
+import com.ptut.expense.domain.settings.AppChoices
+import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.settings.appSettings
+import com.ptut.expense.domain.slip.ImportStore
 import com.ptut.expense.importer.FakeSlipSource
 import com.ptut.expense.importer.FakeSlipTextReader
 import com.ptut.expense.importer.InMemoryImportStore
 import com.ptut.expense.importer.SlipImporter
+import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.work.BackgroundImport
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -26,7 +30,7 @@ class BackgroundImportViewModelTest : ViewModelTest() {
 
     @Test
     fun `switching off writes the choice and cancels the job`() = runTest {
-        val settings = importSettings()
+        val settings = appSettings()
         val schedule = RecordingSchedule()
 
         viewModel(settings = settings, background = schedule).setRunning(false)
@@ -38,7 +42,7 @@ class BackgroundImportViewModelTest : ViewModelTest() {
     /** A switch that changes nothing visible for fifteen minutes reads as one that did not work. */
     @Test
     fun `switching on schedules and scans at once`() = runTest {
-        val settings = importSettings(ImportChoices(backgroundImport = false))
+        val settings = appSettings(AppChoices(backgroundImport = false))
         val schedule = RecordingSchedule()
 
         viewModel(settings = settings, background = schedule).setRunning(true)
@@ -50,7 +54,7 @@ class BackgroundImportViewModelTest : ViewModelTest() {
     /** C-4: nothing to start on iOS, and the switch must not throw where nothing is bound. */
     @Test
     fun `a platform with no schedule still records the choice`() = runTest {
-        val settings = importSettings()
+        val settings = appSettings()
 
         viewModel(settings = settings, background = null).setRunning(false)
 
@@ -119,12 +123,29 @@ class BackgroundImportViewModelTest : ViewModelTest() {
         }
     }
 
+    /** The exception's own text is English or "Job was cancelled", so the reader gets the copy. */
+    @Test
+    fun `a ledger that fails mid scan shows the copy and not the exception text`() = runTest {
+        val importer = SlipImporter(FakeSlipSource(), FakeSlipTextReader(), JournalFails(), work = EmptyCoroutineContext)
+        val settings = viewModel(importer = importer)
+
+        toasts.messages.test {
+            settings.checkNow()
+            runCurrent()
+
+            val toast = awaitItem()
+            assertEquals(ToastTone.Error, toast.tone)
+            assertEquals(AppText.copy.settings.scanCouldNotRun, toast.text)
+        }
+        assertFalse(settings.uiState.value.checking)
+    }
+
     /** The button is disabled while a scan is out, and a second tap must not queue a second run. */
     @Test
     fun `a second tap while a scan is running is ignored`() = runTest {
         val source = FakeSlipSource()
         val store = InMemoryImportStore()
-        val settings = viewModel(importer = SlipImporter(source, FakeSlipTextReader(), store))
+        val settings = viewModel(importer = SlipImporter(source, FakeSlipTextReader(), store, work = EmptyCoroutineContext))
 
         settings.checkNow()
         settings.checkNow()
@@ -152,7 +173,7 @@ class BackgroundImportViewModelTest : ViewModelTest() {
 
     private fun viewModel(
         sinceLastImport: Long? = null,
-        settings: ImportSettings = importSettings(),
+        settings: AppSettings = appSettings(),
         importer: SlipImporter = importer(FakeSlipSource()),
         cadence: SlipImportCadence = scheduled(),
         background: BackgroundImport? = RecordingSchedule(),
@@ -164,6 +185,10 @@ class BackgroundImportViewModelTest : ViewModelTest() {
         cadence = cadence,
         background = background,
     )
+}
+
+private class JournalFails(private val inner: InMemoryImportStore = InMemoryImportStore()) : ImportStore by inner {
+    override suspend fun startRun(run: ImportRun): Unit = throw IllegalStateException("disk I/O error (code 522)")
 }
 
 private class RecordingSchedule : BackgroundImport {

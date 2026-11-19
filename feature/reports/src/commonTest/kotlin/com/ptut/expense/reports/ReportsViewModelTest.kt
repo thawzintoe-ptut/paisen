@@ -1,5 +1,6 @@
 package com.ptut.expense.reports
 
+import app.cash.turbine.TurbineTestContext
 import app.cash.turbine.test
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.BangkokTime
@@ -16,6 +17,7 @@ import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -218,19 +220,65 @@ class ReportsViewModelTest : ViewModelTest() {
         }
     }
 
+    @Test
+    fun onTheFirstOfJanuaryTheMonthHoldsOnlyThatDayAndTheWeekReachesBackIntoDecember() = runTest {
+        val rows = listOf(spentAt(bangkok(2027, 1, 1, 9), 10_000), spentAt(bangkok(2026, 12, 31, 20), 30_000))
+        val viewModel = viewModel(rows, now = bangkok(2027, 1, 1, 12))
+
+        viewModel.uiState.test {
+            assertEquals(Satang(40_000), awaitSuccess().total)
+
+            viewModel.show(ReportPeriod.Month)
+            val month = awaitSuccess()
+            assertEquals("2027-01-01", month.from)
+            assertEquals(Satang(10_000), month.total)
+        }
+    }
+
+    @Test
+    fun onTheLastOfMarchLastMonthEndsOnTheLastOfFebruaryAndStillCompares() = runTest {
+        val rows = listOf(spentAt(bangkok(2026, 3, 10, 12), 50_000), spentAt(bangkok(2026, 2, 28, 12), 100_000))
+        val viewModel = viewModel(rows, now = bangkok(2026, 3, 31, 12))
+        viewModel.show(ReportPeriod.Month)
+
+        viewModel.uiState.test {
+            val state = awaitSuccess()
+            assertEquals(Satang(50_000), state.total)
+            assertEquals("50% less than last month", state.delta?.text)
+        }
+    }
+
+    @Test
+    fun aRowJustAfterMidnightBangkokOnMondayCountsInTheWeekBangkokIsIn() = runTest {
+        val rows = listOf(spentAt(bangkok(2026, 8, 10, 0, 30), 20_000), spentAt(bangkok(2026, 8, 9, 23, 30), 70_000))
+        val viewModel = viewModel(rows)
+
+        viewModel.uiState.test {
+            assertEquals(Satang(20_000), awaitSuccess().total)
+        }
+    }
+
+    private suspend fun TurbineTestContext<ReportsUiState>.awaitSuccess(): ReportsUiState.Success {
+        var state = awaitItem()
+        while (state !is ReportsUiState.Success) state = awaitItem()
+        return state
+    }
+
     private fun viewModel(
         transactions: List<Transaction>,
         categories: Flow<List<Category>> = flowOf(Category.seed()),
         subCategories: Flow<List<SubCategory>> = flowOf(emptyList()),
         target: WeeklyTarget? = null,
+        now: Instant = at(day = 14, hour = 12),
     ) = ReportsViewModel(
         ledger = FakeLedger(transactions),
         clock = object : Clock {
-            override fun now(): Instant = at(day = 14, hour = 12)
+            override fun now(): Instant = now
         },
         categoryUpdates = categories,
         subCategoryUpdates = subCategories,
         weeklyTarget = flowOf(target),
+        work = Dispatchers.Main,
     )
 
     /** Reports only reads recent history; the rest of the seam is not its business. */
@@ -273,6 +321,18 @@ class ReportsViewModelTest : ViewModelTest() {
         categoryId = null,
         counterparty = "Payroll",
     )
+
+    private fun spentAt(instant: Instant, satang: Long) = Transaction(
+        id = "at$instant",
+        occurredAtEpochMillis = instant.toEpochMilliseconds(),
+        amount = Satang(satang),
+        direction = Direction.Expense,
+        categoryId = "food",
+        counterparty = "Somewhere",
+    )
+
+    private fun bangkok(year: Int, month: Int, day: Int, hour: Int, minute: Int = 0): Instant =
+        LocalDateTime(year, month, day, hour, minute).toInstant(BangkokTime)
 
     private fun at(day: Int, hour: Int): Instant =
         LocalDateTime(2026, 8, day, hour, 0).toInstant(BangkokTime)

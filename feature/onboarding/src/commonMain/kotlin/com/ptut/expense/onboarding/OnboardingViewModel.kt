@@ -5,7 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.backup.LedgerArchive
-import com.ptut.expense.domain.backup.phrase
+import com.ptut.expense.domain.backup.RestoreDriver
+import com.ptut.expense.domain.backup.RestoreStep
 import com.ptut.expense.domain.home.HomeBook
 import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.locale.AppText
@@ -13,9 +14,15 @@ import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.platform.photos.PhotoAccessRequest
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.phrase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -61,13 +68,18 @@ class OnboardingViewModel(
     /** True while a restore is reading or merging, so RESTORE cannot be pressed twice. */
     val isRestoring: StateFlow<Boolean> = restoring.asStateFlow()
 
+    private val restoreSteps = archive?.let(::RestoreDriver)
+
+    private val step: StateFlow<RestoreStep> = restoreSteps?.step ?: MutableStateFlow(RestoreStep.Idle)
+
     private val problem = MutableStateFlow<String?>(null)
 
     /**
      * Why the last restore did not work, said on first run itself: toasts only draw inside the
      * shell, and the shell is not there yet.
      */
-    val restoreProblem: StateFlow<String?> = problem.asStateFlow()
+    val restoreProblem: StateFlow<String?> = combine(problem, step) { said, now -> (now as? RestoreStep.Refused)?.reason?.phrase() ?: said }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
      * Guards the second tap while the system dialog is up. Without it a double tap queues a second
@@ -80,11 +92,20 @@ class OnboardingViewModel(
     fun requestPhotoAccess() {
         if (asking) return
         asking = true
+        clearProblem()
         viewModelScope.launch {
-            photoAccess.ask()
-            asking = false
-            commitHome()
-            onboarding.finish()
+            try {
+                photoAccess.ask()
+                commitHome()
+                onboarding.finish()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                // The line under the buttons, as for a restore: toasts only draw inside the shell.
+                problem.value = AppText.copy.settings.didNotWork
+            } finally {
+                asking = false
+            }
         }
     }
 
@@ -100,23 +121,20 @@ class OnboardingViewModel(
         }
     }
 
-    private var chosenText: String? = null
-    private val preview = MutableStateFlow<String?>(null)
-
     /** #220: what the chosen file holds, asked about before anything merges. Null while no file waits. */
-    val restorePreview: StateFlow<String?> = preview.asStateFlow()
+    val restorePreview: StateFlow<String?> = step.map { (it as? RestoreStep.Preview)?.holds?.phrase() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
      * RESTORE (#171, S5), first half: read the file and say what it holds (#220), as Import my data
      * does. Backing out of the picker stays on first run and says nothing.
      */
     fun restore() {
-        val archive = archive ?: return
+        val restoreSteps = restoreSteps ?: return
         val files = files ?: return
         whileRestoring {
             val text = files.read() ?: return@whileRestoring
-            preview.value = archive.preview(text).phrase()
-            chosenText = text
+            restoreSteps.read(text)
         }
     }
 
@@ -125,38 +143,44 @@ class OnboardingViewModel(
      * ledger to look at; the merge sentence waits as a toast for the shell.
      */
     fun confirmRestore() {
-        val archive = archive ?: return
-        val text = chosenText ?: return
+        val restoreSteps = restoreSteps ?: return
+        if (step.value !is RestoreStep.Preview) return
         whileRestoring {
-            letGo()
-            // Before the restore, so a file with no home of its own lands in the chosen one; a file
-            // that carries one takes it over this. The launch home as chosen needs no rebuild.
-            if (home.value != Home.choice.value) commitHome()
-            // Restored before the toast is looked at: a safe call skips its argument too.
-            val merged = archive.restore(text)
+            val merged = restoreSteps.import { merge ->
+                // Before the restore, so a file with no home of its own lands in the chosen one; a file
+                // that carries one takes it over this. The launch home as chosen needs no rebuild.
+                if (home.value != Home.choice.value) commitHome()
+                merge()
+            } ?: return@whileRestoring
             toasts?.show(ToastMessage(merged.phrase()))
             onboarding.finish()
         }
     }
 
     /** Cancel on the preview: the file is let go and nothing has changed. */
-    fun cancelRestore() = letGo()
+    fun cancelRestore() {
+        restoreSteps?.cancel()
+    }
 
-    private fun letGo() {
-        chosenText = null
-        preview.value = null
+    /** A refusal is cleared with the rest, so a new attempt starts with no line under the buttons. */
+    private fun clearProblem() {
+        problem.value = null
+        if (step.value is RestoreStep.Refused) restoreSteps?.cancel()
     }
 
     private fun whileRestoring(work: suspend () -> Unit) {
         if (restoring.value) return
         restoring.value = true
-        problem.value = null
+        clearProblem()
         viewModelScope.launch {
             try {
                 work()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failure: Exception) {
-                letGo()
-                problem.value = failure.message ?: AppText.copy.onboarding.restoreFailed
+                restoreSteps?.cancel()
+                // A refused file is RestoreStep.Refused; any other text is the platform's English.
+                problem.value = AppText.copy.onboarding.restoreFailed
             } finally {
                 restoring.value = false
             }

@@ -28,7 +28,6 @@ data class NoteCopy(
     val toneTitle: String = "Note tone",
     val tonePlain: String = "Plain",
     val tonePlayful: String = "Playful",
-    val toneHint: String = "Written on this phone. Nothing is sent.",
 )
 
 private val EnglishPlayful = NoteCopy(
@@ -56,7 +55,6 @@ private val BurmesePlain = NoteCopy(
     toneTitle = "မှတ်ချက် လေသံ",
     tonePlain = "ရိုးရိုး",
     tonePlayful = "ပေါ့ပေါ့ပါးပါး",
-    toneHint = "ဒီဖုန်းထဲမှာပဲ ရေးတယ်။ ဘာမှ မပို့ဘူး။",
 )
 
 private val BurmesePlayful = BurmesePlain.copy(
@@ -84,7 +82,6 @@ private val ThaiPlain = NoteCopy(
     toneTitle = "น้ำเสียงของบันทึก",
     tonePlain = "เรียบ ๆ",
     tonePlayful = "สนุก ๆ",
-    toneHint = "เขียนบนโทรศัพท์เครื่องนี้ ไม่ส่งออกไปไหน",
 )
 
 private val ThaiPlayful = ThaiPlain.copy(

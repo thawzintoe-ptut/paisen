@@ -1,7 +1,5 @@
 package com.ptut.expense.domain.folders
 
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,7 +15,7 @@ class FirstRunFoldersTest {
         val folders = FakeFolders()
         seeder(folders, "Camera", "K PLUS", "Download").seed()
 
-        assertEquals(listOf("K PLUS"), folders.state.value.map { it.name })
+        assertEquals(listOf("K PLUS"), folders.folders.value.map { it.name })
     }
 
     @Test
@@ -25,7 +23,7 @@ class FirstRunFoldersTest {
         val folders = FakeFolders()
         seeder(folders, "kplus").seed()
 
-        assertEquals(listOf("kplus"), folders.state.value.map { it.name })
+        assertEquals(listOf("kplus"), folders.folders.value.map { it.name })
     }
 
     @Test
@@ -33,7 +31,7 @@ class FirstRunFoldersTest {
         val folders = FakeFolders()
         seeder(folders, "Camera", "Download", "LINE").seed()
 
-        assertTrue(folders.state.value.isEmpty())
+        assertTrue(folders.folders.value.isEmpty())
     }
 
     @Test
@@ -44,7 +42,7 @@ class FirstRunFoldersTest {
 
         seeder(folders, "K PLUS").seed()
 
-        assertTrue(folders.state.value.none { it.watched })
+        assertTrue(folders.folders.value.none { it.watched })
     }
 
     @Test
@@ -55,7 +53,7 @@ class FirstRunFoldersTest {
         seeder.seed()
         seeder.seed()
 
-        assertEquals(1, folders.state.value.size)
+        assertEquals(1, folders.folders.value.size)
     }
 
     private fun seeder(folders: FakeFolders, vararg offered: String) = FirstRunFolders(
@@ -71,25 +69,4 @@ class FirstRunFoldersTest {
         checked = false,
         watched = watched,
     )
-
-    private class FakeFolders(seed: List<WatchedFolder> = emptyList()) : WatchedFolderRepository {
-        val state = MutableStateFlow(seed)
-        override val folders: StateFlow<List<WatchedFolder>> = state
-
-        override suspend fun watch(id: String, name: String, path: String) {
-            state.value = state.value + WatchedFolder(id, name, path, slipsRead = 0, checked = false)
-        }
-
-        override suspend fun stopWatching(id: String) {
-            state.value = state.value.map { if (it.id == id) it.copy(watched = false) else it }
-        }
-
-        override suspend fun known(): List<WatchedFolder> = state.value
-
-        override suspend fun scannedThroughSeconds(id: String): Long = 0L
-
-        override suspend fun recordScan(id: String, throughSeconds: Long, checkedAtEpochMillis: Long) = Unit
-
-        override suspend fun addSlipsRead(id: String, read: Int) = Unit
-    }
 }

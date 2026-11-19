@@ -154,7 +154,7 @@ fun ConfirmSlipView(
                 return@Column
             }
 
-            ConfirmSlipPhase.Ready -> Unit
+            ConfirmSlipPhase.Ready, ConfirmSlipPhase.Saving, ConfirmSlipPhase.Saved, ConfirmSlipPhase.Dismissed -> Unit
         }
         Column(
             modifier = Modifier

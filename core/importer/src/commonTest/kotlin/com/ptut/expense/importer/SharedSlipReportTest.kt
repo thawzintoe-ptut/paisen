@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.minutes
@@ -25,14 +26,14 @@ class SharedSlipReportTest {
     @Test
     fun `a slip the reader fails on says it is tried again on the next scan`() = runTest {
         val source = inbox()
-        val importer = SlipImporter(source, FailingReader, InMemoryImportStore())
+        val importer = SlipImporter(source, FailingReader, InMemoryImportStore(), work = EmptyCoroutineContext)
 
         assertToasts(importer, inboxId = INBOX_ID, received, ToastMessage(text.shareLanded(text.shareNotReadYet)))
     }
 
     @Test
     fun `a picture that went before it was read says so`() = runTest {
-        val importer = SlipImporter(GoneBeforeRead(inbox()), FakeSlipTextReader(), InMemoryImportStore())
+        val importer = SlipImporter(GoneBeforeRead(inbox()), FakeSlipTextReader(), InMemoryImportStore(), work = EmptyCoroutineContext)
 
         assertToasts(importer, inboxId = INBOX_ID, received, ToastMessage(text.shareGone, ToastTone.Error))
     }
@@ -40,14 +41,14 @@ class SharedSlipReportTest {
     /** With no id to wait for, the first line already says where to look. */
     @Test
     fun `a picture that cannot be told apart says where the slip will show`() = runTest {
-        val importer = SlipImporter(inbox(), FakeSlipTextReader(), InMemoryImportStore())
+        val importer = SlipImporter(inbox(), FakeSlipTextReader(), InMemoryImportStore(), work = EmptyCoroutineContext)
 
         assertToasts(importer, inboxId = null, lookIn)
     }
 
     @Test
     fun `a run slower than the wait says where the slip will show`() = runTest {
-        val importer = SlipImporter(inbox(), FakeSlipTextReader(), InMemoryImportStore())
+        val importer = SlipImporter(inbox(), FakeSlipTextReader(), InMemoryImportStore(), work = EmptyCoroutineContext)
         val toasts = ToastMessages()
 
         toasts.messages.test {

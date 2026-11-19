@@ -1,6 +1,5 @@
 package com.ptut.expense.domain
 
-import com.ptut.expense.locale.AppText
 import kotlinx.datetime.LocalDate
 
 /**
@@ -12,14 +11,6 @@ enum class LedgerPeriod {
     Today,
     ThisWeek,
     ThisMonth,
-    ;
-
-    val label: String
-        get() = when (this) {
-            Today -> AppText.copy.common.today
-            ThisWeek -> AppText.copy.common.thisWeek
-            ThisMonth -> AppText.copy.common.thisMonth
-        }.lowercase()
 }
 
 /**
@@ -36,17 +27,3 @@ fun periodsMovedByDeleting(occurredAt: LocalDate, today: LocalDate): List<Ledger
             LedgerPeriod.ThisMonth -> occurredAt in ReportPeriod.Month.rangeContaining(today)
         }
     }
-
-/**
- * "today", "this month", "today, this week and this month" — a list the dialog drops into a
- * sentence. Empty when nothing moves, so the caller writes that case as its own sentence rather
- * than printing a dangling "removes it from ".
- */
-fun List<LedgerPeriod>.phrase(): String {
-    val phrases = AppText.copy.phrases
-    return when (size) {
-        0 -> ""
-        1 -> single().label
-        else -> dropLast(1).joinToString(phrases.listComma) { it.label } + phrases.listAnd + last().label
-    }
-}

@@ -1,9 +1,7 @@
 package com.ptut.expense.platform.photos
 
+import com.ptut.expense.domain.folders.FakeFolders
 import com.ptut.expense.domain.folders.WatchedFolder
-import com.ptut.expense.domain.folders.WatchedFolderRepository
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -64,21 +62,4 @@ class PhotoLibrarySlipSourceTest {
 
     private fun album(id: String) =
         WatchedFolder(id = id, name = id, path = "Album you made", slipsRead = 0, checked = false)
-}
-
-private class FakeFolders(seed: List<WatchedFolder> = emptyList()) : WatchedFolderRepository {
-
-    override val folders: StateFlow<List<WatchedFolder>> = MutableStateFlow(seed)
-
-    override suspend fun watch(id: String, name: String, path: String) = Unit
-
-    override suspend fun stopWatching(id: String) = Unit
-
-    override suspend fun known(): List<WatchedFolder> = folders.value
-
-    override suspend fun scannedThroughSeconds(id: String): Long = 0L
-
-    override suspend fun recordScan(id: String, throughSeconds: Long, checkedAtEpochMillis: Long) = Unit
-
-    override suspend fun addSlipsRead(id: String, read: Int) = Unit
 }

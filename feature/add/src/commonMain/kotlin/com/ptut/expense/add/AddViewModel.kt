@@ -25,6 +25,7 @@ import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.Rate
@@ -61,8 +62,8 @@ data class AddUiState(
     val occurredAtEpochMillis: Long? = null,
     /** The note, trimmed, or null for none (#211). It becomes the row's name. */
     val memo: String? = null,
-    /** True while the note sheet is open over this one. */
-    val editingMemo: Boolean = false,
+    /** The one sheet open over this one, if any. */
+    val overlay: AddOverlay = AddOverlay.None,
     /** True between the tap and the row being durable. */
     val saving: Boolean = false,
     /** True once a row has been written. The shell closes the sheet on it. */
@@ -80,8 +81,6 @@ data class AddUiState(
      * this sheet, where nobody sees it.
      */
     val askNote: AskNote? = null,
-    /** The language whose first online listen waits on a yes, since the voice would go to Google. */
-    val askingOnline: SpeechLanguage? = null,
     /** True once SAVE was tapped before the row could be written, so [missing] is said as a warning. */
     val triedSave: Boolean = false,
     /** The amount's currency. Anything but the home asks for a rate and saves its home amount. */
@@ -94,9 +93,16 @@ data class AddUiState(
     val foreign: ForeignAmount? = null,
     /** "Saved as ฿241.90" under the rate. */
     val homeLine: String? = null,
-    /** True while the rate sheet is open over this one. */
-    val editingRate: Boolean = false,
 ) {
+    /** True while the note sheet is open over this one. */
+    val editingMemo: Boolean get() = overlay == AddOverlay.Memo
+
+    /** True while the rate sheet is open over this one. */
+    val editingRate: Boolean get() = overlay == AddOverlay.Rate
+
+    /** The language whose first online listen waits on a yes, since the voice would go to Google. */
+    val askingOnline: SpeechLanguage? get() = (overlay as? AddOverlay.OnlineAsk)?.language
+
     /**
      * The one line under a foreign amount, and the way into the rate: "฿417.50 · ฿33.4 per $", or
      * "Set the rate for USD" while there is none. Null in the home money.
@@ -168,11 +174,11 @@ data class QuickAddVoice(
 
     /** A row in the voice language sheet: what the mic does for [choice], or null where the phone hears it offline. */
     fun noteFor(choice: SpeechLanguage): String? = AppText.copy.add.let { text ->
-        when {
-            choice in heard -> null
-            choice in downloading -> text.voiceDownloading(choice.fullName)
-            choice in online -> text.voiceOnline(choice.fullName)
-            choice in downloadable -> text.voiceDownloadable(choice.fullName)
+        when (choice) {
+            in heard -> null
+            in downloading -> text.voiceDownloading(choice.fullName)
+            in online -> text.voiceOnline(choice.fullName)
+            in downloadable -> text.voiceDownloadable(choice.fullName)
             else -> text.voiceUnavailable(choice.fullName)
         }
     }
@@ -183,6 +189,17 @@ data class QuickAddVoice(
         downloading = languages.downloading,
         online = languages.online,
     )
+}
+
+/** The sheet over the add sheet. One at a time, so the note and the rate can never both be open. */
+sealed interface AddOverlay {
+    data object None : AddOverlay
+
+    data object Memo : AddOverlay
+
+    data object Rate : AddOverlay
+
+    data class OnlineAsk(val language: SpeechLanguage) : AddOverlay
 }
 
 /** #216: one line under Quick add. [problem] is a sentence not read or a mic that heard nothing. */
@@ -235,7 +252,7 @@ class AddViewModel(
      */
     fun chooseCurrency(currency: Currency) {
         if (!offersCurrencies || currency == state.value.currency) return
-        state.update { it.copy(currency = currency, entry = it.entry.withDigits(currency.digits), rateText = "", editingRate = false).priced() }
+        state.update { it.copy(currency = currency, entry = it.entry.withDigits(currency.digits), rateText = "").closing(AddOverlay.Rate).priced() }
         loadRate(currency, askIfNone = true)
     }
 
@@ -245,13 +262,16 @@ class AddViewModel(
     fun openRate() {
         if (state.value.currency.isHome) return
         rateBefore = state.value.rateText
-        state.update { it.copy(editingRate = true) }
+        state.update { it.copy(overlay = AddOverlay.Rate) }
     }
 
     fun closeRate(keep: Boolean) = state.update {
         val kept = if (keep) it else it.copy(rateText = rateBefore).priced()
-        kept.copy(editingRate = false)
+        kept.closing(AddOverlay.Rate)
     }
+
+    /** Closes [overlay] only while it is the one open, so a late close never shuts another sheet. */
+    private fun AddUiState.closing(overlay: AddOverlay): AddUiState = if (this.overlay == overlay) copy(overlay = AddOverlay.None) else this
 
     private var rateBefore: String = ""
 
@@ -350,7 +370,12 @@ class AddViewModel(
         if (text.isBlank() || state.value.reading) return
         state.update { it.copy(reading = true, askText = text, askNote = null) }
         viewModelScope.launch {
-            val outcome = loop.run(text)
+            val outcome = runSuspendCatching { loop.run(text) }.getOrElse {
+                // A reader that throws must not leave the field locked: it counts as a sentence not read.
+                state.update { it.copy(reading = false, askText = text) }
+                note(AskNote(AppText.copy.add.couldNotRead, problem = true))
+                return@launch
+            }
             val (call, missing) = when (outcome) {
                 is AgentOutcome.Understood -> outcome.call to emptySet<String>()
                 is AgentOutcome.Partly -> outcome.call to outcome.missing
@@ -368,7 +393,10 @@ class AddViewModel(
 
                 is ProposedAction -> AgentInbox.offer(call)
 
-                is ReadCall -> reader?.let { note(AskNote(answer(it, call))) }
+                is ReadCall -> reader?.let { asked ->
+                    val answered = runSuspendCatching { answer(asked, call) }
+                    note(answered.fold(onSuccess = { AskNote(it) }, onFailure = { AskNote(AppText.copy.add.couldNotRead, problem = true) }))
+                }
 
                 null -> note(AskNote(AppText.copy.add.couldNotRead, problem = true))
             }
@@ -439,7 +467,7 @@ class AddViewModel(
         if (voice.listening || !voice.canListen || state.value.reading) return
         // The voice would leave the phone, so the first time for each language asks before the mic opens.
         if (voice.usesOnline && !input.agreedOnline(voice.language)) {
-            state.update { it.copy(askingOnline = voice.language) }
+            state.update { it.copy(overlay = AddOverlay.OnlineAsk(voice.language)) }
             return
         }
         state.update { it.copy(voice = voice.copy(listening = true), askNote = null) }
@@ -463,12 +491,12 @@ class AddViewModel(
     fun agreeOnline() {
         val language = state.value.askingOnline ?: return
         speech?.agreeOnline(language)
-        state.update { it.copy(askingOnline = null) }
+        state.update { it.copy(overlay = AddOverlay.None) }
         listen()
     }
 
     /** Type instead: nothing is kept, so the next tap on the mic asks again. */
-    fun dismissOnlineAsk() = state.update { it.copy(askingOnline = null) }
+    fun dismissOnlineAsk() = state.update { if (it.askingOnline != null) it.copy(overlay = AddOverlay.None) else it }
 
     /** The mic tapped again: stop listening and read what was said. */
     fun stopListening() {
@@ -479,7 +507,10 @@ class AddViewModel(
     fun closeVoice() {
         listening?.cancel()
         listening = null
-        state.update { it.copy(voice = it.voice?.copy(listening = false), askingOnline = null) }
+        state.update { current ->
+            val closed = current.copy(voice = current.voice?.copy(listening = false))
+            if (current.askingOnline != null) closed.copy(overlay = AddOverlay.None) else closed
+        }
     }
 
     private suspend fun answer(reader: AgentReader, call: ReadCall): String = when (call) {
@@ -511,12 +542,12 @@ class AddViewModel(
     /** Income or spending from earlier, typed in now. */
     fun setTime(epochMillis: Long) = state.update { it.copy(occurredAtEpochMillis = epochMillis) }
 
-    fun openMemo() = state.update { it.copy(editingMemo = true) }
+    fun openMemo() = state.update { it.copy(overlay = AddOverlay.Memo) }
 
-    fun closeMemo() = state.update { it.copy(editingMemo = false) }
+    fun closeMemo() = state.update { it.closing(AddOverlay.Memo) }
 
     /** Takes the note and closes its sheet. A blank note is no note, as on Edit purchase. */
-    fun setMemo(memo: String) = state.update { it.copy(memo = memo.trim().ifEmpty { null }, editingMemo = false) }
+    fun setMemo(memo: String) = state.update { it.copy(memo = memo.trim().ifEmpty { null }).closing(AddOverlay.Memo) }
 
     /**
      * Writes the row, then says so. Nothing is written without an amount and a category (FR-14): the
@@ -557,7 +588,8 @@ class AddViewModel(
                     foreign = foreign,
                 ),
             )
-            foreign?.let { saveRate(it.currency, it.rate) }
+            // The row is already written, so a rate that fails to save costs only the next sheet's guess.
+            foreign?.let { runSuspendCatching { saveRate(it.currency, it.rate) } }
             // formatCompact, not format: the design's line is `Saved ฿485 · Food & drink`, and
             // `฿485.00` in a sentence reads as a machine reporting rather than a receipt.
             haptics.saved()

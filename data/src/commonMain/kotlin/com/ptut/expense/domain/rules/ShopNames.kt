@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * The reader's names for shops, keyed by what the slip read: noise they named, or a read name they
- * put right on Check slip. An object for the reason [com.ptut.expense.locale.AppText] is one: every
+ * put right on Check slip. An object for the reason `AppText` is one: every
  * screen that titles a row reads it.
  */
 object ShopNames {

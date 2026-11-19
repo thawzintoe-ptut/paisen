@@ -1,5 +1,6 @@
 package com.ptut.expense.sync.auth
 
+import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -56,7 +57,7 @@ private data class StoredSession(
 )
 
 internal class FirebaseAuthRepository(
-    private val api: FirebaseAuthApi,
+    private val api: AuthApi,
     private val store: TokenStore,
     override val available: Boolean,
     private val clock: Clock = Clock.System,
@@ -75,7 +76,8 @@ internal class FirebaseAuthRepository(
         val stored = StoredSession(
             uid = tokens.uid,
             refreshToken = tokens.refreshToken,
-            name = token.name ?: tokens.displayName ?: tokens.email?.substringBefore('@') ?: "Me",
+            // Not empty: this name goes to the server as the account's member name, and the rules refuse an empty one.
+            name = token.name ?: tokens.displayName ?: tokens.email?.substringBefore('@') ?: AppText.copy.shared.someone,
             email = tokens.email,
             provider = token.providerId,
         )
@@ -99,7 +101,8 @@ internal class FirebaseAuthRepository(
         tokens.idToken
     }
 
-    override suspend fun signOut() = clearSession()
+    // Under the refresh lock: a refresh that lands after the clear would sign the account back in.
+    override suspend fun signOut() = refreshing.withLock { clearSession() }
 
     private fun clearSession() {
         cached = null

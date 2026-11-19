@@ -28,6 +28,20 @@ service cloud.firestore {
     // Names every phone can show, and a push title FCM takes.
     function groupName(value) { return value is string && value.size() > 0 && value.size() <= 100; }
     function memberName(value) { return value is string && value.size() > 0 && value.size() <= 60; }
+    // H2: every document names its fields and caps its text, so nobody fills one up to Firestore's 1 MiB.
+    function textUpTo(value, max) { return value is string && value.size() <= max; }
+    function textOrNull(value, max) { return value == null || textUpTo(value, max); }
+    function shortId(value) { return textUpTo(value, 128); }
+    // M3: money is whole minor units, never past 10^13, so no sum of shares can wrap a 64-bit total.
+    function money(value) { return value is int && value >= 0 && value <= 10000000000000; }
+    function splitModeOk(value) { return value in ['Equally', 'Exact', 'Percent', 'Shares']; }
+    function currencyCode(value) { return value is string && value.matches('[A-Z]{3}'); }
+    // No rate, or one above zero with a scale every build can read.
+    function rateOk(data) {
+      return (data.get('rateUnscaled', null) == null && data.get('rateScale', null) == null)
+        || (data.rateUnscaled is int && data.rateUnscaled > 0
+          && data.rateScale is int && data.rateScale >= 0 && data.rateScale <= 9);
+    }
 
     match /groups/{gid} {
       function groupTypeOk() { return request.resource.data.type in ['Trip', 'Flat', 'Couple', 'Other']; }
@@ -49,19 +63,28 @@ service cloud.firestore {
         return !('currency' in request.resource.data)
           || (request.resource.data.currency is string && request.resource.data.currency.matches('[A-Z]{3}'));
       }
-      allow create: if signedIn()
+      // The fields SharedSync.share and its later patches write, and nothing else.
+      function groupFieldsOk() {
+        let group = request.resource.data;
+        return group.keys().hasOnly(['name', 'type', 'icon', 'simplifyDebts', 'createdAt', 'currency', 'creatorUid',
+            'memberUids', 'inviteCode', 'inviteActive', 'deleted'])
+          && textUpTo(group.get('icon', ''), 64) && group.get('simplifyDebts', true) is bool
+          && group.get('createdAt', 0) is int && textOrNull(group.get('inviteCode', null), 64)
+          && group.get('inviteActive', false) is bool && group.get('deleted', false) is bool;
+      }
+      allow create: if signedIn() && groupFieldsOk()
         && request.resource.data.creatorUid == request.auth.uid
         && request.resource.data.memberUids == [request.auth.uid]
         && groupName(request.resource.data.name) && groupTypeOk() && groupCurrencyOk();
       allow update: if
         // Any member edits the name, icon or the Simplify debts switch, while the group is live.
-        (isMember(gid) && live(gid) && onlyChanged(['name', 'icon', 'type', 'simplifyDebts'])
+        (isMember(gid) && live(gid) && onlyChanged(['name', 'icon', 'type', 'simplifyDebts']) && groupFieldsOk()
             && (!changed().hasAny(['name']) || groupName(request.resource.data.name))
             && (!changed().hasAny(['type']) || groupTypeOk()))
         // Only the creator changes or switches off the invite (#190), or deletes the group for everyone.
-        || (isCreator(gid) && onlyChanged(['inviteCode', 'inviteActive', 'deleted']))
+        || (isCreator(gid) && onlyChanged(['inviteCode', 'inviteActive', 'deleted']) && groupFieldsOk())
         // Someone who joined with a live code adds themselves, and removes nobody, while the group is live.
-        || (joinedAfter(gid) && liveNow() && onlyChanged(['memberUids'])
+        || (joinedAfter(gid) && liveNow() && onlyChanged(['memberUids']) && uidsAfter().size() <= 100
             && uidsAfter().hasAll(uidsBefore()) && uidsAfter().removeAll(uidsBefore()) == [request.auth.uid])
         // A member leaves, when they delete their account (#187), and adds nobody.
         || (isMember(gid) && onlyChanged(['memberUids'])
@@ -82,18 +105,34 @@ service cloud.firestore {
           return noPromptPay() || (request.resource.data.promptPay is string
             && request.resource.data.promptPay.matches('^(0[0-9]{9}|[0-9]{13}|[0-9]{15})$'));
         }
+        // H1: a name is claimed only in the commit that brings its account into the group, so an account
+        // already in keeps the one it came with. Leaving lets it go, and the next join may pick another.
+        function joiningNow() {
+          return !(request.auth.uid in groupData(gid).memberUids)
+            && request.auth.uid in getAfter(groupPath(gid)).data.memberUids;
+        }
+        function memberFieldsOk() {
+          return request.resource.data.keys().hasOnly(['name', 'claimedByUid', 'archived', 'createdAt', 'promptPay'])
+            && request.resource.data.get('archived', false) is bool && request.resource.data.get('createdAt', 0) is int;
+        }
         allow read: if isMember(gid) || joined(gid);
         // A member adds a name; the creator adds their own, already claimed, when sharing (#190);
         // someone joining adds themselves ("I'm not on the list").
-        allow create: if ownPromptPay() && validPromptPay() && live(gid) && memberName(request.resource.data.name) && (
+        allow create: if ownPromptPay() && validPromptPay() && live(gid) && memberName(request.resource.data.name)
+          && memberFieldsOk() && (
           (isMember(gid) && request.resource.data.claimedByUid == null)
           || (isCreator(gid) && request.resource.data.claimedByUid == request.auth.uid)
-          || (joinedAfter(gid) && request.resource.data.claimedByUid in [null, request.auth.uid]));
+          || (joinedAfter(gid) && (request.resource.data.claimedByUid == null
+              || (request.resource.data.claimedByUid == request.auth.uid && joiningNow()))));
         allow update: if
-          (isMember(gid) && live(gid) && onlyChanged(['name']) && memberName(request.resource.data.name))
+          // M2: a claimed name is renamed by the account that holds it or by the creator; a free one by
+          // any member. A patch that sends the name as it is changes nothing and passes.
+          (isMember(gid) && live(gid) && onlyChanged(['name']) && memberName(request.resource.data.name)
+              && (!changed().hasAny(['name']) || resource.data.get('claimedByUid', null) == null
+                || resource.data.get('claimedByUid', null) == request.auth.uid || isCreator(gid)))
           // Only the creator removes a member, by archiving the name (#190), or puts one back. A claimed
           // name goes only with its account, below.
-          || (isCreator(gid) && onlyChanged(['archived'])
+          || (isCreator(gid) && onlyChanged(['archived']) && request.resource.data.archived is bool
               && (request.resource.data.archived != true || resource.data.claimedByUid == null))
           // Removing a claimed name lets its claim and PromptPay ID go, in the commit that takes its
           // account out of the group: a removed name never keeps its access.
@@ -102,7 +141,7 @@ service cloud.firestore {
               && resource.data.claimedByUid != request.auth.uid
               && !(resource.data.claimedByUid in getAfter(groupPath(gid)).data.memberUids))
           // Claiming a name nobody holds, once joined.
-          || (joinedAfter(gid) && onlyChanged(['claimedByUid']) && resource.data.archived != true && noPromptPay()
+          || (joinedAfter(gid) && joiningNow() && onlyChanged(['claimedByUid']) && resource.data.archived != true && noPromptPay()
               && resource.data.claimedByUid == null && request.resource.data.claimedByUid == request.auth.uid)
           // Your own PromptPay ID, on the name you claimed (#199).
           || (isMember(gid) && resource.data.claimedByUid == request.auth.uid && onlyChanged(['promptPay']) && validPromptPay())
@@ -133,17 +172,32 @@ service cloud.firestore {
         function keyedToGroup() { return amountKey() in entry() && !(otherKey() in entry()); }
         // Values every build can read, so no member can store one that stops the others' apps.
         function validVersion() {
-          return entry().splitMode in ['Equally', 'Exact', 'Percent', 'Shares']
-            && entry().amountMinor is int && keyedToGroup() && groupAmount() is int
+          return entry().keys().hasOnly(['kind', 'authorUid', 'createdAt', 'syncedAt', 'authorMemberId', 'expenseId',
+              'version', 'description', 'occurredAt', 'categoryId', 'subCategoryId', 'note', 'currency', 'amountMinor',
+              'rateUnscaled', 'rateScale', 'amountSatang', 'amountGroup', 'payerMemberId', 'splitMode', 'removed',
+              'cause', 'shares'])
+            && shortId(entry().expenseId) && entry().version is int && entry().occurredAt is int
+            && textUpTo(entry().get('description', ''), 500) && textOrNull(entry().get('note', null), 2000)
+            && textOrNull(entry().get('categoryId', null), 128) && textOrNull(entry().get('subCategoryId', null), 128)
+            && currencyCode(entry().currency) && shortId(entry().payerMemberId)
+            && entry().get('removed', false) is bool && textOrNull(entry().get('cause', null), 32)
+            && splitModeOk(entry().splitMode)
+            && money(entry().amountMinor) && keyedToGroup() && money(groupAmount())
             && entry().shares is list && entry().shares.size() > 0 && entry().shares.size() <= 50
-            && (entry().get('rateUnscaled', null) == null
-              || (entry().rateUnscaled is int && entry().rateUnscaled > 0
-                && entry().rateScale is int && entry().rateScale >= 0 && entry().rateScale <= 9));
+            && rateOk(entry());
         }
         function validPayment() {
-          return entry().method in ['BankTransfer', 'Cash', 'PromptPay', 'OtherApp']
-            && keyedToGroup() && groupAmount() is int && groupAmount() > 0
+          return entry().keys().hasOnly(['kind', 'authorUid', 'createdAt', 'syncedAt', 'authorMemberId', 'fromMemberId',
+              'toMemberId', 'amountSatang', 'amountGroup', 'method', 'occurredAt'])
+            && entry().method in ['BankTransfer', 'Cash', 'PromptPay', 'OtherApp']
+            && keyedToGroup() && money(groupAmount()) && groupAmount() > 0
+            && shortId(entry().fromMemberId) && shortId(entry().toMemberId) && entry().occurredAt is int
             && entry().fromMemberId != entry().toMemberId;
+        }
+        // #218: a removal names the payment it takes out or puts back.
+        function validRemoval() {
+          return entry().keys().hasOnly(['kind', 'authorUid', 'createdAt', 'syncedAt', 'authorMemberId', 'paymentId', 'removed'])
+            && shortId(entry().paymentId) && entry().get('removed', false) is bool;
         }
         allow read: if isMember(gid);
         allow create: if isMember(gid) && live(gid) && entry().authorUid == request.auth.uid
@@ -151,8 +205,7 @@ service cloud.firestore {
           && entry().kind in ['version', 'payment', 'paymentRemoval']
           && (entry().kind != 'version' || validVersion())
           && (entry().kind != 'payment' || validPayment())
-          // #218: a removal names the payment it takes out or puts back.
-          && (entry().kind != 'paymentRemoval' || entry().paymentId is string)
+          && (entry().kind != 'paymentRemoval' || validRemoval())
           && entry().syncedAt == request.time
           // The writing phone's own clock, never more than a day ahead of the server's: a row dated
           // in the future would sit above every later one. A day covers a phone set to the wrong zone.
@@ -163,11 +216,27 @@ service cloud.firestore {
 
       // #182: any member sets up, changes or stops a repeat; none is ever deleted.
       match /repeats/{rid} {
+        // The template as every build sends it, with an expense's limits on its money and its text.
+        function validRepeat() {
+          let repeat = request.resource.data;
+          return repeat.keys().hasOnly(['authorUid', 'createdAt', 'syncedAt', 'kind', 'frequency', 'start', 'endKind',
+              'endDate', 'endTimes', 'active', 'description', 'categoryId', 'currency', 'amountMinor', 'rateUnscaled',
+              'rateScale', 'payerMemberId', 'splitMode', 'weights'])
+            && repeat.createdAt is int && textUpTo(repeat.kind, 32) && textUpTo(repeat.frequency, 32)
+            && textUpTo(repeat.start, 32) && textUpTo(repeat.get('endKind', ''), 32)
+            && textOrNull(repeat.get('endDate', null), 32)
+            && (repeat.get('endTimes', null) == null || repeat.endTimes is int) && repeat.active is bool
+            && textUpTo(repeat.get('description', ''), 500) && textOrNull(repeat.get('categoryId', null), 128)
+            && currencyCode(repeat.currency) && money(repeat.amountMinor) && rateOk(repeat)
+            && shortId(repeat.payerMemberId) && splitModeOk(repeat.splitMode) && textUpTo(repeat.get('weights', ''), 8000);
+        }
         allow read: if isMember(gid);
         allow create: if isMember(gid) && live(gid) && request.resource.data.authorUid == request.auth.uid
+          && validRepeat()
           && request.resource.data.syncedAt == request.time;
         // Whoever changes it signs the change, and the first creation time stays put.
         allow update: if isMember(gid) && live(gid) && request.resource.data.authorUid == request.auth.uid
+          && validRepeat()
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.syncedAt == request.time;
         allow delete: if false;
@@ -176,7 +245,9 @@ service cloud.firestore {
       match /joins/{uid} {
         allow get: if signedIn() && (uid == request.auth.uid || isMember(gid));
         allow list: if isMember(gid);
-        allow create, update: if signedIn() && uid == request.auth.uid && validInvite(gid, request.resource.data.code);
+        allow create, update: if signedIn() && uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['code', 'at']) && textUpTo(request.resource.data.code, 64)
+          && request.resource.data.get('at', 0) is int && validInvite(gid, request.resource.data.code);
         allow delete: if false;
       }
     }
@@ -196,7 +267,8 @@ service cloud.firestore {
     // documents; the Worker reads them all with the service account, which bypasses these rules.
     match /devices/{token} {
       function validDevice() {
-        return request.resource.data.uid == request.auth.uid
+        return request.resource.data.keys().hasOnly(['uid', 'platform', 'language', 'updatedAt'])
+          && request.resource.data.uid == request.auth.uid
           && request.resource.data.platform in ['android', 'ios']
           && request.resource.data.language in ['en', 'my', 'th']
           && request.resource.data.updatedAt is int;
@@ -211,9 +283,11 @@ service cloud.firestore {
     match /invites/{code} {
       allow get: if signedIn();
       allow list: if false;
-      allow create: if isCreator(request.resource.data.groupId) && request.resource.data.creatorUid == request.auth.uid;
+      allow create: if isCreator(request.resource.data.groupId) && request.resource.data.creatorUid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['groupId', 'groupName', 'active', 'creatorUid']) && code.size() <= 64
+        && textUpTo(request.resource.data.get('groupName', ''), 100) && request.resource.data.get('active', false) is bool;
       // Only switching it off: the group it points at never changes.
-      allow update: if isCreator(resource.data.groupId) && onlyChanged(['active']);
+      allow update: if isCreator(resource.data.groupId) && onlyChanged(['active']) && request.resource.data.active is bool;
       allow delete: if false;
     }
   }

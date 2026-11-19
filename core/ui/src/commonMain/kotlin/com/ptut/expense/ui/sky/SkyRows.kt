@@ -1,7 +1,6 @@
 package com.ptut.expense.ui.sky
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +27,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
@@ -54,7 +54,7 @@ import com.ptut.expense.locale.LocalCopy
 
 /**
  * One transaction on Home and in History (p05, p15): a category circle, the shop over its meta, the
- * amount over its time. Takes strings, like [com.ptut.expense.ui.TransactionRow], so both lists reuse it.
+ * amount over its time. Takes strings, so both lists reuse it.
  */
 @Composable
 fun SkyTransactionRow(
@@ -78,7 +78,7 @@ fun SkyTransactionRow(
                 if (onClick == null) {
                     Modifier.semantics(mergeDescendants = true) {}
                 } else {
-                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                    Modifier.tappable(RectangleShape, Role.Button, onClick = onClick)
                 },
             )
             .heightIn(min = SkySizes.transactionRow)
@@ -137,10 +137,7 @@ fun SkyKeyValueRow(label: String, value: String, modifier: Modifier = Modifier) 
             .fillMaxWidth()
             .semantics(mergeDescendants = true) {}
             .heightIn(min = SkySizes.keyValueRow)
-            .drawBehind {
-                val weight = SkySizes.hairline.toPx()
-                drawRect(rule, topLeft = Offset(0f, size.height - weight), size = Size(size.width, weight))
-            }
+            .bottomHairline(rule)
             .padding(vertical = Spacing.s12),
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
@@ -179,10 +176,7 @@ fun SkyEditableKeyValueRow(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = SkySizes.keyValueRow)
-            .drawBehind {
-                val weight = SkySizes.hairline.toPx()
-                drawRect(rule, topLeft = Offset(0f, size.height - weight), size = Size(size.width, weight))
-            }
+            .bottomHairline(rule)
             .tappable(RectangleShape, Role.Button) {
                 field.requestFocus()
                 keyboard?.show()
@@ -228,6 +222,11 @@ fun SkyEditableKeyValueRow(
             modifier = Modifier.size(SkySizes.searchGlyph),
         )
     }
+}
+
+private fun Modifier.bottomHairline(color: Color) = drawBehind {
+    val weight = SkySizes.hairline.toPx()
+    drawRect(color, topLeft = Offset(0f, size.height - weight), size = Size(size.width, weight))
 }
 
 /** The rule above the first key-value row, so a group of them is closed at both ends (p13, p16). */

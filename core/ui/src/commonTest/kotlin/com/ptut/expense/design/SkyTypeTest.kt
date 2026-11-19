@@ -85,6 +85,12 @@ class SkyTypeTest {
     }
 
     @Test
+    fun theSheetAndPageTitlesAreTheirSlotsAtLight() {
+        assertEquals(slots.getValue("headlineMedium").copy(fontWeight = FontWeight.Light), type.sheetTitle)
+        assertEquals(slots.getValue("displaySmall").copy(fontWeight = FontWeight.Light), type.pageTitle)
+    }
+
+    @Test
     fun metaAndTheEyebrowKeepTheirValues() {
         assertEquals(13.sp, type.meta.fontSize)
         assertEquals(FontWeight.Normal, type.meta.fontWeight)
@@ -126,4 +132,6 @@ private fun PtutType.namedRoles(): Map<String, TextStyle> = mapOf(
     "listHeadline" to listHeadline,
     "meta" to meta,
     "eyebrow" to eyebrow,
+    "sheetTitle" to sheetTitle,
+    "pageTitle" to pageTitle,
 )

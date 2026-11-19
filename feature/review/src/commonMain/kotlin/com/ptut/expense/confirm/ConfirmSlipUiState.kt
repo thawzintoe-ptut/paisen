@@ -11,8 +11,9 @@ import com.ptut.expense.ui.AmountEntry
 /**
  * #217: Room answers after the screen is built when Android restores it after killing the app, so
  * the slip is waited for, and a slip that has gone says so instead of leaving a blank form.
+ * Saved and Dismissed are where the shell leaves the screen.
  */
-enum class ConfirmSlipPhase { Loading, Ready, Missing }
+enum class ConfirmSlipPhase { Loading, Ready, Saving, Saved, Dismissed, Missing }
 
 /** A slip for exactly what I owe in a shared group: the question, and which debt is picked when several fit. */
 data class DebtMatchUiModel(val question: String, val choices: List<String>, val chosen: Int)
@@ -46,11 +47,6 @@ data class ConfirmSlipUiState(
     /** The chosen category's own sub-categories. Empty until one with any is chosen (#111). */
     val subCategories: List<SubCategory> = emptyList(),
     val subCategory: SubCategory? = null,
-    val saving: Boolean,
-    /** True once the row is durable. The shell leaves the screen on it. */
-    val saved: Boolean,
-    /** True once NOT MINE has taken the slip off the queue. The shell leaves on it too. */
-    val dismissed: Boolean = false,
     /** False for a slip that read no shop (#113): it is saved by hand and no rule is made. */
     val shopRead: Boolean = true,
     /** Research finding 2: the shop read as noise (a Thai name), so the screen says why it asks. */
@@ -80,6 +76,17 @@ data class ConfirmSlipUiState(
     /** Confirm was pressed on a foreign slip with no rate. Cleared by typing one. */
     val askForRate: Boolean = false,
 ) {
+    val saving: Boolean get() = phase == ConfirmSlipPhase.Saving
+
+    /** True once the row is durable. The shell leaves the screen on it. */
+    val saved: Boolean get() = phase == ConfirmSlipPhase.Saved
+
+    /** True once NOT MINE or a paid debt has taken the slip off the queue. The shell leaves on it too. */
+    val dismissed: Boolean get() = phase == ConfirmSlipPhase.Dismissed
+
+    /** The screen has finished with the slip, so its leaving the queue is expected. */
+    val done: Boolean get() = saving || saved || dismissed
+
     /**
      * Inline, beside Confirm, rather than a toast: the keyboard covers the toast, and Confirm then
      * seemed to do nothing (#216).

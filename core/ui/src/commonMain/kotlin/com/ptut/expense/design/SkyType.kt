@@ -58,6 +58,9 @@ internal fun skyTypeOf(geist: FontFamily, mono: FontFamily = geist) = PtutType(
     listHeadline = style(geist, 16f, FontWeight.Medium, 22.sp),
     meta = style(geist, 13f, FontWeight.Normal, 18.sp),
     eyebrow = style(geist, 12f, FontWeight.Bold, 16.sp, 0.08.em),
+    // headlineMedium and displaySmall at 300, the weight Sky's headings use.
+    sheetTitle = style(geist, 24f, FontWeight.Light, 30.sp, (-0.02).em),
+    pageTitle = style(geist, 28f, FontWeight.Light, 34.sp, (-0.02).em),
     // p09's receipt, measured off the artboard: lines at 14, the heading spaced out, the total large.
     receipt = style(mono, 14f, FontWeight.Normal, 22.sp),
     receiptHeading = style(mono, 13f, FontWeight.SemiBold, 18.sp, 0.2.em),

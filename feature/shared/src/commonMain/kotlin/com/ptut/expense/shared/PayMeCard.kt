@@ -14,13 +14,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.PtutTheme
 import com.ptut.expense.design.QrPaper
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
+import com.ptut.expense.design.ptutType
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.PromptPay
@@ -81,7 +81,7 @@ fun PayMeCardPicture(card: PayMeCard, modifier: Modifier = Modifier) {
             Text(text.payMeFor(card.groupName), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 card.amount,
-                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Light),
+                style = MaterialTheme.ptutType.pageTitle,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(top = Spacing.xs),
             )

@@ -33,6 +33,12 @@ object RuleEngine {
         val key = counterparty.matchKey()
         return rules.firstOrNull { it.direction == direction && it.counterparty.matchKey() == key }
     }
-
-    private fun String.matchKey(): String = trim().lowercase()
 }
+
+/** The remembered merchant for [shop], on the key [RuleEngine] files by. */
+fun List<RememberedMerchant>.forShop(shop: String): RememberedMerchant? {
+    val key = shop.matchKey()
+    return firstOrNull { it.counterparty.matchKey() == key }
+}
+
+private fun String.matchKey(): String = trim().lowercase()

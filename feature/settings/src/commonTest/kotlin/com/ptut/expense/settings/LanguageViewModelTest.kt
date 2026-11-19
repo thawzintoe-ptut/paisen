@@ -7,29 +7,29 @@ import com.ptut.expense.locale.LanguageStore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class LanguageViewModelTest : ViewModelTest() {
 
-    @AfterTest
-    fun backToEnglish() {
-        AppText.use(Language.English)
-        AppText.settingsReopened()
-    }
-
     @Test
-    fun `a release build lists Thai after Burmese`() {
-        val viewModel = LanguageViewModel(offered = Language.offered(debug = false))
+    fun `the Thai switch lists Thai after Burmese`() {
+        val viewModel = LanguageViewModel(offered = Language.offered(offersUnreleased = true))
 
         assertEquals(listOf("English", "မြန်မာ", "ไทย"), viewModel.uiState.value.options.map { it.label })
     }
 
     @Test
+    fun `with the Thai switch off only English and Burmese are listed`() {
+        val viewModel = LanguageViewModel(offered = Language.offered(offersUnreleased = false))
+
+        assertEquals(listOf("English", "မြန်မာ"), viewModel.uiState.value.options.map { it.label })
+    }
+
+    @Test
     fun `choosing Thai saves it and shows the app in Thai`() = runTest {
         val store = MemoryLanguageStore()
-        val viewModel = LanguageViewModel(store = store, offered = Language.offered(debug = true))
+        val viewModel = LanguageViewModel(store = store, offered = Language.offered(offersUnreleased = true))
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
 

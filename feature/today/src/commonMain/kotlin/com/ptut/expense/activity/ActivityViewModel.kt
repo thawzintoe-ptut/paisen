@@ -10,16 +10,17 @@ import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.ReportPeriod
 import com.ptut.expense.domain.ReviewReason
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayAndMonth
-import com.ptut.expense.domain.displayName
 import com.ptut.expense.domain.formatCompact
+import com.ptut.expense.domain.inside
 import com.ptut.expense.domain.isAutomatic
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
-import com.ptut.expense.domain.phrase
 import com.ptut.expense.domain.rangeContaining
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.formatMinor
@@ -31,6 +32,8 @@ import com.ptut.expense.domain.weekdayAndDay
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.SlipsCopy
 import com.ptut.expense.locale.currencyCopy
+import com.ptut.expense.ui.displayName
+import com.ptut.expense.ui.phrase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -105,7 +108,7 @@ class ActivityViewModel(
             )
         }.stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
             initialValue = ActivityUiState(emptyList(), loading = true),
         )
 
@@ -166,7 +169,7 @@ class ActivityViewModel(
         return ActivityEntryUiModel(
             id = id,
             title = text.imported(count),
-            body = if (queued == 0) "$from · ${onlyShop(rows) ?: text.allSorted}" else "$from · ${text.toCheck(queued)}",
+            body = if (queued == 0) "$from${Separators.DOT}${onlyShop(rows) ?: text.allSorted}" else "$from${Separators.DOT}${text.toCheck(queued)}",
             time = at.stamp(),
             icon = "check_circle",
             tone = ActivityTone.Imported,
@@ -215,7 +218,7 @@ class ActivityViewModel(
     }
 
     private fun List<Transaction>.spentIn(week: DateRange): Satang =
-        filter { it.occurredAtEpochMillis.dateIn(HomeTime) in week }.summarise().expense
+        inside(week).summarise().expense
 
     private fun DateRange.shiftedWeeks(weeks: Int) =
         DateRange(start.plus(weeks, DateTimeUnit.WEEK), endInclusive.plus(weeks, DateTimeUnit.WEEK))

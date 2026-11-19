@@ -93,6 +93,9 @@ interface ImportStore {
     /** #33: the last rate saved for [currency] on this phone, shared with groups (#181); null when none. */
     suspend fun rateFor(currency: String): Rate? = null
 
+    /** #33: [rate] becomes [currency]'s last rate into the home, for the next slip and every group. */
+    suspend fun saveRate(currency: String, rate: Rate) = Unit
+
     /** Read once per run rather than held open: a rule added mid-run belongs to the next one. */
     suspend fun rules(): List<MerchantRule>
 

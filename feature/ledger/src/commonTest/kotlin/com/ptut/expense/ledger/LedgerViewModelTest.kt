@@ -19,13 +19,14 @@ import com.ptut.expense.domain.TransactionSource
 import com.ptut.expense.domain.ledger.FakeLedger
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.Language
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.toInstant
-import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -65,11 +66,6 @@ class LedgerViewModelTest : ViewModelTest() {
     private val julyRent = row("t5", day = 2, hour = 9, merchant = "Rent", amount = 900_000, month = 7)
     private val newYearsEve = row("t6", day = 31, hour = 20, merchant = "Party", amount = 50_000, month = 12, year = 2025)
     private val threeMonths = everything + listOf(julyRent, newYearsEve)
-
-    @AfterTest
-    fun englishAgain() {
-        AppText.use(Language.English)
-    }
 
     @Test
     fun `days read newest first and each header carries a signed net`() = runTest {
@@ -204,6 +200,7 @@ class LedgerViewModelTest : ViewModelTest() {
         val viewModel = LedgerViewModel(
             FakeLedger(listOf(row)),
             subCategoryUpdates = flowOf(listOf(SubCategory("supermarket", "groceries", "Supermarket"))),
+            work = Dispatchers.Main,
         )
 
         viewModel.uiState.test {
@@ -224,15 +221,27 @@ class LedgerViewModelTest : ViewModelTest() {
         }
     }
 
-    /** Two August days of two rows each sit above July: two headers and four rows. */
+    /** The list jumps by the day header's key, so nothing counts the headers and rows above a month. */
     @Test
-    fun `a month points at its first day header past every header and row above it`() = runTest {
+    fun `a month points at its first day header by the key the list draws it under`() = runTest {
         loaded(threeMonths) { state ->
-            assertEquals(listOf(0, 6, 8), state.months.map { it.firstItem })
-            assertEquals("Aug", state.monthAt(5)?.label)
-            assertEquals("Jul", state.monthAt(6)?.label)
-            assertEquals("Dec", state.monthAt(100)?.label)
-            assertEquals("Aug", state.monthAt(-3)?.label)
+            assertEquals(listOf("day-2026-08-14", "day-2026-07-02", "day-2025-12-31"), state.months.map { it.dayKey })
+            assertEquals("Aug", state.monthOf("t1")?.label)
+            assertEquals("Aug", state.monthOf("day-2026-08-13")?.label)
+            assertEquals("Jul", state.monthOf("day-2026-07-02")?.label)
+            assertEquals("Dec", state.monthOf("t6")?.label)
+            assertEquals("Aug", state.monthOf(null)?.label)
+        }
+    }
+
+    /** A day header keyed by its label would repeat a year later and crash the list. */
+    @Test
+    fun `the same day in two years gets two day keys`() = runTest {
+        val lastYear = row("t7", day = 14, hour = 18, merchant = "Foodland", amount = 1_000, year = 2025)
+        loaded(everything + lastYear) { state ->
+            val keys = state.days.map { it.key }
+            assertEquals(keys.distinct(), keys)
+            assertTrue("day-2025-08-14" in keys)
         }
     }
 
@@ -272,7 +281,7 @@ class LedgerViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `Thai months carry the Buddhist Era year`() = runTest {
+    fun `thai months carry the Buddhist Era year`() = runTest {
         AppText.use(Language.Thai)
 
         loaded(threeMonths) { state ->
@@ -283,7 +292,7 @@ class LedgerViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `Burmese months count in Burmese digits`() = runTest {
+    fun `burmese months count in Burmese digits`() = runTest {
         AppText.use(Language.Burmese)
 
         loaded(threeMonths) { state ->
@@ -293,7 +302,18 @@ class LedgerViewModelTest : ViewModelTest() {
         }
     }
 
-    private fun viewModel(rows: List<Transaction>) = LedgerViewModel(FakeLedger(rows))
+    @Test
+    fun `a slice from Reports keeps its days and only spending in its category`() = runTest {
+        val slice = LedgerScope(from = LocalDate(2026, 8, 13), to = LocalDate(2026, 8, 13), categoryId = "groceries")
+        val viewModel = LedgerViewModel(FakeLedger(threeMonths), scope = slice, work = Dispatchers.Main)
+
+        viewModel.uiState.test {
+            assertEquals(listOf("Grab"), awaitSuccess().merchants())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    private fun viewModel(rows: List<Transaction>) = LedgerViewModel(FakeLedger(rows), work = Dispatchers.Main)
 
     /**
      * Every assertion runs inside one subscription. Re-entering `test { }` per filter would read

@@ -37,19 +37,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.SharedArt
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
+import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.NewMember
 import com.ptut.expense.domain.shared.Person
+import com.ptut.expense.domain.shared.SharedTextLimits
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.sync.InviteLinks
@@ -381,7 +382,7 @@ private fun NothingShared(
         ) { SharedArt() }
         Text(
             text.home.emptyTitle,
-            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Light),
+            style = MaterialTheme.ptutType.sheetTitle,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = Spacing.md),
         )
@@ -492,7 +493,7 @@ private fun NewGroupSheet(
                 )
             }
         }
-        SharedTextField(value = name, onValueChange = { name = it }, label = text.groupName, modifier = Modifier.padding(top = Spacing.md))
+        SharedTextField(value = name, onValueChange = { name = it.take(SharedTextLimits.GROUP_NAME) }, label = text.groupName, modifier = Modifier.padding(top = Spacing.md))
         SkyKeyValueRow(
             label = currencyCopy().currencyTitle,
             value = "${money.code}  ${money.symbol}",
@@ -548,7 +549,7 @@ internal fun PeoplePicker(people: List<Person>, chosen: SnapshotStateList<NewMem
         }
     }
     Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-        SharedTextField(value = typed, onValueChange = onTyped, label = text.home.addAName, modifier = Modifier.weight(1f))
+        SharedTextField(value = typed, onValueChange = { onTyped(it.take(SharedTextLimits.MEMBER_NAME)) }, label = text.home.addAName, modifier = Modifier.weight(1f))
         SkyTextAction(
             label = text.home.add,
             onClick = {
@@ -593,7 +594,7 @@ internal fun NewPersonSheet(people: List<Person>, onAdd: (String, String?) -> Un
         SharedTextField(
             value = name,
             onValueChange = {
-                name = it
+                name = it.take(SharedTextLimits.MEMBER_NAME)
                 personId = null
             },
             label = text.home.theirName,

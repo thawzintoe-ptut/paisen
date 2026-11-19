@@ -67,7 +67,7 @@ class SharedExpenseWriteTest {
         // Its own scope, stopped before the close: the always-on reads must not query a closed
         // database, which on iOS is a segfault rather than an exception.
         val reads = CoroutineScope(backgroundScope.coroutineContext + Job())
-        val ledger = DefaultLedgerRepository(
+        val ledger = RoomLedgerRepository(
             transactionDao = database.transactionDao(),
             queuedSlipDao = database.queuedSlipDao(),
             importRunDao = database.importRunDao(),

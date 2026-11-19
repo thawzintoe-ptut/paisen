@@ -27,9 +27,9 @@ import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.MergeReport
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.SampleLedgerRepository
-import com.ptut.expense.domain.settings.FakeImportSettingsStore
-import com.ptut.expense.domain.settings.ImportChoices
-import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.settings.AppChoices
+import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.settings.FakeAppSettingsStore
 import com.ptut.expense.domain.slip.SlipPictures
 import com.ptut.expense.importer.FakeSlipSource
 import com.ptut.expense.importer.FakeSlipTextReader
@@ -98,7 +98,7 @@ class PtutAppTest {
                     // NFR-4 and FR-3's answers. The ledger module owns the live copy,
                     // and this graph does not load it.
                     // The evening card would put a different tree under the same test after 18:00.
-                    single { ImportSettings(FakeImportSettingsStore(ImportChoices(moodByTimeOfDay = false))) }
+                    single { AppSettings(FakeAppSettingsStore(AppChoices(moodByTimeOfDay = false))) }
                     single<OnboardingFlag> { FakeOnboardingFlag(finished = firstRunAnswered) }
                     single<PhotoAccessRequest> { FakePhotoAccessRequest() }
                     // Today's Fix reads its steps from here when photo access is limited.

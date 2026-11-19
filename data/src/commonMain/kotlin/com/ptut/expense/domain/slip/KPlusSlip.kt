@@ -2,6 +2,7 @@ package com.ptut.expense.domain.slip
 
 import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.shared.MAX_AMOUNT_WHOLE_DIGITS
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
@@ -194,16 +195,15 @@ object KPlusSlip : SlipFormat {
         }
     }
 
+    /** #23: two Thai letters make a name for a reader that reads Thai; ML Kit never returns any. */
+    private fun String.readsAsThaiName(): Boolean = count { it in THAI } >= MIN_NAME_LETTERS
+
     /**
      * Latin letters are the test because C-3 ships no Thai model: a line the reader cannot read
      * is not a name it may guess at. A reference code carries letters too, so a bare run of
      * capitals and digits is excluded — `QN33507WI0187725Y` is not a merchant. So is the text in a
      * recipient's icon: the PromptPay logo reads as `Prompt Pay`, a shop icon as one letter.
      */
-
-    /** #23: two Thai letters make a name for a reader that reads Thai; ML Kit never returns any. */
-    private fun String.readsAsThaiName(): Boolean = count { it in THAI } >= MIN_NAME_LETTERS
-
     private fun String.readsAsName(): Boolean =
         count { it in 'a'..'z' || it in 'A'..'Z' } >= MIN_NAME_LETTERS &&
             !CODE_SHAPE.matches(this) &&
@@ -215,6 +215,7 @@ object KPlusSlip : SlipFormat {
      */
     private fun parseAmount(line: String): Satang? {
         val digits = line.substringBefore(BAHT_SUFFIX).trim().replace(",", "")
+        if (digits.substringBefore('.').length > MAX_AMOUNT_WHOLE_DIGITS) return null
         val baht = digits.substringBefore('.').toLongOrNull() ?: return null
         val satang = when (val fraction = digits.substringAfter('.', missingDelimiterValue = "")) {
             "" -> 0L
@@ -234,13 +235,16 @@ object KPlusSlip : SlipFormat {
         val month = MONTHS.indexOf(monthName.lowercase()) + 1
         if (month == 0) return null
 
-        return LocalDateTime(
-            year = YEAR_2000 + year.toInt(),
-            month = month,
-            day = day.toInt(),
-            hour = hour.toInt().toHourOfDay(marker),
-            minute = minute.toInt(),
-        ).toInstant(zone).toEpochMilliseconds()
+        // The shape lets "31 Feb" and "13:06 PM" through. A date that never was is a misread, not a crash.
+        return runCatching {
+            LocalDateTime(
+                year = YEAR_2000 + year.toInt(),
+                month = month,
+                day = day.toInt(),
+                hour = hour.toInt().toHourOfDay(marker),
+                minute = minute.toInt(),
+            ).toInstant(zone).toEpochMilliseconds()
+        }.getOrNull()
     }
 
     /** 12 AM is midnight and 12 PM is noon — the two the naive `+12` gets backwards. */

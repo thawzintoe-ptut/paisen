@@ -14,8 +14,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import com.ptut.expense.design.Spacing
+import com.ptut.expense.design.ptutType
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.shared.SharedTextField
 import com.ptut.expense.ui.sky.SkyButton
@@ -54,7 +54,7 @@ fun ShopRuleView(
                 item {
                     Text(
                         text = uiState.shop,
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Light),
+                        style = MaterialTheme.ptutType.sheetTitle,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(horizontal = Spacing.md),
                     )

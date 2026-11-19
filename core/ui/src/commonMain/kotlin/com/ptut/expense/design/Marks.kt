@@ -191,21 +191,24 @@ fun ArcLoop(
     color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     val period = MaterialTheme.ptutMotion.arcLoop.inMillis
-    val still = ptutReduceMotion
 
-    val progress by rememberInfiniteTransition(label = "arc").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(period, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "turn",
-    )
+    // p33: reduced motion holds the loop's last frame (#131), with no clock left running under it.
+    val progress = if (ptutReduceMotion) {
+        null
+    } else {
+        rememberInfiniteTransition(label = "arc").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(period, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "turn",
+        )
+    }
 
     Canvas(modifier.size(size)) {
-        // p33: reduced motion holds the loop's last frame (#131).
-        val frame = arcFrameAt(if (still) 1f else progress)
+        val frame = arcFrameAt(progress?.value ?: 1f)
         val unit = this.size.minDimension / 100f
         val stroke = 7f * unit
         val inset = (100f - 76f) / 2f * unit + stroke / 2f

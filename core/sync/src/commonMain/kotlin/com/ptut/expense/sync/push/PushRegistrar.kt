@@ -1,10 +1,12 @@
 package com.ptut.expense.sync.push
 
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.locale.AppText
-import com.ptut.expense.sync.FirestoreClient
+import com.ptut.expense.sync.Firestore
 import com.ptut.expense.sync.auth.Account
 import com.ptut.expense.sync.auth.AuthRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -18,13 +20,13 @@ import kotlin.time.Clock
 class PushRegistrar internal constructor(
     private val auth: AuthRepository,
     private val tokens: PushTokenHolder,
-    private val firestore: FirestoreClient,
+    private val firestore: Firestore,
     /** False in a build with no push Worker: nothing registers. */
     private val enabled: Boolean,
     private val clock: Clock = Clock.System,
 ) {
-    /** The token whose document this phone last wrote, so sign-out removes the right one. */
-    private var registered: String? = null
+    /** The token whose document this phone last wrote, so sign-out removes the right one. Set and read from several threads. */
+    private val registered = MutableStateFlow<String?>(null)
 
     fun start(scope: CoroutineScope) {
         if (!enabled) return
@@ -34,7 +36,7 @@ class PushRegistrar internal constructor(
                 .collectLatest { (account, token, language) ->
                     if (account !is Account.SignedIn || token == null) return@collectLatest
                     // A failure waits for the next change or launch; the phone still pulls on its own.
-                    runCatching {
+                    runSuspendCatching {
                         firestore.set(
                             "devices/$token",
                             mapOf(
@@ -44,7 +46,7 @@ class PushRegistrar internal constructor(
                                 "updatedAt" to clock.now().toEpochMilliseconds(),
                             ),
                         )
-                        registered = token
+                        registered.value = token
                     }
                 }
         }
@@ -53,8 +55,9 @@ class PushRegistrar internal constructor(
     /** Called while the account is still signed in, because the rules let only the owner delete. */
     suspend fun forgetDevice() {
         if (!enabled) return
-        val token = registered ?: tokens.token.value ?: return
-        runCatching { firestore.delete("devices/$token") }
-        registered = null
+        val token = registered.value ?: tokens.token.value ?: return
+        runSuspendCatching { firestore.delete("devices/$token") }
+        // Only the token deleted here: one registered meanwhile still needs removing.
+        registered.compareAndSet(token, null)
     }
 }

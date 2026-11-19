@@ -1,5 +1,6 @@
 package com.ptut.expense.categories
 
+import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.ImportRun
@@ -11,9 +12,14 @@ import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.locale.AppText
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -21,6 +27,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.toInstant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -92,6 +100,47 @@ class CategoriesViewModelTest {
         runCurrent()
 
         assertEquals("฿0", model.uiState.value.rows.single().spentThisMonth)
+    }
+
+    @Test
+    fun `a row dated later this month waits for its day as it does in Reports`() = runTest {
+        val model = viewModel(
+            categories = listOf(Category("food", "Food & drink", "restaurant")),
+            transactions = listOf(spend("food", 100_00, daysAgo = 1), spend("food", 900_00, daysAgo = -3)),
+        )
+        runCurrent()
+
+        assertEquals("฿100", model.uiState.value.rows.single().spentThisMonth)
+    }
+
+    @Test
+    fun `just after midnight on the 1st only the new month counts`() = runTest {
+        val first = bangkok(2026, 9, 1, 0, 20)
+        val rows = listOf(
+            at("food", 40_00, bangkok(2026, 9, 1, 0, 5)),
+            at("food", 700_00, bangkok(2026, 8, 31, 23, 59)),
+        )
+        val model = watching(
+            CategoriesViewModel(ledger(rows), FakeCategories(listOf(food)), FixedClock(first)),
+        )
+        runCurrent()
+
+        assertEquals("฿40", model.uiState.value.rows.single().spentThisMonth)
+    }
+
+    @Test
+    fun `a move that fails keeps the order and says it did not work`() = runTest {
+        val toasts = ToastMessages()
+        val model = watching(
+            CategoriesViewModel(ledger(emptyList()), FakeCategories(listOf(food, groceries), failWrites = true), FixedClock(now), toasts = toasts),
+        )
+        runCurrent()
+
+        model.move("groceries", -1)
+        runCurrent()
+
+        assertEquals(ToastMessage(AppText.copy.settings.didNotWork, tone = ToastTone.Error), toasts.messages.first())
+        assertEquals(listOf("food", "groceries"), model.uiState.value.rows.map { it.id })
     }
 
     @Test
@@ -234,6 +283,12 @@ class CategoriesViewModelTest {
         subCategoryId = subCategoryId,
         counterparty = null,
     )
+
+    private fun bangkok(year: Int, month: Int, day: Int, hour: Int, minute: Int) =
+        LocalDateTime(year, month, day, hour, minute).toInstant(BangkokTime)
+
+    private fun at(categoryId: String, minor: Long, instant: Instant) = row(categoryId, minor, 0, Direction.Expense, null)
+        .copy(id = "$categoryId-$instant", occurredAtEpochMillis = instant.toEpochMilliseconds())
 
     private class FixedClock(private val at: Instant) : Clock {
         override fun now(): Instant = at

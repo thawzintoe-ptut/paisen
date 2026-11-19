@@ -4,12 +4,14 @@ import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.EvidenceRetention
 import com.ptut.expense.domain.ForeignAmount
 import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.ImportFailureKind
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.folders.FolderReadTally
 import com.ptut.expense.domain.rules.MerchantRule
 import com.ptut.expense.domain.rules.RuleEngine
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.FiledSlip
@@ -21,6 +23,7 @@ import com.ptut.expense.domain.slip.direction
 import com.ptut.expense.platform.ocr.SlipTextReader
 import com.ptut.expense.platform.photos.SlipCandidate
 import com.ptut.expense.platform.photos.SlipSource
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +33,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import okio.ByteString.Companion.toByteString
+import kotlin.coroutines.CoroutineContext
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.uuid.ExperimentalUuidApi
@@ -95,6 +100,10 @@ class SlipImporter(
     private val owner: SlipOwnerBook = SlipOwnerBook.Unknown,
     /** #33: Myanmar wallet receipts, debug builds only until one real receipt per wallet has read. */
     private val readsWallets: Boolean = true,
+    /** Where a run hashes and parses: off the main thread, since Check now starts one from a screen. */
+    private val work: CoroutineContext = Dispatchers.Default,
+    /** [SlipParser.parse], named so a test can stand a parser that fails in its place. */
+    private val parse: (lines: List<String>, readsWallets: Boolean) -> SlipRead = SlipParser::parse,
     /**
      * Injected so a test can name the row it wrote. Random everywhere else, and last so the tests
      * that name one keep reading it as a trailing lambda.
@@ -135,12 +144,14 @@ class SlipImporter(
     /** Each picture's result as the run reaches it. A picture that vanished mid-run has none. */
     val landings: SharedFlow<SlipLanding> = landed.asSharedFlow()
 
-    suspend fun run(): ImportSummary = scanning.withLock {
-        running.value = true
-        try {
-            scanAndImport()
-        } finally {
-            running.value = false
+    suspend fun run(): ImportSummary = withContext(work) {
+        scanning.withLock {
+            running.value = true
+            try {
+                scanAndImport()
+            } finally {
+                running.value = false
+            }
         }
     }
 
@@ -155,12 +166,13 @@ class SlipImporter(
         )
         store.startRun(run)
 
-        val candidates = try {
-            source.candidates()
-        } catch (failure: Exception) {
+        val candidates = runSuspendCatching { source.candidates() }.getOrElse { failure ->
             // US-8: a run that could not scan is a failure. A run that scanned and found nothing
             // is not — collapsing the two is how an import breaks while the banner stays green.
-            return run.failed(failure.message ?: failure::class.simpleName.orEmpty())
+            return run.failed(
+                reason = failure.message ?: failure::class.simpleName.orEmpty(),
+                kind = (failure as? ScanStopped)?.kind ?: ImportFailureKind.Other,
+            )
         }
 
         val rules = store.rules()
@@ -203,7 +215,8 @@ class SlipImporter(
      */
     suspend fun confirm(slip: ConfirmedSlip) {
         store.confirm(slip)
-        source.delete(slip.queuedSlipId)
+        // The row is filed and its hash kept, so a picture that would not delete is not a failed save.
+        runSuspendCatching { source.delete(slip.queuedSlipId) }
     }
 
     /**
@@ -243,15 +256,17 @@ class SlipImporter(
             return Outcome.AlreadySeen
         }
 
-        val lines = try {
-            reader.read(bytes)
-        } catch (failure: Exception) {
+        val lines = runSuspendCatching { reader.read(bytes) }.getOrElse {
             // One unreadable slip does not fail the run. The picture stays for the retry.
             land(candidate, SlipPlace.NotReadYet)
             return Outcome.Unreadable
         }
 
-        val read = SlipParser.parse(lines, readsWallets)
+        // The text is the reader's guess at a picture anyone can share in, so a parser that throws on it stops this slip only.
+        val read = runSuspendCatching { parse(lines, readsWallets) }.getOrElse {
+            land(candidate, SlipPlace.NotReadYet)
+            return Outcome.Unreadable
+        }
         // #26: the bank app's own folder holds only your payments, so its sender is you.
         if (read is SlipRead.Readable && candidate.isBankFolder()) read.sender?.let(owner::learnFrom)
         // #33: a wallet receipt that shows its own direction (a minus sign, a "To") is believed first.
@@ -384,12 +399,13 @@ class SlipImporter(
         return Outcome.AlreadySeen
     }
 
-    private suspend fun ImportRun.failed(reason: String): ImportSummary {
+    private suspend fun ImportRun.failed(reason: String, kind: ImportFailureKind): ImportSummary {
         store.finishRun(
             copy(
                 finishedAtEpochMillis = now(),
                 outcome = ImportOutcome.Failure,
                 failureReason = reason,
+                failureKind = kind,
             ),
         )
         return ImportSummary(ImportOutcome.Failure, 0, 0, 0, 0, 0)

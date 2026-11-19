@@ -16,6 +16,7 @@ import com.ptut.expense.data.local.entity.QueuedSlipEntity
 import com.ptut.expense.data.local.entity.RuleEntity
 import com.ptut.expense.data.local.entity.TransactionEntity
 import com.ptut.expense.data.local.entity.asColumn
+import com.ptut.expense.data.local.entity.withForeign
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.ImportOutcome
@@ -28,6 +29,7 @@ import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.FiledSlip
 import com.ptut.expense.domain.slip.ImportStore
 import com.ptut.expense.domain.slip.QueuedSlipEntry
+import kotlin.time.Clock
 
 /**
  * [ImportStore] over Room. It owns the mapping and nothing else — every rule about what to write
@@ -42,14 +44,23 @@ class RoomImportStore(
     private val slipConfirmationDao: SlipConfirmationDao,
     /** #33: the app-wide last rate per currency, the same table shared groups write (#181). */
     private val sharedDao: SharedDao? = null,
+    private val clock: Clock = Clock.System,
 ) : ImportStore {
 
     override suspend fun rateFor(currency: String): Rate? =
         sharedDao?.rate(currency, Home.money.code)?.let { Rate(it.rateUnscaled, it.rateScale) }
 
+    override suspend fun saveRate(currency: String, rate: Rate) = writeRate(currency, rate, clock.now().toEpochMilliseconds())
+
+    private suspend fun writeRate(currency: String, rate: Rate, atEpochMillis: Long) {
+        sharedDao?.upsertRate(CurrencyRateEntity(currency, rate.unscaled, rate.scale, atEpochMillis, Home.money.code))
+    }
+
     override suspend fun rules(): List<MerchantRule> =
-        ruleDao.all().map {
-            MerchantRule(counterparty = it.counterparty, categoryId = it.categoryId, id = it.id, direction = Direction.valueOf(it.direction))
+        // A direction this build does not know is a rule it cannot place, so it files nothing rather than stop every run.
+        ruleDao.all().mapNotNull { row ->
+            val direction = Direction.entries.firstOrNull { it.name == row.direction } ?: return@mapNotNull null
+            MerchantRule(counterparty = row.counterparty, categoryId = row.categoryId, id = row.id, direction = direction)
         }
 
     override suspend fun isImported(hash: String): Boolean = importedSlipDao.isImported(hash)
@@ -95,7 +106,7 @@ class RoomImportStore(
     ).also {
         // #33: the rate typed on Check slip becomes the next kyat slip's, in a group or here.
         slip.foreign?.let { foreign ->
-            sharedDao?.upsertRate(CurrencyRateEntity(foreign.currency, foreign.rate.unscaled, foreign.rate.scale, slip.confirmedAtEpochMillis, Home.money.code))
+            writeRate(foreign.currency, foreign.rate, slip.confirmedAtEpochMillis)
         }
     }
 
@@ -114,11 +125,7 @@ class RoomImportStore(
         filedAt = confirmedAtEpochMillis,
         sourceFolder = folder,
         planned = planned,
-        currency = foreign?.currency ?: Home.money.code,
-        originalMinor = foreign?.originalMinor,
-        rateUnscaled = foreign?.rate?.unscaled,
-        rateScale = foreign?.rate?.scale,
-    )
+    ).withForeign(foreign)
 
     override suspend fun discard(id: String) = queuedSlipDao.discard(id)
 
@@ -153,11 +160,7 @@ class RoomImportStore(
         filedAt = filedAtEpochMillis,
         sourceFolder = folder,
         ruleId = ruleId,
-        currency = foreign?.currency ?: Home.money.code,
-        originalMinor = foreign?.originalMinor,
-        rateUnscaled = foreign?.rate?.unscaled,
-        rateScale = foreign?.rate?.scale,
-    )
+    ).withForeign(foreign)
 
     private fun QueuedSlipEntry.toEntity() = QueuedSlipEntity(
         id = id,
@@ -182,6 +185,7 @@ class RoomImportStore(
         outcome = outcome.toColumn(),
         slipsFound = slipsFound,
         failureReason = failureReason,
+        failureKind = failureKind?.name,
         filed = filed,
         queued = queued,
         folders = folders.joinToString(FOLDER_SEPARATOR),

@@ -7,7 +7,6 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(projects.data)
-            implementation(projects.core.ui)
             implementation(projects.core.util)
             implementation(projects.core.locale)
             implementation(projects.core.platform)

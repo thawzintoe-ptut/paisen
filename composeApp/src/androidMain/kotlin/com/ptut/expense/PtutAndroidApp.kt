@@ -12,7 +12,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ptut.expense.agent.AndroidSpeechInput
 import com.ptut.expense.agent.SpeechInput
-import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.onboarding.Onboarding
 import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.platform.files.SafLedgerFileStore
@@ -105,7 +105,7 @@ private fun MicrophoneDialog() {
 private fun SlipImportOnOpen() {
     val context = LocalContext.current
     val firstRunAnswered by koinInject<Onboarding>().isFinished.collectAsStateWithLifecycle()
-    val settings = koinInject<ImportSettings>()
+    val settings = koinInject<AppSettings>()
 
     LaunchedEffect(firstRunAnswered) {
         if (!firstRunAnswered) return@LaunchedEffect

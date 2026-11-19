@@ -25,7 +25,7 @@ import kotlin.time.Clock
 
 /**
  * A populated ledger for tests that need one. It is a fixture, not a fallback: the app builds
- * [com.ptut.expense.data.repository.DefaultLedgerRepository] and nothing in `commonMain` can
+ * [com.ptut.expense.data.repository.RoomLedgerRepository] and nothing in `commonMain` can
  * reach this, so an empty screen in the running app is the truth rather than a wiring mistake.
  *
  * Dates are relative to now rather than pinned to a date in 2026, so the week chart and the

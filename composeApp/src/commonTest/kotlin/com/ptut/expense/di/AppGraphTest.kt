@@ -7,8 +7,8 @@ import com.ptut.expense.data.local.PtutDatabaseConstructor
 import com.ptut.expense.domain.folders.FolderAccess
 import com.ptut.expense.domain.folders.FolderCatalog
 import com.ptut.expense.domain.folders.FolderChooser
-import com.ptut.expense.domain.settings.FakeImportSettingsStore
-import com.ptut.expense.domain.settings.ImportSettingsStore
+import com.ptut.expense.domain.settings.AppSettingsStore
+import com.ptut.expense.domain.settings.FakeAppSettingsStore
 import com.ptut.expense.onboarding.FakeOnboardingFlag
 import com.ptut.expense.onboarding.FakePhotoAccessRequest
 import com.ptut.expense.onboarding.OnboardingFlag
@@ -121,7 +121,7 @@ private val platformStandIns = module {
     single<PtutDatabase> { PtutDatabaseConstructor.initialize() }
 
     single<LedgerFileStore> { NoFiles }
-    single<ImportSettingsStore> { FakeImportSettingsStore() }
+    single<AppSettingsStore> { FakeAppSettingsStore() }
     single<OnboardingFlag> { FakeOnboardingFlag() }
     single<PhotoAccessRequest> { FakePhotoAccessRequest() }
     single<FolderCatalog> { FolderCatalog { emptyList() } }

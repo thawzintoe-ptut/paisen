@@ -10,7 +10,8 @@ import com.ptut.expense.data.local.entity.foreignAmount
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.home.HomeBook
-import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.runSuspendCatching
+import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.Rate
@@ -27,7 +28,7 @@ import kotlin.time.Clock
 class RoomHomeBook(
     private val meta: LedgerMetaDao,
     private val transactions: TransactionDao,
-    private val settings: ImportSettings,
+    private val settings: AppSettings,
     /** #47: where the typed rate is saved, so the next slip in the old money uses it. Null in tests. */
     private val rates: SharedDao? = null,
     private val clock: Clock = Clock.System,
@@ -96,7 +97,7 @@ class RoomHomeBook(
         } catch (failure: Exception) {
             return false
         }
-        runCatching { rates?.upsertRate(CurrencyRateEntity(old.code, rate.unscaled, rate.scale, clock.now().toEpochMilliseconds(), home = new.code)) }
+        runSuspendCatching { rates?.upsertRate(CurrencyRateEntity(old.code, rate.unscaled, rate.scale, clock.now().toEpochMilliseconds(), home = new.code)) }
         runCatching { settings.setHome(new.code, choice.zoneId, converted = target) }
         Home.use(choice)
         return true

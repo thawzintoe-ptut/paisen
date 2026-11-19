@@ -2,6 +2,7 @@ package com.ptut.expense.importer
 
 import app.cash.turbine.test
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.ImportFailureKind
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
@@ -9,15 +10,24 @@ import com.ptut.expense.domain.rules.MerchantRule
 import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.QueuedSlipEntry
 import com.ptut.expense.domain.slip.SlipOwner
+import com.ptut.expense.domain.slip.SlipParser
+import com.ptut.expense.platform.ocr.SlipTextReader
 import com.ptut.expense.platform.photos.SlipCandidate
 import com.ptut.expense.platform.photos.SlipSource
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
+import kotlin.coroutines.ContinuationInterceptor
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
@@ -51,7 +61,7 @@ class SlipImporterTest {
     """.trimIndent()
 
     private fun importer(
-        source: FakeSlipSource,
+        source: SlipSource,
         store: InMemoryImportStore,
         clock: Clock = FixedClock(now),
         owner: SlipOwnerBook = SlipOwnerBook.Unknown,
@@ -61,6 +71,8 @@ class SlipImporterTest {
         store = store,
         clock = clock,
         owner = owner,
+        // The test's own dispatcher, so the scanning flag and the journal are read in step.
+        work = EmptyCoroutineContext,
         newId = { "id-${store.filed.size}-${store.runs.size}" },
     )
 
@@ -319,6 +331,23 @@ class SlipImporterTest {
         val run = store.runs.single()
         assertEquals(ImportOutcome.Failure, run.outcome)
         assertEquals("the folder could not be read", run.failureReason)
+        assertEquals(ImportFailureKind.Other, run.failureKind)
+    }
+
+    @Test
+    fun `a scan the photo source refuses journals its kind beside the sentence`() = runTest {
+        ImportFailureKind.entries.forEach { kind ->
+            val store = InMemoryImportStore()
+            val refusing = object : SlipSource by FakeSlipSource() {
+                override suspend fun candidates(): List<SlipCandidate> = throw ScanStopped(kind, "stopped")
+            }
+
+            importer(refusing, store).run()
+
+            val run = store.runs.single()
+            assertEquals(kind, run.failureKind)
+            assertEquals("stopped", run.failureReason)
+        }
     }
 
     @Test
@@ -365,12 +394,91 @@ class SlipImporterTest {
     fun `two runs cannot scan one folder at the same time`() = runTest {
         val source = ScanWatchingSource()
         val store = InMemoryImportStore()
-        val importer = SlipImporter(source, FakeSlipTextReader(), store, FixedClock(now)) { "one" }
+        val importer = SlipImporter(source, FakeSlipTextReader(), store, FixedClock(now), work = EmptyCoroutineContext) { "one" }
 
         listOf(async { importer.run() }, async { importer.run() }).awaitAll()
 
         assertEquals(1, source.mostScansAtOnce)
         assertEquals(2, store.runs.size, "each caller still gets its own journal entry")
+    }
+
+    /** Check now starts a run from a screen, so hashing and parsing 200 slips must not hold the main thread. */
+    @Test
+    fun `a run does its work off the caller dispatcher`() = runTest {
+        val source = FakeSlipSource().apply { add("a.jpg", slip(), capturedAt()) }
+        val reader = DispatcherWatchingReader()
+
+        SlipImporter(source, reader, InMemoryImportStore(listOf(lawson))).run()
+
+        assertEquals(Dispatchers.Default, reader.readOn)
+    }
+
+    @Test
+    fun `a slip the parser throws on is set aside and the run goes on`() = runTest {
+        val source = FakeSlipSource().apply {
+            add("bad.jpg", slip(reference = "BAD1"), capturedAt())
+            add("good.jpg", slip(), capturedAt() + 1)
+        }
+        val store = InMemoryImportStore(listOf(lawson))
+        val throwing = SlipImporter(
+            source,
+            FakeSlipTextReader(),
+            store,
+            FixedClock(now),
+            work = EmptyCoroutineContext,
+            parse = { lines, wallets -> if ("BAD1" in lines) error("a parser bug") else SlipParser.parse(lines, wallets) },
+        ) { "one" }
+
+        val summary = throwing.run()
+
+        assertEquals(1, summary.filed)
+        assertEquals(1, summary.unreadable)
+        assertTrue("bad.jpg" in source.remaining, "the picture waits for the next run")
+    }
+
+    /** A stopped worker is not an unreadable slip: the picture must not be marked to wait for a retry. */
+    @Test
+    fun `a reader stopped mid slip stops the run instead of setting the slip aside`() = runTest {
+        val source = FakeSlipSource().apply { add("a.jpg", slip(), capturedAt()) }
+        val store = InMemoryImportStore(listOf(lawson))
+        val stopped = SlipImporter(source, StoppedReader(), store, FixedClock(now), work = EmptyCoroutineContext) { "one" }
+
+        assertFailsWith<CancellationException> { stopped.run() }
+
+        assertEquals(ImportOutcome.Running, store.runs.single().outcome, "a stop is not journaled as a failed run")
+        assertFalse(stopped.isScanning.value)
+    }
+
+    @Test
+    fun `a scan stopped before it lists is not journaled as a failure`() = runTest {
+        val store = InMemoryImportStore()
+        val stopped = SlipImporter(StoppedSource(), FakeSlipTextReader(), store, FixedClock(now), work = EmptyCoroutineContext) { "one" }
+
+        assertFailsWith<CancellationException> { stopped.run() }
+
+        assertEquals(ImportOutcome.Running, store.runs.single().outcome)
+    }
+
+    private class DispatcherWatchingReader : SlipTextReader {
+        var readOn: ContinuationInterceptor? = null
+            private set
+
+        override suspend fun read(bytes: ByteArray): List<String> {
+            readOn = currentCoroutineContext()[ContinuationInterceptor]
+            return FakeSlipTextReader().read(bytes)
+        }
+    }
+
+    private class StoppedReader : SlipTextReader {
+        override suspend fun read(bytes: ByteArray): List<String> = throw CancellationException("worker stopped")
+    }
+
+    private class StoppedSource : SlipSource {
+        override suspend fun candidates(): List<SlipCandidate> = throw CancellationException("worker stopped")
+
+        override suspend fun bytesOf(id: String): ByteArray? = null
+
+        override suspend fun delete(id: String) = Unit
     }
 
     /** #26: a slip someone else's K PLUS saved, sent to you as a picture. */

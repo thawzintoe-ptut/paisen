@@ -11,9 +11,9 @@ import com.ptut.expense.data.local.entity.TransactionEntity
 import com.ptut.expense.data.repository.RoomLedgerArchive
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.domain.backup.BackupProblem
 import com.ptut.expense.domain.backup.BackupUnreadable
 import com.ptut.expense.domain.backup.LedgerBackup
-import com.ptut.expense.domain.backup.phrase
 import com.ptut.expense.domain.home.FakeHomeBook
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -71,7 +71,7 @@ class RoomLedgerArchiveTest {
 
         val failure = assertFailsWith<BackupUnreadable> { archive(table = FakeLedgerTable(byHand), homeBook = FakeHomeBook(rows = 1)).restore(kyatFile) }
 
-        assertEquals("This file counts in MMK. This phone counts in THB.", failure.message)
+        assertEquals(BackupProblem.OtherHome(file = "MMK", here = "THB"), failure.problem)
     }
 
     @Test
@@ -82,8 +82,8 @@ class RoomLedgerArchiveTest {
 
         assertFailsWith<BackupUnreadable> { archive(homeBook = FakeHomeBook(rows = 1)).preview(kyatFile) }
 
-        val phrase = archive(homeBook = FakeHomeBook()).preview(kyatFile).phrase()
-        assertTrue(phrase.contains("counts in MMK, Yangon days"), phrase)
+        val preview = archive(homeBook = FakeHomeBook()).preview(kyatFile)
+        assertEquals("MMK" to "Asia/Yangon", preview.homeCurrency to preview.homeZone)
     }
 
     @Test
@@ -178,7 +178,7 @@ class RoomLedgerArchiveTest {
 
         val failure = assertFailsWith<BackupUnreadable> { archive().restore(newer) }
 
-        assertTrue(failure.message!!.contains("format $later"), failure.message!!)
+        assertEquals(BackupProblem.OtherVersion(later), failure.problem)
     }
 
     @Test

@@ -27,13 +27,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.Sizes
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
+import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.format
@@ -84,7 +84,7 @@ fun ReviewView(
                 Column(modifier = Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.sm, bottom = Spacing.xs)) {
                     Text(
                         text = text.reviewHeadline(state.slips.size),
-                        style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Light),
+                        style = MaterialTheme.ptutType.pageTitle,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(

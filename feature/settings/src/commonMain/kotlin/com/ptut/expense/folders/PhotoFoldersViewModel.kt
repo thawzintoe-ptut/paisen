@@ -2,6 +2,7 @@ package com.ptut.expense.folders
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.folders.DeviceFolder
 import com.ptut.expense.domain.folders.FolderAccess
 import com.ptut.expense.domain.folders.FolderCatalog
@@ -11,7 +12,11 @@ import com.ptut.expense.domain.folders.WatchedFolder
 import com.ptut.expense.domain.folders.WatchedFolderRepository
 import com.ptut.expense.domain.folders.slipsRead
 import com.ptut.expense.domain.folders.watched
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +40,8 @@ class PhotoFoldersViewModel(
      */
     private val access: () -> FolderAccess = { FolderAccess(action = null, explanation = "") },
     private val chooser: FolderChooser = FolderChooser {},
+    /** Where a failed read or save is said. Null in a graph that binds none. */
+    private val toasts: ToastMessages? = null,
 ) : ViewModel() {
 
     private val available = MutableStateFlow<List<DeviceFolder>?>(null)
@@ -56,7 +63,7 @@ class PhotoFoldersViewModel(
     ) { offered, watched, ticks, platform -> state(offered, watched, ticks, platform) }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
             initialValue = state(offered = null, watched = emptyList(), ticks = null, platform = offer.value),
         )
 
@@ -65,19 +72,22 @@ class PhotoFoldersViewModel(
     }
 
     /** Called on start and whenever the screen comes back, so it follows the system settings. */
-    fun refresh() = viewModelScope.launch {
-        offer.value = access()
-        available.value = catalog.available()
-    }
+    fun refresh() = viewModelScope.launch { reread() }
 
     /**
      * Opens the platform's own way of reaching more pictures, then re-reads: whatever the reader
      * granted while they were away has to show up without them coming back a second time.
      */
     fun chooseMore() = viewModelScope.launch {
-        chooser.chooseMore()
-        offer.value = access()
-        available.value = catalog.available()
+        runSuspendCatching { chooser.chooseMore() }.onFailure { say(AppText.copy.settings.didNotWork) }
+        reread()
+    }
+
+    private suspend fun reread() {
+        runSuspendCatching {
+            offer.value = access()
+            available.value = catalog.available()
+        }.onFailure { say(AppText.copy.folders.notRead) }
     }
 
     /** A tick, held until SAVE. */
@@ -86,13 +96,20 @@ class PhotoFoldersViewModel(
         draft.value = if (id in now) now - id else now + id
     }
 
-    /** Applies every tick at once: the folders newly ticked are watched, the ones unticked dropped. */
+    /**
+     * Applies every tick at once: the folders newly ticked are watched, the ones unticked dropped.
+     * One folder failing does not stop the rest; the ticks stay so SAVE can retry the ones left.
+     */
     fun save() = viewModelScope.launch {
         val chosen = draft.value ?: return@launch
         val rows = uiState.value.rows
-        rows.filter { it.watched && it.id !in chosen }.forEach { folders.stopWatching(it.id) }
-        rows.filter { !it.watched && it.id in chosen }.forEach { folders.watch(it.id, it.name, it.path) }
-        draft.value = null
+        val dropped = rows.filter { it.watched && it.id !in chosen }.map { runSuspendCatching { folders.stopWatching(it.id) } }
+        val added = rows.filter { !it.watched && it.id in chosen }.map { runSuspendCatching { folders.watch(it.id, it.name, it.path) } }
+        if ((dropped + added).any { it.isFailure }) say(AppText.copy.folders.notSaved) else draft.value = null
+    }
+
+    private suspend fun say(text: String) {
+        toasts?.show(ToastMessage(text, tone = ToastTone.Error))
     }
 
     private fun ticks(): Set<String> = draft.value ?: uiState.value.rows.filter { it.watched }.map { it.id }.toSet()

@@ -4,11 +4,15 @@ import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.backup.BackupPreview
+import com.ptut.expense.domain.backup.BackupProblem
+import com.ptut.expense.domain.backup.BackupUnreadable
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.MergeReport
 import com.ptut.expense.domain.home.FakeHomeBook
 import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.files.LedgerFileStore
+import com.ptut.expense.platform.photos.PhotoAccessRequest
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -88,12 +92,62 @@ class OnboardingViewModelTest : ViewModelTest() {
         assertEquals(kyat, archive.homeAtRestore)
     }
 
-    private class FakeArchive : LedgerArchive {
+    /** The platform's own text is English and says nothing the reader can act on. */
+    @Test
+    fun `a restore that fails shows the copy and not the exception text`() = runTest {
+        val viewModel = OnboardingViewModel(onboarding, photoAccess, archive = FakeArchive(fails = IllegalStateException("database is locked")), files = FakeFiles())
+
+        viewModel.restore()
+        runCurrent()
+
+        assertEquals(AppText.copy.onboarding.restoreFailed, viewModel.restoreProblem.value)
+        assertFalse(viewModel.isRestoring.value)
+    }
+
+    @Test
+    fun `a file the archive refuses keeps the refusal copy`() = runTest {
+        val refusal = BackupUnreadable(BackupProblem.NotReadable)
+        val viewModel = OnboardingViewModel(onboarding, photoAccess, archive = FakeArchive(fails = refusal), files = FakeFiles())
+
+        viewModel.restore()
+        runCurrent()
+
+        assertEquals(AppText.copy.phrases.backupNotReadable, viewModel.restoreProblem.value)
+    }
+
+    @Test
+    fun `a photo dialog that throws says so and lets the reader tap again`() = runTest {
+        val flaky = FlakyPhotoAccess()
+        val viewModel = OnboardingViewModel(onboarding, flaky)
+
+        viewModel.requestPhotoAccess()
+        runCurrent()
+        assertEquals(AppText.copy.settings.didNotWork, viewModel.restoreProblem.value)
+        assertFalse(onboarding.isFinished.value)
+
+        viewModel.requestPhotoAccess()
+        runCurrent()
+        assertEquals(2, flaky.asks)
+        assertTrue(onboarding.isFinished.value)
+    }
+
+    /** Throws on the first ask, as a platform with no activity to show the dialog on would. */
+    private class FlakyPhotoAccess : PhotoAccessRequest {
+        var asks = 0
+            private set
+
+        override suspend fun ask() {
+            asks++
+            check(asks > 1) { "no activity" }
+        }
+    }
+
+    private class FakeArchive(private val fails: Exception? = null) : LedgerArchive {
         var homeAtRestore: HomeChoice? = null
 
         override suspend fun export(): String = ""
 
-        override suspend fun preview(json: String): BackupPreview = BackupPreview(transactions = 1, oldestEpochMillis = null, groups = 0, categories = 0, subCategories = 0, shopRules = 0)
+        override suspend fun preview(json: String): BackupPreview = fails?.let { throw it } ?: BackupPreview(transactions = 1, oldestEpochMillis = null, groups = 0, categories = 0, subCategories = 0, shopRules = 0)
 
         override suspend fun restore(json: String): MergeReport {
             homeAtRestore = Home.choice.value

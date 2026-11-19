@@ -7,7 +7,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -17,6 +21,7 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -87,6 +92,27 @@ class SkyControlsTest {
 
         onNodeWithText("Groceries").assertIsSelected()
         onNodeWithText("Transport").assertIsNotSelected().performClick()
+
+        assertEquals(1, taps)
+    }
+
+    @Test
+    fun aChoiceRowIsARadioButtonThatSaysWhetherItIsChosenAndReportsATap() = runComposeUiTest {
+        var taps = 0
+        setContent {
+            Sky {
+                Column {
+                    SkyChoiceRow(label = "USD", selected = true, onClick = {})
+                    SkyChoiceRow(label = "Never", selected = true, onClick = {}, mark = SkyChoiceMark.Word)
+                    SkyChoiceRow(label = "MMK", selected = false, onClick = { taps++ }, detail = "Heard online")
+                }
+            }
+        }
+
+        onNodeWithText("USD").assertIsSelected().assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton))
+        onNodeWithText("Never").assertIsSelected()
+        onAllNodesWithText("Chosen", useUnmergedTree = true).assertCountEquals(0)
+        onNodeWithText("MMK").assertIsNotSelected().performClick()
 
         assertEquals(1, taps)
     }

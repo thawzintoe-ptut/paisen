@@ -1,45 +1,17 @@
 package com.ptut.expense.sync
 
 import com.ptut.expense.data.local.dao.SharedDao
-import com.ptut.expense.data.local.entity.ExpenseShareEntity
-import com.ptut.expense.data.local.entity.ExpenseVersionEntity
-import com.ptut.expense.data.local.entity.GroupMemberEntity
-import com.ptut.expense.data.local.entity.PaymentRemovalEntity
-import com.ptut.expense.data.local.entity.RepeatRuleEntity
-import com.ptut.expense.data.local.entity.SharedGroupEntity
-import com.ptut.expense.data.local.entity.SharedPaymentEntity
-import com.ptut.expense.data.local.entity.SyncOutboxEntity
-import com.ptut.expense.data.repository.END_NEVER
-import com.ptut.expense.data.repository.KIND_GROUP
-import com.ptut.expense.data.repository.KIND_MEMBER
-import com.ptut.expense.data.repository.KIND_PAYMENT
-import com.ptut.expense.data.repository.KIND_PAYMENT_REMOVAL
-import com.ptut.expense.data.repository.KIND_REPEAT
-import com.ptut.expense.data.repository.KIND_VERSION
-import com.ptut.expense.data.repository.toDomain
-import com.ptut.expense.data.repository.toEntity
-import com.ptut.expense.domain.BangkokTime
-import com.ptut.expense.domain.shared.Currencies
-import com.ptut.expense.domain.shared.GroupType
-import com.ptut.expense.domain.shared.Member
-import com.ptut.expense.domain.shared.PaymentRemoval
-import com.ptut.expense.domain.shared.PromptPay
-import com.ptut.expense.domain.shared.RepeatRule
-import com.ptut.expense.domain.shared.SharedExpense
-import com.ptut.expense.domain.shared.SharedGroup
-import com.ptut.expense.domain.shared.SharedPayment
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.SharedRepository
-import com.ptut.expense.domain.shared.firstLastAdded
-import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.sync.auth.Account
 import com.ptut.expense.sync.auth.AuthException
 import com.ptut.expense.sync.auth.AuthRepository
 import com.ptut.expense.sync.auth.authTimeOf
-import com.ptut.expense.sync.push.PushNotice
 import com.ptut.expense.sync.push.PushNotices
 import com.ptut.expense.sync.push.PushRegistrar
 import com.ptut.expense.sync.push.PushSender
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
@@ -54,8 +26,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -83,6 +55,12 @@ class JoinException(message: String) : Exception(message)
 class ChangesWaiting(val count: Int) : Exception("$count changes waiting to sync")
 
 /**
+ * What one sync did. [groupsChanged]: a group came onto or went off this phone, so its repeat
+ * reminders can be rebuilt (#203). [failed]: a group, or the sign-in behind every call, could not be reached.
+ */
+data class SyncOutcome(val groupsChanged: Boolean, val failed: Boolean)
+
+/**
  * #189 and #190: keeps each shared group's log the same on every member's phone.
  *
  * Writes land in Room first and wait in the outbox; [syncAll] uploads them and pulls what other
@@ -108,41 +86,41 @@ class SharedSync internal constructor(
     val isSignedIn: Boolean get() = auth.account.value is Account.SignedIn
 
     private val failed = MutableStateFlow<Set<String>>(emptySet())
-    private val refused = MutableStateFlow<Map<String, Int>>(emptyMap())
     private val endedHere = MutableStateFlow(false)
     private val running = Mutex()
 
+    // In memory only, read and written under [running]: a new process checks everything once.
+    private var accountCheckedAt: Pair<String, Long>? = null
+
+    private val puller = GroupPuller(firestore, dao, clock) { (auth.account.value as? Account.SignedIn)?.uid }
+    private val pusher = OutboxPusher(firestore, dao, repository, clock, pushes, failed, ::account, ::newInvite)
+
     fun status(groupId: String): Flow<GroupSyncStatus> =
-        combine(repository.snapshot, dao.observeOutbox(), failed, refused, auth.account) { snapshot, outbox, failed, refused, account ->
+        combine(repository.snapshot, dao.observeOutbox(), failed, pusher.refused, auth.account) { snapshot, outbox, failed, refused, account ->
             val group = snapshot.group(groupId)
             val waiting = outbox.count { it.groupId == groupId }
-            val notTaken = refused[groupId] ?: 0
-            when {
-                group == null || !group.remote -> GroupSyncStatus(SyncHealth.Local, 0)
-                account !is Account.SignedIn -> GroupSyncStatus(SyncHealth.SignedOut, waiting, notTaken)
-                groupId in failed -> GroupSyncStatus(SyncHealth.Offline, waiting, notTaken)
-                waiting > 0 -> GroupSyncStatus(SyncHealth.Waiting, waiting, notTaken)
-                else -> GroupSyncStatus(SyncHealth.UpToDate, 0, notTaken)
-            }
+            health(remote = group?.remote == true, account is Account.SignedIn, groupId in failed, waiting, notTaken = refused[groupId] ?: 0)
         }
 
     /** #196: the same, across every shared group, for the Shared tab's one line. */
     fun overallStatus(): Flow<GroupSyncStatus> =
-        combine(repository.snapshot, dao.observeOutbox(), failed, refused, auth.account) { snapshot, outbox, failed, refused, account ->
+        combine(repository.snapshot, dao.observeOutbox(), failed, pusher.refused, auth.account) { snapshot, outbox, failed, refused, account ->
             val remote = snapshot.groups.filter { it.remote }.map { it.id }.toSet()
             val waiting = outbox.count { it.groupId in remote }
             val notTaken = refused.filterKeys { it in remote }.values.sum()
-            when {
-                remote.isEmpty() -> GroupSyncStatus(SyncHealth.Local, 0)
-                account !is Account.SignedIn -> GroupSyncStatus(SyncHealth.SignedOut, waiting, notTaken)
-                failed.any { it in remote } -> GroupSyncStatus(SyncHealth.Offline, waiting, notTaken)
-                waiting > 0 -> GroupSyncStatus(SyncHealth.Waiting, waiting, notTaken)
-                else -> GroupSyncStatus(SyncHealth.UpToDate, 0, notTaken)
-            }
+            health(remote = remote.isNotEmpty(), account is Account.SignedIn, failed.any { it in remote }, waiting, notTaken)
         }
 
+    private fun health(remote: Boolean, signedIn: Boolean, failed: Boolean, waiting: Int, notTaken: Int): GroupSyncStatus = when {
+        !remote -> GroupSyncStatus(SyncHealth.Local, 0)
+        !signedIn -> GroupSyncStatus(SyncHealth.SignedOut, waiting, notTaken)
+        failed -> GroupSyncStatus(SyncHealth.Offline, waiting, notTaken)
+        waiting > 0 -> GroupSyncStatus(SyncHealth.Waiting, waiting, notTaken)
+        else -> GroupSyncStatus(SyncHealth.UpToDate, 0, notTaken)
+    }
+
     /** The group screen has said it once; the count starts again from zero. */
-    fun acknowledgeRefused(groupId: String) = refused.update { it - groupId }
+    fun acknowledgeRefused(groupId: String) = pusher.acknowledgeRefused(groupId)
 
     /** True once a newer sign-in on another phone signed this one out, until the notice is read. */
     val signedOutElsewhere: StateFlow<Boolean> get() = endedHere
@@ -156,25 +134,63 @@ class SharedSync internal constructor(
      * does not hold yet. Quiet when signed out or not set up. True when a group came onto or went
      * off this phone, so its repeat reminders can be rebuilt (#203).
      */
-    suspend fun syncAll(): Boolean {
-        if (!available || auth.account.value !is Account.SignedIn) return false
+    suspend fun syncAll(): Boolean = syncAllOutcome().groupsChanged
+
+    /** [syncAll], also saying whether it failed, so a poll can wait longer before the next. */
+    suspend fun syncAllOutcome(): SyncOutcome = synced { account ->
+        // The session check and the restore query cost reads on every poll; once in a while is enough.
+        val mine = if (accountCheckDue(account.uid)) {
+            if (!holdsSession(account.uid)) return@synced SyncOutcome(groupsChanged = endHere(), failed = false)
+            memberships(account.uid)?.also { accountCheckedAt = account.uid to now() }
+        } else {
+            null
+        }
+        val docs = mine.orEmpty().associateBy { it.id }
+        val tried = mine?.let { restore(it, docs) }.orEmpty()
+        val restored = tried.filterValues { it }.keys
+        var changed = restored.isNotEmpty()
+        var anyFailed = false in tried.values
+        (dao.remoteGroupIds() - restored).forEach { groupId ->
+            val pulled = attempt(groupId) { if (puller.pull(groupId, docs[groupId]) == PullResult.Removed) changed = true }
+            if (!pulled) anyFailed = true
+        }
+        SyncOutcome(changed, anyFailed)
+    }
+
+    /**
+     * The group screen's poll: uploads what waits and pulls [groupId] alone. True, as for [syncAll],
+     * when the group went off this phone.
+     */
+    suspend fun syncGroup(groupId: String): Boolean = syncGroupOutcome(groupId).groupsChanged
+
+    /** [syncGroup], also saying whether it failed, so a poll can wait longer before the next. */
+    suspend fun syncGroupOutcome(groupId: String): SyncOutcome = synced {
+        var removed = false
+        var pulled = true
+        if (groupId in dao.remoteGroupIds()) pulled = attempt(groupId) { if (puller.pull(groupId) == PullResult.Removed) removed = true }
+        SyncOutcome(removed, failed = !pulled)
+    }
+
+    private suspend fun synced(work: suspend (Account.SignedIn) -> SyncOutcome): SyncOutcome {
+        if (!available || auth.account.value !is Account.SignedIn) return QUIET
         return running.withLock {
             // Read again inside: a sign-out or account deletion may have finished while this waited.
-            val account = auth.account.value as? Account.SignedIn ?: return@withLock false
+            val account = auth.account.value as? Account.SignedIn ?: return@withLock QUIET
             try {
                 forgetOtherAccounts(account.uid)
-                push()
-                if (!holdsSession(account.uid)) return@withLock endHere()
-                val restored = restore(account.uid)
-                var changed = restored.isNotEmpty()
-                (dao.remoteGroupIds() - restored).forEach { groupId -> attempt(groupId) { if (!pull(groupId)) changed = true } }
-                changed
+                pusher.push()
+                work(account)
             } catch (noToken: AuthException) {
                 // #218: no group says "Up to date" when the sign-in behind every call has failed.
                 failAll()
-                false
+                SyncOutcome(groupsChanged = false, failed = true)
             }
         }
+    }
+
+    private fun accountCheckDue(uid: String): Boolean {
+        val (checkedUid, at) = accountCheckedAt ?: return true
+        return checkedUid != uid || now() - at >= ACCOUNT_CHECK_EVERY.inWholeMilliseconds
     }
 
     /**
@@ -191,7 +207,7 @@ class SharedSync internal constructor(
                 .debounce(UPLOAD_SOON)
                 .filter { it.isNotEmpty() }
                 // As the polling does: one failed upload must not stop every later one.
-                .collect { runCatching { uploadQueued() } }
+                .collect { runSuspendCatching { uploadQueued() } }
         }
     }
 
@@ -200,7 +216,7 @@ class SharedSync internal constructor(
         try {
             running.withLock {
                 forgetOtherAccounts(account.uid)
-                push()
+                pusher.push()
             }
         } catch (noToken: AuthException) {
             failAll()
@@ -229,7 +245,7 @@ class SharedSync internal constructor(
      */
     suspend fun signOut() {
         running.withLock {
-            push()
+            pusher.push()
             val waiting = waitingToSend()
             if (waiting > 0) throw ChangesWaiting(waiting)
             forgetSharedGroups()
@@ -244,7 +260,7 @@ class SharedSync internal constructor(
      */
     suspend fun share(groupId: String): String {
         val account = signedIn()
-        val group = requireNotNull(groupOf(groupId)) { "No group $groupId" }
+        val group = requireNotNull(dao.groupOf(groupId)) { "No group $groupId" }
         running.withLock {
             if (!group.remote) {
                 group.meMemberId?.let { dao.claimMember(it, account.name.firstWord(), account.uid) }
@@ -257,9 +273,9 @@ class SharedSync internal constructor(
                 )
                 val local = requireNotNull(dao.group(groupId))
                 dao.upsertGroup(local.copy(remote = true, creatorUid = account.uid))
-                queueWholeGroup(groupId)
+                pusher.queueWholeGroup(groupId)
                 // Nobody else is in it yet, so its first upload tells no one.
-                push(quietFor = groupId)
+                pusher.push(quietFor = groupId)
             }
         }
         return group.inviteCode?.takeIf { group.inviteActive } ?: newInvite(groupId)
@@ -298,7 +314,7 @@ class SharedSync internal constructor(
         try {
             if (!firestore.create("groups/$groupId/joins", account.uid, join)) firestore.patch("groups/$groupId/joins/${account.uid}", join)
         } catch (refused: FirestoreException) {
-            if (refused.status == FORBIDDEN) throw JoinException(EXPIRED) else throw refused
+            if (refused.status == FirestoreStatus.FORBIDDEN) throw JoinException(EXPIRED) else throw refused
         }
         val members = firestore.list("groups/$groupId/members")
         val alreadyMine = members.firstOrNull { it.fields.string("claimedByUid") == account.uid }
@@ -334,10 +350,10 @@ class SharedSync internal constructor(
         try {
             firestore.commit(listOf(claim, firestore.appendWrite("groups/$groupId", "memberUids", listOf(account.uid))))
         } catch (refused: FirestoreException) {
-            if (refused.status != FORBIDDEN) throw refused
+            if (refused.status != FirestoreStatus.FORBIDDEN) throw refused
             throw JoinException(if (memberId != null && claimedSince(groupId, memberId)) AppText.copy.shared.sync.nameTaken else EXPIRED)
         }
-        running.withLock { pull(groupId, meMemberId = mine) }
+        running.withLock { puller.pull(groupId, meMemberId = mine) }
         val name = choice.mine?.second ?: choice.names.firstOrNull { it.first == memberId }?.second ?: account.name.firstWord()
         pushes?.tell(groupId, PushNotices(choice.groupName, name).joined())
         return groupId
@@ -356,10 +372,10 @@ class SharedSync internal constructor(
      * documents (its rules delete nothing); nobody can open them from the app again.
      */
     suspend fun deleteForEveryone(groupId: String) {
-        signedIn()
+        account()
         val group = requireNotNull(dao.group(groupId)) { "No group $groupId" }
         // Before the write: the Worker sends nothing for a group already deleted.
-        noticesFor(groupId)?.deleted()?.let { pushes?.tellFirst(groupId, it) }
+        pusher.noticesFor(groupId)?.deleted()?.let { pushes?.tellFirst(groupId, it) }
         group.inviteCode?.let { firestore.patch("invites/$it", mapOf("active" to false)) }
         firestore.patch("groups/$groupId", mapOf("deleted" to true, "inviteActive" to false))
         running.withLock { dao.forgetGroup(groupId) }
@@ -370,22 +386,17 @@ class SharedSync internal constructor(
      * What waits is sent first; unless [dropUnsent], leaving stops rather than lose it (#218).
      */
     suspend fun leaveGroup(groupId: String, dropUnsent: Boolean = false) {
-        val account = signedIn()
+        val account = account()
         if (!dropUnsent) {
             val waiting = running.withLock {
-                push()
+                pusher.push()
                 dao.outbox().count { it.groupId == groupId }
             }
             if (waiting > 0) throw ChangesWaiting(waiting)
         }
         val me = dao.group(groupId)?.meMemberId
-        noticesFor(groupId)?.left()?.let { pushes?.tellFirst(groupId, it) }
-        firestore.commit(
-            listOfNotNull(
-                me?.let { firestore.updateWrite("groups/$groupId/members/$it", mapOf("claimedByUid" to null, "promptPay" to null)) },
-                firestore.removeWrite("groups/$groupId", "memberUids", listOf(account.uid)),
-            ),
-        )
+        pusher.noticesFor(groupId)?.left()?.let { pushes?.tellFirst(groupId, it) }
+        firestore.commit(firestore.leaveWrites(groupId, me, account.uid))
         running.withLock { dao.forgetGroup(groupId) }
     }
 
@@ -395,7 +406,7 @@ class SharedSync internal constructor(
      */
     suspend fun deleteAccount() = running.withLock {
         // What waits goes first, as on sign-out: after the account is gone nothing can send it.
-        push()
+        pusher.push()
         val waiting = waitingToSend()
         if (waiting > 0) throw ChangesWaiting(waiting)
         leaveAll()
@@ -409,28 +420,27 @@ class SharedSync internal constructor(
      * cannot be left stops the deletion, or the dead account would hold its name there for good.
      */
     private suspend fun leaveAll() {
-        val account = signedIn()
+        val account = account()
         dao.remoteGroupIds().forEach { groupId ->
-            val me = dao.group(groupId)?.meMemberId
-            val writes = listOfNotNull(
-                me?.let { firestore.updateWrite("groups/$groupId/members/$it", mapOf("claimedByUid" to null, "promptPay" to null)) },
-                firestore.removeWrite("groups/$groupId", "memberUids", listOf(account.uid)),
-            )
+            val writes = firestore.leaveWrites(groupId, dao.group(groupId)?.meMemberId, account.uid)
             try {
-                noticesFor(groupId)?.left()?.let { pushes?.tellFirst(groupId, it) }
+                pusher.noticesFor(groupId)?.left()?.let { pushes?.tellFirst(groupId, it) }
                 firestore.commit(writes)
             } catch (refused: FirestoreException) {
                 // Not a member any more (left elsewhere, or taken out by the creator): nothing to leave.
-                if (refused.status != FORBIDDEN) throw refused
+                if (refused.status != FirestoreStatus.FORBIDDEN) throw refused
             }
         }
-        runCatching { firestore.delete("sessions/${account.uid}") }
+        runSuspendCatching { firestore.delete("sessions/${account.uid}") }
     }
 
     /** #187: shared groups leave this phone with the account. Your own spending stays. */
     private suspend fun forgetSharedGroups() {
         dao.remoteGroupIds().forEach { dao.forgetGroup(it) }
         failed.value = emptySet()
+        puller.forget()
+        // Signing in again brings the groups back at once rather than at the next check.
+        accountCheckedAt = null
     }
 
     /**
@@ -470,15 +480,16 @@ class SharedSync internal constructor(
 
     /**
      * Groups the account is in that this phone does not hold: after signing in again, on a new
-     * phone, or after a reinstall (#187). Returns the ones brought back.
+     * phone, or after a reinstall (#187). Each one tried, and whether it was brought back.
      */
-    private suspend fun restore(uid: String): Set<String> {
-        val mine = try {
-            firestore.whereContains("groups", "memberUids", uid)
-        } catch (unknown: FirestoreException) {
-            return emptySet()
-        }
-        return groupsToRestore(mine, dao.remoteGroupIds().toSet()).filter { groupId -> attempt(groupId) { pull(groupId) } }.toSet()
+    private suspend fun restore(mine: List<FirestoreDoc>, docs: Map<String, FirestoreDoc>): Map<String, Boolean> =
+        groupsToRestore(mine, dao.remoteGroupIds().toSet()).associateWith { groupId -> attempt(groupId) { puller.pull(groupId, docs[groupId]) } }
+
+    /** Every group document the account is in, or null when the query failed. */
+    private suspend fun memberships(uid: String): List<FirestoreDoc>? = try {
+        firestore.whereContains("groups", "memberUids", uid)
+    } catch (unknown: FirestoreException) {
+        null
     }
 
     private suspend fun waitingToSend(): Int {
@@ -487,514 +498,40 @@ class SharedSync internal constructor(
     }
 
     /**
-     * #194: a change the server refuses for good (a 4xx other than an expired session, a timeout
-     * or a rate limit) leaves the outbox and is counted once; anything that may pass later stays.
-     * A row that has to wait holds back the rest of its group, so a group's changes go up in the
-     * order they were made and no entry lands before the name that signs it.
+     * Runs [work] for a group and remembers whether it reached Firestore, for the status line. Any
+     * failure but a lost sign-in stays with this group, so the next one still syncs.
      */
-    private suspend fun push(quietFor: String? = null) {
-        val held = mutableSetOf<String>()
-        for (row in dao.outbox()) {
-            if (row.groupId in held) continue
-            try {
-                val notice = upload(row, notify = row.groupId != quietFor)
-                dao.dequeue(row.id, row.createdAtEpochMillis)
-                failed.update { it - row.groupId }
-                notice?.let { pushes?.tell(row.groupId, it) }
-            } catch (refusal: FirestoreException) {
-                if (refusal.isPermanent()) {
-                    dao.dequeue(row.id, row.createdAtEpochMillis)
-                    takeBack(row)
-                    refused.update { it + (row.groupId to (it[row.groupId] ?: 0) + 1) }
-                } else {
-                    failed.update { it + row.groupId }
-                    held += row.groupId
-                }
-            }
-        }
-    }
-
-    /**
-     * A log row the group refused for good reaches no other phone, so it leaves this one too and
-     * the balances here match everyone's. A group or name change needs nothing: the next pull
-     * writes the server's values over it once it no longer waits.
-     */
-    private suspend fun takeBack(row: SyncOutboxEntity) {
-        when (row.kind) {
-            KIND_VERSION -> dao.takeBackVersion(row.rowId)
-            KIND_PAYMENT -> dao.deletePayment(row.rowId)
-            KIND_PAYMENT_REMOVAL -> dao.deletePaymentRemoval(row.rowId)
-        }
-    }
-
-    /**
-     * A new name is created whole. One already on the server changes field by field, each through
-     * the one rule that allows it, so a rename, a removal or a PromptPay ID is never refused whole.
-     */
-    private suspend fun uploadMember(group: SharedGroup, member: Member, uid: String, notices: PushNotices?): PushNotice? {
-        val own = member.id == group.meMemberId
-        // #199: only this phone's own member carries a PromptPay ID; nobody writes another's.
-        val promptPay = if (own) mapOf("promptPay" to member.promptPayId) else emptyMap()
-        val fields = mapOf("name" to member.name, "claimedByUid" to member.claimedByUid, "archived" to member.archived, "createdAt" to now()) + promptPay
-        if (firestore.create("groups/${group.id}/members", member.id, fields)) return notices?.personAdded(member.name)?.takeUnless { own }
-        val path = "groups/${group.id}/members/${member.id}"
-        val creator = group.creatorUid == uid
-        // Read first to word the notice (a PromptPay ID alone tells nobody), and to learn whose
-        // account a name the creator removes was held by.
-        val before = if (notices != null || (creator && member.archived)) firestore.get(path)?.fields else null
-        firestore.patch(path, mapOf("name" to member.name))
-        // Only the creator removes a name (#190), so no other phone sends one back.
-        if (creator) archive(group.id, path, member.archived, holder = before?.string("claimedByUid")?.takeIf { it != uid })
-        if (own) firestore.patch(path, promptPay)
-        if (notices == null || before == null) return null
-        val wasArchived = before.bool("archived")
-        return when {
-            creator && member.archived && !wasArchived -> notices.personRemoved(member.name)
-            creator && !member.archived && wasArchived -> notices.personAdded(member.name)
-            before.string("name") != member.name -> notices.nameChanged()
-            else -> null
-        }
-    }
-
-    /**
-     * Removing a name someone claimed also takes their account out of the group, after a new invite
-     * replaces the live one, so they can no longer read it, write to it or come back on the old link.
-     */
-    private suspend fun archive(groupId: String, path: String, archived: Boolean, holder: String?) {
-        if (!archived || holder == null) {
-            firestore.patch(path, mapOf("archived" to archived))
-            return
-        }
-        if (dao.group(groupId)?.inviteActive == true) newInvite(groupId)
-        // One commit: the rules refuse a claimed name archived without its account taken out.
-        firestore.commit(
-            listOf(
-                firestore.updateWrite(path, mapOf("archived" to true, "claimedByUid" to null, "promptPay" to null)),
-                firestore.removeWrite("groups/$groupId", "memberUids", listOf(holder)),
-            ),
-        )
-    }
-
-    /** The notice for what went up, or null when it was already there, tells nobody, or [notify] is off. */
-    private suspend fun upload(row: SyncOutboxEntity, notify: Boolean): PushNotice? {
-        // Room, not the snapshot: a row saved a moment ago may not be in the snapshot yet, and a
-        // null here takes it out of the outbox for good.
-        val group = groupOf(row.groupId) ?: return null
-        val uid = signedIn().uid
-        // Null when nothing will be sent, so the reads that word a notice are skipped too.
-        val notices = pushes?.takeIf { notify }?.let { noticesFor(group) }
-        return when (row.kind) {
-            KIND_GROUP -> {
-                // Only a new name is news; an icon or the debt setting tells nobody.
-                val before = notices?.let { firestore.get("groups/${group.id}")?.fields?.string("name") }
-                firestore.patch("groups/${group.id}", group.fields())
-                notices?.takeIf { before != null && before != group.name }?.renamed()
-            }
-
-            KIND_MEMBER -> group.member(row.rowId)?.let { member -> uploadMember(group, member, uid, notices) }
-
-            // The server stamps each entry, so every phone pulls only what came after its last pull.
-            KIND_VERSION -> dao.version(row.rowId)?.let { it.toDomain(dao.sharesOf(it.versionId)) }?.let { version ->
-                val created = firestore.createStamped("groups/${group.id}/entries", version.versionId, version.fields(uid, group.currency), SYNCED_AT)
-                notices?.takeIf { created }?.expense(version, dao.versionsOf(version.id).mapNotNull { it.toDomain(emptyList()) })
-            }
-
-            KIND_PAYMENT -> dao.payment(row.rowId)?.toDomain()?.let { payment ->
-                val created = firestore.createStamped("groups/${group.id}/entries", payment.id, payment.fields(uid, group.currency), SYNCED_AT)
-                notices?.takeIf { created }?.payment(payment)
-            }
-
-            // #218: a removal is a document of its own; the payment's document never changes.
-            KIND_PAYMENT_REMOVAL -> dao.paymentRemoval(row.rowId)?.toDomain()?.let { removal ->
-                val created = firestore.createStamped("groups/${group.id}/entries", removal.id, removal.fields(uid), SYNCED_AT)
-                notices?.takeIf { created }?.paymentRemoval(removal)
-            }
-
-            // #182: the template only. Each phone keeps its own progress and reminder choice. The
-            // creation time it sends is the stored one, which the rules require to stay put.
-            KIND_REPEAT -> dao.repeat(row.rowId)?.toDomain()?.let { rule ->
-                val path = "groups/${group.id}/repeats/${rule.id}"
-                val isNew = notices?.let { firestore.get(path) == null }
-                firestore.upsertStamped(path, rule.fields(uid), SYNCED_AT)
-                isNew?.let { notices.repeat(rule, it) }
-            }
-
-            else -> null
-        }
-    }
-
-    /** A group and its members as Room holds them now, which the snapshot may not show yet. */
-    private suspend fun groupOf(groupId: String): SharedGroup? = dao.group(groupId)?.toDomain(dao.membersOf(groupId))
-
-    private fun noticesFor(group: SharedGroup): PushNotices {
-        // The name this phone's member has in the group, which is how the others see it.
-        val actor = group.meMemberId?.let(group::member)?.name ?: signedIn().name.firstWord()
-        return PushNotices(group.name, actor, group.members, money = group.moneyFormat())
-    }
-
-    private fun noticesFor(groupId: String): PushNotices? = pushes?.let { repository.snapshot.value.group(groupId)?.let(::noticesFor) }
-
-    /** Everything another member's phone has written, added to this one. [meMemberId] is set when joining. */
-
-    /** False when the group was deleted for everyone, or this account was taken out of it, and it has gone from this phone. */
-    private suspend fun pull(groupId: String, meMemberId: String? = null): Boolean {
-        val remote = try {
-            firestore.get("groups/$groupId")
-        } catch (refused: FirestoreException) {
-            // The creator took this account out of the group: nothing in it can be read here any more.
-            if (refused.status != FORBIDDEN) throw refused
-            dao.forgetGroup(groupId)
-            return false
-        } ?: return true
-        val local = dao.group(groupId)
-        val fields = remote.fields
-        // The creator deleted it for everyone: it goes from this phone too. Your own spending stays.
-        if (fields.bool("deleted")) {
-            dao.forgetGroup(groupId)
-            return false
-        }
-        // A row changed here and not yet uploaded keeps this phone's values: the server's copy is
-        // the older one until the outbox sends it, so a pull in between must not undo the edit.
-        val kept = local?.takeIf { "$KIND_GROUP:$groupId" in pendingIn(groupId) }
-        // #48: set when the group was made and never changed; a group from before #48 is baht.
-        val currency = fields.string("currency") ?: local?.currency ?: Currencies.Thb.code
-        val pulledUpTo = PullMark.kept(local?.currency, local?.lastSyncedAtEpochMillis, currency)
-        val members = firestore.list("groups/$groupId/members")
-        val uid = (auth.account.value as? Account.SignedIn)?.uid
-        dao.upsertGroup(
-            SharedGroupEntity(
-                id = groupId,
-                name = kept?.name ?: fields.string("name") ?: local?.name ?: "Group",
-                type = kept?.type ?: fields.string("type")?.let(::knownGroupType) ?: local?.type ?: GroupType.Other.name,
-                icon = kept?.icon ?: fields.string("icon") ?: local?.icon ?: "group",
-                simplifyDebts = kept?.simplifyDebts ?: fields["simplifyDebts"] as? Boolean ?: true,
-                createdAtEpochMillis = fields.long("createdAt") ?: local?.createdAtEpochMillis ?: now(),
-                // A group brought back after signing in again finds "you" by the name this account claimed.
-                meMemberId = meMemberId ?: local?.meMemberId ?: uid?.let { claimedBy(members, it) },
-                remote = true,
-                creatorUid = fields.string("creatorUid"),
-                inviteCode = fields.string("inviteCode"),
-                inviteActive = fields.bool("inviteActive"),
-                // Moves only in markSynced, once the log is in: a pull that fails before then starts here again.
-                lastSyncedAtEpochMillis = pulledUpTo,
-                // This phone's own mark, never on the server: a pull must not reset it.
-                lastSeenAtEpochMillis = local?.lastSeenAtEpochMillis,
-                currency = currency,
-            ),
-        )
-        val known = dao.membersOf(groupId).associateBy { it.id }
-        val membersPending = pendingIn(groupId)
-        dao.upsertMembers(
-            members.filterNot { "$KIND_MEMBER:${it.id}" in membersPending }.map { doc ->
-                GroupMemberEntity(
-                    id = doc.id,
-                    groupId = groupId,
-                    name = doc.fields.string("name") ?: known[doc.id]?.name ?: "Someone",
-                    personId = known[doc.id]?.personId,
-                    archived = doc.fields.bool("archived"),
-                    createdAtEpochMillis = doc.fields.long("createdAt") ?: known[doc.id]?.createdAtEpochMillis ?: now(),
-                    claimedByUid = doc.fields.string("claimedByUid"),
-                    // #199: an ID counts only on a claimed name; one on an unclaimed name is ignored.
-                    promptPayId = doc.fields.string("promptPay")?.let(PromptPay::normalize)?.takeIf { doc.fields.string("claimedByUid") != null },
-                )
-            },
-        )
-        val since = pullSince(pulledUpTo)
-        val log = if (since == null) wholeLog(groupId) else newerLog(groupId, since)
-        // #48: read with the key the group's money names, so a baht amount an older build wrote into a
-        // kyat group is skipped rather than taken as kyat.
-        val amountKey = WireAmount.key(dao.group(groupId)?.currency ?: Currencies.Thb.code)
-        log.entries.forEach { doc -> receive(groupId, doc, amountKey) }
-        log.repeats.forEach { doc -> receiveRepeat(groupId, doc) }
-        dao.markSynced(groupId, log.readTimeEpochMillis ?: now())
-        return true
-    }
-
-    private class PulledLog(val entries: List<FirestoreDoc>, val repeats: List<FirestoreDoc>, val readTimeEpochMillis: Long?)
-
-    /** A group's first pull on this phone: everything, also documents written before [SYNCED_AT] existed. */
-    private suspend fun wholeLog(groupId: String): PulledLog {
-        // The server's clock, from a query that matches nothing, read before the lists: an entry that
-        // lands while they load is newer than it, so the next pull takes it.
-        val readTime = firestore.changedSince("groups/$groupId", "entries", SYNCED_AT, FAR_FUTURE_MILLIS).readTimeEpochMillis
-        val entries = firestore.list("groups/$groupId/entries")
-        val repeats = firestore.list("groups/$groupId/repeats")
-        return PulledLog(entries, repeats, readTime)
-    }
-
-    /** Later pulls: only what the server stamped after [since]. The log only grows, so the rest is here. */
-    private suspend fun newerLog(groupId: String, since: Long): PulledLog {
-        val entries = firestore.changedSince("groups/$groupId", "entries", SYNCED_AT, since)
-        val repeats = firestore.changedSince("groups/$groupId", "repeats", SYNCED_AT, since)
-        return PulledLog(entries.docs, repeats.docs, listOfNotNull(entries.readTimeEpochMillis, repeats.readTimeEpochMillis).minOrNull())
-    }
-
-    /** A repeat another member set up or changed. This phone's progress and reminder stay its own. */
-    private suspend fun receiveRepeat(groupId: String, doc: FirestoreDoc) {
-        val f = doc.fields
-        val local = dao.repeat(doc.id)
-        val rule = runCatching {
-            RepeatRuleEntity(
-                id = doc.id,
-                groupId = groupId,
-                kind = f.string("kind") ?: return,
-                frequency = f.string("frequency") ?: return,
-                startDate = f.string("start") ?: return,
-                endKind = f.string("endKind") ?: END_NEVER,
-                endDate = f.string("endDate"),
-                endTimes = f.int("endTimes"),
-                remind = local?.remind ?: true,
-                active = f.bool("active"),
-                lastAdded = local?.lastAdded,
-                description = f.string("description").orEmpty(),
-                categoryId = f.string("categoryId"),
-                currency = f.string("currency") ?: return,
-                amountMinor = f.long("amountMinor") ?: return,
-                rateUnscaled = f.long("rateUnscaled"),
-                rateScale = f.int("rateScale"),
-                payerMemberId = f.string("payerMemberId") ?: return,
-                splitMode = f.string("splitMode") ?: return,
-                weights = f.string("weights").orEmpty(),
-                createdAtEpochMillis = f.long("createdAt") ?: now(),
-            ).also { it.toDomain() }
-        }.getOrNull() ?: return
-        // The payer and every weight must be people in this group, or the repeat is not taken.
-        val members = dao.membersOf(groupId).map { it.id }.toSet()
-        val domain = rule.toDomain()
-        if (domain.payerMemberId !in members || !members.containsAll(domain.weights.keys)) return
-        val today = clock.now().toLocalDateTime(BangkokTime).date
-        // Checked last, right before the write, so an edit saved during this pull is not undone.
-        if ("$KIND_REPEAT:${doc.id}" in pendingIn(groupId)) return
-        dao.upsertRepeat(rule.copy(lastAdded = local?.lastAdded ?: domain.firstLastAdded(today)?.toString()))
-    }
-
-    /** Outbox ids ("repeat:<id>", "member:<id>"…) for [groupId]: local changes not uploaded yet. */
-    private suspend fun pendingIn(groupId: String): Set<String> = dao.outbox().filter { it.groupId == groupId }.map { it.id }.toSet()
-
-    private suspend fun receive(groupId: String, doc: FirestoreDoc, amountKey: String) {
-        val f = doc.fields
-        when (f.string("kind")) {
-            KIND_VERSION -> {
-                val version = ExpenseVersionEntity(
-                    versionId = doc.id,
-                    expenseId = f.string("expenseId") ?: return,
-                    groupId = groupId,
-                    version = f.int("version") ?: return,
-                    description = f.string("description").orEmpty(),
-                    occurredAtEpochMillis = f.long("occurredAt") ?: return,
-                    categoryId = f.string("categoryId"),
-                    subCategoryId = f.string("subCategoryId"),
-                    note = f.string("note"),
-                    currency = f.string("currency") ?: return,
-                    amountMinor = f.long("amountMinor") ?: return,
-                    rateUnscaled = f.long("rateUnscaled"),
-                    rateScale = f.int("rateScale"),
-                    amountSatang = f.long(amountKey) ?: return,
-                    payerMemberId = f.string("payerMemberId") ?: return,
-                    splitMode = f.string("splitMode") ?: return,
-                    authorMemberId = f.string("authorMemberId"),
-                    createdAtEpochMillis = f.long("createdAt") ?: return,
-                    removed = f.bool("removed"),
-                    cause = f.string("cause"),
-                )
-                val shares = f.list("shares").mapNotNull { share ->
-                    val s = share.asFields()
-                    ExpenseShareEntity(
-                        versionId = doc.id,
-                        memberId = s.string("memberId") ?: return@mapNotNull null,
-                        weight = s.long("weight") ?: 0L,
-                        amountMinor = s.long("amountMinor") ?: 0L,
-                        amountSatang = s.long(amountKey) ?: 0L,
-                    )
-                }
-                // A split mode or rate this build cannot read is not taken: stored, it would stop every launch.
-                // Nor is a split whose parts don't add up to the total: the balances would gain money from it.
-                if (version.toDomain(shares) != null && addsUp(version, shares)) dao.receiveVersion(version, shares)
-            }
-
-            KIND_PAYMENT -> {
-                val payment = SharedPaymentEntity(
-                    id = doc.id,
-                    groupId = groupId,
-                    fromMemberId = f.string("fromMemberId") ?: return,
-                    toMemberId = f.string("toMemberId") ?: return,
-                    amountSatang = f.long(amountKey) ?: return,
-                    method = f.string("method") ?: return,
-                    occurredAtEpochMillis = f.long("occurredAt") ?: return,
-                    authorMemberId = f.string("authorMemberId"),
-                    createdAtEpochMillis = f.long("createdAt") ?: return,
-                )
-                val real = payment.amountSatang > 0 && payment.fromMemberId != payment.toMemberId
-                if (real && payment.toDomain() != null) dao.insertPaymentIfNew(payment)
-            }
-
-            KIND_PAYMENT_REMOVAL -> dao.insertPaymentRemovalIfNew(
-                PaymentRemovalEntity(
-                    id = doc.id,
-                    groupId = groupId,
-                    paymentId = f.string("paymentId") ?: return,
-                    removed = f.bool("removed"),
-                    authorMemberId = f.string("authorMemberId"),
-                    createdAtEpochMillis = f.long("createdAt") ?: return,
-                ),
-            )
-        }
-    }
-
-    /** From Room, as [upload] reads them: what was saved just before Share may not be in the snapshot yet. */
-    private suspend fun queueWholeGroup(groupId: String) {
-        val at = now()
-        // The names go a moment earlier: the rules check each entry's author against a name already there.
-        val after = at + 1
-        val ids = listOf(groupId)
-        dao.queue(
-            dao.membersOf(groupId).map { SyncOutboxEntity("$KIND_MEMBER:${it.id}", groupId, KIND_MEMBER, it.id, at) } +
-                dao.versionsIn(ids).map { SyncOutboxEntity("$KIND_VERSION:${it.versionId}", groupId, KIND_VERSION, it.versionId, after) } +
-                dao.paymentsIn(ids).map { SyncOutboxEntity("$KIND_PAYMENT:${it.id}", groupId, KIND_PAYMENT, it.id, after) } +
-                dao.repeatsIn(ids).map { SyncOutboxEntity("$KIND_REPEAT:${it.id}", groupId, KIND_REPEAT, it.id, after) },
-        )
-    }
-
-    /** Runs [work] for a group and remembers whether it reached Firestore, for the status line. */
     private suspend fun attempt(groupId: String, work: suspend () -> Unit): Boolean = try {
         work()
         failed.update { it - groupId }
         true
-    } catch (failure: FirestoreException) {
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (noToken: AuthException) {
+        throw noToken
+    } catch (failure: Exception) {
         failed.update { it + groupId }
         false
     }
 
+    /** For sharing and joining, whose screens say "sign in to share". */
     private fun signedIn(): Account.SignedIn = auth.account.value as? Account.SignedIn ?: throw JoinException(AppText.copy.shared.sync.signInToShare)
+
+    /** For everything else: a sign-out midway fails the sync as a lost session does, not as a join. */
+    private fun account(): Account.SignedIn = auth.account.value as? Account.SignedIn ?: throw AuthException("Not signed in", sessionEnded = true)
 
     private fun now(): Long = clock.now().toEpochMilliseconds()
 }
 
 private val EXPIRED: String get() = AppText.copy.shared.sync.inviteExpired
 
-/** Firestore's answer when the rules refuse a write, here a code that is no longer live. */
-private const val FORBIDDEN = 403
+/** What a sync that never started says: nothing changed, nothing failed. */
+private val QUIET = SyncOutcome(groupsChanged = false, failed = false)
 
-/** The field the server stamps on every entry and repeat with its commit time. */
-private const val SYNCED_AT = "syncedAt"
-
-/** 2100-01-01: a time no entry carries, so a query for later ones costs one read and answers with the server's clock. */
-private const val FAR_FUTURE_MILLIS = 4_102_444_800_000L
+/** How often [SharedSync.syncAll] checks the account's session and looks for groups to bring back. */
+private val ACCOUNT_CHECK_EVERY = 10.minutes
 
 /** Quiet time after the last queued change, so one save's several rows go up in one push. */
 private val UPLOAD_SOON = 1.seconds
 
-/** Statuses that can pass on a later try: an expired session, a timeout, a rate limit. */
-private val RETRYABLE_4XX = setOf(401, 408, 429)
-
-private fun FirestoreException.isPermanent(): Boolean = status in 400..499 && status !in RETRYABLE_4XX
-
-private fun String.firstWord(): String = trim().substringBefore(' ').ifEmpty { this }
-
-/** Every phone stores a split whose parts add up to its total, in its currency and in satang (#134). */
-private fun addsUp(version: ExpenseVersionEntity, shares: List<ExpenseShareEntity>): Boolean =
-    shares.isNotEmpty() &&
-        version.amountMinor >= 0 &&
-        shares.all { it.amountMinor >= 0 && it.amountSatang >= 0 } &&
-        shares.sumOf { it.amountMinor } == version.amountMinor &&
-        shares.sumOf { it.amountSatang } == version.amountSatang
-
-/** A group type a newer app added is stored as Other, which every build can read. */
-private fun knownGroupType(name: String): String = GroupType.entries.firstOrNull { it.name == name }?.name ?: GroupType.Other.name
-
-private fun SharedGroup.fields(): Fields = mapOf(
-    "name" to name,
-    "type" to type.name,
-    "icon" to icon,
-    "simplifyDebts" to simplifyDebts,
-    "createdAt" to createdAtEpochMillis,
-)
-
-/**
- * #48: a baht group keeps `amountSatang`, which every build reads. Any other group writes
- * `amountGroup` instead, so a build from before #48 skips the entry rather than read kyat as baht.
- * The rules hold the same line, so an older build cannot write baht into a kyat group either.
- */
-internal object PullMark {
-    /**
-     * The mark a pull starts from. A phone that held the group in other money (a build from before
-     * #48, which skipped every amountGroup entry but still moved its mark) pulls the whole log once,
-     * or those entries never come.
-     */
-    fun kept(localCurrency: String?, localMark: Long?, serverCurrency: String): Long? = localMark?.takeIf { localCurrency == serverCurrency }
-}
-
-internal object WireAmount {
-    fun key(groupCurrency: String): String = if (groupCurrency == Currencies.Thb.code) "amountSatang" else "amountGroup"
-}
-
-private fun SharedExpense.fields(uid: String, groupCurrency: String): Fields = mapOf(
-    "kind" to KIND_VERSION,
-    "authorUid" to uid,
-    "createdAt" to createdAtEpochMillis,
-    "expenseId" to id,
-    "version" to version.toLong(),
-    "description" to description,
-    "occurredAt" to occurredAtEpochMillis,
-    "categoryId" to categoryId,
-    "subCategoryId" to subCategoryId,
-    "note" to note,
-    "currency" to currency,
-    "amountMinor" to amountMinor,
-    "rateUnscaled" to rate?.unscaled,
-    "rateScale" to rate?.scale?.toLong(),
-    WireAmount.key(groupCurrency) to satang.toMinorUnits(),
-    "payerMemberId" to payerMemberId,
-    "splitMode" to splitMode.name,
-    "authorMemberId" to authorMemberId,
-    "removed" to removed,
-    "cause" to cause,
-    "shares" to shares.map {
-        mapOf("memberId" to it.memberId, "weight" to it.weight, "amountMinor" to it.amountMinor, WireAmount.key(groupCurrency) to it.satang.toMinorUnits())
-    },
-)
-
-private fun SharedPayment.fields(uid: String, groupCurrency: String): Fields = mapOf(
-    "kind" to KIND_PAYMENT,
-    "authorUid" to uid,
-    "createdAt" to createdAtEpochMillis,
-    "fromMemberId" to fromMemberId,
-    "toMemberId" to toMemberId,
-    WireAmount.key(groupCurrency) to amount.toMinorUnits(),
-    "method" to method.name,
-    "occurredAt" to occurredAtEpochMillis,
-    "authorMemberId" to authorMemberId,
-)
-
-private fun PaymentRemoval.fields(uid: String): Fields = mapOf(
-    "kind" to KIND_PAYMENT_REMOVAL,
-    "authorUid" to uid,
-    "createdAt" to createdAtEpochMillis,
-    "paymentId" to paymentId,
-    "removed" to removed,
-    "authorMemberId" to authorMemberId,
-)
-
-/** #182's template as Firestore holds it. Never this phone's progress or its reminder choice. */
-private fun RepeatRule.fields(uid: String): Fields = toEntity().let { rule ->
-    mapOf(
-        "authorUid" to uid,
-        "createdAt" to rule.createdAtEpochMillis,
-        "kind" to rule.kind,
-        "frequency" to rule.frequency,
-        "start" to rule.startDate,
-        "endKind" to rule.endKind,
-        "endDate" to rule.endDate,
-        "endTimes" to rule.endTimes?.toLong(),
-        "active" to rule.active,
-        "description" to rule.description,
-        "categoryId" to rule.categoryId,
-        "currency" to rule.currency,
-        "amountMinor" to rule.amountMinor,
-        "rateUnscaled" to rule.rateUnscaled,
-        "rateScale" to rule.rateScale?.toLong(),
-        "payerMemberId" to rule.payerMemberId,
-        "splitMode" to rule.splitMode,
-        "weights" to rule.weights,
-    )
-}
+internal fun String.firstWord(): String = trim().substringBefore(' ').ifEmpty { this }

@@ -1,7 +1,5 @@
 package com.ptut.expense.domain
 
-import com.ptut.expense.locale.AppText
-
 /**
  * FR-21. The five the Ledger offers, in the order the design draws them.
  *
@@ -16,16 +14,6 @@ enum class LedgerFilter {
     ByHand,
     Income,
     Edited,
-    ;
-
-    val label: String
-        get() = when (this) {
-            All -> AppText.copy.history.filterAll
-            Auto -> AppText.copy.history.filterAuto
-            ByHand -> AppText.copy.history.filterByHand
-            Income -> AppText.copy.common.income
-            Edited -> AppText.copy.history.filterEdited
-        }
 }
 
 fun LedgerFilter.accepts(transaction: Transaction): Boolean = when (this) {

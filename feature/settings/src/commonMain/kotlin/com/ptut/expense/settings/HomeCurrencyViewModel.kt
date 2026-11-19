@@ -6,6 +6,7 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.home.HomeBook
 import com.ptut.expense.domain.minorPerWhole
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.Rate
@@ -53,22 +54,26 @@ class HomeCurrencyViewModel(private val book: HomeBook) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            if (!book.isEmpty()) state.update { it.copy(note = currencyCopy().homeHasRows) }
+            runSuspendCatching { book.isEmpty() }
+                .onSuccess { empty -> if (!empty) state.update { it.copy(note = currencyCopy().homeHasRows) } }
+                .onFailure { saysItFailed() }
         }
     }
 
     fun choose(code: String?) {
         if (code == null || code == Home.money.code) return
         viewModelScope.launch {
-            if (book.isEmpty()) {
-                // A slip filed between the two calls makes the book refuse, and the screen says why.
-                if (!Home.fromSettings { book.choose(choiceOf(code)) }) state.update { it.copy(note = currencyCopy().homeHasRows) }
-            } else {
-                val new = Currencies.of(code)
-                state.update {
-                    it.copy(converting = ConvertUiModel(code, currencyCopy().convertTitle(code), unit = old().rateUnitLabel(), newSymbol = new.symbol))
+            runSuspendCatching {
+                if (book.isEmpty()) {
+                    // A slip filed between the two calls makes the book refuse, and the screen says why.
+                    if (!Home.fromSettings { book.choose(choiceOf(code)) }) state.update { it.copy(note = currencyCopy().homeHasRows) }
+                } else {
+                    val new = Currencies.of(code)
+                    state.update {
+                        it.copy(converting = ConvertUiModel(code, currencyCopy().convertTitle(code), unit = old().rateUnitLabel(), newSymbol = new.symbol))
+                    }
                 }
-            }
+            }.onFailure { saysItFailed() }
         }
     }
 
@@ -91,13 +96,15 @@ class HomeCurrencyViewModel(private val book: HomeBook) : ViewModel() {
         }
         state.update { it.copy(converting = converting.copy(working = true)) }
         viewModelScope.launch {
-            if (!Home.fromSettings { book.convert(choiceOf(converting.code), rate) }) {
+            if (!runSuspendCatching { Home.fromSettings { book.convert(choiceOf(converting.code), rate) } }.getOrDefault(false)) {
                 state.update {
                     if (it.converting?.code == converting.code) it.copy(converting = converting.copy(working = false, problem = currencyCopy().convertFailed)) else it
                 }
             }
         }
     }
+
+    private fun saysItFailed() = state.update { it.copy(note = AppText.copy.settings.didNotWork) }
 
     private fun old(): Currency = Currencies.of(Home.money.code)
 

@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -51,8 +53,8 @@ import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.LedgerFilter
-import com.ptut.expense.domain.categoryAndProvenance
 import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.ui.categoryAndProvenance
 import com.ptut.expense.ui.sky.SkyBarIconAction
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyChip
@@ -107,13 +109,13 @@ private fun LoadedLedger(
     val density = LocalDensity.current
     var railWidthPx by remember { mutableIntStateOf(0) }
     var lineHeight by remember { mutableIntStateOf(0) }
-    // The items above the first day header: top bar, scope line, search row, and the pinned line.
-    val leading = 2 + (if (state.scope != null) 1 else 0) + (if (state.hasMonthIndex) 1 else 0) + (if (state.isEmpty) 1 else 0)
-    val current by remember(state, leading) {
+    // Filled as the list emits its day headers, so a month jump finds its day by key.
+    val dayIndex = remember { mutableMapOf<String, Int>() }
+    val current by remember(state) {
         derivedStateOf {
             val under = listState.layoutInfo.visibleItemsInfo
                 .firstOrNull { it.key != BEHIND_KEY && it.offset + it.size > lineHeight }
-            state.monthAt((under?.index ?: 0) - leading)
+            state.monthOf(under?.key)
         }
     }
     val railWidth = with(density) { railWidthPx.toDp() } + Spacing.xxs
@@ -121,13 +123,14 @@ private fun LoadedLedger(
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-            item {
+            val list = CountedItems(this)
+            list.item {
                 // Sky draws no top-bar action here: the sliders beside search open the filters, and
                 // Categories is reached from Settings (#128).
                 SkyTopBar(title = state.scope?.title ?: text.title, onBack = onBack)
             }
             state.scope?.let { scope ->
-                item {
+                list.item {
                     Text(
                         text = scope.days,
                         style = MaterialTheme.typography.labelLarge,
@@ -137,7 +140,7 @@ private fun LoadedLedger(
                     )
                 }
             }
-            item {
+            list.item {
                 Row(
                     modifier = Modifier.padding(horizontal = Spacing.sm).padding(bottom = Spacing.xs),
                     horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
@@ -154,7 +157,7 @@ private fun LoadedLedger(
             }
 
             if (state.hasMonthIndex) {
-                stickyHeader(key = BEHIND_KEY) {
+                list.stickyHeader(key = BEHIND_KEY) {
                     Text(
                         text = current?.behind.orEmpty(),
                         style = MaterialTheme.typography.labelLarge,
@@ -169,7 +172,7 @@ private fun LoadedLedger(
             }
 
             if (state.isEmpty) {
-                item {
+                list.item {
                     SkyEmptyState(
                         headline = if (state.ledgerIsEmpty) text.emptyHeadline else text.noMatchHeadline,
                         body = if (state.ledgerIsEmpty) text.emptyBody else text.noMatchBody,
@@ -186,9 +189,11 @@ private fun LoadedLedger(
                 }
             }
 
+            dayIndex.clear()
             state.days.forEach { day ->
-                item(key = day.date) { DayHeader(day, end = rowEnd) }
-                items(day.rows, key = { it.id }) { row ->
+                dayIndex[day.key] = list.size
+                list.item(key = day.key) { DayHeader(day, end = rowEnd) }
+                list.items(day.rows, key = { it.id }) { row ->
                     SkyTransactionRow(
                         merchant = row.merchant,
                         meta = row.parts.categoryAndProvenance(),
@@ -202,7 +207,7 @@ private fun LoadedLedger(
                     )
                 }
             }
-            item { Box(Modifier.height(SkySizes.pillClearance)) }
+            list.item { Box(Modifier.height(SkySizes.pillClearance)) }
         }
 
         if (state.hasMonthIndex) {
@@ -211,7 +216,7 @@ private fun LoadedLedger(
                 current = current,
                 onJump = { month ->
                     // Pulled down by the pinned line, so the month's first day header shows below it.
-                    scroller.launch { listState.scrollToItem(leading + month.firstItem, -lineHeight) }
+                    dayIndex[month.dayKey]?.let { index -> scroller.launch { listState.scrollToItem(index, -lineHeight) } }
                 },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -325,6 +330,27 @@ private fun MonthIndex(
 }
 
 private const val BEHIND_KEY = "behind"
+
+/** Emits into the list and counts what it emitted, so an item's index is known where it is added. */
+private class CountedItems(private val scope: LazyListScope) {
+    var size = 0
+        private set
+
+    fun item(key: Any? = null, content: @Composable LazyItemScope.() -> Unit) {
+        scope.item(key = key, content = content)
+        size++
+    }
+
+    fun stickyHeader(key: Any, content: @Composable LazyItemScope.() -> Unit) {
+        scope.stickyHeader(key = key) { content() }
+        size++
+    }
+
+    fun <T : Any> items(items: List<T>, key: (T) -> Any, content: @Composable LazyItemScope.(T) -> Unit) {
+        scope.items(items, key = key, itemContent = content)
+        size += items.size
+    }
+}
 
 @Composable
 private fun DayHeader(day: LedgerDayUiModel, end: Dp) {

@@ -10,7 +10,6 @@ import com.ptut.expense.data.local.entity.ExpenseVersionEntity
 import com.ptut.expense.data.local.entity.GroupMemberEntity
 import com.ptut.expense.data.local.entity.PaymentRemovalEntity
 import com.ptut.expense.data.local.entity.PersonEntity
-import com.ptut.expense.data.local.entity.RepeatRuleEntity
 import com.ptut.expense.data.local.entity.SharedGroupEntity
 import com.ptut.expense.data.local.entity.SharedPaymentEntity
 import com.ptut.expense.data.local.entity.SyncOutboxEntity
@@ -22,27 +21,19 @@ import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.ExpenseCause
 import com.ptut.expense.domain.shared.ExpenseChanged
 import com.ptut.expense.domain.shared.ExpenseDraft
-import com.ptut.expense.domain.shared.ExpenseTitle
 import com.ptut.expense.domain.shared.GroupType
-import com.ptut.expense.domain.shared.Member
 import com.ptut.expense.domain.shared.NewMember
 import com.ptut.expense.domain.shared.PaymentDraft
-import com.ptut.expense.domain.shared.PaymentMethod
-import com.ptut.expense.domain.shared.PaymentRemoval
 import com.ptut.expense.domain.shared.Person
 import com.ptut.expense.domain.shared.Rate
-import com.ptut.expense.domain.shared.RepeatEnd
-import com.ptut.expense.domain.shared.RepeatFrequency
-import com.ptut.expense.domain.shared.RepeatKind
 import com.ptut.expense.domain.shared.RepeatRule
 import com.ptut.expense.domain.shared.Share
-import com.ptut.expense.domain.shared.SharedExpense
 import com.ptut.expense.domain.shared.SharedGroup
-import com.ptut.expense.domain.shared.SharedPayment
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.SplitMode
@@ -51,13 +42,14 @@ import com.ptut.expense.domain.shared.TransactionSeed
 import com.ptut.expense.domain.shared.convert
 import com.ptut.expense.domain.shared.due
 import com.ptut.expense.domain.shared.entryId
+import com.ptut.expense.domain.shared.followed
 import com.ptut.expense.domain.shared.membersToSplit
 import com.ptut.expense.domain.shared.money
-import com.ptut.expense.domain.shared.rebalancedTo
 import com.ptut.expense.domain.shared.sharedExpenseOf
 import com.ptut.expense.domain.shared.shares
 import com.ptut.expense.domain.shared.split
 import com.ptut.expense.domain.shared.splitMembers
+import com.ptut.expense.domain.shared.toLocalDateOrNull
 import com.ptut.expense.domain.startOfDayEpochMillis
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -104,7 +96,7 @@ class RoomSharedRepository(
             expenseVersions = versions,
             payments = payments.mapNotNull { it.toDomain() },
             links = links.associate { it.expenseId to it.transactionId },
-            repeats = repeats.map { it.toDomain() },
+            repeats = repeats.mapNotNull { it.toDomain() },
             paymentRemovals = removals.map { it.toDomain() },
         )
     }.stateIn(scope, SharingStarted.Eagerly, SharedSnapshot.Empty)
@@ -162,8 +154,6 @@ class RoomSharedRepository(
         return group.creatorUid != null && me?.claimedByUid == group.creatorUid
     }
 
-    /** #189: a change to a shared group waits in the outbox until it reaches Firestore. */
-
     /**
      * The time a new log row is stamped with. Every phone takes the row with the latest stamp as
      * current (LogOrder, RemovalOrder), so a row written after [latestAt] must sort after it even when
@@ -174,6 +164,7 @@ class RoomSharedRepository(
         return if (latestAt == null || now > latestAt) now else latestAt + 1
     }
 
+    /** #189: a change to a shared group waits in the outbox until it reaches Firestore. */
     private suspend fun queueIfShared(groupId: String, kind: String, rowId: String) {
         if (dao.group(groupId)?.remote != true) return
         dao.queue(listOf(SyncOutboxEntity("$kind:$rowId", groupId, kind, rowId, clock.now().toEpochMilliseconds())))
@@ -247,7 +238,7 @@ class RoomSharedRepository(
         }
         dao.writeVersion(
             version = row,
-            shares = shares.map { ExpenseShareEntity(versionId, it.memberId, it.weight, it.amountMinor, it.satang.toMinorUnits()) },
+            shares = shares.map { it.toEntity(versionId) },
             newTransaction = if (youPaid && inHome && link == null && shareOf == null && draft.categoryId != null) yourTransaction(draft, satang, now) else null,
         )
         if (shareOf != null) dao.upsertLink(ExpenseLinkEntity(expenseId = expenseId, transactionId = shareOf))
@@ -287,13 +278,7 @@ class RoomSharedRepository(
         val versionId = newId()
         val group = snapshot.value.group(last.groupId)
         dao.writeVersion(
-            version = last.copy(
-                versionId = versionId,
-                version = last.version + 1,
-                authorMemberId = group?.meMemberId,
-                createdAtEpochMillis = stampAfter(last.createdAtEpochMillis),
-                removed = true,
-            ),
+            version = last.next(versionId, group?.meMemberId).copy(removed = true),
             shares = dao.sharesOf(last.versionId).map { it.copy(versionId = versionId) },
             newTransaction = null,
         )
@@ -340,65 +325,41 @@ class RoomSharedRepository(
         val group = snapshot.value.group(last.groupId) ?: return
         // Your row follows only your own spending: once someone else pays it, it is theirs to change.
         if (!group.isMe(last.payerMemberId)) return
-        // A foreign-currency expense keeps its own amount: only one in both the group's money and the
-        // ledger's home can take History's figure (#48).
-        val baht = last.currency == group.currency && last.currency == Home.money.code
-        // What this edit changed, compared with the row before it, never with the group's latest
-        // version: a field left alone in History keeps whatever another phone made it since.
-        val amountMoved = baht && row.amountMinor != before.amount.toMinorUnits()
-        val dateMoved = before.occurredAtEpochMillis != null && row.occurredAtEpochMillis != before.occurredAtEpochMillis
-        val categoryMoved = row.categoryId != before.categoryId || row.subCategoryId != before.subCategoryId
-        val amountMinor = if (amountMoved) row.amountMinor else last.amountMinor
-        val occurredAt = if (dateMoved) row.occurredAtEpochMillis else last.occurredAtEpochMillis
-        val categoryId = if (categoryMoved) row.categoryId else last.categoryId
-        val subCategoryId = if (categoryMoved) row.subCategoryId else last.subCategoryId
-        val memo = row.memo?.trim()?.ifEmpty { null }
-        val note = if (memo != before.memo?.trim()?.ifEmpty { null }) memo else last.note
-        val description = if (categoryMoved) ExpenseTitle.followed(last.description, titleChange) else last.description
-        if (amountMinor == last.amountMinor && occurredAt == last.occurredAtEpochMillis &&
-            categoryId == last.categoryId && subCategoryId == last.subCategoryId &&
-            note == last.note && description == last.description
-        ) {
-            return
-        }
-        val old = dao.sharesOf(last.versionId)
-        val mode = SplitMode.valueOf(last.splitMode)
-        val members = group.splitMembers().filter { member -> old.any { it.memberId == member.id } }
-        val weights = when (mode) {
-            SplitMode.Equally -> old.associate { it.memberId to 1L }
-            SplitMode.Exact -> old.associate { it.memberId to it.amountMinor }.rebalancedTo(amountMinor, last.payerMemberId)
-            else -> old.associate { it.memberId to it.weight }
-        }
-        val exact = split(amountMinor, mode, members, weights)
-        // O1 can push the payer below zero when the amount falls; then every part shrinks in step,
-        // and the weights stored are the old parts it shrank by, so the next edit splits the same way.
-        val keptMode = if (exact.complete) mode else SplitMode.Shares
-        val keptWeights = if (exact.complete) weights else old.associate { it.memberId to it.amountMinor }
-        val check = if (exact.complete) exact else split(amountMinor, SplitMode.Shares, members, keptWeights)
-        val satang = if (amountMoved) Satang.ofMinorUnits(row.amountMinor) else Satang.ofMinorUnits(last.amountSatang)
+        val expense = last.toDomain(dao.sharesOf(last.versionId)) ?: return
+        val after = TransactionEdit(
+            amount = Satang.ofMinorUnits(row.amountMinor),
+            categoryId = row.categoryId,
+            memo = row.memo,
+            subCategoryId = row.subCategoryId,
+            occurredAtEpochMillis = row.occurredAtEpochMillis,
+        )
+        val followed = expense.followed(before, after, titleChange, group.splitMembers(), group.currency, Home.money.code) ?: return
         val versionId = newId()
-        val written = shares(check, satang, members, keptWeights, keptMode)
         dao.writeVersion(
-            version = last.copy(
-                versionId = versionId,
-                version = last.version + 1,
-                occurredAtEpochMillis = occurredAt,
-                categoryId = categoryId,
-                subCategoryId = subCategoryId,
-                description = description,
-                note = note,
-                amountMinor = amountMinor,
-                amountSatang = satang.toMinorUnits(),
-                splitMode = keptMode.name,
-                authorMemberId = group.meMemberId,
-                createdAtEpochMillis = stampAfter(last.createdAtEpochMillis),
+            version = last.next(versionId, group.meMemberId).copy(
+                occurredAtEpochMillis = followed.occurredAtEpochMillis,
+                categoryId = followed.categoryId,
+                subCategoryId = followed.subCategoryId,
+                description = followed.description,
+                note = followed.note,
+                amountMinor = followed.amountMinor,
+                amountSatang = followed.satang.toMinorUnits(),
+                splitMode = followed.splitMode.name,
                 cause = ExpenseCause.TRANSACTION,
             ),
-            shares = written.map { ExpenseShareEntity(versionId, it.memberId, it.weight, it.amountMinor, it.satang.toMinorUnits()) },
+            shares = followed.shares.map { it.toEntity(versionId) },
             newTransaction = null,
         )
         queueIfShared(last.groupId, KIND_VERSION, versionId)
     }
+
+    /** The version after [latest], written by this phone and stamped after it, with [this] version's fields. */
+    private fun ExpenseVersionEntity.next(versionId: String, authorMemberId: String?, latest: ExpenseVersionEntity = this) = copy(
+        versionId = versionId,
+        version = latest.version + 1,
+        authorMemberId = authorMemberId,
+        createdAtEpochMillis = stampAfter(latest.createdAtEpochMillis),
+    )
 
     /** Payments removed from a group only on this phone, held so Undo can put the same row back. */
     private val removedHere = mutableMapOf<String, SharedPaymentEntity>()
@@ -447,13 +408,7 @@ class RoomSharedRepository(
         val before = versions.firstOrNull { !it.removed } ?: return
         val versionId = newId()
         dao.writeVersion(
-            version = before.copy(
-                versionId = versionId,
-                version = versions.first().version + 1,
-                authorMemberId = snapshot.value.group(before.groupId)?.meMemberId,
-                createdAtEpochMillis = stampAfter(versions.first().createdAtEpochMillis),
-                cause = null,
-            ),
+            version = before.next(versionId, snapshot.value.group(before.groupId)?.meMemberId, latest = versions.first()).copy(cause = null),
             shares = dao.sharesOf(before.versionId).map { it.copy(versionId = versionId) },
             newTransaction = null,
         )
@@ -471,7 +426,7 @@ class RoomSharedRepository(
             rule.copy(
                 id = id,
                 // This phone's progress and reminder choice survive an edit of the template.
-                lastAdded = existing?.lastAdded?.let(LocalDate::parse) ?: rule.lastAdded,
+                lastAdded = existing?.lastAdded?.toLocalDateOrNull() ?: rule.lastAdded,
                 createdAtEpochMillis = existing?.createdAtEpochMillis ?: clock.now().toEpochMilliseconds(),
             ).toEntity(),
         )
@@ -490,14 +445,21 @@ class RoomSharedRepository(
     override suspend fun addDueRepeats(today: LocalDate): Int {
         var added = 0
         for (entity in dao.activeRepeats()) {
-            val rule = entity.toDomain()
+            val rule = entity.toDomain() ?: continue
             val group = snapshot.value.group(rule.groupId) ?: continue
-            for (date in rule.due(today)) {
-                val entry = repeatEntry(rule, group, date)
-                if (dao.addRepeatEntry(entry.first, entry.second, rule.id, date.toString())) {
-                    added++
-                    queueIfShared(rule.groupId, KIND_VERSION, entry.first.versionId)
-                }
+            // One repeat that cannot be added, a synced one with no rate for its money, leaves the others to run.
+            runSuspendCatching { added += addDue(rule, group, today) }
+        }
+        return added
+    }
+
+    private suspend fun addDue(rule: RepeatRule, group: SharedGroup, today: LocalDate): Int {
+        var added = 0
+        for (date in rule.due(today)) {
+            val entry = repeatEntry(rule, group, date)
+            if (dao.addRepeatEntry(entry.first, entry.second, rule.id, date.toString())) {
+                added++
+                queueIfShared(rule.groupId, KIND_VERSION, entry.first.versionId)
             }
         }
         return added
@@ -543,7 +505,7 @@ class RoomSharedRepository(
             cause = ExpenseCause.REPEAT,
         )
         val parts = shares(check, satang, members, rule.weights, mode)
-        return version to parts.map { ExpenseShareEntity(versionId, it.memberId, it.weight, it.amountMinor, it.satang.toMinorUnits()) }
+        return version to parts.map { it.toEntity(versionId) }
     }
 
     override suspend fun markSeen(groupId: String, atEpochMillis: Long) = dao.markSeen(groupId, atEpochMillis)
@@ -557,152 +519,13 @@ class RoomSharedRepository(
     }
 }
 
-/** What an outbox row carries (#189). */
-const val KIND_GROUP = "group"
-const val KIND_MEMBER = "member"
-const val KIND_VERSION = "version"
-const val KIND_PAYMENT = "payment"
-const val KIND_REPEAT = "repeat"
-const val KIND_PAYMENT_REMOVAL = "paymentRemoval"
-
-fun SharedGroupEntity.toDomain(members: List<GroupMemberEntity>) = SharedGroup(
-    id = id,
-    name = name,
-    // A type a newer app added reads as Other here rather than failing the whole snapshot.
-    type = GroupType.entries.firstOrNull { it.name == type } ?: GroupType.Other,
-    icon = icon,
-    simplifyDebts = simplifyDebts,
-    createdAtEpochMillis = createdAtEpochMillis,
-    meMemberId = meMemberId,
-    members = members.map { Member(it.id, it.groupId, it.name, it.personId, it.archived, it.claimedByUid, it.promptPayId) },
-    remote = remote,
-    creatorUid = creatorUid,
-    inviteCode = inviteCode,
-    inviteActive = inviteActive,
-    lastSyncedAtEpochMillis = lastSyncedAtEpochMillis,
-    lastSeenAtEpochMillis = lastSeenAtEpochMillis,
-    currency = currency,
+private fun Share.toEntity(versionId: String) = ExpenseShareEntity(
+    versionId = versionId,
+    memberId = memberId,
+    weight = weight,
+    amountMinor = amountMinor,
+    amountSatang = satang.toMinorUnits(),
 )
-
-/**
- * Null for a version this build cannot read: a split mode it does not know, or a rate [Rate] refuses.
- * Sync takes no such version, and one already stored is left out rather than crash every launch.
- */
-fun ExpenseVersionEntity.toDomain(shares: List<ExpenseShareEntity>): SharedExpense? {
-    val mode = SplitMode.entries.firstOrNull { it.name == splitMode } ?: return null
-    if (!readableRate(rateUnscaled, rateScale)) return null
-    return SharedExpense(
-        id = expenseId,
-        versionId = versionId,
-        version = version,
-        groupId = groupId,
-        description = description,
-        occurredAtEpochMillis = occurredAtEpochMillis,
-        categoryId = categoryId,
-        subCategoryId = subCategoryId,
-        note = note,
-        currency = currency,
-        amountMinor = amountMinor,
-        rate = if (rateUnscaled != null && rateScale != null) Rate(rateUnscaled, rateScale) else null,
-        satang = Satang.ofMinorUnits(amountSatang),
-        payerMemberId = payerMemberId,
-        splitMode = mode,
-        shares = shares.map { Share(it.memberId, it.weight, it.amountMinor, Satang.ofMinorUnits(it.amountSatang)) },
-        authorMemberId = authorMemberId,
-        createdAtEpochMillis = createdAtEpochMillis,
-        removed = removed,
-        cause = cause,
-    )
-}
-
-/** No rate at all, or a whole one [Rate] accepts. Half a rate, a zero or too many decimals is not. */
-private fun readableRate(unscaled: Long?, scale: Int?): Boolean = when {
-    unscaled == null && scale == null -> true
-    unscaled == null || scale == null -> false
-    else -> unscaled > 0 && scale in 0..Rate.MAX_SCALE
-}
-
-fun PaymentRemovalEntity.toDomain() = PaymentRemoval(
-    id = id,
-    groupId = groupId,
-    paymentId = paymentId,
-    removed = removed,
-    authorMemberId = authorMemberId,
-    createdAtEpochMillis = createdAtEpochMillis,
-)
-
-/** Null for a method this build does not know, so sync takes no such payment and a stored one is left out. */
-fun SharedPaymentEntity.toDomain(): SharedPayment? {
-    val known = PaymentMethod.entries.firstOrNull { it.name == method } ?: return null
-    return SharedPayment(
-        id = id,
-        groupId = groupId,
-        fromMemberId = fromMemberId,
-        toMemberId = toMemberId,
-        amount = Satang.ofMinorUnits(amountSatang),
-        method = known,
-        occurredAtEpochMillis = occurredAtEpochMillis,
-        authorMemberId = authorMemberId,
-        createdAtEpochMillis = createdAtEpochMillis,
-    )
-}
 
 /** #182: the hour a repeat's expense is dated on its Bangkok day. Its place in the log is the day's start. */
 private const val REPEAT_HOUR = 9
-
-fun RepeatRuleEntity.toDomain() = RepeatRule(
-    id = id,
-    groupId = groupId,
-    kind = RepeatKind.valueOf(kind),
-    frequency = RepeatFrequency.valueOf(frequency),
-    start = LocalDate.parse(startDate),
-    end = when (endKind) {
-        END_ON_DATE -> endDate?.let { RepeatEnd.OnDate(LocalDate.parse(it)) } ?: RepeatEnd.Never
-        END_AFTER -> endTimes?.let { RepeatEnd.After(it) } ?: RepeatEnd.Never
-        else -> RepeatEnd.Never
-    },
-    remind = remind,
-    active = active,
-    lastAdded = lastAdded?.let(LocalDate::parse),
-    description = description,
-    categoryId = categoryId,
-    currency = currency,
-    amountMinor = amountMinor,
-    rate = if (rateUnscaled != null && rateScale != null) Rate(rateUnscaled, rateScale) else null,
-    payerMemberId = payerMemberId,
-    splitMode = SplitMode.valueOf(splitMode),
-    weights = weights.split(';').filter { '=' in it }.associate { it.substringBefore('=') to (it.substringAfter('=').toLongOrNull() ?: 0L) },
-    createdAtEpochMillis = createdAtEpochMillis,
-)
-
-fun RepeatRule.toEntity() = RepeatRuleEntity(
-    id = id,
-    groupId = groupId,
-    kind = kind.name,
-    frequency = frequency.name,
-    startDate = start.toString(),
-    endKind = when (end) {
-        RepeatEnd.Never -> END_NEVER
-        is RepeatEnd.OnDate -> END_ON_DATE
-        is RepeatEnd.After -> END_AFTER
-    },
-    endDate = (end as? RepeatEnd.OnDate)?.last?.toString(),
-    endTimes = (end as? RepeatEnd.After)?.times,
-    remind = remind,
-    active = active,
-    lastAdded = lastAdded?.toString(),
-    description = description,
-    categoryId = categoryId,
-    currency = currency,
-    amountMinor = amountMinor,
-    rateUnscaled = rate?.unscaled,
-    rateScale = rate?.scale,
-    payerMemberId = payerMemberId,
-    splitMode = splitMode.name,
-    weights = weights.entries.joinToString(";") { "${it.key}=${it.value}" },
-    createdAtEpochMillis = createdAtEpochMillis,
-)
-
-const val END_NEVER = "Never"
-internal const val END_ON_DATE = "OnDate"
-internal const val END_AFTER = "After"

@@ -25,8 +25,8 @@ private const val SCAN_NOW = "ptut-slip-import-now"
  * a failed run to the journal. `UPDATE` rather than `KEEP` so a changed interval takes effect on
  * the next launch instead of surviving until the app is reinstalled.
  *
- * No `Constraints`. Every constraint WorkManager offers is about a resource this run does not use,
- * and a network constraint on an app that makes no request would only delay it forever.
+ * The scan has no `Constraints`: it reads photos and makes no request, so a network constraint
+ * would only delay it. Shared groups sync in their own job, which waits for a network.
  */
 fun Context.startSlipImport() {
     watchForSlips()

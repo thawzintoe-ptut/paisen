@@ -14,7 +14,6 @@ import org.gradle.api.tasks.TaskAction
 
 /**
  * Cheaper than a lint rule, runs everywhere, and every pattern has a requirement behind it.
- * See docs/design/2026-08-17-implementation-plan.md §C.
  */
 abstract class VerifySourceRules : DefaultTask() {
 
@@ -157,8 +156,7 @@ abstract class VerifySourceRules : DefaultTask() {
                 buildString {
                     appendLine("${violations.size} source rule violation(s):")
                     violations.forEach { appendLine("  $it") }
-                    append("Each pattern has a requirement behind it — see ")
-                    append("docs/design/2026-08-17-implementation-plan.md §C.")
+                    append("Each pattern has a requirement behind it, named under the matching line.")
                 },
             )
         }

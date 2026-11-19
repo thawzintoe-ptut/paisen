@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -69,6 +68,7 @@ import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyChip
 import com.ptut.expense.ui.sky.SkyChoice
+import com.ptut.expense.ui.sky.SkyChoiceRow
 import com.ptut.expense.ui.sky.SkyChoiceSheet
 import com.ptut.expense.ui.sky.SkyDateTimePicker
 import com.ptut.expense.ui.sky.SkyGroupedCard
@@ -85,52 +85,78 @@ import com.ptut.expense.ui.sky.SkySubChipBox
  * Stateless: [AddViewModel] holds what is typed, so the sheet can be closed and reopened, rotated
  * or recomposed without the amount going with it.
  */
+/** What the sheet's own form does: the amount, kind, category, note, time and SAVE, and #207's typed sentence. */
+data class AddActions(
+    val onType: (AmountEntry) -> Unit,
+    val onKind: (Direction) -> Unit,
+    val onCategory: (Category) -> Unit,
+    val onSubCategory: (SubCategory) -> Unit,
+    val onTime: (Long) -> Unit,
+    val onOpenMemo: () -> Unit,
+    val onMemo: (String) -> Unit,
+    val onCloseMemo: () -> Unit,
+    val onSave: () -> Unit,
+    /** #207: a typed sentence fills the sheet. Shown only while [AddUiState.quickAdd] says so. */
+    val onQuickAdd: (String) -> Unit = {},
+    val onAskText: (String) -> Unit = {},
+)
+
+/** #212: the mic. Opened with the sheet, and whatever it was hearing is dropped when the sheet closes. */
+data class AddVoiceActions(
+    val onOpenVoice: () -> Unit = {},
+    val onCloseVoice: () -> Unit = {},
+    val onListen: () -> Unit = {},
+    val onStopListening: () -> Unit = {},
+    val onVoiceLanguage: (SpeechLanguage) -> Unit = {},
+    val onDownloadVoice: () -> Unit = {},
+    /** The yes or no to [AddUiState.askingOnline], asked before a language is first heard online. */
+    val onAgreeOnline: () -> Unit = {},
+    val onDismissOnlineAsk: () -> Unit = {},
+)
+
+/** The currency under the amount and its rate sheet. */
+data class AddRateActions(
+    val onCurrency: (Currency) -> Unit = {},
+    val onRate: (String) -> Unit = {},
+    val onOpenRate: () -> Unit = {},
+    val onCloseRate: (keep: Boolean) -> Unit = {},
+)
+
+/**
+ * The add sheet in Sky (p10), read top to bottom: Expense / Income, the amount, the reader's own
+ * categories in their order, then the note and the time. No title: the amount is the subject. The
+ * amount is typed with the number keyboard, which opens with the sheet, the way Check slip's does (#204).
+ *
+ * SAVE sits under the scrolling form rather than in it, so the number keyboard never covers it.
+ * Stateless: [AddViewModel] holds what is typed, so the sheet can be closed and reopened, rotated
+ * or recomposed without the amount going with it.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AddSheet(
     uiState: AddUiState,
-    onType: (AmountEntry) -> Unit,
-    onKind: (Direction) -> Unit,
-    onCategory: (Category) -> Unit,
-    onSubCategory: (SubCategory) -> Unit,
-    onTime: (Long) -> Unit,
-    onOpenMemo: () -> Unit,
-    onMemo: (String) -> Unit,
-    onCloseMemo: () -> Unit,
-    onSave: () -> Unit,
+    actions: AddActions,
     modifier: Modifier = Modifier,
-    /** #207: a typed sentence fills the sheet. Shown only while [AddUiState.quickAdd] says so. */
-    onQuickAdd: (String) -> Unit = {},
-    onAskText: (String) -> Unit = {},
-    /** #212: the mic. Opened with the sheet, and whatever it was hearing is dropped when the sheet closes. */
-    onOpenVoice: () -> Unit = {},
-    onCloseVoice: () -> Unit = {},
-    onListen: () -> Unit = {},
-    onStopListening: () -> Unit = {},
-    onVoiceLanguage: (SpeechLanguage) -> Unit = {},
-    onDownloadVoice: () -> Unit = {},
-    /** The yes or no to [AddUiState.askingOnline], asked before a language is first heard online. */
-    onAgreeOnline: () -> Unit = {},
-    onDismissOnlineAsk: () -> Unit = {},
-    onCurrency: (Currency) -> Unit = {},
-    onRate: (String) -> Unit = {},
-    onOpenRate: () -> Unit = {},
-    onCloseRate: (keep: Boolean) -> Unit = {},
+    voiceActions: AddVoiceActions = AddVoiceActions(),
+    rateActions: AddRateActions = AddRateActions(),
 ) {
-    if (uiState.editingMemo) MemoSheet(memo = uiState.memo, onMemo = onMemo, onDismiss = onCloseMemo)
-    uiState.askingOnline?.let { language -> OnlineAsk(language = language, onListen = onAgreeOnline, onTypeInstead = onDismissOnlineAsk) }
+    when (val overlay = uiState.overlay) {
+        AddOverlay.None -> Unit
+        AddOverlay.Memo -> MemoSheet(memo = uiState.memo, onMemo = actions.onMemo, onDismiss = actions.onCloseMemo)
+        AddOverlay.Rate -> RateSheet(uiState = uiState, onRate = rateActions.onRate, onClose = rateActions.onCloseRate)
+        is AddOverlay.OnlineAsk -> OnlineAsk(language = overlay.language, onListen = voiceActions.onAgreeOnline, onTypeInstead = voiceActions.onDismissOnlineAsk)
+    }
     val common = LocalCopy.current.common
     val shell = LocalCopy.current.shell
     val focus = LocalFocusManager.current
     var choosingCurrency by rememberSaveable { mutableStateOf(false) }
-    if (uiState.editingRate) RateSheet(uiState = uiState, onRate = onRate, onClose = onCloseRate)
     if (choosingCurrency) {
         SkyChoiceSheet(
             title = currencyCopy().currencyTitle,
             options = Currencies.all.map { SkyChoice(it.code, it.pickerLabel) },
             chosen = uiState.currency.code,
             onPick = { code ->
-                onCurrency(Currencies.of(code))
+                rateActions.onCurrency(Currencies.of(code))
                 choosingCurrency = false
             },
             onDismiss = { choosingCurrency = false },
@@ -152,37 +178,29 @@ fun AddSheet(
             // Not on p10: first, because what it reads fills everything below it.
             if (uiState.quickAdd) {
                 DisposableEffect(Unit) {
-                    onOpenVoice()
-                    onDispose(onCloseVoice)
+                    voiceActions.onOpenVoice()
+                    onDispose(voiceActions.onCloseVoice)
                 }
-                QuickAdd(
-                    uiState = uiState,
-                    onAskText = onAskText,
-                    onQuickAdd = onQuickAdd,
-                    onListen = onListen,
-                    onStopListening = onStopListening,
-                    onVoiceLanguage = onVoiceLanguage,
-                    onDownloadVoice = onDownloadVoice,
-                )
+                QuickAdd(uiState = uiState, onAskText = actions.onAskText, onQuickAdd = actions.onQuickAdd, voiceActions = voiceActions)
             }
 
             // Before the amount, because the kind decides which categories are offered under it.
             SkySegmentedToggle(
                 options = DirectionOrder.map { it.label(common) },
                 selected = DirectionOrder.indexOf(uiState.kind),
-                onSelect = { onKind(DirectionOrder[it]) },
+                onSelect = { actions.onKind(DirectionOrder[it]) },
             )
 
             DraftAmount(
                 entry = uiState.entry,
                 kind = uiState.kind,
-                onType = onType,
+                onType = actions.onType,
                 symbol = uiState.currency.symbol,
                 onSymbol = if (uiState.offersCurrencies) ({ choosingCurrency = true }) else null,
             )
 
             // Anything but baht counts as baht at a rate: one line says what it comes to, and a tap changes the rate.
-            uiState.rateLine?.let { line -> RateLine(line = line, asking = uiState.needsRate, onClick = onOpenRate) }
+            uiState.rateLine?.let { line -> RateLine(line = line, asking = uiState.needsRate, onClick = rateActions.onOpenRate) }
 
             // Wraps rather than scrolls: a category has to be chosen before SAVE lights up.
             FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
@@ -190,7 +208,7 @@ fun AddSheet(
                     SkyChip(
                         label = category.name,
                         selected = uiState.category == category,
-                        onClick = { onCategory(category) },
+                        onClick = { actions.onCategory(category) },
                         height = SkySizes.sheetChip,
                         icon = ptutIcon(category.icon),
                     )
@@ -203,7 +221,7 @@ fun AddSheet(
                     options = uiState.subCategories,
                     name = SubCategory::name,
                     selected = uiState.subCategory,
-                    onSelect = onSubCategory,
+                    onSelect = actions.onSubCategory,
                 )
             }
 
@@ -213,10 +231,10 @@ fun AddSheet(
                     icon = PtutIcon.Edit,
                     name = common.note,
                     value = uiState.memo ?: shell.addANote,
-                    onClick = onOpenMemo,
+                    onClick = actions.onOpenMemo,
                     modifier = Modifier.weight(1f),
                 )
-                SkyDateTimePicker(epochMillis = uiState.occurredAtEpochMillis, onPick = onTime) { value, open ->
+                SkyDateTimePicker(epochMillis = uiState.occurredAtEpochMillis, onPick = actions.onTime) { value, open ->
                     DetailButton(
                         icon = PtutIcon.CalendarMonth,
                         name = shell.dateAndTime,
@@ -241,7 +259,7 @@ fun AddSheet(
         // Lit even before it can save: a dark key gives no reason and no answer to a tap.
         SkyButton(
             label = uiState.saveLabel,
-            onClick = onSave,
+            onClick = actions.onSave,
             enabled = !uiState.saving,
             modifier = Modifier.fillMaxWidth().padding(top = Spacing.s12),
         )
@@ -257,10 +275,7 @@ private fun QuickAdd(
     uiState: AddUiState,
     onAskText: (String) -> Unit,
     onQuickAdd: (String) -> Unit,
-    onListen: () -> Unit,
-    onStopListening: () -> Unit,
-    onVoiceLanguage: (SpeechLanguage) -> Unit,
-    onDownloadVoice: () -> Unit,
+    voiceActions: AddVoiceActions,
 ) {
     val text = LocalCopy.current.add
     val voice = uiState.voice
@@ -280,8 +295,8 @@ private fun QuickAdd(
                     VoiceControls(
                         voice = voice,
                         onChooseLanguage = { choosingLanguage = true },
-                        onListen = onListen,
-                        onStopListening = onStopListening,
+                        onListen = voiceActions.onListen,
+                        onStopListening = voiceActions.onStopListening,
                     )
                 }
             } else {
@@ -301,8 +316,8 @@ private fun QuickAdd(
     if (choosingLanguage && voice != null) {
         VoiceLanguageSheet(
             voice = voice,
-            onPick = onVoiceLanguage,
-            onDownload = onDownloadVoice,
+            onPick = voiceActions.onVoiceLanguage,
+            onDownload = voiceActions.onDownloadVoice,
             onDismiss = { choosingLanguage = false },
         )
     }
@@ -399,28 +414,12 @@ private fun VoiceLanguageSheet(
 
 @Composable
 private fun VoiceLanguageRow(language: SpeechLanguage, voice: QuickAddVoice, onPick: (SpeechLanguage) -> Unit) {
-    val chosen = language == voice.language
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = SkySizes.keyValueRow)
-            .selectable(selected = chosen, role = Role.RadioButton, onClick = { onPick(language) })
-            .padding(horizontal = Spacing.sm, vertical = Spacing.s12),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s14),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(language.fullName, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-            Text(
-                voice.noteFor(language) ?: LocalCopy.current.add.voiceOnPhone,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (chosen) {
-            Icon(PtutIcon.Check.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(Sizes.settingsGlyph))
-        }
-    }
+    SkyChoiceRow(
+        label = language.fullName,
+        selected = language == voice.language,
+        onClick = { onPick(language) },
+        detail = voice.noteFor(language) ?: LocalCopy.current.add.voiceOnPhone,
+    )
 }
 
 /** Asked once per language, the moment the mic would first send the voice to Google. */

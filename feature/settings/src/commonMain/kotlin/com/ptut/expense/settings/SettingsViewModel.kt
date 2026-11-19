@@ -4,14 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.agent.ModelState
 import com.ptut.expense.domain.Home
-import com.ptut.expense.domain.elapsedPhrase
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.folders.WatchedFolder
 import com.ptut.expense.domain.folders.watched
 import com.ptut.expense.domain.importFix
 import com.ptut.expense.domain.ledger.LedgerRepository
-import com.ptut.expense.domain.retentionPhrase
-import com.ptut.expense.domain.settings.ImportChoices
-import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.settings.AppChoices
+import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.NoteTone
@@ -19,12 +18,14 @@ import com.ptut.expense.locale.SettingsCopy
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.locale.incomeSlipCopy
 import com.ptut.expense.locale.noteCopy
+import com.ptut.expense.ui.elapsedPhrase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /** Which row. It is the row's identity as well as the destination it opens. */
 enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, HomeCurrency, AddCurrency, Assistant, Feedback, Licences }
@@ -51,13 +52,22 @@ data class SettingsRowUiModel(
      * marked without anyone having to navigate away from the screen.
      */
     val needsAttention: Boolean = false,
-    /** Which white card the row sits in (p21): importing, then the ledger's words, then its file and day. */
-    val group: Int = 0,
     /** Background import's switch where the platform has a schedule to switch (C-4), or null. */
     val switchedOn: Boolean? = null,
 )
 
-data class SettingsUiState(val rows: List<SettingsRowUiModel>)
+/** The white cards of p21, top to bottom: importing, the ledger's words, its file and day, then help. */
+enum class SettingsGroup { Slips, Daily, Region, Help }
+
+data class SettingsGroupUiModel(val group: SettingsGroup, val rows: List<SettingsRowUiModel>)
+
+data class SettingsUiState(val groups: List<SettingsGroupUiModel>) {
+    /** Every row in screen order, for a reader that does not care which card holds it. */
+    val rows: List<SettingsRowUiModel> get() = groups.flatMap { it.rows }
+}
+
+/** What the Categories row counts (#168). */
+data class CategoryCounts(val categories: Int = 0, val subCategories: Int = 0)
 
 /**
  * NFR-1, NFR-2, NFR-4, NFR-5. The levers that decide whether the ledger can be trusted.
@@ -72,12 +82,12 @@ data class SettingsUiState(val rows: List<SettingsRowUiModel>)
  */
 class SettingsViewModel(
     ledger: LedgerRepository,
-    private val settings: ImportSettings,
+    private val settings: AppSettings,
     private val cadence: SlipImportCadence,
     /** The watched folders, named on the Photo folders row (#124, #168). Empty where none is bound. */
     folders: Flow<List<WatchedFolder>> = flowOf(emptyList()),
     /** The reader's categories and sub-categories, counted on the Categories row (#168). */
-    categoryCounts: Flow<Pair<Int, Int>> = flowOf(0 to 0),
+    categoryCounts: Flow<CategoryCounts> = flowOf(CategoryCounts()),
     /** #207: the model's state, for its row. */
     assistant: Flow<ModelState> = flowOf(ModelState.NotOffered),
     /** A debug build shows the assistant row before any build can offer the model. */
@@ -96,7 +106,22 @@ class SettingsViewModel(
 
     fun setTransparency(on: Boolean) = settings.setTransparency(on)
 
-    fun setAppLock(on: Boolean) = settings.setAppLock(on)
+    /**
+     * #25: on only after the phone's own check passes, so a failed check cannot lock anyone out.
+     * [onTurnedOn] runs once the lock is on, so the open session is not locked straight away.
+     */
+    fun setAppLock(on: Boolean, authenticate: suspend () -> Boolean, onTurnedOn: () -> Unit = {}) {
+        if (!on) {
+            settings.setAppLock(false)
+            return
+        }
+        viewModelScope.launch {
+            if (authenticate()) {
+                settings.setAppLock(true)
+                onTurnedOn()
+            }
+        }
+    }
 
     fun setWeeklyCheckIn(on: Boolean) = settings.setWeeklyCheckIn(on)
 
@@ -112,23 +137,30 @@ class SettingsViewModel(
         folders,
         categoryCounts,
         assistant,
-    ) { since, choices, watched, counts, model -> SettingsUiState(rows(since, choices, watched, counts, model)) }
+    ) { since, choices, watched, counts, model -> SettingsUiState(groups(since, choices, watched, counts, model)) }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
             initialValue = SettingsUiState(
-                rows(since = null, choices = settings.choices.value, watched = emptyList(), counts = 0 to 0, model = ModelState.NotOffered),
+                groups(since = null, choices = settings.choices.value, watched = emptyList(), counts = CategoryCounts(), model = ModelState.NotOffered),
             ),
         )
 
-    private fun rows(
+    private fun groups(
         since: Long?,
-        choices: ImportChoices,
+        choices: AppChoices,
         watched: List<WatchedFolder>,
-        counts: Pair<Int, Int>,
+        counts: CategoryCounts,
         model: ModelState,
         text: SettingsCopy = AppText.copy.settings,
-    ) = listOfNotNull(
+    ) = listOf(
+        SettingsGroupUiModel(SettingsGroup.Slips, slipRows(since, choices, watched, text)),
+        SettingsGroupUiModel(SettingsGroup.Daily, dailyRows(choices, counts, text)),
+        SettingsGroupUiModel(SettingsGroup.Region, regionRows(choices, text)),
+        SettingsGroupUiModel(SettingsGroup.Help, helpRows(model, text)),
+    ).filter { it.rows.isNotEmpty() }
+
+    private fun slipRows(since: Long?, choices: AppChoices, watched: List<WatchedFolder>, text: SettingsCopy) = listOf(
         SettingsRowUiModel(
             id = SettingsAction.SlipSource,
             name = text.photoFolders,
@@ -166,12 +198,14 @@ class SettingsViewModel(
             value = since?.let { text.lastImport(elapsedPhrase(it)) } ?: text.noImportYet,
             icon = "notifications",
         ),
+    )
+
+    private fun dailyRows(choices: AppChoices, counts: CategoryCounts, text: SettingsCopy) = listOfNotNull(
         SettingsRowUiModel(
             id = SettingsAction.Categories,
             name = AppText.copy.categories.title,
-            value = text.categoryCounts(counts.first, counts.second),
+            value = text.categoryCounts(counts.categories, counts.subCategories),
             icon = "label",
-            group = 1,
         ),
         // p21's second group: the morning recap and evening receipt, off with one switch (#121).
         SettingsRowUiModel(
@@ -179,7 +213,6 @@ class SettingsViewModel(
             name = text.moodByTimeOfDay,
             value = text.moodValue,
             icon = "wb_twilight",
-            group = 1,
             switchedOn = choices.moodByTimeOfDay,
         ),
         // #20: Monday's look back at last week on Today.
@@ -188,7 +221,6 @@ class SettingsViewModel(
             name = text.weeklyCheckIn,
             value = text.weeklyCheckInValue,
             icon = "calendar_month",
-            group = 1,
             switchedOn = choices.weeklyCheckIn,
         ),
         SettingsRowUiModel(
@@ -196,7 +228,6 @@ class SettingsViewModel(
             name = noteCopy().toneTitle,
             value = if (choices.noteTone == NoteTone.Playful) noteCopy().tonePlayful else noteCopy().tonePlain,
             icon = "tune",
-            group = 1,
         ).takeIf { showNoteTone },
         // Off draws the pill solid. iOS Reduce Transparency does the same without asking (#123).
         SettingsRowUiModel(
@@ -204,7 +235,6 @@ class SettingsViewModel(
             name = text.transparency,
             value = text.transparencyValue,
             icon = "tune",
-            group = 1,
             switchedOn = choices.transparency,
         ),
         // #25: turning it on asks for the fingerprint, face or PIN first, so a failed check cannot lock anyone out.
@@ -213,36 +243,34 @@ class SettingsViewModel(
             name = text.appLock,
             value = text.appLockValue,
             icon = "lock",
-            group = 1,
             switchedOn = choices.appLock,
         ).takeIf { canLock },
+    )
+
+    private fun regionRows(choices: AppChoices, text: SettingsCopy) = listOfNotNull(
         SettingsRowUiModel(
             id = SettingsAction.Language,
             name = AppText.copy.language.title,
             value = AppText.language.value.label,
             icon = "translate",
-            group = 2,
         ),
         SettingsRowUiModel(
             id = SettingsAction.Timezone,
             name = text.timezone,
             value = text.timezoneValue(Home.choice.value.zoneId),
             icon = "schedule",
-            group = 2,
         ),
         SettingsRowUiModel(
             id = SettingsAction.HomeCurrency,
             name = currencyCopy().homeTitle,
             value = Home.choice.value.let { currencyCopy().homeRowValue(it.money.code, it.zoneId) },
             icon = "payments",
-            group = 2,
         ).takeIf { showAddCurrency },
         SettingsRowUiModel(
             id = SettingsAction.AddCurrency,
             name = currencyCopy().startsIn,
             value = choices.addCurrency ?: currencyCopy().fromPhone(phoneCurrency()),
             icon = "payments",
-            group = 2,
         ).takeIf { showAddCurrency },
         // "Backup file", not "CSV or backup file": export is JSON only in v1 (#147, S7).
         SettingsRowUiModel(
@@ -250,22 +278,22 @@ class SettingsViewModel(
             name = text.exportLedger,
             value = text.exportValue,
             icon = "download",
-            group = 2,
         ),
         SettingsRowUiModel(
             id = SettingsAction.ImportLedger,
             name = text.importLedger,
             value = text.importValue,
             icon = "upload",
-            group = 2,
         ),
+    )
+
+    private fun helpRows(model: ModelState, text: SettingsCopy) = listOfNotNull(
         // #207: absent until a build can offer the model, so the screen is unchanged without one.
         SettingsRowUiModel(
             id = SettingsAction.Assistant,
             name = text.assistant,
             value = model.statusLine(),
             icon = "auto_awesome",
-            group = 3,
         ).takeIf { showAssistant || model != ModelState.NotOffered },
         // The address is the value, so a phone with no mail app still shows where to write.
         SettingsRowUiModel(
@@ -273,14 +301,12 @@ class SettingsViewModel(
             name = text.feedback,
             value = FEEDBACK_ADDRESS,
             icon = "help",
-            group = 3,
         ),
         SettingsRowUiModel(
             id = SettingsAction.Licences,
             name = text.licences,
             value = text.licencesValue,
             icon = "menu_book",
-            group = 3,
         ),
     )
 
@@ -291,7 +317,7 @@ class SettingsViewModel(
      *
      * A platform with no schedule to switch cannot be off, so its rhythm is read straight through.
      */
-    private fun importLine(text: SettingsCopy, since: Long?, choices: ImportChoices): String {
+    private fun importLine(text: SettingsCopy, since: Long?, choices: AppChoices): String {
         if (cadence.importIsAdjustable && !choices.backgroundImport) {
             return text.importOff
         }

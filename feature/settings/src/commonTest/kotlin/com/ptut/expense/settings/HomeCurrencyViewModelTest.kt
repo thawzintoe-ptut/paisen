@@ -7,6 +7,7 @@ import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.home.FakeHomeBook
 import com.ptut.expense.domain.home.HomeBook
 import com.ptut.expense.domain.shared.Rate
+import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -154,6 +155,62 @@ class HomeCurrencyViewModelTest : ViewModelTest() {
         runCurrent()
 
         assertEquals(1, book.converted.size)
+    }
+
+    @Test
+    fun `a book that cannot be read on open says so`() = runTest {
+        val viewModel = HomeCurrencyViewModel(BrokenHomeBook())
+        runCurrent()
+
+        assertEquals(AppText.copy.settings.didNotWork, viewModel.uiState.value.note)
+    }
+
+    @Test
+    fun `a choice the book throws on says so and keeps the home`() = runTest {
+        val viewModel = HomeCurrencyViewModel(BrokenHomeBook(failsOnOpen = false, failsAfter = 1))
+        runCurrent()
+
+        viewModel.choose("MMK")
+        runCurrent()
+
+        assertEquals(AppText.copy.settings.didNotWork, viewModel.uiState.value.note)
+        assertEquals("THB", Home.money.code)
+        assertFalse(Home.reopenSettings)
+    }
+
+    @Test
+    fun `a convert that throws frees the sheet and says nothing changed`() = runTest {
+        val viewModel = HomeCurrencyViewModel(ThrowingConvertBook())
+        runCurrent()
+        viewModel.choose("MMK")
+        runCurrent()
+        viewModel.typeRate("125")
+
+        viewModel.confirmConvert()
+        runCurrent()
+
+        val converting = viewModel.uiState.value.converting
+        assertEquals("Nothing changed. The entries could not be converted.", converting?.problem)
+        assertFalse(converting?.working ?: true)
+    }
+
+    /** A book whose reads throw, as a closed database would; [failsAfter] lets the first reads through. */
+    private class BrokenHomeBook(
+        private val failsOnOpen: Boolean = true,
+        private val failsAfter: Int = 0,
+        private val inner: FakeHomeBook = FakeHomeBook(),
+    ) : HomeBook by inner {
+        private var reads = 0
+
+        override suspend fun isEmpty(): Boolean {
+            reads++
+            check(!failsOnOpen && reads <= failsAfter) { "database closed" }
+            return inner.isEmpty()
+        }
+    }
+
+    private class ThrowingConvertBook(private val inner: FakeHomeBook = FakeHomeBook(rows = 3)) : HomeBook by inner {
+        override suspend fun convert(choice: HomeChoice, rate: Rate): Boolean = error("database closed")
     }
 
     /** A book seen empty whose ledger gains a row before the choice lands, so the choice is refused. */

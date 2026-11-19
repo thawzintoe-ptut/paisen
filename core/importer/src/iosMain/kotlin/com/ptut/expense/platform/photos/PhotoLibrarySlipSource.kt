@@ -7,7 +7,10 @@ import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import platform.Foundation.NSDate
+import platform.Foundation.NSPredicate
 import platform.Foundation.NSSortDescriptor
+import platform.Foundation.dateWithTimeIntervalSince1970
 import platform.Foundation.timeIntervalSince1970
 import platform.Photos.PHAsset
 import platform.Photos.PHAssetCollection
@@ -20,15 +23,6 @@ import platform.Photos.PHImageRequestOptionsDeliveryModeHighQualityFormat
 import platform.Photos.PHImageRequestOptionsVersionCurrent
 import kotlin.coroutines.resume
 import kotlin.time.Clock
-
-/**
- * How many assets one run may read, across every album together. The Android scan holds the same
- * ceiling for the same reason: an album added later is read from its own beginning, and Screenshots
- * can hold thousands, so an uncapped first run never finishes and never leaves the floor higher.
- */
-private const val BATCH_CAP = 200
-
-private const val MILLIS_PER_SECOND = 1_000L
 
 private const val OLDEST_FIRST = "creationDate"
 
@@ -57,24 +51,18 @@ class PhotoLibrarySlipSource(
     private val clock: Clock = Clock.System,
 ) : SlipSource {
 
-    /** Creation second per candidate, so a read that fails can hold its album behind that asset. */
-    private var batch = emptyMap<String, Long>()
-
-    /** Which album listed a candidate, so a held floor is held on the right one. */
-    private var albumOf = emptyMap<String, String>()
-
-    /** Listed-through per album, held until the next scan settles it. */
-    private var pending = mutableMapOf<String, Long>()
+    /** Floors in creation seconds, so a read that fails can hold its album behind that asset. */
+    private val floors = ScanFloors(folders, clock)
 
     override suspend fun candidates(): List<SlipCandidate> = withContext(Dispatchers.Default) {
         if (!isAllowed()) throw PhotoAccessDenied()
 
-        settlePreviousBatch()
+        floors.settlePrevious()
 
         val watched = folders.folders.value.watched()
         if (watched.isEmpty()) return@withContext emptyList()
 
-        val share = maxOf(1, BATCH_CAP / watched.size)
+        val share = floors.shareFor(watched.size)
         val listedAt = clock.now().toEpochMilliseconds()
 
         val found = mutableListOf<SlipCandidate>()
@@ -83,39 +71,22 @@ class PhotoLibrarySlipSource(
 
         for (album in watched) {
             val floor = folders.scannedThroughSeconds(album.id)
-            val fresh = assetsIn(album.id).filter { it.createdAtSeconds > floor }.take(share)
+            val fresh = assetsIn(album.id, after = floor, limit = share)
 
             fresh.forEach {
                 createdAt[it.id] = it.createdAtSeconds
                 owner[it.id] = album.id
                 found += SlipCandidate(it.id, it.createdAtSeconds * MILLIS_PER_SECOND, album.id, album.name)
             }
-            fresh.maxOfOrNull { it.createdAtSeconds }?.let { pending[album.id] = it }
+            fresh.maxOfOrNull { it.createdAtSeconds }?.let { floors.listedThrough(album.id, it) }
 
             // Stamped as looked-at now, at the floor it already had: that is what tells an album
             // holding nothing apart from one nothing has ever looked in.
             folders.recordScan(album.id, floor, listedAt)
         }
 
-        batch = createdAt
-        albumOf = owner
+        floors.handOut(createdAt, owner)
         found.sortedBy { it.capturedAtEpochMillis }
-    }
-
-    /** Nothing is written while a batch is in flight, so a run that died lists its batch again. */
-    private suspend fun settlePreviousBatch() {
-        if (pending.isEmpty()) return
-        val settling = pending
-        pending = mutableMapOf()
-        val at = clock.now().toEpochMilliseconds()
-        settling.forEach { (albumId, through) -> folders.recordScan(albumId, through, at) }
-    }
-
-    private fun holdBelow(id: String) {
-        val albumId = albumOf[id] ?: return
-        val seconds = batch[id] ?: return
-        val listed = pending[albumId] ?: return
-        pending[albumId] = minOf(listed, seconds - 1)
     }
 
     override suspend fun bytesOf(id: String): ByteArray? {
@@ -126,7 +97,7 @@ class PhotoLibrarySlipSource(
             // Still in the album, just not readable this minute — an asset offloaded to iCloud is
             // the usual reason. Holding the floor turns that into a retry on the next scan
             // instead of a slip stepped over for good.
-            holdBelow(id)
+            floors.holdBelow(id)
         }
         return data
     }
@@ -134,7 +105,11 @@ class PhotoLibrarySlipSource(
     /** See the class note: iOS will not let this app remove a picture it did not write, unasked. */
     override suspend fun delete(id: String) = Unit
 
-    private fun assetsIn(albumId: String): List<Slip> {
+    /**
+     * The images created after [after], oldest first, at most [limit]. Photos filters and caps the
+     * fetch, so a Screenshots album of thousands is never walked to keep two hundred.
+     */
+    private fun assetsIn(albumId: String, after: Long, limit: Int): List<Slip> {
         val album = PHAssetCollection
             .fetchAssetCollectionsWithLocalIdentifiers(listOf(albumId), null)
             .collections()
@@ -144,11 +119,16 @@ class PhotoLibrarySlipSource(
             ?: return emptyList()
 
         val options = PHFetchOptions().apply {
+            // A whole second past the floor, because the floor is a creation time cut to seconds.
+            predicate = NSPredicate.predicateWithFormat(
+                "mediaType == $PHAssetMediaTypeImage AND creationDate >= %@",
+                argumentArray = listOf(NSDate.dateWithTimeIntervalSince1970(after + 1.0)),
+            )
             sortDescriptors = listOf(NSSortDescriptor.sortDescriptorWithKey(OLDEST_FIRST, ascending = true))
+            fetchLimit = limit.toULong()
         }
 
         return PHAsset.fetchAssetsInAssetCollection(album, options).assets()
-            .filter { it.mediaType == PHAssetMediaTypeImage }
             .map { Slip(id = it.localIdentifier, createdAtSeconds = it.createdAtSeconds()) }
             // Two albums can hold the same asset, and a run over both must not read it twice.
             .distinctBy { it.id }
@@ -161,8 +141,8 @@ class PhotoLibrarySlipSource(
     /**
      * Suspends until Photos hands the bytes over, and cancels the request if the caller goes away.
      *
-     * `networkAccessAllowed` stays false: NFR-1 says v1 makes no outbound request at all, and the
-     * default here is one iCloud download away from breaking that promise.
+     * `networkAccessAllowed` stays false: the slip pipeline makes no outbound request, and an
+     * offloaded asset would be one iCloud download. Such an asset holds its floor until it is local.
      */
     private suspend fun requestImageData(asset: PHAsset): ByteArray? =
         suspendCancellableCoroutine { waiting ->

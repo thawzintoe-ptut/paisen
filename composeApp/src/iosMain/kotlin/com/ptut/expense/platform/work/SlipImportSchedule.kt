@@ -6,6 +6,7 @@ import com.ptut.expense.onboarding.Onboarding
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -68,6 +69,8 @@ class SlipImportSchedule(
                 // No dialog here. First run owns the one ask, and a refusal is answered by the
                 // journal rather than by a second dialog on every foreground.
                 importer.run()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failure: Exception) {
                 // The importer journals a scan it could not start. Anything that gets past it is
                 // the ledger itself failing, and the app is in the foreground by definition here,

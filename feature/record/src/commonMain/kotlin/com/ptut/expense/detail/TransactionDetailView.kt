@@ -31,7 +31,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.ptut.expense.design.PtutIcon
@@ -43,11 +42,13 @@ import com.ptut.expense.design.categoryTint
 import com.ptut.expense.design.ptut
 import com.ptut.expense.design.ptutIcon
 import com.ptut.expense.design.ptutMotion
+import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
 import com.ptut.expense.locale.Copy
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.locale.noteCopy
+import com.ptut.expense.ui.MetaField
 import com.ptut.expense.ui.rememberScreenReader
 import com.ptut.expense.ui.sky.SkyBarIconAction
 import com.ptut.expense.ui.sky.SkyBottomSheet
@@ -170,7 +171,7 @@ private fun Record(
 
             Column(modifier = Modifier.fillMaxWidth().padding(top = Spacing.md)) {
                 SkyHairline()
-                state.rows.forEach { row -> SkyKeyValueRow(label = row.label.skyLabel(copy), value = row.value) }
+                state.rows.forEach { row -> SkyKeyValueRow(label = row.field.skyLabel(copy), value = row.value) }
                 if (state.offersPlanned) {
                     val words = noteCopy()
                     SkySwitchRow(label = words.planned, hint = words.plannedHint, checked = state.planned, onCheckedChange = onSetPlanned)
@@ -266,7 +267,7 @@ private fun DeleteSheet(
         ) { SlipDropArt() }
         Text(
             text = if (state.isIncome) text.deleteIncome else text.deletePurchase,
-            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Light),
+            style = MaterialTheme.ptutType.sheetTitle,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = Spacing.md),
         )
@@ -278,8 +279,16 @@ private fun DeleteSheet(
         )
         // #186 (D9): ticked, the group's copy goes too; unticked, the group keeps it.
         state.sharedGroupName?.let { group ->
-            Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                SkyCheckbox(checked = state.alsoRemoveFromGroup, onCheckedChange = onSetAlsoRemove, label = text.alsoRemoveFrom(group))
+            // The whole row is the target, as in Photo folders, so the label is read once.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = Spacing.sm)
+                    .semantics(mergeDescendants = true) {}
+                    .tappable(PtutRadii.r12, Role.Checkbox, onClick = { onSetAlsoRemove(!state.alsoRemoveFromGroup) }),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SkyCheckbox(checked = state.alsoRemoveFromGroup, onCheckedChange = null)
                 Text(
                     text.alsoRemoveFrom(group),
                     style = MaterialTheme.typography.bodyLarge,
@@ -351,15 +360,15 @@ private fun ShareGroupSheet(groups: List<ShareGroupUiModel>, onPick: (String) ->
     }
 }
 
-/** The record's row names as p16 writes them. */
-private fun String.skyLabel(copy: Copy): String = when (this) {
-    "CATEGORY" -> copy.common.category
-    "NOTE" -> copy.common.note
-    "DATE" -> copy.record.whenLabel
-    "SOURCE" -> copy.record.fromLabel
-    "REFERENCE" -> copy.record.referenceLabel
-    "PAID" -> currencyCopy().paidLabel
-    else -> lowercase().replaceFirstChar { it.uppercase() }
+/** A meta row's name as p16 and p18 write it. */
+internal fun MetaField.skyLabel(copy: Copy): String = when (this) {
+    MetaField.Merchant -> copy.record.shopLabel
+    MetaField.Category -> copy.common.category
+    MetaField.Paid -> currencyCopy().paidLabel
+    MetaField.Note -> copy.common.note
+    MetaField.Date -> copy.record.whenLabel
+    MetaField.Source -> copy.record.fromLabel
+    MetaField.Reference -> copy.record.referenceLabel
 }
 
 private val DETAIL_CIRCLE = SkySizes.rowCircle * 1.4f

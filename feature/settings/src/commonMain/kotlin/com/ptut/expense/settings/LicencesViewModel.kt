@@ -2,6 +2,7 @@ package com.ptut.expense.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,7 +50,7 @@ class LicencesViewModel(
         state.update { it.copy(open = licence.name, text = licence.notice) }
         val file = licence.file ?: return
         viewModelScope.launch {
-            val text = readText(file)
+            val text = runSuspendCatching { readText(file) }.getOrDefault(AppText.copy.settings.licenceNotOpened)
             state.update { if (it.open == licence.name) it.copy(text = text) else it }
         }
     }

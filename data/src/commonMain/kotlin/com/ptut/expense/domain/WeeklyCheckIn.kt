@@ -16,8 +16,6 @@ private const val USUAL_WEEK_MIN_SAMPLES = 2
 /** Top shops named in the next step. */
 private const val RISE_SHOPS = 2
 
-private const val DAYS_IN_WEEK = 7
-
 /**
  * Monday's look back at last week (#20): what it came to beside a usual week, and the one category
  * that rose most. From the reader's own rows on the phone, never a budget, and never a warning.
@@ -70,12 +68,10 @@ fun List<Transaction>.weeklyCheckIn(today: LocalDate, zone: TimeZone = HomeTime)
     )
 }
 
-internal fun List<Transaction>.inWeek(monday: LocalDate, zone: TimeZone): List<Transaction> {
-    val end = monday.plus(DAYS_IN_WEEK, DateTimeUnit.DAY)
-    return filter { it.occurredAtEpochMillis.dateIn(zone).let { day -> day >= monday && day < end } }
-}
+internal fun List<Transaction>.inWeek(monday: LocalDate, zone: TimeZone): List<Transaction> =
+    inside(DateRange(monday, monday.plus(DAYS_IN_WEEK - 1, DateTimeUnit.DAY)), zone)
 
-internal fun List<Transaction>.total(): Satang = fold(Satang.Zero) { sum, row -> sum + row.amount }
+internal fun List<Transaction>.total(): Satang = map { it.amount }.sum()
 
 internal fun List<Satang>.mean(): Satang = Satang(sumOf { it.raw } / size)
 

@@ -9,38 +9,43 @@ import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.LedgerFilter
 import com.ptut.expense.domain.MetaParts
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
+import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
-import com.ptut.expense.domain.UnknownCategory
 import com.ptut.expense.domain.accepts
 import com.ptut.expense.domain.bucketByDay
 import com.ptut.expense.domain.colorName
-import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayLabel
-import com.ptut.expense.domain.displayName
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.formatNet
 import com.ptut.expense.domain.iconName
+import com.ptut.expense.domain.inside
 import com.ptut.expense.domain.label
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.longName
 import com.ptut.expense.domain.matches
-import com.ptut.expense.domain.metaLine
-import com.ptut.expense.domain.metaParts
 import com.ptut.expense.domain.monthShort
 import com.ptut.expense.domain.rules.ShopNames
 import com.ptut.expense.domain.weekdayAndDay
 import com.ptut.expense.domain.yearLabel
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.ui.UnknownCategory
+import com.ptut.expense.ui.displayName
+import com.ptut.expense.ui.metaLine
+import com.ptut.expense.ui.metaParts
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 
@@ -58,21 +63,25 @@ data class LedgerRowUiModel(
 
 /** A day header and its rows. [total] is the day's net, signed, never a bare magnitude. */
 data class LedgerDayUiModel(
+    /** The list key of the day header, from the date itself so no two years share one. */
+    val key: String,
     val date: String,
     val total: String,
     val rows: List<LedgerRowUiModel>,
 )
 
 /**
- * One month on History's edge index (#70), newest first. [firstItem] counts the day headers and rows
- * above the month's first day header, so the list can jump there; [behind] is the top line meanwhile.
+ * One month on History's edge index (#70), newest first. [dayKey] is the key of the month's first
+ * day header, so the list jumps by key; [keys] are every day and row key in the month, so the list
+ * can tell which month is under the top line, which [behind] then describes.
  */
 data class LedgerMonthUiModel(
     val label: String,
     /** Shown on the newest month and wherever the year changes. */
     val year: String?,
     val spoken: String,
-    val firstItem: Int,
+    val dayKey: String,
+    val keys: Set<String>,
     val behind: String,
 )
 
@@ -109,8 +118,8 @@ sealed interface LedgerUiState {
         /** One month has nothing to jump between. */
         val hasMonthIndex: Boolean get() = months.size > 1
 
-        /** The month whose rows hold [item], counted the way [LedgerMonthUiModel.firstItem] counts. */
-        fun monthAt(item: Int): LedgerMonthUiModel? = months.lastOrNull { it.firstItem <= item } ?: months.firstOrNull()
+        /** The month holding the day or row with [key]; the newest month above the first day. */
+        fun monthOf(key: Any?): LedgerMonthUiModel? = months.firstOrNull { key in it.keys } ?: months.firstOrNull()
 
         /** Nothing is hidden and nothing shows: the ledger itself is empty. */
         val ledgerIsEmpty: Boolean get() = isEmpty && hiddenByFilter == 0
@@ -140,6 +149,8 @@ class LedgerViewModel(
     private val clock: Clock = Clock.System,
     /** The slice Reports opened (#220), or null for the whole table. Search and filters work inside it. */
     private val scope: LedgerScope? = null,
+    /** Grouping a whole ledger on every keystroke stays off the main thread. */
+    private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
@@ -157,7 +168,7 @@ class LedgerViewModel(
                 LedgerSnapshot.Unanswered -> return@combine LedgerUiState.Loading
                 is LedgerSnapshot.Rows -> snapshot.transactions
             }
-            val inScope = scope?.let { slice -> transactions.filter { slice.holds(it, categories) } } ?: transactions
+            val inScope = scope?.let { slice -> transactions.inside(DateRange(slice.from, slice.to)).filter { slice.holds(it, categories) } } ?: transactions
             val visible = inScope.filter { filter.accepts(it) && it.matches(text) }
             val today = clock.now().toLocalDateTime(HomeTime).date
 
@@ -167,7 +178,8 @@ class LedgerViewModel(
                 filter = filter,
                 days = buckets.map { bucket ->
                     LedgerDayUiModel(
-                        date = if (bucket.date == today) "${AppText.copy.common.today} · ${bucket.date.weekdayAndDay()}" else bucket.date.dayLabel(),
+                        key = bucket.date.dayKey(),
+                        date = if (bucket.date == today) "${AppText.copy.common.today}${Separators.DOT}${bucket.date.weekdayAndDay()}" else bucket.date.dayLabel(),
                         total = bucket.summary.net.formatNet(),
                         rows = bucket.transactions
                             .sortedByDescending(Transaction::occurredAtEpochMillis)
@@ -178,9 +190,9 @@ class LedgerViewModel(
                 scope = scope?.heading(categories),
                 months = buckets.monthIndex(),
             )
-        }.stateIn(
+        }.flowOn(work).stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
             initialValue = LedgerUiState.Loading,
         )
 
@@ -206,33 +218,30 @@ class LedgerViewModel(
 }
 
 private fun List<DayBucket>.monthIndex(): List<LedgerMonthUiModel> {
-    class Start(val date: LocalDate, val firstItem: Int, val rowsAbove: Int)
-    val starts = mutableListOf<Start>()
-    var item = 0
-    var rows = 0
-    forEach { bucket ->
-        val last = starts.lastOrNull()?.date
-        if (last == null || last.year != bucket.date.year || last.month != bucket.date.month) {
-            starts += Start(bucket.date, item, rows)
-        }
-        item += 1 + bucket.transactions.size
-        rows += bucket.transactions.size
-    }
+    // Newest first, so each month's days sit together and keep their order.
+    val months = groupBy { it.date.year to it.date.month }.values.toList()
+    val total = sumOf { it.transactions.size }
     val text = AppText.copy.history
-    return starts.mapIndexed { index, start ->
-        val date = start.date
-        LedgerMonthUiModel(
+    var rowsAbove = 0
+    return months.mapIndexed { index, days ->
+        val date = days.first().date
+        val month = LedgerMonthUiModel(
             label = date.monthShort(),
-            year = date.yearLabel().takeIf { index == 0 || starts[index - 1].date.year != date.year },
-            spoken = text.goToMonth("${AppText.copy.calendar.months[date.month.number - 1]} ${date.yearLabel()}"),
-            firstItem = start.firstItem,
-            behind = if (index == 0) text.monthsTotal(rows, starts.size) else text.monthsAbove(start.rowsAbove, index),
+            year = date.yearLabel().takeIf { index == 0 || months[index - 1].first().date.year != date.year },
+            spoken = text.goToMonth("${date.month.longName()} ${date.yearLabel()}"),
+            dayKey = date.dayKey(),
+            keys = days.flatMapTo(mutableSetOf()) { day -> listOf(day.date.dayKey()) + day.transactions.map(Transaction::id) },
+            behind = if (index == 0) text.monthsTotal(total, months.size) else text.monthsAbove(rowsAbove, index),
         )
+        rowsAbove += days.sumOf { it.transactions.size }
+        month
     }
 }
 
+private fun LocalDate.dayKey(): String = "day-$this"
+
+/** The category half of the slice; the days are cut by [inside] first. */
 private fun LedgerScope.holds(transaction: Transaction, categories: List<Category>): Boolean {
-    if (transaction.occurredAtEpochMillis.dateIn(HomeTime) !in DateRange(from, to)) return false
     val wanted = categoryId ?: return true
     val filed = categories.firstOrNull { it.id == transaction.categoryId } ?: UnknownCategory
     return transaction.direction == Direction.Expense && filed.id == wanted

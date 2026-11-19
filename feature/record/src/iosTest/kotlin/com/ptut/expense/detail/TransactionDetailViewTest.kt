@@ -17,6 +17,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import com.ptut.expense.domain.DEFAULT_COLOR
 import com.ptut.expense.domain.MoneyParts
+import com.ptut.expense.ui.MetaField
 import com.ptut.expense.ui.TransactionMetaRow
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -108,7 +109,7 @@ class TransactionDetailViewTest {
         spoken = "Foodland Rama IV, 642.50 baht spent",
         categoryIcon = "local_grocery_store",
         categoryColor = DEFAULT_COLOR,
-        rows = listOf(TransactionMetaRow("CATEGORY", "Groceries", icon = "sell")),
+        rows = listOf(TransactionMetaRow(MetaField.Category, "Groceries", icon = "sell")),
         consequence = "The slip image for this transaction was already deleted.",
         deleteMoves = "฿642.50 comes off today, this week and this month.",
         ruleFooter = "The shop rule is kept. " +

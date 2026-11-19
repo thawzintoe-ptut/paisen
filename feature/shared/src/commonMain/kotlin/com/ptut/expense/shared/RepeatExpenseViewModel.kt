@@ -4,28 +4,33 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.HomeTime
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.Separators
+import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.domain.formatCompact
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.RepeatEnd
 import com.ptut.expense.domain.shared.RepeatFrequency
 import com.ptut.expense.domain.shared.RepeatKind
 import com.ptut.expense.domain.shared.RepeatRule
 import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedRepository
+import com.ptut.expense.domain.shared.SharedTextLimits
 import com.ptut.expense.domain.shared.SplitMode
-import com.ptut.expense.domain.shared.anchorLine
-import com.ptut.expense.domain.shared.formatMinor
+import com.ptut.expense.domain.shared.membersToSplit
 import com.ptut.expense.domain.shared.money
 import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.next
 import com.ptut.expense.domain.shared.parseMinor
 import com.ptut.expense.domain.shared.shares
 import com.ptut.expense.domain.shared.split
-import com.ptut.expense.domain.shared.splitMembers
+import com.ptut.expense.domain.shared.typedText
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,7 +43,6 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
-import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 
 /** What is being set up. The split is equal among today's members, as p33's "split 50 / 50" draws it. */
@@ -115,7 +119,7 @@ class RepeatExpenseViewModel(
         val group = snapshot.group(groupId) ?: return@combine RepeatExpenseUiState.Missing
         ready(group, form, snapshot.repeats.firstOrNull { it.id == ruleId }?.active ?: true)
             .copy(changed = opened != null && form.content != opened)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RepeatExpenseUiState.Missing)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), RepeatExpenseUiState.Missing)
 
     init {
         viewModelScope.launch {
@@ -134,7 +138,7 @@ class RepeatExpenseViewModel(
             RepeatForm(
                 kind = rule.kind,
                 description = rule.description,
-                amountText = formatMinor(rule.amountMinor, group.money).filter { it.isDigit() || it == '.' },
+                amountText = group.money.typedText(rule.amountMinor),
                 frequency = rule.frequency,
                 start = rule.start,
                 end = rule.end,
@@ -170,36 +174,47 @@ class RepeatExpenseViewModel(
         val group = repository.snapshot.value.group(groupId) ?: return
         val form = state.form
         val remind = form.remind && allowed
-        val members = group.splitMembers().filter { group.member(it.id)?.archived != true }
+        val members = group.membersToSplit()
+        val start = form.start ?: return
+        val amountMinor = parseMinor(form.amountText, group.money) ?: return
+        val payer = form.payerMemberId ?: group.meMemberId ?: return
         this.form.update { it.copy(saving = true) }
         viewModelScope.launch {
-            repository.saveRepeat(
-                RepeatRule(
-                    id = ruleId.orEmpty(),
-                    groupId = groupId,
-                    kind = form.kind,
-                    frequency = form.frequency,
-                    start = form.start ?: return@launch,
-                    end = form.end,
-                    remind = remind,
-                    active = true,
-                    lastAdded = null,
-                    description = form.description.trim(),
-                    categoryId = form.kind.categoryIn(categories),
-                    currency = group.currency,
-                    amountMinor = parseMinor(form.amountText, group.money) ?: return@launch,
-                    rate = null,
-                    payerMemberId = form.payerMemberId ?: group.meMemberId ?: return@launch,
-                    splitMode = SplitMode.Equally,
-                    weights = members.associate { it.id to 1L },
-                    createdAtEpochMillis = clock.now().toEpochMilliseconds(),
-                ),
-            )
+            val saved = runSuspendCatching {
+                repository.saveRepeat(
+                    RepeatRule(
+                        id = ruleId.orEmpty(),
+                        groupId = groupId,
+                        kind = form.kind,
+                        frequency = form.frequency,
+                        start = start,
+                        end = form.end,
+                        remind = remind,
+                        active = true,
+                        lastAdded = null,
+                        description = form.description.trim().take(SharedTextLimits.DESCRIPTION),
+                        categoryId = form.kind.categoryIn(categories),
+                        currency = group.currency,
+                        amountMinor = amountMinor,
+                        rate = null,
+                        payerMemberId = payer,
+                        splitMode = SplitMode.Equally,
+                        weights = members.associate { it.id to 1L },
+                        createdAtEpochMillis = clock.now().toEpochMilliseconds(),
+                    ),
+                )
+            }
+            if (saved.isFailure) {
+                // The form stays as typed and Save unlocks, so a second tap can try again.
+                toasts.show(ToastMessage(text = AppText.copy.shared.repeat.didntSave, tone = ToastTone.Error))
+                this@RepeatExpenseViewModel.form.update { it.copy(saving = false) }
+                return@launch
+            }
             if (form.remind && !allowed) {
                 toasts.show(ToastMessage(text = AppText.copy.shared.repeat.noReminder))
             }
             // The repeat is saved: a reminder that cannot be lined up now must not keep the screen open.
-            runCatching { runner?.run() }
+            runSuspendCatching { runner?.run() }
             done.value = true
         }
     }
@@ -209,13 +224,13 @@ class RepeatExpenseViewModel(
         viewModelScope.launch {
             repository.stopRepeat(id)
             // The repeat is saved: a reminder that cannot be lined up now must not keep the screen open.
-            runCatching { runner?.run() }
+            runSuspendCatching { runner?.run() }
             done.value = true
         }
     }
 
     private fun ready(group: SharedGroup, form: RepeatForm, active: Boolean): RepeatExpenseUiState.Ready {
-        val members = group.splitMembers().filter { group.member(it.id)?.archived != true }
+        val members = group.membersToSplit()
         val amount = parseMinor(form.amountText, group.money)
         val payer = form.payerMemberId ?: group.meMemberId
         val preview = form.start?.let { start ->
@@ -226,19 +241,19 @@ class RepeatExpenseViewModel(
                 splitMode = SplitMode.Equally, weights = members.associate { it.id to 1L }, createdAtEpochMillis = 0L,
             )
         }
-        val today = clock.now().toLocalDateTime(HomeTime).date
+        val today = clock.now().dateIn(HomeTime)
         val text = AppText.copy.shared
         val you = AppText.copy.common.you
         return RepeatExpenseUiState.Ready(
             form = form,
             isEdit = ruleId != null,
             active = active,
-            title = "${form.description.ifBlank { form.kind.label() }} · ${group.name}",
+            title = "${form.description.ifBlank { form.kind.label() }}${Separators.DOT}${group.name}",
             symbol = group.money.symbol,
             amountShown = form.amountText.ifEmpty { "0" },
             payLine = buildString {
                 append(if (payer == null || group.isMe(payer)) text.repeat.youPaid else text.repeat.paid(group.displayName(payer)))
-                append(" · ")
+                append(Separators.DOT)
                 // The person who did not pay: from Mali's phone, Thaw paying splits "with you".
                 val partner = members.singleOrNull { it.id != payer }
                 append(
@@ -267,7 +282,7 @@ class RepeatExpenseViewModel(
 
     /** "Mint owes you ฿9,000", or what you owe the payer: the same for every date of a fixed amount. */
     private fun meaningFor(group: SharedGroup, rule: RepeatRule, amount: Long): String {
-        val members = group.splitMembers().filter { group.member(it.id)?.archived != true }
+        val members = group.membersToSplit()
         val check = split(amount, SplitMode.Equally, members, emptyMap())
         val parts = shares(check, Satang.ofMinorUnits(amount), members, emptyMap(), SplitMode.Equally)
         val me = group.meMemberId
@@ -283,7 +298,7 @@ class RepeatExpenseViewModel(
     }
 
     private fun firstOfNextMonth(): LocalDate {
-        val today = clock.now().toLocalDateTime(HomeTime).date
+        val today = clock.now().dateIn(HomeTime)
         return LocalDate(today.year, today.month, 1).plus(DatePeriod(months = 1))
     }
 }
@@ -306,8 +321,11 @@ fun RepeatKind.icon(): String = when (this) {
     RepeatKind.Subscription -> "sync"
 }
 
+private const val SUBSCRIPTION_CATEGORY = "other"
+private const val BILLS_CATEGORY = "bills"
+
 private fun RepeatKind.categoryIn(categories: List<Category>): String? {
-    val wanted = if (this == RepeatKind.Subscription) "other" else "bills"
+    val wanted = if (this == RepeatKind.Subscription) SUBSCRIPTION_CATEGORY else BILLS_CATEGORY
     return categories.firstOrNull { it.id == wanted }?.id ?: categories.firstOrNull()?.id
 }
 

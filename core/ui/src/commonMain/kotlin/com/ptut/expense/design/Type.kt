@@ -89,6 +89,8 @@ private fun PtutType.inPhoneFont() = copy(
     listHeadline = listHeadline.inPhoneFont(),
     meta = meta.inPhoneFont(),
     eyebrow = eyebrow.inPhoneFont(),
+    sheetTitle = sheetTitle.inPhoneFont(),
+    pageTitle = pageTitle.inPhoneFont(),
 )
 
 /**
@@ -140,6 +142,9 @@ data class PtutType(
     val listHeadline: TextStyle,
     val meta: TextStyle,
     val eyebrow: TextStyle,
+    /** Light 24 and light 28: a sheet's or empty state's heading, and a page's big heading. */
+    val sheetTitle: TextStyle,
+    val pageTitle: TextStyle,
     /** The day receipt's Geist Mono (#120, p09): a line, the shop's heading, and the ruled total. */
     val receipt: TextStyle,
     val receiptHeading: TextStyle,
@@ -192,6 +197,8 @@ val LocalPtutType = staticCompositionLocalOf {
         listHeadline = fallback.titleMedium,
         meta = fallback.labelMedium,
         eyebrow = fallback.labelSmall,
+        sheetTitle = fallback.headlineMedium,
+        pageTitle = fallback.displaySmall,
         receipt = fallback.bodyMedium,
         receiptHeading = fallback.labelLarge,
         receiptTotal = fallback.headlineSmall,

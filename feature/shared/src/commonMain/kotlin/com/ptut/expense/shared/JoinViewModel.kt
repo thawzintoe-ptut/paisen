@@ -2,6 +2,7 @@ package com.ptut.expense.shared
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.sync.JoinChoice
 import com.ptut.expense.sync.SharedSync
 import com.ptut.expense.sync.auth.Account
@@ -87,11 +88,8 @@ class JoinViewModel(
         val sync = sync ?: return
         val choice = choice ?: return
         viewModelScope.launch {
-            state.value = try {
-                JoinUiState.Done(sync.join(choice, memberId))
-            } catch (failure: Exception) {
-                JoinUiState.Failed(failure.message())
-            }
+            state.value = runSuspendCatching<JoinUiState> { JoinUiState.Done(sync.join(choice, memberId)) }
+                .getOrElse { failure -> JoinUiState.Failed(failure.syncMessage()) }
         }
     }
 
@@ -99,16 +97,12 @@ class JoinViewModel(
         val sync = sync ?: return
         state.value = JoinUiState.Loading
         viewModelScope.launch {
-            state.value = try {
+            state.value = runSuspendCatching<JoinUiState> {
                 val opened = sync.openJoin(code)
                 choice = opened
                 opened.mine?.let { (_, name) -> JoinUiState.AlreadyIn(opened.groupName, name) }
                     ?: JoinUiState.Choose(opened.groupName, opened.names.map { (id, name) -> JoinNameUiModel(id, name) })
-            } catch (failure: Exception) {
-                JoinUiState.Failed(failure.message())
-            }
+            }.getOrElse { failure -> JoinUiState.Failed(failure.syncMessage()) }
         }
     }
-
-    private fun Exception.message(): String = syncMessage()
 }

@@ -567,6 +567,40 @@ class SlipParserTest {
     // Degraded reads
 
     @Test
+    fun `a date that never was leaves the time unread rather than failing the slip`() {
+        assertEquals(null, readAt("31 Feb 26  1:06 AM").occurredAtEpochMillis)
+    }
+
+    @Test
+    fun `an hour past twelve with a PM mark leaves the time unread`() {
+        assertEquals(null, readAt("15 Aug 26 13:06 PM").occurredAtEpochMillis)
+    }
+
+    private fun readAt(date: String) = assertIs<SlipRead.Partial>(
+        SlipParser.parse(
+            listOf(
+                "Payment Completed", date,
+                "MR. SOMCHAI J", "KBank", "xxx-x-xxxxx-x",
+                "SHOPEEPAY", "Transaction ID:", "R1", "Amount:", "10.00 Baht",
+            ),
+        ),
+    )
+
+    @Test
+    fun `an amount too long to be money is not read as one`() {
+        val read = SlipParser.parse(slip("SHOPEEPAY", "Transaction ID:", "016200000002TXN00002", "Amount:", "${Long.MAX_VALUE}.00 Baht"))
+
+        assertEquals(null, assertIs<SlipRead.Partial>(read).amount)
+    }
+
+    @Test
+    fun `thirteen digits of baht still read`() {
+        val read = complete("SHOPEEPAY", "Transaction ID:", "016200000002TXN00002", "Amount:", "1,234,567,890,123.00 Baht")
+
+        assertEquals(Satang.ofMinorUnits(123_456_789_012_300), read.amount)
+    }
+
+    @Test
     fun `a slip with no amount is partial and the amount stays absent`() {
         val read = SlipParser.parse(
             slip(

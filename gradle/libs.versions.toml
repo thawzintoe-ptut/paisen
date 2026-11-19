@@ -1,5 +1,5 @@
 [versions]
-# Kotlin is held at 2.3.x deliberately: KSP has no 2.4.x build yet and Room needs KSP.
+# KSP2 (2.3.x) is no longer tied to one Kotlin release, so Room's KSP runs on Kotlin 2.4.
 kotlin = "2.4.21"
 ksp = "2.3.13"
 agp = "9.2.1"
@@ -11,10 +11,9 @@ androidTargetSdk = "37"
 
 androidxActivityCompose = "1.13.0"
 # JetBrains republishes lifecycle and navigation for multiplatform under org.jetbrains.androidx.
-# Their version lines differ from Google's — navigation tops out at 2.9.2, not 2.9.8.
+# Their version lines differ from Google's, so do not copy a version number from androidx.
 androidxLifecycle = "2.11.0"
 androidxNavigation = "2.10.0"
-androidxMaterial3Adaptive = "1.3.0"
 androidxWork = "2.12.0"
 
 room = "2.8.5"
@@ -34,8 +33,8 @@ ktor = "3.6.1"
 androidxCredentials = "1.6.0"
 googleId = "1.2.1"
 firebaseMessaging = "26.0.2"
-# #190: draws the invite QR code. Pure Compose, no camera. Held at 1.1.1: 1.2.0 and later ship
-# iOS klibs built with Kotlin 2.4 (ABI 2.4.0), which this Kotlin 2.3 build cannot read.
+# #190: draws the invite QR code. Pure Compose, no camera. Held at 1.1.1 while the build was on
+# Kotlin 2.3, which cannot read the Kotlin 2.4 iOS klibs of 1.2.0+. Kotlin is 2.4 now; not yet moved.
 qrose = "1.1.1"
 # #213: Gemini calls these on Android 16+. Alpha, and debug builds only until Google's Early Access
 # Program says yes; a release build carries none of it.
@@ -57,11 +56,13 @@ androidx-lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycl
 androidx-navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "androidxNavigation" }
 # #214: back and the iOS edge swipe ask before a changed form closes.
 compose-ui-backhandler = { module = "org.jetbrains.compose.ui:ui-backhandler", version.ref = "composeMultiplatform" }
-androidx-material3-adaptive = { module = "androidx.compose.material3.adaptive:adaptive", version.ref = "androidxMaterial3Adaptive" }
 
 # Database
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+room-testing = { module = "androidx.room:room-testing", version.ref = "room" }
+# room-testing reads schemas through json-okio 1.8.1, which cannot link against json 1.12; keep them in step.
+kotlinx-serialization-json-okio = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json-okio", version.ref = "serialization" }
 sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
 
 # DI
@@ -111,14 +112,5 @@ kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotl
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 
 [plugins]
-androidApplication = { id = "com.android.application", version.ref = "agp" }
-# AGP 9 forbids com.android.application in a module that also applies the KMP plugin.
-androidKmpLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
-kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
-kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
-composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-room = { id = "androidx.room", version.ref = "room" }
+# The other Gradle plugins reach the build through buildSrc, which pins them from [versions].
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

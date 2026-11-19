@@ -2,8 +2,9 @@ package com.ptut.expense.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.settings.ImportChoices
-import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
+import com.ptut.expense.domain.settings.AppChoices
+import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.pickerLabel
@@ -20,18 +21,18 @@ data class AddCurrencyUiState(val options: List<CurrencyOptionUiModel>)
 
 /** Which currency the Add sheet opens on. The first row follows the phone; the rest pin one. */
 class AddCurrencyViewModel(
-    private val settings: ImportSettings,
+    private val settings: AppSettings,
     /** What the phone's country maps to, read when the screen opens. */
     private val phoneCurrency: () -> Currency = { Currencies.Thb },
 ) : ViewModel() {
 
     val uiState: StateFlow<AddCurrencyUiState> = settings.choices
         .map(::state)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state(settings.choices.value))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), state(settings.choices.value))
 
     fun choose(code: String?) = settings.setAddCurrency(code)
 
-    private fun state(choices: ImportChoices): AddCurrencyUiState {
+    private fun state(choices: AppChoices): AddCurrencyUiState {
         val follow = CurrencyOptionUiModel(null, currencyCopy().followPhone(phoneCurrency().code), chosen = choices.addCurrency == null)
         val pinned = Currencies.all.map { CurrencyOptionUiModel(it.code, it.pickerLabel, chosen = it.code == choices.addCurrency) }
         return AddCurrencyUiState(listOf(follow) + pinned)

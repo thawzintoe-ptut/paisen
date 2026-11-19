@@ -23,7 +23,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
@@ -72,7 +71,7 @@ fun PhotoFoldersView(
                 Column(modifier = Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.xs, bottom = Spacing.sm)) {
                     Text(
                         text = text.headline,
-                        style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Light),
+                        style = MaterialTheme.ptutType.pageTitle,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(

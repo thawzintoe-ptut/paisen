@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.rules.RememberedMerchant
 import com.ptut.expense.domain.rules.RuleRepository
+import com.ptut.expense.domain.rules.forShop
 import com.ptut.expense.domain.slip.isReaderNoise
 import com.ptut.expense.domain.slip.shownShop
 import com.ptut.expense.locale.AppText
@@ -41,28 +43,28 @@ class ShopRuleViewModel(
     val isForgotten: StateFlow<Boolean> = forgotten.asStateFlow()
 
     val uiState: StateFlow<ShopRuleUiState> = rules.rules
-        .map { held -> held.matching(shop).state() }
+        .map { held -> held.forShop(shop).state() }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
             initialValue = ShopRuleUiState.Loading,
         )
 
     /** The shop keeps its history. Only its next slip lands somewhere new. */
     fun recategorise(categoryId: String) = viewModelScope.launch {
-        val rule = rules.rules.value.matching(shop) ?: return@launch
+        val rule = rules.rules.value.forShop(shop) ?: return@launch
         rules.recategorise(rule.id, categoryId)
     }
 
     /** A name for a shop read as noise. Its rows show it at once; which slips it files does not change. */
     fun rename(name: String) = viewModelScope.launch {
-        val rule = rules.rules.value.matching(shop) ?: return@launch
+        val rule = rules.rules.value.forShop(shop) ?: return@launch
         rules.rename(rule.id, name)
     }
 
     /** The past stays filed. The shop is simply asked about again the next time it appears. */
     fun forget() = viewModelScope.launch {
-        val rule = rules.rules.value.matching(shop) ?: return@launch
+        val rule = rules.rules.value.forShop(shop) ?: return@launch
         rules.forget(rule.id)
         forgotten.value = true
     }
@@ -82,10 +84,4 @@ class ShopRuleViewModel(
             name = it.displayName.orEmpty(),
         )
     } ?: ShopRuleUiState.Missing
-
-    /** The engine's own key, so a rule taught in one case still matches a slip printed in another. */
-    private fun List<RememberedMerchant>.matching(shop: String): RememberedMerchant? {
-        val key = shop.trim().lowercase()
-        return firstOrNull { it.counterparty.trim().lowercase() == key }
-    }
 }

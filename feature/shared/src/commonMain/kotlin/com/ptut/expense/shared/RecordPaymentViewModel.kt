@@ -2,10 +2,10 @@ package com.ptut.expense.shared
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
-import com.ptut.expense.domain.formatDigits
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.PaymentDraft
 import com.ptut.expense.domain.shared.PaymentMethod
@@ -16,6 +16,7 @@ import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.money
 import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.parseMinor
+import com.ptut.expense.domain.shared.typedText
 import com.ptut.expense.domain.shared.whoPaysWhom
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.Haptics
@@ -26,6 +27,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
@@ -98,6 +100,10 @@ class RecordPaymentViewModel(
 
     private val form = MutableStateFlow(PaymentForm())
     private val opened = MutableStateFlow<PaymentForm?>(null)
+    private val saved = MutableStateFlow(false)
+
+    /** True once the payment is recorded; the shell leaves on this. */
+    val isSaved: StateFlow<Boolean> = saved.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -143,7 +149,7 @@ class RecordPaymentViewModel(
             failedTitle = if (form.failed) text.didntSave else null,
             failedBody = if (form.failed) text.keptTyped else null,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecordPaymentUiState.Missing)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), RecordPaymentUiState.Missing)
 
     fun setAmount(text: String) = form.update { it.copy(amountText = text.filter { c -> c.isDigit() || c == '.' }) }
 
@@ -151,7 +157,7 @@ class RecordPaymentViewModel(
 
     fun setTime(epochMillis: Long) = form.update { it.copy(occurredAtEpochMillis = epochMillis) }
 
-    fun record(onDone: () -> Unit) {
+    fun record(onDone: () -> Unit = {}) {
         val state = uiState.value as? RecordPaymentUiState.Ready ?: return
         // The form, not uiState: uiState catches up a frame later, and the second tap comes sooner.
         if (!state.canSave || form.value.saving) return
@@ -184,6 +190,7 @@ class RecordPaymentViewModel(
                     action = ToastAction(AppText.copy.common.undo) { repository.removePayment(id) },
                 ),
             )
+            saved.value = true
             onDone()
         }
     }
@@ -208,5 +215,5 @@ class RecordPaymentViewModel(
 
     private fun amountOf(form: PaymentForm, group: SharedGroup): Satang? = parseMinor(form.amountText, group.money)?.let { Satang.ofMinorUnits(it) }
 
-    private fun plain(amount: Satang, group: SharedGroup): String = amount.formatDigits(group.moneyFormat()).replace(",", "")
+    private fun plain(amount: Satang, group: SharedGroup): String = group.money.typedText(amount.toMinorUnits())
 }

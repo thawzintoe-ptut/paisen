@@ -1,174 +1,64 @@
 package com.ptut.expense
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.toRoute
-import com.ptut.expense.activity.ActivityView
-import com.ptut.expense.activity.ActivityViewModel
-import com.ptut.expense.add.AddSheet
 import com.ptut.expense.add.AddViewModel
 import com.ptut.expense.agent.AgentInbox
 import com.ptut.expense.agent.ProposedAction
-import com.ptut.expense.categories.CategoriesView
-import com.ptut.expense.categories.CategoriesViewModel
-import com.ptut.expense.categories.EditCategoryView
-import com.ptut.expense.categories.EditCategoryViewModel
-import com.ptut.expense.confirm.ConfirmSlipView
-import com.ptut.expense.confirm.ConfirmSlipViewModel
-import com.ptut.expense.debug.DebugSlipPanel
-import com.ptut.expense.debug.DebugSlipViewModel
-import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutTheme
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
 import com.ptut.expense.design.systemAllowsFrost
-import com.ptut.expense.detail.TransactionDetailView
-import com.ptut.expense.detail.TransactionDetailViewModel
-import com.ptut.expense.di.AppBuild
 import com.ptut.expense.domain.DayPart
 import com.ptut.expense.domain.Home
-import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.dayPartAt
-import com.ptut.expense.domain.folders.FolderChooser
-import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.slip.SlipPictures
-import com.ptut.expense.edit.EditTransactionView
-import com.ptut.expense.edit.EditTransactionViewModel
-import com.ptut.expense.folders.PhotoFoldersView
-import com.ptut.expense.folders.PhotoFoldersViewModel
-import com.ptut.expense.home.AllowAllPhotosSheet
-import com.ptut.expense.home.HomeView
-import com.ptut.expense.home.HomeViewModel
-import com.ptut.expense.ledger.LedgerView
-import com.ptut.expense.ledger.LedgerViewModel
-import com.ptut.expense.ledger.scope
 import com.ptut.expense.locale.AppText
-import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.nav.BarDestination
 import com.ptut.expense.nav.PtutNavHost
 import com.ptut.expense.nav.PtutRoute
 import com.ptut.expense.nav.PtutShell
-import com.ptut.expense.nav.editTransaction
 import com.ptut.expense.nav.openProposed
-import com.ptut.expense.nav.openTabAt
-import com.ptut.expense.nav.openTransaction
 import com.ptut.expense.nav.pillSlot
+import com.ptut.expense.nav.recordRoutes
 import com.ptut.expense.nav.selectTab
+import com.ptut.expense.nav.settingsRoutes
+import com.ptut.expense.nav.sharedRoutes
 import com.ptut.expense.nav.switchTab
+import com.ptut.expense.nav.todayRoutes
 import com.ptut.expense.onboarding.Onboarding
 import com.ptut.expense.onboarding.OnboardingView
 import com.ptut.expense.onboarding.OnboardingViewModel
-import com.ptut.expense.platform.lock.AppLock
-import com.ptut.expense.platform.lock.DeviceAuth
-import com.ptut.expense.platform.photos.PhotoSettings
-import com.ptut.expense.receipt.DayReceiptView
-import com.ptut.expense.receipt.DayReceiptViewModel
-import com.ptut.expense.reports.ReportsView
-import com.ptut.expense.reports.ReportsViewModel
-import com.ptut.expense.review.ReviewView
-import com.ptut.expense.review.ReviewViewModel
-import com.ptut.expense.settings.AddCurrencyView
-import com.ptut.expense.settings.AddCurrencyViewModel
-import com.ptut.expense.settings.AssistantModelView
-import com.ptut.expense.settings.AssistantModelViewModel
-import com.ptut.expense.settings.BackgroundImportView
-import com.ptut.expense.settings.BackgroundImportViewModel
-import com.ptut.expense.settings.ExportDataView
-import com.ptut.expense.settings.FEEDBACK_ADDRESS
-import com.ptut.expense.settings.HomeCurrencyView
-import com.ptut.expense.settings.HomeCurrencyViewModel
-import com.ptut.expense.settings.ImportDataView
-import com.ptut.expense.settings.KeepFailedSlipsView
-import com.ptut.expense.settings.KeepFailedSlipsViewModel
-import com.ptut.expense.settings.LanguageView
-import com.ptut.expense.settings.LanguageViewModel
-import com.ptut.expense.settings.LedgerBackupViewModel
-import com.ptut.expense.settings.LicencesView
-import com.ptut.expense.settings.LicencesViewModel
-import com.ptut.expense.settings.SettingsAction
-import com.ptut.expense.settings.SettingsView
-import com.ptut.expense.settings.SettingsViewModel
-import com.ptut.expense.settings.SlipOwnerDialog
-import com.ptut.expense.settings.TimezoneView
-import com.ptut.expense.settings.TimezoneViewModel
-import com.ptut.expense.settings.destination
-import com.ptut.expense.settings.feedbackMail
-import com.ptut.expense.settings.focusedRow
-import com.ptut.expense.settings.settingsRoute
-import com.ptut.expense.shared.AccountCard
-import com.ptut.expense.shared.AddExpenseActions
-import com.ptut.expense.shared.AddExpenseView
-import com.ptut.expense.shared.AddExpenseViewModel
-import com.ptut.expense.shared.GroupDetailView
-import com.ptut.expense.shared.GroupDetailViewModel
-import com.ptut.expense.shared.GroupInvite
-import com.ptut.expense.shared.GroupManage
-import com.ptut.expense.shared.GroupTabsState
-import com.ptut.expense.shared.JoinView
-import com.ptut.expense.shared.JoinViewModel
-import com.ptut.expense.shared.PeopleView
-import com.ptut.expense.shared.PeopleViewModel
-import com.ptut.expense.shared.RecordPaymentView
-import com.ptut.expense.shared.RecordPaymentViewModel
-import com.ptut.expense.shared.RepeatExpenseActions
-import com.ptut.expense.shared.RepeatExpenseView
-import com.ptut.expense.shared.RepeatExpenseViewModel
-import com.ptut.expense.shared.RepeatRunner
-import com.ptut.expense.shared.SharedActivityView
-import com.ptut.expense.shared.SharedActivityViewModel
-import com.ptut.expense.shared.SharedView
-import com.ptut.expense.shared.SharedViewModel
 import com.ptut.expense.shared.SignedOutElsewhereSheet
-import com.ptut.expense.shared.WhoPaysWhomView
-import com.ptut.expense.shared.WhoPaysWhomViewModel
-import com.ptut.expense.shoprule.ShopRuleView
-import com.ptut.expense.shoprule.ShopRuleViewModel
 import com.ptut.expense.sync.InviteLinks
 import com.ptut.expense.sync.SharedSync
 import com.ptut.expense.sync.push.GroupLinks
-import com.ptut.expense.sync.push.PushEvents
 import com.ptut.expense.ui.HapticEvent
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.LocalSlipPictures
 import com.ptut.expense.ui.ToastHost
-import com.ptut.expense.ui.ToastMessage
-import com.ptut.expense.ui.ToastMessages
-import com.ptut.expense.ui.ToastTone
-import com.ptut.expense.ui.sky.AskBeforeLeaving
-import com.ptut.expense.ui.sky.SkyBottomSheet
-import com.ptut.expense.ui.sky.SkyDiscardSheet
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.StateFlow
 import org.koin.compose.getKoin
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import org.koin.core.parameter.parametersOf
 import kotlin.time.Clock
 
 /**
@@ -194,7 +84,7 @@ fun PtutApp() {
 /** #122: evening on Bangkok's clock while Mood by time of day is on, read again whenever the app comes back. */
 @Composable
 private fun rememberEveningMood(): Boolean {
-    val choices by koinInject<ImportSettings>().choices.collectAsStateWithLifecycle()
+    val choices by koinInject<AppSettings>().choices.collectAsStateWithLifecycle()
     var now by remember { mutableStateOf(Clock.System.now()) }
     LifecycleResumeEffect(Unit) {
         now = Clock.System.now()
@@ -224,15 +114,26 @@ private fun FirstRun() {
     )
 }
 
+/** Takes what waits in an inbox once [ready], consumes it, then hands it to [onTake]. */
+@Composable
+private fun <T : Any> TakeFromInbox(pending: StateFlow<T?>, ready: Boolean, consume: () -> Unit, onTake: (T) -> Unit) {
+    val waiting by pending.collectAsStateWithLifecycle()
+    LaunchedEffect(waiting, ready) {
+        val value = waiting ?: return@LaunchedEffect
+        if (!ready) return@LaunchedEffect
+        consume()
+        onTake(value)
+    }
+}
+
 /**
  * The shell: chrome, an add sheet and a [PtutNavHost]. It owns neither the destinations nor the
  * chrome — those live in [PtutRoute] and [PtutShell] — so adding a screen means one route and one
- * `composable` block.
+ * `composable` block in its area's routes, such as [settingsRoutes].
  *
  * The transitions live in [PtutNavHost], which is where the two platforms are allowed to
  * disagree about how a screen arrives — see its own note for why iOS keeps the platform's.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LedgerShell() {
     val navController = rememberNavController()
@@ -267,7 +168,6 @@ private fun LedgerShell() {
     // Resolved here rather than inside the sheet: the write outlives the sheet that started
     // it, so closing on save cannot cancel the row half-written.
     val addViewModel = koinViewModel<AddViewModel>()
-    val addState by addViewModel.uiState.collectAsStateWithLifecycle()
 
     // The design opens the sheet cleared every time, and this holder outlives it, so the
     // clearing is said out loud rather than left to whoever calls next.
@@ -281,31 +181,20 @@ private fun LedgerShell() {
     // Research finding 8: an Undo stays until the reader moves to another screen.
     LaunchedEffect(currentEntry?.id) { app.screenChanged() }
 
+    val graphReady = currentEntry != null
     // #190: an invite link can arrive before the graph exists, so it waits in InviteLinks.
-    val inviteCode by InviteLinks.pendingCode.collectAsStateWithLifecycle()
-    LaunchedEffect(inviteCode, currentEntry == null) {
-        val code = inviteCode ?: return@LaunchedEffect
-        if (currentEntry == null) return@LaunchedEffect
-        InviteLinks.consume()
+    TakeFromInbox(InviteLinks.pendingCode, graphReady, InviteLinks::consume) { code ->
         navController.navigate(PtutRoute.Join(code)) { launchSingleTop = true }
     }
 
     // A tapped push opens its group; like an invite link it can arrive before the graph exists.
-    val pushedGroup by GroupLinks.pendingGroupId.collectAsStateWithLifecycle()
-    LaunchedEffect(pushedGroup, currentEntry == null) {
-        val groupId = pushedGroup ?: return@LaunchedEffect
-        if (currentEntry == null) return@LaunchedEffect
-        GroupLinks.consume()
+    TakeFromInbox(GroupLinks.pendingGroupId, graphReady, GroupLinks::consume) { groupId ->
         navController.navigate(PtutRoute.SharedGroup(groupId)) { launchSingleTop = true }
     }
 
     // #205: what Siri, a Shortcut, the Android icon or Quick add left, waiting the same way. A row
     // to add opens this sheet filled; anything else closes it and opens the screen that saves it.
-    val agentAction by AgentInbox.pendingAction.collectAsStateWithLifecycle()
-    LaunchedEffect(agentAction, currentEntry == null) {
-        val action = agentAction ?: return@LaunchedEffect
-        if (currentEntry == null) return@LaunchedEffect
-        AgentInbox.consume()
+    TakeFromInbox(AgentInbox.pendingAction, graphReady, AgentInbox::consume) { action ->
         if (action is ProposedAction.AddTransaction) {
             addViewModel.prefill(action)
             addOpen = true
@@ -315,30 +204,13 @@ private fun LedgerShell() {
         }
     }
 
-    // #189: what other members added arrives whenever the app comes back.
     // Not in every graph: the iOS UI tests build the app without a sync module.
     val koin = getKoin()
     val sharedSync = remember(koin) { koin.getOrNull<SharedSync>() }
-    val syncScope = rememberCoroutineScope()
-    // #182: repeats due today add themselves after the pull, so another phone's copy arrives first.
-    val repeatRunner = remember(koin) { koin.getOrNull<RepeatRunner>() }
-    LifecycleResumeEffect(sharedSync, repeatRunner) {
-        val running = syncScope.launch {
-            sharedSync?.let { sync -> runCatching { sync.syncAll() } }
-            repeatRunner?.let { runner -> runCatching { runner.run() } }
-        }
-        // Only while on screen, so a push that finds nobody listening becomes a notification.
-        val pushes = syncScope.launch {
-            PushEvents.groupIds.collect { sharedSync?.let { sync -> runCatching { sync.syncAll() } } }
-        }
-        onPauseOrDispose {
-            running.cancel()
-            pushes.cancel()
-        }
-    }
+    SyncOnResume(sharedSync)
 
     // #123: the reader's Transparency switch, and whether this device can blur at all.
-    val choices by koinInject<ImportSettings>().choices.collectAsStateWithLifecycle()
+    val choices by koinInject<AppSettings>().choices.collectAsStateWithLifecycle()
     val frosted = choices.transparency && systemAllowsFrost()
 
     PtutShell(
@@ -368,745 +240,14 @@ private fun LedgerShell() {
             startDestination = PtutRoute.Today,
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
-            composable<PtutRoute.Today> {
-                val viewModel = koinViewModel<HomeViewModel>()
-                val state by viewModel.uiState.collectAsStateWithLifecycle()
-                val photoSettings = koinInject<PhotoSettings>()
-                val pickScope = rememberCoroutineScope()
-                var askingAllowAll by remember { mutableStateOf(false) }
-                HomeView(
-                    uiState = state,
-                    onChoosePeriod = viewModel::show,
-                    onOpenReview = { navController.navigate(PtutRoute.Review) },
-                    // History is pushed since Shared took its pill slot (#33), and lights Today.
-                    onOpenLedger = { navController.navigate(PtutRoute.Ledger) { launchSingleTop = true } },
-                    onAddByHand = openAddSheet,
-                    // The stale notice does not land on Settings, it lands on the lever
-                    // that owns the cause — a different one depending on whether the
-                    // importer never started or stopped after working. Failing scans need the
-                    // system's photo page, which only the note in front of it can explain.
-                    onFixImport = { fix ->
-                        if (fix == ImportFix.AllowAllPhotos) askingAllowAll = true else navController.openTabAt(fix.settingsRoute())
-                    },
-                    onOpenTransaction = { navController.openTransaction(it) },
-                    onOpenReceipt = { navController.navigate(PtutRoute.DayReceipt(it)) },
-                    onOpenWeek = { navController.navigate(PtutRoute.LedgerSlice(it.from, it.to, it.categoryId)) { launchSingleTop = true } },
-                    onHideNoteWeek = viewModel::hideNoteWeek,
-                )
-                if (askingAllowAll) {
-                    // Asked for only under "Select photos", the one case that offers Android's picker.
-                    val chooser = if (photoSettings.onlyPickedPhotos) koinInject<FolderChooser>() else null
-                    AllowAllPhotosSheet(
-                        steps = photoSettings.steps,
-                        onOpenSettings = {
-                            askingAllowAll = false
-                            photoSettings.open()
-                        },
-                        onDismiss = { askingAllowAll = false },
-                        onPickPhotos = chooser?.let { picker ->
-                            {
-                                askingAllowAll = false
-                                pickScope.launch { picker.chooseMore() }
-                            }
-                        },
-                    )
-                }
-                // The morning card leaves at noon: the clock is read again whenever Home comes back.
-                LifecycleResumeEffect(viewModel) {
-                    viewModel.refreshClock()
-                    onPauseOrDispose { }
-                }
-            }
-
-            composable<PtutRoute.DayReceipt> { entry ->
-                val date = entry.toRoute<PtutRoute.DayReceipt>().date
-                val receipt = koinViewModel<DayReceiptViewModel> { parametersOf(date) }
-                val state by receipt.uiState.collectAsStateWithLifecycle()
-                DayReceiptView(uiState = state, onBack = { navController.popBackStack() })
-            }
-
-            composable<PtutRoute.Reports> {
-                val viewModel = koinViewModel<ReportsViewModel>()
-                val state by viewModel.uiState.collectAsStateWithLifecycle()
-                ReportsView(
-                    uiState = state,
-                    onChoosePeriod = viewModel::show,
-                    onSelectBar = viewModel::select,
-                    onOpenHistory = { from, to, categoryId ->
-                        navController.navigate(PtutRoute.LedgerSlice(from, to, categoryId)) { launchSingleTop = true }
-                    },
-                )
-            }
-
-            composable<PtutRoute.Ledger> {
-                val ledger = koinViewModel<LedgerViewModel>()
-                val state by ledger.uiState.collectAsStateWithLifecycle()
-                LedgerView(
-                    uiState = state,
-                    onSearch = ledger::search,
-                    onFilter = ledger::filter,
-                    onOpenTransaction = { navController.openTransaction(it) },
-                    onBack = { navController.popBackStack() },
-                )
-            }
-
-            // #220: the same History, holding what a Reports bar or category row counted.
-            composable<PtutRoute.LedgerSlice> { entry ->
-                val slice = entry.toRoute<PtutRoute.LedgerSlice>()
-                val ledger = koinViewModel<LedgerViewModel> { parametersOf(slice.scope()) }
-                val state by ledger.uiState.collectAsStateWithLifecycle()
-                LedgerView(
-                    uiState = state,
-                    onSearch = ledger::search,
-                    onFilter = ledger::filter,
-                    onOpenTransaction = { navController.openTransaction(it) },
-                    onBack = { navController.popBackStack() },
-                )
-            }
-
-            composable<PtutRoute.Shared> {
-                val shared = koinViewModel<SharedViewModel>()
-                val state by shared.uiState.collectAsStateWithLifecycle()
-                SharedView(
-                    uiState = state,
-                    onSearch = shared::search,
-                    onCreateGroup = { name, type, icon, members, currency ->
-                        shared.createGroup(name, type, icon, members, currency) { navController.navigate(PtutRoute.SharedGroup(it, invite = true)) }
-                    },
-                    onAddPerson = { name, personId ->
-                        shared.addPerson(name, personId) { navController.navigate(PtutRoute.SharedGroup(it, invite = true)) }
-                    },
-                    onOpenGroup = { navController.navigate(PtutRoute.SharedGroup(it)) { launchSingleTop = true } },
-                    onOpenActivity = { navController.navigate(PtutRoute.SharedActivity()) { launchSingleTop = true } },
-                    onJoinCode = { navController.navigate(PtutRoute.Join(it)) { launchSingleTop = true } },
-                    onOpenPeople = { navController.navigate(PtutRoute.People) { launchSingleTop = true } },
-                )
-            }
-
-            composable<PtutRoute.RepeatExpense> { entry ->
-                val route = entry.toRoute<PtutRoute.RepeatExpense>()
-                val repeat = koinViewModel<RepeatExpenseViewModel> { parametersOf(route.groupId, route.ruleId.orEmpty()) }
-                val state by repeat.uiState.collectAsStateWithLifecycle()
-                val done by repeat.isDone.collectAsStateWithLifecycle()
-                LaunchedEffect(done) { if (done) navController.popBackStack() }
-                RepeatExpenseView(
-                    uiState = state,
-                    actions = RepeatExpenseActions(
-                        onBack = { navController.popBackStack() },
-                        onKind = repeat::setKind,
-                        onAmount = repeat::setAmount,
-                        onFrequency = repeat::setFrequency,
-                        onStart = repeat::setStart,
-                        onEnd = repeat::setEnd,
-                        onRemind = repeat::setRemind,
-                        onPayer = repeat::setPayer,
-                        onSave = repeat::save,
-                        onStop = repeat::stop,
-                    ),
-                )
-            }
-
-            composable<PtutRoute.People> {
-                val people = koinViewModel<PeopleViewModel>()
-                val state by people.uiState.collectAsStateWithLifecycle()
-                PeopleView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onSearch = people::search,
-                    onSetArchived = people::setArchived,
-                    onAddPerson = { name, personId ->
-                        people.addPerson(name, personId) { navController.navigate(PtutRoute.SharedGroup(it, invite = true)) }
-                    },
-                )
-            }
-
-            composable<PtutRoute.Join> { entry ->
-                val code = entry.toRoute<PtutRoute.Join>().code
-                val join = koinViewModel<JoinViewModel> { parametersOf(code) }
-                val state by join.uiState.collectAsStateWithLifecycle()
-                JoinView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onPick = join::pick,
-                    onOpenGroup = join::openGroup,
-                    onRetry = join::retry,
-                    onJoined = { groupId ->
-                        navController.navigate(PtutRoute.SharedGroup(groupId)) {
-                            popUpTo<PtutRoute.Join> { inclusive = true }
-                            launchSingleTop = true
-                        }
-                    },
-                )
-            }
-
-            composable<PtutRoute.SharedGroup> { entry ->
-                val route = entry.toRoute<PtutRoute.SharedGroup>()
-                val groupId = route.groupId
-                val group = koinViewModel<GroupDetailViewModel> { parametersOf(groupId) }
-                val state by group.uiState.collectAsStateWithLifecycle()
-                val signedIn by group.signedIn.collectAsStateWithLifecycle()
-                val inviteAction by group.inviteAction.collectAsStateWithLifecycle()
-                val groupAction by group.groupActionState.collectAsStateWithLifecycle()
-                val groupRemoved by group.isRemoved.collectAsStateWithLifecycle()
-                val refreshing by group.isRefreshing.collectAsStateWithLifecycle()
-                val tab by group.tab.collectAsStateWithLifecycle()
-                val who = koinViewModel<WhoPaysWhomViewModel> { parametersOf(groupId) }
-                val balances by who.uiState.collectAsStateWithLifecycle()
-                val activity = koinViewModel<SharedActivityViewModel> { parametersOf(groupId) }
-                val activityState by activity.uiState.collectAsStateWithLifecycle()
-                val activitySince by group.activitySince.collectAsStateWithLifecycle()
-                LaunchedEffect(activitySince) { activity.since(activitySince) }
-                LaunchedEffect(groupRemoved) { if (groupRemoved) navController.popBackStack() }
-                GroupDetailView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onSettleUp = { from, to -> navController.navigate(PtutRoute.RecordPayment(groupId, from, to)) { launchSingleTop = true } },
-                    onBalances = { navController.navigate(PtutRoute.WhoPaysWhom(groupId)) { launchSingleTop = true } },
-                    onAddExpense = { navController.navigate(PtutRoute.AddSharedExpense(groupId)) { launchSingleTop = true } },
-                    onOpenExpense = { navController.navigate(PtutRoute.AddSharedExpense(groupId, it)) { launchSingleTop = true } },
-                    onRepeat = { navController.navigate(PtutRoute.RepeatExpense(groupId)) { launchSingleTop = true } },
-                    onOpenRepeat = { navController.navigate(PtutRoute.RepeatExpense(groupId, it)) { launchSingleTop = true } },
-                    manage = GroupManage(
-                        action = groupAction,
-                        onSetPromptPay = group::setPromptPay,
-                        onEdit = group::editGroup,
-                        onRemove = group::removeGroup,
-                        onDismissError = group::dismissGroupError,
-                        onAddPeople = group::addPeople,
-                        onRemoveMember = group::removeMember,
-                        onRemovePayment = group::removePayment,
-                    ),
-                    invite = GroupInvite(
-                        openOnStart = route.invite,
-                        signedIn = signedIn,
-                        action = inviteAction,
-                        onInvite = group::invite,
-                        onNewLink = group::newLink,
-                        onSwitchOff = group::switchOff,
-                    ),
-                    refreshing = refreshing,
-                    onRefresh = group::refresh,
-                    tabs = GroupTabsState(
-                        selected = tab,
-                        onSelect = group::showTab,
-                        balances = balances,
-                        onSimplify = who::setSimplify,
-                        activity = activityState,
-                    ),
-                )
-            }
-
-            composable<PtutRoute.AddSharedExpense> { entry ->
-                val route = entry.toRoute<PtutRoute.AddSharedExpense>()
-                // Koin's parameters do not carry a null, so a new expense travels as "".
-                val add = koinViewModel<AddExpenseViewModel> {
-                    parametersOf(route.groupId, route.expenseId.orEmpty(), route.transactionId.orEmpty(), route.amount.orEmpty(), route.description.orEmpty())
-                }
-                val state by add.uiState.collectAsStateWithLifecycle()
-                val close: () -> Unit = { navController.popBackStack() }
-                AddExpenseView(
-                    uiState = state,
-                    actions = AddExpenseActions(
-                        onClose = close,
-                        onAmount = add::setAmount,
-                        onRate = add::setRate,
-                        onCurrency = add::setCurrency,
-                        onDescription = add::setDescription,
-                        onNote = add::setNote,
-                        onTime = add::setTime,
-                        onCategory = add::setCategory,
-                        onPayer = add::setPayer,
-                        onQuickSplit = add::setQuickSplit,
-                        onQuickPayer = add::setQuickPayer,
-                        onOpenSplit = add::openSplit,
-                        onSplitMode = add::setSplitMode,
-                        onWeight = add::setWeight,
-                        onGiveLeft = add::giveLeftToLastEdited,
-                        onSave = { add.save(onSaved = close) },
-                        onRemove = { add.remove(onRemoved = close) },
-                    ),
-                )
-            }
-
-            composable<PtutRoute.WhoPaysWhom> { entry ->
-                val groupId = entry.toRoute<PtutRoute.WhoPaysWhom>().groupId
-                val who = koinViewModel<WhoPaysWhomViewModel> { parametersOf(groupId) }
-                val state by who.uiState.collectAsStateWithLifecycle()
-                WhoPaysWhomView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onSimplify = who::setSimplify,
-                    onSettle = { from, to -> navController.navigate(PtutRoute.RecordPayment(groupId, from, to)) { launchSingleTop = true } },
-                    // Debug builds only until the card has been scanned by a real bank app.
-                    offerPayMe = koinInject<AppBuild>().debug,
-                    onPromptPay = who::setPromptPay,
-                )
-            }
-
-            composable<PtutRoute.RecordPayment> { entry ->
-                val route = entry.toRoute<PtutRoute.RecordPayment>()
-                val payment = koinViewModel<RecordPaymentViewModel> { parametersOf(route.groupId, route.fromMemberId, route.toMemberId) }
-                val state by payment.uiState.collectAsStateWithLifecycle()
-                val close: () -> Unit = { navController.popBackStack() }
-                RecordPaymentView(
-                    uiState = state,
-                    onClose = close,
-                    onAmount = payment::setAmount,
-                    onMethod = payment::setMethod,
-                    onTime = payment::setTime,
-                    onRecord = { payment.record(onDone = close) },
-                )
-            }
-
-            composable<PtutRoute.SharedActivity> { entry ->
-                val groupId = entry.toRoute<PtutRoute.SharedActivity>().groupId
-                // Koin's parameters do not carry a null, so every group's timeline travels as "".
-                val activity = koinViewModel<SharedActivityViewModel> { parametersOf(groupId.orEmpty()) }
-                val state by activity.uiState.collectAsStateWithLifecycle()
-                SharedActivityView(uiState = state, onBack = { navController.popBackStack() }, onFilter = activity::show)
-            }
-
-            composable<PtutRoute.Settings> { entry ->
-                val settings = koinViewModel<SettingsViewModel>()
-                val state by settings.uiState.collectAsStateWithLifecycle()
-                // The switch in the background import row is that screen's own lever (#168).
-                val background = koinViewModel<BackgroundImportViewModel>()
-                val uriHandler = LocalUriHandler.current
-                val build = koinInject<AppBuild>()
-                val toasts = koinInject<ToastMessages>()
-                val scope = rememberCoroutineScope()
-                val noEmailApp = LocalCopy.current.settings.noEmailApp(FEEDBACK_ADDRESS)
-                val deviceAuth = koinInject<DeviceAuth>()
-                val appLock = koinInject<AppLock>()
-                val unlockReason = LocalCopy.current.settings.unlockReason
-                // #26: the one row that opens a dialog, not a screen.
-                var editingOwner by rememberSaveable { mutableStateOf(false) }
-                if (editingOwner) {
-                    SlipOwnerDialog(
-                        current = koinInject<ImportSettings>().choices.value.slipOwner.name,
-                        onSave = {
-                            settings.setSlipOwner(it)
-                            editingOwner = false
-                        },
-                        onDismiss = { editingOwner = false },
-                    )
-                }
-                SettingsView(
-                    uiState = state,
-                    // Every row but one is a destination, so the screen navigates and the state
-                    // holder holds no action — an operation started here would report its result
-                    // over whichever screen the reader had moved on to.
-                    onAction = { action ->
-                        if (action == SettingsAction.Feedback) {
-                            // The phone's own mail app writes and sends it. Android throws when it has none.
-                            runCatching { uriHandler.openUri(feedbackMail(build)) }
-                                .onFailure { scope.launch { toasts.show(ToastMessage(noEmailApp, ToastTone.Error)) } }
-                        } else if (action == SettingsAction.SlipOwner) {
-                            editingOwner = true
-                        } else if (action == SettingsAction.NoteTone) {
-                            settings.switchNoteTone()
-                        } else {
-                            action.destination()?.let { navController.navigate(it) }
-                        }
-                    },
-                    focusRow = entry.toRoute<PtutRoute.Settings>().focusedRow(),
-                    onSwitch = { action, on ->
-                        when (action) {
-                            SettingsAction.MoodByTimeOfDay -> settings.setMoodByTimeOfDay(on)
-
-                            SettingsAction.WeeklyCheckIn -> settings.setWeeklyCheckIn(on)
-
-                            SettingsAction.Transparency -> settings.setTransparency(on)
-
-                            // #25: on only after the phone's own check passes, so a failed check cannot lock anyone out.
-                            SettingsAction.AppLock -> scope.launch {
-                                if (!on) {
-                                    settings.setAppLock(false)
-                                } else if (deviceAuth.authenticate(unlockReason)) {
-                                    settings.setAppLock(true)
-                                    appLock.unlock()
-                                }
-                            }
-
-                            else -> background.setRunning(on)
-                        }
-                    },
-                    account = { AccountCard(Modifier.padding(horizontal = Spacing.sm)) },
-                    footer = {
-                        Column {
-                            // Absent from a release build rather than hidden in one: the
-                            // graph binds nothing this needs unless the entry point said
-                            // debug.
-                            if (koinInject<AppBuild>().debug) {
-                                val debug = koinViewModel<DebugSlipViewModel>()
-                                val summary by debug.summary.collectAsStateWithLifecycle()
-                                DebugSlipPanel(
-                                    summary = summary,
-                                    onInjectReadable = debug::injectReadable,
-                                    onInjectSameMerchant = debug::injectSameMerchant,
-                                    onInjectUnreadable = debug::injectUnreadable,
-                                    modifier = Modifier.padding(Spacing.sm),
-                                )
-                            }
-                        }
-                    },
-                )
-            }
-
-            composable<PtutRoute.BackgroundImport> {
-                val background = koinViewModel<BackgroundImportViewModel>()
-                val state by background.uiState.collectAsStateWithLifecycle()
-                BackgroundImportView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onSetRunning = background::setRunning,
-                    onCheckNow = background::checkNow,
-                )
-            }
-
-            composable<PtutRoute.KeepFailedSlips> {
-                val keep = koinViewModel<KeepFailedSlipsViewModel>()
-                val state by keep.uiState.collectAsStateWithLifecycle()
-                KeepFailedSlipsView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onChoose = keep::choose,
-                )
-            }
-
-            // One class for both ends of FR-22. Each screen resolves its own instance,
-            // which is fine — they are separate destinations, so only one is ever on top.
-            composable<PtutRoute.ExportData> {
-                val backup = koinViewModel<LedgerBackupViewModel>()
-                val state by backup.uiState.collectAsStateWithLifecycle()
-                ExportDataView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onExport = backup::export,
-                )
-            }
-
-            composable<PtutRoute.ImportData> {
-                val backup = koinViewModel<LedgerBackupViewModel>()
-                val state by backup.uiState.collectAsStateWithLifecycle()
-                ImportDataView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onChooseFile = backup::chooseFile,
-                    onImport = backup::restore,
-                    onCancel = backup::cancelRestore,
-                )
-            }
-
-            composable<PtutRoute.Language> {
-                val language = koinViewModel<LanguageViewModel>()
-                val state by language.uiState.collectAsStateWithLifecycle()
-                LanguageView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onChoose = language::choose,
-                )
-            }
-
-            composable<PtutRoute.AddCurrency> {
-                val currency = koinViewModel<AddCurrencyViewModel>()
-                val state by currency.uiState.collectAsStateWithLifecycle()
-                AddCurrencyView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onChoose = currency::choose,
-                )
-            }
-
-            composable<PtutRoute.HomeCurrency> {
-                val homeCurrency = koinViewModel<HomeCurrencyViewModel>()
-                val state by homeCurrency.uiState.collectAsStateWithLifecycle()
-                HomeCurrencyView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onChoose = homeCurrency::choose,
-                    onRate = homeCurrency::typeRate,
-                    onConfirmConvert = homeCurrency::confirmConvert,
-                    onCancelConvert = homeCurrency::cancelConvert,
-                    onExport = { navController.navigate(PtutRoute.ExportData) },
-                )
-            }
-
-            composable<PtutRoute.Timezone> {
-                TimezoneView(
-                    uiState = koinViewModel<TimezoneViewModel>().uiState,
-                    onBack = { navController.popBackStack() },
-                )
-            }
-
-            composable<PtutRoute.AssistantModel> {
-                val assistant = koinViewModel<AssistantModelViewModel>()
-                val state by assistant.uiState.collectAsStateWithLifecycle()
-                AssistantModelView(
-                    uiState = state,
-                    onAct = assistant::act,
-                    onBack = { navController.popBackStack() },
-                )
-            }
-
-            composable<PtutRoute.Licences> {
-                val licences = koinViewModel<LicencesViewModel>()
-                val state by licences.uiState.collectAsStateWithLifecycle()
-                LicencesView(
-                    uiState = state,
-                    onToggle = licences::toggle,
-                    onBack = { navController.popBackStack() },
-                )
-            }
-
-            composable<PtutRoute.Review> {
-                val review = koinViewModel<ReviewViewModel>()
-                val state by review.uiState.collectAsStateWithLifecycle()
-                ReviewView(
-                    state = state,
-                    onOpenSlip = { navController.navigate(PtutRoute.ConfirmSlip(it)) },
-                    onDiscard = review::discard,
-                    onBack = { navController.popBackStack() },
-                )
-            }
-
-            composable<PtutRoute.Categories> {
-                val categories = koinViewModel<CategoriesViewModel>()
-                val state by categories.uiState.collectAsStateWithLifecycle()
-                val created by categories.justCreated.collectAsStateWithLifecycle()
-
-                // A new category is opened for editing at once: naming it is the first thing
-                // screen 12a is for, so asking in a dialog first would ask twice.
-                LaunchedEffect(created) {
-                    created?.let {
-                        categories.openedCreated()
-                        navController.navigate(PtutRoute.EditCategory(it, isNew = true))
-                    }
-                }
-
-                CategoriesView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onOpen = { navController.navigate(PtutRoute.EditCategory(it)) },
-                    onNew = { categories.newCategory() },
-                    onMove = { id, by -> categories.move(id, by) },
-                )
-            }
-
-            composable<PtutRoute.EditCategory> { entry ->
-                val route = entry.toRoute<PtutRoute.EditCategory>()
-                val edit = koinViewModel<EditCategoryViewModel> { parametersOf(route.categoryId, route.isNew) }
-                val state by edit.uiState.collectAsStateWithLifecycle()
-                val deleted by edit.isDeleted.collectAsStateWithLifecycle()
-
-                // The category is gone before the screen is, so leaving cannot cancel the
-                // delete — the order the record screen already uses.
-                LaunchedEffect(deleted) { if (deleted) navController.popBackStack() }
-
-                EditCategoryView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onRename = edit::rename,
-                    onIcon = edit::chooseIcon,
-                    onDirection = edit::chooseDirection,
-                    onColor = edit::chooseColor,
-                    onSave = { edit.save() },
-                    onAddSubCategory = { edit.addSubCategory(it) },
-                    onRenameSubCategory = { id, name -> edit.renameSubCategory(id, name) },
-                    onRemoveSubCategory = { edit.removeSubCategory(it) },
-                    onDelete = { edit.delete(it) },
-                    onTarget = edit::typeTarget,
-                )
-            }
-
-            composable<PtutRoute.ConfirmSlip> { entry ->
-                val slipId = entry.toRoute<PtutRoute.ConfirmSlip>().slipId
-                val confirm = koinViewModel<ConfirmSlipViewModel> { parametersOf(slipId) }
-                val state by confirm.uiState.collectAsStateWithLifecycle()
-
-                // The row is durable, or the slip gone, before the screen goes, so leaving cannot cancel it.
-                // A save lands on Today, where the row it made shows; Not mine goes back to the list.
-                LaunchedEffect(state.saved, state.dismissed) {
-                    when {
-                        state.saved -> if (!navController.popBackStack<PtutRoute.Today>(inclusive = false)) {
-                            navController.openTabAt(PtutRoute.Today)
-                        }
-
-                        state.dismissed -> navController.popBackStack()
-                    }
-                }
-
-                ConfirmSlipView(
-                    uiState = state,
-                    onType = confirm::type,
-                    onCategory = confirm::choose,
-                    onSubCategory = confirm::chooseSubCategory,
-                    onSave = confirm::save,
-                    onNotMine = confirm::notMine,
-                    onClose = { navController.popBackStack() },
-                    onShopName = confirm::nameShop,
-                    onChooseDebt = confirm::chooseDebt,
-                    onPayDebt = confirm::payDebt,
-                    onNotThisDebt = confirm::notThisDebt,
-                    onPlanned = confirm::markPlanned,
-                    onRate = confirm::typeRate,
-                )
-            }
-
-            composable<PtutRoute.PhotoFolders> {
-                val folders = koinViewModel<PhotoFoldersViewModel>()
-                val state by folders.uiState.collectAsStateWithLifecycle()
-
-                PhotoFoldersView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onToggle = folders::onToggle,
-                    onSave = { folders.save() },
-                    onChooseAnother = { folders.chooseMore() },
-                )
-                // Access granted in the system settings shows on return, not after a restart (#217).
-                LifecycleResumeEffect(folders) {
-                    folders.refresh()
-                    onPauseOrDispose { }
-                }
-            }
-
-            composable<PtutRoute.TransactionDetail> { entry ->
-                val id = entry.toRoute<PtutRoute.TransactionDetail>().transactionId
-                val detail =
-                    koinViewModel<TransactionDetailViewModel> { parametersOf(id) }
-                val state by detail.uiState.collectAsStateWithLifecycle()
-                val deleted by detail.isDeleted.collectAsStateWithLifecycle()
-
-                // The row is out of the ledger before the screen goes, so leaving cannot
-                // cancel the delete — the same order the confirm slip screen saves in.
-                LaunchedEffect(deleted) { if (deleted) navController.popBackStack() }
-
-                TransactionDetailView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onEdit = { navController.editTransaction(id) },
-                    onAskToDelete = detail::askToDelete,
-                    onKeepIt = detail::keepIt,
-                    onConfirmDelete = detail::confirmDelete,
-                    onOpenShopRule = { navController.navigate(PtutRoute.ShopRule(it)) },
-                    onShare = { groupId -> navController.navigate(PtutRoute.AddSharedExpense(groupId, transactionId = id)) { launchSingleTop = true } },
-                    onOpenSharedGroup = { navController.navigate(PtutRoute.SharedGroup(it)) { launchSingleTop = true } },
-                    onSetAlsoRemove = detail::setAlsoRemove,
-                    onSetPlanned = detail::setPlanned,
-                )
-            }
-
-            composable<PtutRoute.ShopRule> { entry ->
-                val shop = entry.toRoute<PtutRoute.ShopRule>().shop
-                val rule = koinViewModel<ShopRuleViewModel> { parametersOf(shop) }
-                val state by rule.uiState.collectAsStateWithLifecycle()
-                val forgotten by rule.isForgotten.collectAsStateWithLifecycle()
-
-                // The rule is gone before the screen is, so leaving cannot cancel it.
-                LaunchedEffect(forgotten) { if (forgotten) navController.popBackStack() }
-
-                ShopRuleView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onCategory = { rule.recategorise(it) },
-                    onForget = { rule.forget() },
-                    onRename = { rule.rename(it) },
-                )
-            }
-
-            composable<PtutRoute.EditTransaction> { entry ->
-                val id = entry.toRoute<PtutRoute.EditTransaction>().transactionId
-                val edit = koinViewModel<EditTransactionViewModel> { parametersOf(id) }
-                val state by edit.uiState.collectAsStateWithLifecycle()
-                val saved by edit.isSaved.collectAsStateWithLifecycle()
-
-                // The correction is durable before the screen goes, so leaving cannot
-                // cancel it — the same order the record screen deletes in.
-                LaunchedEffect(saved) { if (saved) navController.popBackStack() }
-
-                EditTransactionView(
-                    uiState = state,
-                    onClose = { navController.popBackStack() },
-                    onType = edit::type,
-                    onCategory = edit::choose,
-                    onSubCategory = edit::chooseSubCategory,
-                    onTime = edit::setTime,
-                    onOpenMemo = edit::openMemo,
-                    onMemo = edit::setMemo,
-                    onCloseMemo = edit::closeMemo,
-                    onSave = edit::save,
-                )
-            }
-
-            composable<PtutRoute.Activity> {
-                val activity = koinViewModel<ActivityViewModel>()
-                val state by activity.uiState.collectAsStateWithLifecycle()
-                ActivityView(
-                    uiState = state,
-                    onBack = { navController.popBackStack() },
-                    onOpenReview = { navController.navigate(PtutRoute.Review) },
-                    onOpenSlip = { navController.navigate(PtutRoute.ConfirmSlip(it)) },
-                    onOpenFolders = { navController.navigate(PtutRoute.PhotoFolders) },
-                )
-            }
+            todayRoutes(navController, openAddSheet)
+            sharedRoutes(navController)
+            settingsRoutes(navController)
+            recordRoutes(navController)
         }
     }
 
-    // The sheet closes on the write finishing, not on the tap: a save that failed must leave
-    // the amount where the person can see it.
-    LaunchedEffect(addState.saved) {
-        if (addState.saved) addOpen = false
-    }
-
-    if (addOpen) {
-        // #214: a changed draft asks before a swipe, a scrim tap, back or the iOS edge swipe drops it.
-        var askDiscard by remember { mutableStateOf(false) }
-        SkyBottomSheet(
-            onDismissRequest = { addOpen = false },
-            confirmDismiss = {
-                if (addState.changed) askDiscard = true
-                !addState.changed
-            },
-        ) {
-            AskBeforeLeaving(changed = addState.changed, onAsk = { askDiscard = true })
-            AddSheet(
-                uiState = addState,
-                onType = addViewModel::type,
-                onKind = addViewModel::setKind,
-                onCategory = addViewModel::choose,
-                onSubCategory = addViewModel::chooseSubCategory,
-                onTime = addViewModel::setTime,
-                onOpenMemo = addViewModel::openMemo,
-                onMemo = addViewModel::setMemo,
-                onCloseMemo = addViewModel::closeMemo,
-                onSave = addViewModel::save,
-                onQuickAdd = addViewModel::quickAdd,
-                onAskText = addViewModel::typeAsk,
-                onOpenVoice = addViewModel::openVoice,
-                onCloseVoice = addViewModel::closeVoice,
-                onListen = addViewModel::listen,
-                onStopListening = addViewModel::stopListening,
-                onVoiceLanguage = addViewModel::chooseVoiceLanguage,
-                onDownloadVoice = addViewModel::downloadVoice,
-                onAgreeOnline = addViewModel::agreeOnline,
-                onDismissOnlineAsk = addViewModel::dismissOnlineAsk,
-                onCurrency = addViewModel::chooseCurrency,
-                onRate = addViewModel::typeRate,
-                onOpenRate = addViewModel::openRate,
-                onCloseRate = addViewModel::closeRate,
-            )
-        }
-        if (askDiscard) {
-            SkyDiscardSheet(
-                onKeep = { askDiscard = false },
-                onDiscard = {
-                    askDiscard = false
-                    addOpen = false
-                },
-            )
-        }
-    }
+    AddSheetHost(addViewModel = addViewModel, open = addOpen, onClose = { addOpen = false })
 
     // One phone at a time: a newer sign-in on another phone signed this one out at the last sync.
     val signedOutElsewhere by remember(sharedSync) { sharedSync?.signedOutElsewhere ?: MutableStateFlow(false) }.collectAsStateWithLifecycle()

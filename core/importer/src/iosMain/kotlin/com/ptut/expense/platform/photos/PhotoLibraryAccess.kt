@@ -1,5 +1,7 @@
 package com.ptut.expense.platform.photos
 
+import com.ptut.expense.domain.ImportFailureKind
+import com.ptut.expense.importer.ScanStopped
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.Photos.PHAccessLevelReadWrite
@@ -15,7 +17,7 @@ import kotlin.coroutines.resume
  * green while nothing was being watched. The importer journals this message, so it is written for
  * the person reading it.
  */
-class PhotoAccessDenied : IllegalStateException(AppText.copy.folders.iosAccessDenied)
+class PhotoAccessDenied : ScanStopped(ImportFailureKind.PhotoAccessDenied, AppText.copy.folders.iosAccessDenied)
 
 /** iOS's answer, folded to what Photo folders offers next (#217). */
 enum class PhotoLibraryStatus {

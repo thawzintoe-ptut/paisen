@@ -56,6 +56,20 @@ class SavedTodayTest {
         assertEquals(listOf("second", "first"), listOf(first, second).savedOn(today).map { it.id })
     }
 
+    @Test
+    fun spentOnAddsTheDaysSpendingOnBangkokDaysAndLeavesIncomeOut() {
+        val lunch = row("lunch", occurred = at(2026, 10, 4, 0, 30), filed = null)
+        val late = row("late", occurred = at(2026, 10, 3, 23, 50), filed = null)
+        val salary = row("salary", occurred = at(2026, 10, 4, 9, 0), filed = null).copy(direction = Direction.Income)
+
+        assertEquals(Satang(15_500), listOf(lunch, late, salary).spentOn(today))
+    }
+
+    @Test
+    fun spentOnADayWithNothingIsZero() {
+        assertEquals(Satang.Zero, emptyList<Transaction>().spentOn(today))
+    }
+
     private fun at(year: Int, month: Int, day: Int, hour: Int, minute: Int): Long =
         LocalDateTime(year, month, day, hour, minute).toInstant(BangkokTime).toEpochMilliseconds()
 

@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runComposeUiTest
 import com.ptut.expense.domain.Category
 import com.ptut.expense.ui.AmountEntry
+import com.ptut.expense.ui.MetaField
 import com.ptut.expense.ui.TransactionMetaRow
 import kotlin.test.Test
 
@@ -56,9 +57,9 @@ private val loaded = EditTransactionUiState.Loaded(
     categoryId = "groceries",
     memo = null,
     evidence = listOf(
-        TransactionMetaRow("MERCHANT", "Foodland Rama IV", icon = "store"),
-        TransactionMetaRow("DATE & TIME", "Fri 14 Aug, 18:30", icon = "schedule"),
-        TransactionMetaRow("REFERENCE", "0138K4", icon = "sell"),
+        TransactionMetaRow(MetaField.Merchant, "Foodland Rama IV", icon = "store"),
+        TransactionMetaRow(MetaField.Date, "Fri 14 Aug, 18:30", icon = "schedule"),
+        TransactionMetaRow(MetaField.Reference, "0138K4", icon = "sell"),
     ),
     notice = "Shop, reference and time came from the slip and stay as read.",
     canSave = false,

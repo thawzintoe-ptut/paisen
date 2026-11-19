@@ -52,6 +52,9 @@ private fun Int.pad(): String = toString().padStart(2, '0')
 /** "Friday", for "฿180 less than a usual Friday" (#119). */
 fun DayOfWeek.longName(): String = AppText.copy.calendar.weekdays[isoDayNumber - 1]
 
+/** "August", for History's "Go to August 2026". */
+fun Month.longName(): String = AppText.copy.calendar.months[number - 1]
+
 private fun DayOfWeek.short(): String = AppText.copy.calendar.weekdaysShort[isoDayNumber - 1]
 
 private fun Month.short(): String = AppText.copy.calendar.monthsShort[number - 1]

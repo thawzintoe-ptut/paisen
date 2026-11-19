@@ -50,6 +50,7 @@ import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.NewMember
 import com.ptut.expense.domain.shared.Person
+import com.ptut.expense.domain.shared.SharedTextLimits
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.platform.notify.rememberNotificationAsk
@@ -445,7 +446,7 @@ private fun EditGroupSheet(name: String, type: GroupType, icon: String, onSave: 
                 SkyChip(label = option.label(), selected = option == picked, onClick = { picked = option })
             }
         }
-        SharedTextField(value = typed, onValueChange = { typed = it }, label = text.shared.groupName, modifier = Modifier.padding(top = Spacing.md))
+        SharedTextField(value = typed, onValueChange = { typed = it.take(SharedTextLimits.GROUP_NAME) }, label = text.shared.groupName, modifier = Modifier.padding(top = Spacing.md))
         SkyButton(
             text.common.save,
             onClick = { onSave(typed.trim(), picked, if (picked == type) icon else picked.defaultIcon()) },

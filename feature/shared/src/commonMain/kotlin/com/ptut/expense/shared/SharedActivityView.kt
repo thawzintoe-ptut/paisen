@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -70,19 +72,34 @@ fun SharedActivityView(uiState: SharedActivityUiState, onBack: () -> Unit, onFil
                 )
             }
         }
-        uiState.days.forEach { day ->
-            item(key = "day-${day.label}") {
-                Text(
-                    day.label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.md, bottom = Spacing.xxs),
-                )
-            }
-            items(day.entries, key = { it.id }) { entry -> ActivityEntryRow(entry) }
-        }
+        activityDays(uiState.days, itemModifier = { Modifier })
         item { Spacer(Modifier.height(SkySizes.pillClearance)) }
     }
+}
+
+/**
+ * The timeline by day, as this screen and the group's Activity tab (#64) list it. Days are keyed by
+ * date: the label has no year, so it repeats a year apart.
+ */
+internal fun LazyListScope.activityDays(
+    days: List<SharedActivityDay>,
+    itemModifier: @Composable LazyItemScope.() -> Modifier,
+    open: (SharedEntryUiModel) -> (() -> Unit)? = { null },
+) {
+    days.forEach { day ->
+        item(key = "activity-day-${day.date}") { ActivityHeading(day.label, itemModifier()) }
+        items(day.entries, key = { "entry-${it.id}" }) { entry -> Box(itemModifier()) { ActivityEntryRow(entry, onClick = open(entry)) } }
+    }
+}
+
+@Composable
+internal fun ActivityHeading(label: String, modifier: Modifier = Modifier) {
+    Text(
+        label,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.padding(horizontal = Spacing.md).padding(top = Spacing.md, bottom = Spacing.xxs),
+    )
 }
 
 /** One change. On the group's Activity tab (#64) it can be new and open what it is about. */

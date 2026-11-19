@@ -2,6 +2,7 @@ package com.ptut.expense.domain
 
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
@@ -30,14 +31,20 @@ val ReportPeriod.bucketSize: BucketSize
 val ReportPeriod.needsWholeLedger: Boolean
     get() = this == ReportPeriod.ThreeMonths || this == ReportPeriod.SixMonths || this == ReportPeriod.Year
 
+const val DAYS_IN_WEEK = 7
+
 data class DateRange(val start: LocalDate, val endInclusive: LocalDate) {
     operator fun contains(date: LocalDate): Boolean = date >= start && date <= endInclusive
 }
 
+/** The rows whose day on [zone] falls in [range]. */
+fun List<Transaction>.inside(range: DateRange, zone: TimeZone = HomeTime): List<Transaction> =
+    filter { it.occurredAtEpochMillis.dateIn(zone) in range }
+
 fun ReportPeriod.rangeContaining(today: LocalDate): DateRange = when (this) {
     ReportPeriod.Week -> {
         val monday = today.minus(today.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
-        DateRange(monday, monday.plus(6, DateTimeUnit.DAY))
+        DateRange(monday, monday.plus(DAYS_IN_WEEK - 1, DateTimeUnit.DAY))
     }
 
     // Ends today, not at month end: the rest of the month has not happened, and padding it
@@ -54,7 +61,7 @@ fun ReportPeriod.rangeContaining(today: LocalDate): DateRange = when (this) {
 
 fun ReportPeriod.previousRangeBefore(today: LocalDate): DateRange = when (this) {
     ReportPeriod.Week -> rangeContaining(today).let {
-        DateRange(it.start.minus(7, DateTimeUnit.DAY), it.endInclusive.minus(7, DateTimeUnit.DAY))
+        DateRange(it.start.minus(DAYS_IN_WEEK, DateTimeUnit.DAY), it.endInclusive.minus(DAYS_IN_WEEK, DateTimeUnit.DAY))
     }
 
     ReportPeriod.Month -> {
@@ -92,5 +99,3 @@ fun DateRange.label(): String = when {
     // Months apart, so each end names its own month.
     else -> "${start.dayAndMonth()} – ${endInclusive.dayAndMonth()}"
 }
-
-private const val DAYS_IN_WEEK = 7

@@ -10,6 +10,23 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+
+/** Years of a ledger are a few megabytes. Past this the file is not one, and reading it could end the process. */
+internal const val MAX_BACKUP_BYTES = 50 * 1024 * 1024
+
+/** The whole stream, or null when it holds more than [cap] bytes. */
+internal fun InputStream.readUpTo(cap: Int): ByteArray? {
+    val bytes = ByteArrayOutputStream()
+    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    while (true) {
+        val read = read(buffer)
+        if (read < 0) return bytes.toByteArray()
+        if (bytes.size() + read > cap) return null
+        bytes.write(buffer, 0, read)
+    }
+}
 
 /**
  * FR-22 on Android, through the Storage Access Framework.
@@ -62,7 +79,7 @@ class SafLedgerFileStore(private val context: Context) : LedgerFileStore {
         return withContext(Dispatchers.IO) {
             val stream = context.contentResolver.openInputStream(source)
                 ?: error(AppText.copy.folders.fileNotOpenedForReading)
-            stream.use { it.readBytes().decodeToString() }
+            stream.use { it.readUpTo(MAX_BACKUP_BYTES) ?: error(AppText.copy.phrases.backupNotReadable) }.decodeToString()
         }
     }
 

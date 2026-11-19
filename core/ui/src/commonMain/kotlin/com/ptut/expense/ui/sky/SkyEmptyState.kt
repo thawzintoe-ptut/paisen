@@ -19,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.text.font.FontWeight
 import com.ptut.expense.design.ArcLoop
 import com.ptut.expense.design.PtutBrandMark
 import com.ptut.expense.design.PtutRadii
@@ -27,6 +26,7 @@ import com.ptut.expense.design.Sizes
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
+import com.ptut.expense.design.ptutType
 
 /**
  * FR-20 in Sky (p24): an illustration slot, a light headline, one sentence and the status line that
@@ -51,7 +51,7 @@ fun SkyEmptyState(
         IllustrationSlot(illustration = illustration, waiting = waiting)
         Text(
             text = headline,
-            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Light),
+            style = MaterialTheme.ptutType.sheetTitle,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = Spacing.md),
         )

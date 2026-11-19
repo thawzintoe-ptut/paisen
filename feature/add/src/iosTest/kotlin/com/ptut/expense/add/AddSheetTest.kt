@@ -44,15 +44,17 @@ class AddSheetTest {
     @Composable
     private fun Sheet() = AddSheet(
         uiState = AddUiState(),
-        onType = {},
-        onKind = {},
-        onCategory = {},
-        onSubCategory = {},
-        onTime = {},
-        onOpenMemo = {},
-        onMemo = {},
-        onCloseMemo = {},
-        onSave = {},
+        actions = AddActions(
+            onType = {},
+            onKind = {},
+            onCategory = {},
+            onSubCategory = {},
+            onTime = {},
+            onOpenMemo = {},
+            onMemo = {},
+            onCloseMemo = {},
+            onSave = {},
+        ),
     )
 }
 

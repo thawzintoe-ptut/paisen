@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import platform.Foundation.NSURL
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * FR-1 and US-4 on iOS: a slip handed over by the share sheet.
@@ -45,6 +46,8 @@ class SharedSlipReceiver(
         scope.launch {
             val added = try {
                 copying.withLock { inbox.pictureAddedBy { inbox.accept(picture) } }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failure: Exception) {
                 // The share sheet has closed by now, so a toast is the only place left to say it.
                 toasts.show(

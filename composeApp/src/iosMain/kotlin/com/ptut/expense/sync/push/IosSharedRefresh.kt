@@ -1,5 +1,6 @@
 package com.ptut.expense.sync.push
 
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
@@ -7,6 +8,7 @@ import com.ptut.expense.graphStarted
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.shared.displayName
 import com.ptut.expense.sync.SharedSync
+import com.ptut.expense.sync.SyncHealth
 import com.ptut.expense.sync.auth.Account
 import com.ptut.expense.sync.auth.AuthRepository
 import kotlinx.coroutines.CoroutineScope
@@ -46,11 +48,47 @@ fun runSharedRefresh(done: () -> Unit) {
         try {
             // A cold start in the background has not read Room yet; Empty is the value before it has.
             val before = repository.snapshot.first { it !== SharedSnapshot.Empty }
-            runCatching { sync.syncAll() }
+            runSuspendCatching { sync.syncAll() }
             val after = repository.snapshot.value
             notifyNew(before, after, account.uid)
         } finally {
             done()
+        }
+    }
+}
+
+/** What a background push's sync tells iOS: `.newData`, `.noData` or `.failed`. */
+enum class PushSyncResult { NewData, NoData, Failed }
+
+/**
+ * A push that woke the app in the background: the shared groups sync now, since no screen is open
+ * to do it, and [done] is called once with what it found. The push's own banner says what changed.
+ */
+fun runPushSync(uid: String?, done: (PushSyncResult) -> Unit) {
+    graphStarted
+    val koin = KoinPlatform.getKoin()
+    val sync = koin.getOrNull<SharedSync>()
+    val repository = koin.getOrNull<SharedRepository>()
+    val account = koin.getOrNull<AuthRepository>()?.account?.value as? Account.SignedIn
+    // A sign-out made offline leaves the device document behind; only the account the push names syncs.
+    if (sync == null || repository == null || account == null || account.uid != uid || !sync.available) {
+        done(PushSyncResult.NoData)
+        return
+    }
+    CoroutineScope(Dispatchers.Default).launch {
+        var result = PushSyncResult.Failed
+        try {
+            val before = repository.snapshot.first { it !== SharedSnapshot.Empty }.entryIds()
+            val pulled = runSuspendCatching { sync.syncAll() }
+            val offline = sync.overallStatus().first().health == SyncHealth.Offline
+            val fresh = repository.snapshot.value.entryIds() != before || pulled.getOrDefault(false)
+            result = when {
+                pulled.isFailure || offline -> PushSyncResult.Failed
+                fresh -> PushSyncResult.NewData
+                else -> PushSyncResult.NoData
+            }
+        } finally {
+            done(result)
         }
     }
 }

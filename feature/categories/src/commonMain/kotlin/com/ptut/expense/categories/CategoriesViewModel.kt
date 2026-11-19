@@ -5,15 +5,23 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.HomeTime
+import com.ptut.expense.domain.ReportPeriod
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.categories.CategoryRepository
+import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.formatCompact
+import com.ptut.expense.domain.inside
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
-import com.ptut.expense.domain.startOfDayEpochMillis
+import com.ptut.expense.domain.rangeContaining
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,8 +29,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -42,6 +48,8 @@ class CategoriesViewModel(
     private val clock: Clock = Clock.System,
     /** Injected so a test can name the row it wrote. Random everywhere else. */
     private val newId: () -> String = { Uuid.random().toString() },
+    /** Where a failed move is said. Null in a graph that binds none. */
+    private val toasts: ToastMessages? = null,
 ) : ViewModel() {
 
     private val opened = MutableStateFlow<String?>(null)
@@ -69,7 +77,8 @@ class CategoriesViewModel(
         val to = from + by
         if (from < 0 || to !in ordered.indices) return@launch
 
-        categories.reorder(ordered.toMutableList().apply { add(to, removeAt(from)) })
+        runSuspendCatching { categories.reorder(ordered.toMutableList().apply { add(to, removeAt(from)) }) }
+            .onFailure { toasts?.show(ToastMessage(AppText.copy.settings.didNotWork, tone = ToastTone.Error)) }
     }
 
     fun openedCreated() {
@@ -83,7 +92,7 @@ class CategoriesViewModel(
     ) { snapshot, known, subs -> state(snapshot, known, subs) }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
             initialValue = CategoriesUiState(),
         )
 
@@ -103,7 +112,8 @@ class CategoriesViewModel(
         known: List<Category>,
         subs: List<SubCategory>,
     ): List<CategoryRowUiModel> {
-        val thisMonth = transactions.filter { it.occurredAtEpochMillis >= startOfThisMonth() }
+        // FR-19: the Bangkok month to today, as Reports counts it, so a future-dated row waits.
+        val thisMonth = transactions.inside(ReportPeriod.Month.rangeContaining(clock.now().dateIn(HomeTime)))
         val byCategory = subs.groupBy { it.categoryId }
 
         val ordered = known.sortedWith(inTheReadersOrder)
@@ -133,13 +143,7 @@ class CategoriesViewModel(
      */
     private fun List<Transaction>.spentUnder(categoryId: String): Satang = filter {
         it.categoryId == categoryId && it.direction == Direction.Expense
-    }.fold(Satang.ofMinorUnits(0)) { running, row -> running + row.amount }
-
-    /** FR-19: months break on the Bangkok calendar, like every other bucket in the app. */
-    private fun startOfThisMonth(): Long {
-        val today = clock.now().toLocalDateTime(HomeTime).date
-        return LocalDate(today.year, today.month, 1).startOfDayEpochMillis()
-    }
+    }.fold(Satang.Zero) { running, row -> running + row.amount }
 }
 
 /**

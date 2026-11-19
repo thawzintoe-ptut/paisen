@@ -7,10 +7,15 @@ import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.WeeklyTarget
-import com.ptut.expense.domain.settings.ImportChoices
-import com.ptut.expense.domain.settings.ImportSettings
-import com.ptut.expense.domain.settings.ImportSettingsStore
+import com.ptut.expense.domain.settings.AppChoices
+import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.settings.AppSettingsStore
+import com.ptut.expense.locale.AppText
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -19,7 +24,6 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.toInstant
 import kotlin.test.AfterTest
@@ -29,6 +33,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
@@ -445,6 +450,37 @@ class EditCategoryViewModelTest {
     }
 
     @Test
+    fun `a save that fails keeps the edits and says it did not work`() = runTest {
+        val toasts = ToastMessages()
+        val categories = FakeCategories(listOf(food, groceries), failWrites = true)
+        val model = watching(EditCategoryViewModel("food", StaticLedger(emptyList()), categories, toasts = toasts))
+        runCurrent()
+
+        model.rename("Eating")
+        model.save()
+        runCurrent()
+
+        assertEquals(ToastMessage(AppText.copy.settings.didNotWork, tone = ToastTone.Error), toasts.messages.first())
+        assertEquals("Eating", model.uiState.value.name)
+        assertTrue(model.uiState.value.dirty)
+    }
+
+    @Test
+    fun `a delete that fails stays on the screen and says it did not work`() = runTest {
+        val toasts = ToastMessages()
+        val categories = FakeCategories(listOf(food, groceries), failWrites = true)
+        val model = watching(EditCategoryViewModel("food", StaticLedger(emptyList()), categories, toasts = toasts))
+        runCurrent()
+
+        model.delete(moveTo = "groceries")
+        runCurrent()
+
+        assertEquals(ToastMessage(AppText.copy.settings.didNotWork, tone = ToastTone.Error), toasts.messages.first())
+        assertFalse(model.isDeleted.value)
+        assertNull(categories.movedTo)
+    }
+
+    @Test
     fun `typing a weekly target lights save and stores it for this category`() = runTest {
         val settings = settings()
         val model = targeting(settings)
@@ -530,25 +566,27 @@ class EditCategoryViewModelTest {
         assertNull(settings.choices.value.weeklyTarget)
     }
 
-    private fun settings(target: WeeklyTarget? = null) = ImportSettings(
-        object : ImportSettingsStore {
-            private var held = ImportChoices(weeklyTarget = target)
+    private fun settings(target: WeeklyTarget? = null) = AppSettings(
+        object : AppSettingsStore {
+            private var held = AppChoices(weeklyTarget = target)
 
             override fun read() = held
 
-            override fun write(choices: ImportChoices) {
+            override fun write(choices: AppChoices) {
                 held = choices
             }
         },
     )
 
-    private fun TestScope.targeting(settings: ImportSettings, rows: List<Transaction> = emptyList()) = watching(
+    private fun TestScope.targeting(settings: AppSettings, rows: List<Transaction> = emptyList()) = watching(
         EditCategoryViewModel(
             categoryId = "food",
             ledger = StaticLedger(rows),
             categories = FakeCategories(listOf(food, groceries)),
             settings = settings,
-            today = { LocalDate(2026, 11, 18) },
+            clock = object : Clock {
+                override fun now() = LocalDateTime(2026, 11, 18, 12, 0).toInstant(BangkokTime)
+            },
         ),
     )
 

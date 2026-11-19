@@ -3,11 +3,11 @@ package com.ptut.expense.settings
 import androidx.lifecycle.ViewModel
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeTime
+import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayAndMonth
 import com.ptut.expense.domain.dayLabel
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.plus
-import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 
 data class TimezoneUiState(
@@ -30,7 +30,7 @@ data class TimezoneUiState(
  */
 class TimezoneViewModel(clock: Clock = Clock.System) : ViewModel() {
 
-    val uiState: TimezoneUiState = clock.now().toLocalDateTime(HomeTime).date.let { today ->
+    val uiState: TimezoneUiState = clock.now().dateIn(HomeTime).let { today ->
         val tomorrow = today.plus(DatePeriod(days = 1))
         TimezoneUiState(
             zone = Home.choice.value.zoneId,

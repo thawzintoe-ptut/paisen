@@ -10,8 +10,8 @@ import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.categories.CategoryRepository
 import com.ptut.expense.domain.inAppLanguage
 import com.ptut.expense.domain.inTableLanguage
-import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -21,16 +21,20 @@ import kotlinx.coroutines.flow.stateIn
 /**
  * [CategoryRepository] over Room. Mapping, and one rule the SQL cannot state on its own: the
  * reassignment runs before the delete, in the same transaction.
+ *
+ * [language] ticks when the reader switches language; [seedNames] then gives the installed names in it.
  */
 class RoomCategoryRepository(
     private val categoryDao: CategoryDao,
     private val subCategoryDao: SubCategoryDao,
     scope: CoroutineScope,
+    language: Flow<Any>,
+    private val seedNames: () -> Map<String, String>,
 ) : CategoryRepository {
 
     // With the language, so an installed category's name changes as soon as the language does.
-    override val categories: StateFlow<List<Category>> = combine(categoryDao.observeAll(), AppText.language) { rows, _ ->
-        rows.map { it.toDomain().inAppLanguage() }
+    override val categories: StateFlow<List<Category>> = combine(categoryDao.observeAll(), language) { rows, _ ->
+        rows.map { it.toDomain().inAppLanguage(seedNames()) }
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     override val subCategories: StateFlow<List<SubCategory>> = subCategoryDao.observeAll()
@@ -44,7 +48,7 @@ class RoomCategoryRepository(
     ) = categoryDao.save(
         category = CategoryEntity(
             id = category.id,
-            name = category.inTableLanguage().name,
+            name = category.inTableLanguage(seedNames()).name,
             icon = category.icon,
             direction = category.direction.name,
             color = category.color,

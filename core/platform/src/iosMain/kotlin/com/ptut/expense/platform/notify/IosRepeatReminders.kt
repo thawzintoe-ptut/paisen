@@ -16,6 +16,8 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 
+private const val ID_PREFIX = "repeat-"
+
 /**
  * #182 on iOS: one pending local notification per repeat. Without permission iOS keeps them and
  * shows nothing, so scheduling does not need to ask first.
@@ -26,7 +28,9 @@ private class IosRepeatReminders : RepeatReminders {
 
     override suspend fun replaceAll(plans: List<ReminderPlan>) {
         val center = UNUserNotificationCenter.currentNotificationCenter()
-        center.removeAllPendingNotificationRequests()
+        // Only its own: a shared-group push posts through this centre too.
+        val ours = center.pendingIds().filter { it.startsWith(ID_PREFIX) }
+        center.removePendingNotificationRequestsWithIdentifiers(ours)
         val now = Clock.System.now().toEpochMilliseconds()
         plans.filter { it.atEpochMillis > now }.forEach { plan ->
             val content = UNMutableNotificationContent().apply {
@@ -36,8 +40,14 @@ private class IosRepeatReminders : RepeatReminders {
             }
             val wait = (plan.atEpochMillis - now).milliseconds.toDouble(DurationUnit.SECONDS)
             val trigger = UNTimeIntervalNotificationTrigger.triggerWithTimeInterval(wait, repeats = false)
-            center.addNotificationRequest(UNNotificationRequest.requestWithIdentifier("repeat-${plan.id}", content, trigger), withCompletionHandler = null)
+            center.addNotificationRequest(UNNotificationRequest.requestWithIdentifier("$ID_PREFIX${plan.id}", content, trigger), withCompletionHandler = null)
         }
+    }
+}
+
+private suspend fun UNUserNotificationCenter.pendingIds(): List<String> = suspendCancellableCoroutine { waiting ->
+    getPendingNotificationRequestsWithCompletionHandler { requests ->
+        waiting.resume(requests.orEmpty().mapNotNull { (it as? UNNotificationRequest)?.identifier })
     }
 }
 

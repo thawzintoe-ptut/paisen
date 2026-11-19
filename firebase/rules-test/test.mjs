@@ -54,6 +54,13 @@ const payment = (over = {}) => ({
   kind: 'payment', fromMemberId: 'mBob', toMemberId: 'mAlice', amountSatang: 5000, method: 'Cash', occurredAt: 1,
   authorMemberId: 'mBob', ...over,
 });
+// What RepeatRule.fields sends, with the server's stamp.
+const repeat = (over = {}) => ({
+  authorUid: 'bob', createdAt: 1, syncedAt: serverTimestamp(), kind: 'Rent', frequency: 'Monthly', start: '2026-11-01',
+  endKind: 'Never', endDate: null, endTimes: null, active: true, description: 'Rent', categoryId: null, currency: 'THB',
+  amountMinor: 1200000, rateUnscaled: null, rateScale: null, payerMemberId: 'mBob', splitMode: 'Equally',
+  weights: 'mAlice=1;mBob=1', ...over,
+});
 const shares = (n) => Array.from({ length: n }, (_, i) => ({ memberId: `m${i}`, weight: 1, amountMinor: 1, amountSatang: 1 }));
 
 // What SharedSync.archive sends: a new invite first while one is live (newInvite), then one commit
@@ -229,8 +236,8 @@ await check('5.8b deleted group: joiner with the still-live code adds themselves
 await check('5.9 deleted group: member leaves', 'allow', { group: { deleted: true } }, () => updateDoc(doc(as('bob'), 'groups/g1'), { memberUids: arrayRemove('bob') }));
 await check('5.10 deleted group: member lets their name go', 'allow', { group: { deleted: true } }, () => updateDoc(doc(as('bob'), 'groups/g1/members/mBob'), { claimedByUid: null, promptPay: null }));
 await check('5.12 share: creator adds their own claimed name', 'allow', {}, () => setDoc(doc(as('alice'), 'groups/g1/members/mNew'), { name: 'Alice', claimedByUid: 'alice', archived: false, createdAt: 1 }));
-await check('5.13 member sets up a repeat', 'allow', {}, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), { authorUid: 'bob', createdAt: 1, syncedAt: serverTimestamp(), kind: 'Expense', active: true }));
-await check('5.14 deleted group: member sets up a repeat', 'deny', { group: { deleted: true } }, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), { authorUid: 'bob', createdAt: 1, syncedAt: serverTimestamp(), kind: 'Expense', active: true }));
+await check('5.13 member sets up a repeat', 'allow', {}, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), repeat()));
+await check('5.14 deleted group: member sets up a repeat', 'deny', { group: { deleted: true } }, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), repeat()));
 await check('5.15 a phone set to Thai registers', 'allow', {}, () => setDoc(doc(as('bob'), 'devices/devB'), { uid: 'bob', platform: 'android', language: 'th', updatedAt: 2 }));
 await check('5.16 a phone registers in a language no notice carries', 'deny', {}, () => setDoc(doc(as('bob'), 'devices/devB'), { uid: 'bob', platform: 'android', language: 'xx', updatedAt: 2 }));
 await check('5.11 app delete-for-everyone', 'allow', {}, () => {
@@ -240,6 +247,149 @@ await check('5.11 app delete-for-everyone', 'allow', {}, () => {
   batch.update(doc(db, 'groups/g1'), { deleted: true, inviteActive: false });
   return batch.commit();
 });
+
+// 6. H1: one name per account
+const three = { group: { memberUids: ['alice', 'bob', 'carol'] } };
+const joinCommit = (uid, claim) => {
+  const db = as(uid);
+  const batch = writeBatch(db);
+  claim(batch, db);
+  batch.update(doc(db, 'groups/g1'), { memberUids: arrayUnion(uid) });
+  return batch.commit();
+};
+const claimName = (uid, mid) => (batch, db) => batch.update(doc(db, `groups/g1/members/${mid}`), { claimedByUid: uid });
+const addOwnName = (uid) => (batch, db) => batch.set(doc(db, 'groups/g1/members/mNew'), { name: 'Mal', claimedByUid: uid, archived: false, createdAt: 1 });
+await check('6.1 a member who holds a name claims a second one', 'deny', {}, () => updateDoc(doc(as('bob'), 'groups/g1/members/mCara'), { claimedByUid: 'bob' }));
+await check('6.2 the same, sent as a join commit', 'deny', {}, () => joinCommit('bob', claimName('bob', 'mCara')));
+await check('6.3 a member who holds a name adds a second one already claimed', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/members/mNew'), { name: 'Bob 2', claimedByUid: 'bob', archived: false, createdAt: 1 }));
+await check('6.4 the same, sent as a join commit', 'deny', {}, () => joinCommit('bob', addOwnName('bob')));
+await check('6.5 joiner claims a name without coming into the group', 'deny', {}, () => updateDoc(doc(as('mallory'), 'groups/g1/members/mCara'), { claimedByUid: 'mallory' }));
+await check('6.6 app join commit, "I\'m not on the list"', 'allow', {}, () => joinCommit('mallory', addOwnName('mallory')));
+await check('6.7 joiner adds their own name without coming into the group', 'deny', {}, () => setDoc(doc(as('mallory'), 'groups/g1/members/mNew'), { name: 'Mal', claimedByUid: 'mallory', archived: false, createdAt: 1 }));
+await check('6.8 already in: the link again claims the same name and changes nothing', 'allow', {}, () => joinCommit('bob', claimName('bob', 'mBob')));
+await check('6.9 leave, then join again under another name', 'allow', {}, async () => {
+  const db = as('bob');
+  const leave = writeBatch(db);
+  leave.update(doc(db, 'groups/g1/members/mBob'), { claimedByUid: null, promptPay: null });
+  leave.update(doc(db, 'groups/g1'), { memberUids: arrayRemove('bob') });
+  await leave.commit();
+  return joinCommit('bob', claimName('bob', 'mCara'));
+});
+await check('6.10 a member lets their name go and claims another without leaving', 'deny', {}, async () => {
+  await updateDoc(doc(as('bob'), 'groups/g1/members/mBob'), { claimedByUid: null, promptPay: null });
+  return updateDoc(doc(as('bob'), 'groups/g1/members/mCara'), { claimedByUid: 'bob' });
+});
+await check('6.11 joiner claims a name someone holds', 'deny', {}, () => joinCommit('mallory', claimName('mallory', 'mBob')));
+
+// 7. M2: renaming a claimed name
+await check('7.1 another member renames a claimed name', 'deny', three, () => updateDoc(doc(as('carol'), 'groups/g1/members/mBob'), { name: 'Alice' }));
+await check('7.2 its holder renames it', 'allow', three, () => updateDoc(doc(as('bob'), 'groups/g1/members/mBob'), { name: 'Bobby' }));
+await check('7.3 the creator renames it', 'allow', three, () => updateDoc(doc(as('alice'), 'groups/g1/members/mBob'), { name: 'Bobby' }));
+await check('7.4 any member renames a name nobody claimed', 'allow', three, () => updateDoc(doc(as('carol'), 'groups/g1/members/mCara'), { name: 'Caroline' }));
+await check('7.5 another member sends a claimed name as it is (the app\'s upload)', 'allow', three, () => updateDoc(doc(as('carol'), 'groups/g1/members/mBob'), { name: 'Bob' }));
+await check('7.6 someone outside the group renames a name', 'deny', {}, () => updateDoc(doc(as('mallory'), 'groups/g1/members/mCara'), { name: 'Mal' }));
+
+// 8. M3: amounts are ints up to 10^13 minor units
+const CAP = 10_000_000_000_000;
+// Each share is not checked: 50 of them cost more than the 1,000 expressions a request may evaluate.
+const sized = (amount, share = amount) => version({ amountMinor: amount, amountSatang: amount, shares: [{ memberId: 'mBob', weight: 1, amountMinor: share, amountSatang: share }] });
+await check('8.1 expense of exactly 10^13', 'allow', {}, () => entry('groups/g1/entries/e1', 'bob', sized(CAP)));
+await check('8.2 expense one past 10^13', 'deny', {}, () => entry('groups/g1/entries/e1', 'bob', sized(CAP + 1, CAP)));
+await check('8.3 amountMinor past the cap, group amount within it', 'deny', {}, () => entry('groups/g1/entries/e1', 'bob', { ...sized(CAP), amountMinor: CAP + 1 }));
+await check('8.9 expense below zero', 'deny', {}, () => entry('groups/g1/entries/e1', 'bob', sized(-100, 0)));
+await check('8.10 payment of exactly 10^13', 'allow', {}, () => entry('groups/g1/entries/p1', 'bob', payment({ amountSatang: CAP })));
+await check('8.11 payment one past 10^13', 'deny', {}, () => entry('groups/g1/entries/p1', 'bob', payment({ amountSatang: CAP + 1 })));
+await check('8.12 payment that is not an int', 'deny', {}, () => entry('groups/g1/entries/p1', 'bob', payment({ amountSatang: 50.5 })));
+await check('8.13 kyat group: amountGroup past the cap', 'deny', kyat, () => entry('groups/g1/entries/e2', 'bob', { ...groupVersion(), amountGroup: CAP + 1 }));
+await check('8.14 repeat of exactly 10^13', 'allow', {}, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), repeat({ amountMinor: CAP })));
+await check('8.15 repeat one past 10^13', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), repeat({ amountMinor: CAP + 1 })));
+
+// 9. H2: named fields and capped sizes
+const newGroup = (over = {}) => ({ name: 'Home', type: 'Flat', icon: 'group', simplifyDebts: true, createdAt: 1, creatorUid: 'carol', memberUids: ['carol'], inviteCode: null, inviteActive: false, ...over });
+const many = (n) => ['alice', 'bob', ...Array.from({ length: n - 2 }, (_, i) => `u${i}`)];
+const name = (over = {}) => ({ name: 'Dan', claimedByUid: null, archived: false, createdAt: 1, ...over });
+await check('9.1 new group with a field the app never sends', 'deny', {}, () => setDoc(doc(as('carol'), 'groups/g2'), newGroup({ blob: 'x' })));
+await check('9.2 new group with an icon of 65 characters', 'deny', {}, () => setDoc(doc(as('carol'), 'groups/g2'), newGroup({ icon: 'x'.repeat(65) })));
+await check('9.3 new group with an icon of 64 characters', 'allow', {}, () => setDoc(doc(as('carol'), 'groups/g2'), newGroup({ icon: 'x'.repeat(64) })));
+await check('9.4 member sets an icon of 65 characters', 'deny', {}, () => updateDoc(doc(as('bob'), 'groups/g1'), { icon: 'x'.repeat(65) }));
+await check('9.5 member sets the icon and the debts switch', 'allow', {}, () => updateDoc(doc(as('bob'), 'groups/g1'), { icon: 'home', simplifyDebts: false }));
+await check('9.6 member stores text in the debts switch', 'deny', {}, () => updateDoc(doc(as('bob'), 'groups/g1'), { simplifyDebts: 'x'.repeat(1000) }));
+await check('9.7 member adds a field to the group', 'deny', {}, () => updateDoc(doc(as('bob'), 'groups/g1'), { blob: 'x' }));
+await check('9.8 creator stores text in the deleted mark', 'deny', {}, () => updateDoc(doc(as('alice'), 'groups/g1'), { deleted: 'x'.repeat(1000) }));
+await check('9.9 creator sets an invite code of 65 characters', 'deny', {}, () => updateDoc(doc(as('alice'), 'groups/g1'), { inviteCode: 'X'.repeat(65) }));
+await check('9.10 the 101st account joins', 'deny', { group: { memberUids: many(100) } }, () => updateDoc(doc(as('mallory'), 'groups/g1'), { memberUids: arrayUnion('mallory') }));
+await check('9.11 the 100th account joins', 'allow', { group: { memberUids: many(99) } }, () => updateDoc(doc(as('mallory'), 'groups/g1'), { memberUids: arrayUnion('mallory') }));
+await check('9.12 new name with a field the app never sends', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/members/mNew'), name({ blob: 'x' })));
+await check('9.13 new name with text for archived', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/members/mNew'), name({ archived: 'no' })));
+await check('9.14 creator archives a name with text, not a switch', 'deny', {}, () => updateDoc(doc(as('alice'), 'groups/g1/members/mCara'), { archived: 'x'.repeat(1000) }));
+await check('9.15 expense with a field the app never sends', 'deny', {}, () => entry('groups/g1/entries/e1', 'bob', version({ blob: 'x' })));
+await check('9.16 expense with a description of 501 characters', 'deny', {}, () => entry('groups/g1/entries/e1', 'bob', version({ description: 'x'.repeat(501) })));
+await check('9.17 expense with a description of 500 and a note of 2000', 'allow', {}, () => entry('groups/g1/entries/e1', 'bob', version({ description: 'x'.repeat(500), note: 'x'.repeat(2000) })));
+await check('9.18 expense with a note of 2001 characters', 'deny', {}, () => entry('groups/g1/entries/e1', 'bob', version({ note: 'x'.repeat(2001) })));
+await check('9.19 expense in a currency that is not a code', 'deny', {}, () => entry('groups/g1/entries/e1', 'bob', version({ currency: 'baht' })));
+await check('9.20 expense with a category id of 129 characters', 'deny', {}, () => entry('groups/g1/entries/e1', 'bob', version({ categoryId: 'x'.repeat(129) })));
+await check('9.23 no rate, and text where its scale goes', 'deny', {}, () => entry('groups/g1/entries/e1', 'bob', version({ rateScale: 'x'.repeat(1000) })));
+await check('9.24 a foreign expense with its rate', 'allow', {}, () => entry('groups/g1/entries/e1', 'bob', version({ currency: 'USD', amountMinor: 300, rateUnscaled: 3333, rateScale: 2 })));
+await check('9.25 payment with a field the app never sends', 'deny', {}, () => entry('groups/g1/entries/p1', 'bob', payment({ note: 'x' })));
+await check('9.26 payment removal with a field the app never sends', 'deny', {}, () => entry('groups/g1/entries/r1', 'bob', { kind: 'paymentRemoval', paymentId: 'p1', removed: true, authorMemberId: 'mBob', blob: 'x' }));
+await check('9.27 payment removal with a payment id of 129 characters', 'deny', {}, () => entry('groups/g1/entries/r1', 'bob', { kind: 'paymentRemoval', paymentId: 'x'.repeat(129), removed: true, authorMemberId: 'mBob' }));
+await check('9.28 repeat with a field the app never sends', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), repeat({ blob: 'x' })));
+await check('9.29 repeat in a currency that is not a code', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), repeat({ currency: 'baht' })));
+await check('9.30 repeat with an unknown split', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), repeat({ splitMode: 'Bogus' })));
+await check('9.31 repeat with a description of 501 characters', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), repeat({ description: 'x'.repeat(501) })));
+await check('9.32 repeat with only an author and a kind', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), { authorUid: 'bob', createdAt: 1, syncedAt: serverTimestamp(), kind: 'Rent', active: true }));
+await check('9.33 foreign repeat with its rate, ending after 12 times', 'allow', {}, () => setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), repeat({ currency: 'USD', rateUnscaled: 3333, rateScale: 2, endKind: 'After', endTimes: 12 })));
+const changeRepeat = (uid, over) => async () => {
+  await setDoc(doc(as('bob'), 'groups/g1/repeats/r1'), repeat());
+  return setDoc(doc(as(uid), 'groups/g1/repeats/r1'), repeat({ authorUid: uid, ...over }));
+};
+await check('9.34 another member stops a repeat and signs the change', 'allow', {}, changeRepeat('alice', { active: false }));
+await check('9.35 a change that moves the repeat\'s creation time', 'deny', {}, changeRepeat('alice', { createdAt: 2 }));
+await check('9.36 a change that adds a field', 'deny', {}, changeRepeat('alice', { blob: 'x' }));
+await check('9.37 a change signed with someone else\'s account', 'deny', {}, changeRepeat('alice', { authorUid: 'bob' }));
+await check('9.38 open an invite: the join document as the app writes it', 'allow', {}, () => setDoc(doc(as('eve'), 'groups/g1/joins/eve'), { code: 'CODE1', at: Date.now() }));
+await check('9.39 join document with a code that is not the group\'s', 'deny', {}, () => setDoc(doc(as('eve'), 'groups/g1/joins/eve'), { code: 'WRONG', at: 1 }));
+await check('9.40 join document with a field the app never sends', 'deny', {}, () => setDoc(doc(as('eve'), 'groups/g1/joins/eve'), { code: 'CODE1', at: 1, blob: 'x' }));
+await check('9.41 join document written for another account', 'deny', {}, () => setDoc(doc(as('eve'), 'groups/g1/joins/bob'), { code: 'CODE1', at: 1 }));
+await check('9.42 join document with a code that was switched off', 'deny', { group: { inviteActive: false } }, () => setDoc(doc(as('eve'), 'groups/g1/joins/eve'), { code: 'CODE1', at: 1 }));
+await check('9.43 device document with a field the app never sends', 'deny', {}, () => setDoc(doc(as('bob'), 'devices/devB'), { uid: 'bob', platform: 'ios', language: 'en', updatedAt: 2, blob: 'x' }));
+await check('9.44 session with a second field', 'deny', {}, () => setDoc(doc(as('alice'), 'sessions/alice'), { signedInAt: AUTH_TIME, blob: 'x' }));
+const invite = (over = {}) => ({ groupId: 'g1', groupName: 'Trip', active: true, creatorUid: 'alice', ...over });
+await check('9.45 creator makes an invite as the app writes it', 'allow', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite()));
+await check('9.46 invite with a field the app never sends', 'deny', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite({ blob: 'x' })));
+await check('9.47 invite with a group name of 101 characters', 'deny', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite({ groupName: 'x'.repeat(101) })));
+await check('9.48 a member who is not the creator makes an invite', 'deny', {}, () => setDoc(doc(as('bob'), 'invites/CODE2'), invite({ creatorUid: 'bob' })));
+await check('9.49 a member who is not the creator switches the invite off', 'deny', {}, () => updateDoc(doc(as('bob'), 'invites/CODE1'), { active: false }));
+await check('9.50 a member who is not the creator changes the group\'s code', 'deny', {}, () => updateDoc(doc(as('bob'), 'groups/g1'), { inviteActive: false }));
+await check('9.51 creator points an invite at another group', 'deny', {}, () => updateDoc(doc(as('alice'), 'invites/CODE1'), { groupId: 'g2' }));
+
+// 10. Reads
+await check('10.1 a stranger reads the group', 'deny', {}, () => getDoc(doc(as('eve'), 'groups/g1')));
+await check('10.2 a stranger lists the names', 'deny', {}, () => getDocs(collection(as('eve'), 'groups/g1/members')));
+await check('10.3 a stranger lists the entries', 'deny', {}, () => getDocs(collection(as('eve'), 'groups/g1/entries')));
+await check('10.4 a stranger lists the repeats', 'deny', {}, () => getDocs(collection(as('eve'), 'groups/g1/repeats')));
+await check('10.5 a stranger lists the joins', 'deny', {}, () => getDocs(collection(as('eve'), 'groups/g1/joins')));
+await check('10.6 a stranger reads someone\'s join document', 'deny', {}, () => getDoc(doc(as('eve'), 'groups/g1/joins/bob')));
+await check('10.7 a stranger lists every group', 'deny', {}, () => getDocs(collection(as('eve'), 'groups')));
+await check('10.8 someone with the live code reads the group and its names', 'allow', {}, async () => {
+  await getDoc(doc(as('mallory'), 'groups/g1'));
+  return getDocs(collection(as('mallory'), 'groups/g1/members'));
+});
+await check('10.9 someone with the live code lists the entries', 'deny', {}, () => getDocs(collection(as('mallory'), 'groups/g1/entries')));
+await check('10.10 someone with the live code lists the repeats', 'deny', {}, () => getDocs(collection(as('mallory'), 'groups/g1/repeats')));
+await check('10.11 a member reads entries, repeats and joins', 'allow', {}, async () => {
+  await getDocs(collection(as('bob'), 'groups/g1/entries'));
+  await getDocs(collection(as('bob'), 'groups/g1/repeats'));
+  return getDocs(collection(as('bob'), 'groups/g1/joins'));
+});
+await check('10.12 another account reads a session', 'deny', {}, () => getDoc(doc(as('bob'), 'sessions/alice')));
+await check('10.13 an account reads its own session', 'allow', {}, () => getDoc(doc(as('alice'), 'sessions/alice')));
+await check('10.14 another account reads a phone\'s device document', 'deny', {}, () => getDoc(doc(as('bob'), 'devices/devA')));
+await check('10.15 another account lists the device documents', 'deny', {}, () => getDocs(collection(as('bob'), 'devices')));
+await check('10.16 an account lists its own device documents', 'allow', {}, () => getDocs(query(collection(as('alice'), 'devices'), where('uid', '==', 'alice'))));
+await check('10.17 anyone signed in looks an invite up by its code', 'allow', {}, () => getDoc(doc(as('eve'), 'invites/CODE1')));
+await check('10.18 nobody lists the invites', 'deny', {}, () => getDocs(collection(as('alice'), 'invites')));
+await check('10.19 someone signed out reads the group', 'deny', {}, () => getDoc(doc(env.unauthenticatedContext().firestore(), 'groups/g1')));
 
 await env.cleanup();
 for (const [status, expect, name, why] of results) console.log(`${status}  ${expect.padEnd(5)}  ${name}${why ? `  -> ${why}` : ''}`);

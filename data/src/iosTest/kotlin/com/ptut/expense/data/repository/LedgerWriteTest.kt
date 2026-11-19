@@ -41,7 +41,7 @@ class LedgerWriteTest {
 
         val first = openAt(file)
         try {
-            DefaultLedgerRepository(
+            RoomLedgerRepository(
                 transactionDao = first.transactionDao(),
                 queuedSlipDao = first.queuedSlipDao(),
                 importRunDao = first.importRunDao(),
@@ -124,14 +124,14 @@ class LedgerWriteTest {
     }
 
     private fun withLedger(
-        test: suspend (DefaultLedgerRepository, PtutDatabase) -> Unit,
+        test: suspend (RoomLedgerRepository, PtutDatabase) -> Unit,
     ): TestResult = runTest {
         val database = Room.inMemoryDatabaseBuilder<PtutDatabase>().openPtutDatabase()
         database.subCategoryDao().upsert(SubCategoryEntity(id = "coffee", categoryId = "food", name = "Coffee"))
         // Its own scope, stopped before the close: the ledger's always-on reads must not query a
         // closed database, which on iOS is a segfault rather than an exception.
         val reads = CoroutineScope(backgroundScope.coroutineContext + Job())
-        val ledger = DefaultLedgerRepository(
+        val ledger = RoomLedgerRepository(
             transactionDao = database.transactionDao(),
             queuedSlipDao = database.queuedSlipDao(),
             importRunDao = database.importRunDao(),

@@ -34,6 +34,12 @@ fun SharedSnapshot.removedPaymentIds(): Set<String> =
         .filter { it.removed }
         .mapTo(mutableSetOf()) { it.paymentId }
 
+/** What this expense does to [me]'s balance: above zero they lent, below zero they owe; zero for a stranger. */
+fun SharedExpense.effectFor(me: String?): Satang {
+    val mine = shares.filter { it.memberId == me }.map { it.satang }.sum()
+    return (if (payerMemberId == me) satang else Satang.Zero) - mine
+}
+
 /** Each member's net in a group: above zero they are owed, below zero they owe. */
 fun SharedSnapshot.nets(groupId: String): Map<String, Satang> {
     val net = mutableMapOf<String, Satang>()

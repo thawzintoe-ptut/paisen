@@ -1,5 +1,6 @@
 package com.ptut.expense.sync.push
 
+import com.ptut.expense.domain.runSuspendCatching
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.header
@@ -40,7 +41,7 @@ class PushSender internal constructor(
     }
 
     private suspend fun send(groupId: String, notice: PushNotice) {
-        runCatching {
+        runSuspendCatching {
             val body = buildJsonObject {
                 put("groupId", groupId)
                 put("title", notice.title)

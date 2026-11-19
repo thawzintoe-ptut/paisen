@@ -41,6 +41,28 @@ class FirestoreQueriesTest {
     }
 
     @Test
+    fun aDocumentBodyCarriesItsFieldsAlone() {
+        assertEquals("""{"fields":{"name":{"stringValue":"Flat"},"archived":{"booleanValue":false}}}""", documentBody(mapOf("name" to "Flat", "archived" to false)))
+    }
+
+    @Test
+    fun aPatchMaskNamesEachFieldInTheQuery() {
+        assertEquals("updateMask.fieldPaths=name&updateMask.fieldPaths=a%20b", fieldMaskQuery(mapOf("name" to "Flat", "a b" to 1L)))
+    }
+
+    @Test
+    fun aWriteMaskListsTheFieldPaths() {
+        assertEquals("""{"fieldPaths":["claimedByUid","promptPay"]}""", fieldMaskJson(mapOf("claimedByUid" to null, "promptPay" to null)).toString())
+    }
+
+    @Test
+    fun aCommitBodyHoldsItsWritesInOrder() {
+        val writes = listOf(fieldMaskJson(mapOf("a" to 1L)), fieldMaskJson(mapOf("b" to 2L)))
+
+        assertEquals("""{"writes":[{"fieldPaths":["a"]},{"fieldPaths":["b"]}]}""", commitBody(writes))
+    }
+
+    @Test
     fun theReadTimeComesFromTheFirstResultEvenWhenNothingMatched() {
         val empty = Json.parseToJsonElement("""[{"readTime":"2026-10-15T14:03:12.123456789Z"}]""")
         val matched = Json.parseToJsonElement(
@@ -56,5 +78,17 @@ class FirestoreQueriesTest {
     fun aGroupNeverPulledTakesEverythingAndOneAlreadyPulledTakesFromJustBeforeItsWatermark() {
         assertNull(pullSince(null))
         assertEquals(1_760_000_000_000L - PULL_OVERLAP_MILLIS, pullSince(1_760_000_000_000L))
+    }
+
+    @Test
+    fun anIdThisAppMakesGoesIntoAUrlUnchanged() {
+        val path = "groups/3f2b8c1e-9a4d-4e7b-8c1a-2d3e4f5a6b7c/entries/repeat:r1:2026-03-01"
+
+        assertEquals(path, urlPath(path))
+    }
+
+    @Test
+    fun anIdTheServerSentCannotReadAsAQueryOrAnotherPath() {
+        assertEquals("groups/a%3Fx=1%23b%25", urlPath("groups/a?x=1#b%"))
     }
 }

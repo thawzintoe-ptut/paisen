@@ -25,6 +25,7 @@ import com.ptut.expense.design.ptut
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.domain.formatParts
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.Member
@@ -34,6 +35,7 @@ import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.ui.sky.SkyEmptyState
 import com.ptut.expense.ui.sky.SkyRollingAmount
+import kotlinx.datetime.LocalDate
 
 /**
  * The parts every v2 screen shares (#136–#141). Direction is always in words as well as colour
@@ -78,7 +80,28 @@ fun GroupType.label(): String {
 fun SharedGroup.displayName(memberId: String): String =
     if (isMe(memberId)) AppText.copy.common.you else member(memberId)?.name ?: AppText.copy.shared.someone
 
-fun Member.initial(): String = name.trim().firstOrNull()?.uppercase() ?: "?"
+fun Member.initial(): String = initialOf(name)
+
+/** A day's heading in a feed: TODAY, or "MON 12 NOV". */
+internal fun dayHeading(date: LocalDate, today: LocalDate): String =
+    if (date == today) AppText.copy.common.today.uppercase() else date.dayLabel().uppercase()
+
+/** A person's avatar letter: the first of their name, or "?" for a blank one. */
+internal fun initialOf(name: String): String = name.trim().firstOrNull()?.uppercase() ?: "?"
+
+/** A person's balance in words: they owe you, you owe them, or settled. */
+internal fun BalanceTone.personWord(): String {
+    val text = AppText.copy.shared
+    return when (this) {
+        BalanceTone.Owed -> text.owesYou
+        BalanceTone.Owe -> text.youOwe
+        BalanceTone.Settled -> text.settledUp
+    }
+}
+
+/** Another member's row after [mark]. Never on a first visit, when everything would be new, nor for this phone's own rows. */
+internal fun SharedGroup.isNewToMe(author: String?, atEpochMillis: Long, mark: Long?): Boolean =
+    mark != null && author != null && !isMe(author) && atEpochMillis > mark
 
 /** A member as p26–p31 draw them: an initial on pale sky, or "You" on ink. */
 @Composable

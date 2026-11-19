@@ -3,6 +3,7 @@ package com.ptut.expense.importer
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayLabel
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.photos.SlipSource
 import com.ptut.expense.ui.ToastMessage
@@ -24,9 +25,9 @@ private val LANDING_WAIT = 2.minutes
  * cannot be told. The share receivers call it while no other share is copying in.
  */
 suspend fun SlipSource.pictureAddedBy(accept: suspend () -> Unit): String? {
-    val before = runCatching { candidates() }.getOrNull()?.mapTo(HashSet()) { it.id }
+    val before = runSuspendCatching { candidates() }.getOrNull()?.mapTo(HashSet()) { it.id }
     accept()
-    val after = runCatching { candidates() }.getOrNull() ?: return null
+    val after = runSuspendCatching { candidates() }.getOrNull() ?: return null
     return before?.let { known -> after.singleOrNull { it.id !in known }?.id }
 }
 

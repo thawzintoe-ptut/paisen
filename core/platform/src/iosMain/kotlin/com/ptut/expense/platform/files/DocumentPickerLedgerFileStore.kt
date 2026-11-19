@@ -4,6 +4,9 @@ import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.toNSData
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.CompletableDeferred
+import platform.Foundation.NSFileManager
+import platform.Foundation.NSFileSize
+import platform.Foundation.NSNumber
 import platform.Foundation.NSString
 import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSURL
@@ -36,8 +39,12 @@ class DocumentPickerLedgerFileStore : LedgerFileStore {
             error(AppText.copy.folders.fileNotStaged)
         }
 
-        val saved = present {
-            UIDocumentPickerViewController(forExportingURLs = listOf(staged), asCopy = true)
+        // The picker saves a copy, so the staged one has no job left when it closes, saved or backed out.
+        // Left in tmp it is the whole ledger in plain text, outside the place the reader chose.
+        val saved = try {
+            present { UIDocumentPickerViewController(forExportingURLs = listOf(staged), asCopy = true) }
+        } finally {
+            NSFileManager.defaultManager.removeItemAtURL(staged, null)
         } ?: return null
         return saved.lastPathComponent ?: suggestedName
     }
@@ -52,6 +59,7 @@ class DocumentPickerLedgerFileStore : LedgerFileStore {
         // a file the app has no other claim to.
         val opened = picked.startAccessingSecurityScopedResource()
         try {
+            if (picked.fileBytes() > MAX_BACKUP_BYTES) error(AppText.copy.phrases.backupNotReadable)
             return NSString.stringWithContentsOfURL(picked, NSUTF8StringEncoding, null)
                 ?: error(AppText.copy.folders.fileNotRead)
         } finally {
@@ -91,6 +99,16 @@ class DocumentPickerLedgerFileStore : LedgerFileStore {
     /** Presenting on a controller that already has one showing does nothing at all. */
     private fun UIViewController.topMost(): UIViewController =
         presentedViewController?.topMost() ?: this
+}
+
+/** Years of a ledger are a few megabytes. Past this the file is not one, and reading it could end the process. */
+private const val MAX_BACKUP_BYTES = 50L * 1024 * 1024
+
+/** The file's size on disk, or 0 when it cannot be asked: the read that follows then says what is wrong. */
+@OptIn(ExperimentalForeignApi::class)
+private fun NSURL.fileBytes(): Long {
+    val attributes = path?.let { NSFileManager.defaultManager.attributesOfItemAtPath(it, null) }
+    return (attributes?.get(NSFileSize) as? NSNumber)?.longLongValue ?: 0L
 }
 
 private class PickerDelegate(

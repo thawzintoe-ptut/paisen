@@ -4,6 +4,7 @@ import com.ptut.expense.platform.toNSData
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ObjCObjectVar
 import kotlinx.cinterop.alloc
+import kotlinx.cinterop.autoreleasepool
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.useContents
@@ -49,9 +50,12 @@ private const val BEST_CANDIDATE_ONLY = 1uL
 class VisionSlipTextReader : SlipTextReader {
 
     override suspend fun read(bytes: ByteArray): List<String> = withContext(Dispatchers.Default) {
-        val request = recognizeText()
-        perform(request, bytes)
-        request.pageLines().topToBottom()
+        // A run reads up to 200 slips on a worker thread with no pool of its own, so each slip drains its own.
+        autoreleasepool {
+            val request = recognizeText()
+            perform(request, bytes)
+            request.pageLines().topToBottom()
+        }
     }
 
     private fun recognizeText() = VNRecognizeTextRequest().apply {

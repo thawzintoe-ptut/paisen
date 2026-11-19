@@ -5,7 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.HomeTime
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.Separators
+import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GroupType
@@ -20,7 +23,6 @@ import com.ptut.expense.domain.shared.currenciesOf
 import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.myNet
 import com.ptut.expense.domain.shared.newFromOthers
-import com.ptut.expense.domain.shared.ordinal
 import com.ptut.expense.domain.shared.overall
 import com.ptut.expense.domain.shared.peopleBalances
 import com.ptut.expense.domain.shared.running
@@ -35,7 +37,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
@@ -92,7 +93,7 @@ class SharedViewModel(
 
     private val status = sync?.overallStatus() ?: flowOf(GroupSyncStatus(SyncHealth.Local, 0))
 
-    private val polling = sync?.takeIf { it.available }?.let { syncPolling(it, runner, SYNC_INTERVAL) } ?: flowOf(Unit)
+    private val polling = sync?.takeIf { it.available }?.let { syncPolling(it.signedIn, runner, SYNC_INTERVAL, it::syncAllOutcome) } ?: flowOf(Unit)
 
     val uiState: StateFlow<SharedUiState> = combine(repository.snapshot, query, status, polling) { snapshot, query, status, _ ->
         if (snapshot.groups.isEmpty()) {
@@ -100,7 +101,7 @@ class SharedViewModel(
         } else {
             snapshot.ready(query).copy(syncLine = status.line(), signedOut = status.health == SyncHealth.SignedOut)
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SharedUiState.Empty(emptyList()))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), SharedUiState.Empty(emptyList()))
 
     /** Quiet when all is sent: the line is there only while something waits or was refused. */
     private fun GroupSyncStatus.line(): String? {
@@ -125,15 +126,13 @@ class SharedViewModel(
 
     /** #141: a one-off bill with one person is a group of two behind the scenes, named after them. */
     fun addPerson(name: String, personId: String?, onCreated: (String) -> Unit) {
-        viewModelScope.launch {
-            onCreated(repository.createGroup(name.trim(), GroupType.Other, GroupType.Other.defaultIcon(), listOf(NewMember(name, personId))))
-        }
+        viewModelScope.launch { onCreated(repository.createPersonGroup(name, personId)) }
     }
 
     private fun SharedSnapshot.ready(query: String): SharedUiState.Ready {
         val text = AppText.copy.shared
         val match = query.trim().lowercase()
-        val today = clock.now().toLocalDateTime(HomeTime).date
+        val today = clock.now().dateIn(HomeTime)
         val groupRows = groups.map { group ->
             val net = myNet(group.id)
             val others = group.activeMembers.filterNot { group.isMe(it.id) }
@@ -142,7 +141,7 @@ class SharedViewModel(
                 currenciesOf(group.id).takeIf { it.isNotEmpty() }?.let { add(it.joinToString(", ")) }
                 // p26's "rent repeats 1st" (#136, #185).
                 repeats.firstOrNull { it.groupId == group.id && it.running(today) }?.let { add(it.shortLine()) }
-            }.joinToString(" · ")
+            }.joinToString(Separators.DOT)
             SharedGroupRowUiModel(
                 id = group.id,
                 name = group.name,
@@ -166,12 +165,8 @@ class SharedViewModel(
             SharedPersonRowUiModel(
                 key = "${person.key}:${person.currency}",
                 name = person.name,
-                initial = person.name.trim().firstOrNull()?.uppercase() ?: "?",
-                word = when (person.amount.tone()) {
-                    BalanceTone.Owed -> text.owesYou
-                    BalanceTone.Owe -> text.youOwe
-                    BalanceTone.Settled -> text.settledUp
-                },
+                initial = initialOf(person.name),
+                word = person.amount.tone().personWord(),
                 amount = person.amount.magnitude().format(Currencies.of(person.currency).toHomeMoney()),
                 tone = person.amount.tone(),
             )
@@ -218,3 +213,7 @@ private fun RepeatRule.shortLine(): String {
 }
 
 private val SYNC_INTERVAL = 60.seconds
+
+/** #141: one person is a group of two behind the scenes, named after them. Shared and People both add one. */
+internal suspend fun SharedRepository.createPersonGroup(name: String, personId: String?): String =
+    createGroup(name.trim(), GroupType.Other, GroupType.Other.defaultIcon(), listOf(NewMember(name, personId)))

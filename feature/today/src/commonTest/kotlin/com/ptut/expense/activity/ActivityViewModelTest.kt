@@ -3,6 +3,7 @@ package com.ptut.expense.activity
 import app.cash.turbine.test
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.BangkokTime
+import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.QueuedSlip
@@ -120,11 +121,45 @@ class ActivityViewModelTest : ViewModelTest() {
         }
     }
 
+    @Test
+    fun `each finished week gets one wrap newest first and this week gets none`() = runTest {
+        val rows = listOf(spend(2026, 8, 3, 10_000), spend(2026, 8, 12, 30_000), spend(2026, 8, 19, 5_000))
+        entries(rows = rows) { entries ->
+            assertEquals(listOf("week-2026-08-10", "week-2026-08-03"), entries.map { it.id })
+            assertTrue(entries.first().body.startsWith("You spent ฿300 Mon–Sun"), entries.first().body)
+        }
+    }
+
+    @Test
+    fun `the week across New Year is one wrap holding both years`() = runTest {
+        val rows = listOf(spend(2026, 12, 31, 20_000), spend(2027, 1, 2, 5_000))
+        val wednesday = object : Clock {
+            override fun now(): Instant = LocalDateTime(2027, 1, 6, 12, 0).toInstant(BangkokTime)
+        }
+        entries(rows = rows, clock = wednesday) { entries ->
+            val wrap = entries.single()
+            assertEquals("week-2026-12-28", wrap.id)
+            assertEquals("Your week, 28 Dec to 3 Jan", wrap.title)
+            assertTrue(wrap.body.startsWith("You spent ฿250 Mon–Sun"), wrap.body)
+        }
+    }
+
+    private fun spend(year: Int, month: Int, day: Int, satang: Long) = Transaction(
+        id = "s$year$month$day",
+        occurredAtEpochMillis = LocalDateTime(year, month, day, 12, 0).toInstant(BangkokTime).toEpochMilliseconds(),
+        amount = Satang(satang),
+        direction = Direction.Expense,
+        categoryId = "food",
+        counterparty = "Somewhere",
+    )
+
     private suspend fun entries(
         runs: List<ImportRun> = emptyList(),
         queued: List<QueuedSlip> = emptyList(),
+        rows: List<Transaction> = emptyList(),
+        clock: Clock = frozen,
         assert: (List<ActivityEntryUiModel>) -> Unit,
-    ) = ActivityViewModel(JournalLedger(runs, queued), clock = frozen).uiState.test {
+    ) = ActivityViewModel(JournalLedger(runs, queued, rows), clock = clock).uiState.test {
         var state = awaitItem()
         while (state.entries.isEmpty()) state = awaitItem()
         assert(state.entries)
@@ -178,11 +213,12 @@ class ActivityViewModelTest : ViewModelTest() {
 private class JournalLedger(
     runs: List<ImportRun>,
     queued: List<QueuedSlip>,
+    rows: List<Transaction> = emptyList(),
 ) : LedgerRepository {
 
     override val todaysTransactions: StateFlow<LedgerSnapshot> = MutableStateFlow(LedgerSnapshot.Rows(emptyList()))
     override val recentTransactions: StateFlow<LedgerSnapshot> = MutableStateFlow(LedgerSnapshot.Rows(emptyList()))
-    override val allTransactions: StateFlow<LedgerSnapshot> = MutableStateFlow(LedgerSnapshot.Rows(emptyList()))
+    override val allTransactions: StateFlow<LedgerSnapshot> = MutableStateFlow(LedgerSnapshot.Rows(rows))
     override val sinceLastImportMillis: StateFlow<Long?> = MutableStateFlow(null)
     override val importRuns: StateFlow<List<ImportRun>> = MutableStateFlow(runs)
     override val queuedSlips: StateFlow<List<QueuedSlip>> = MutableStateFlow(queued)

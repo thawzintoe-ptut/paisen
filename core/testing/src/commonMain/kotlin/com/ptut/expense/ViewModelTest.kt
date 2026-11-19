@@ -2,6 +2,8 @@ package com.ptut.expense
 
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.Language
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -37,5 +39,12 @@ abstract class ViewModelTest {
     fun backToBaht() {
         Home.use(HomeChoice.Default)
         Home.settingsReopened()
+    }
+
+    /** A test that switched the language, or failed before it could switch back, leaves English for the next. */
+    @AfterTest
+    fun backToEnglish() {
+        AppText.use(Language.English)
+        AppText.settingsReopened()
     }
 }

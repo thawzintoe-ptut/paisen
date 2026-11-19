@@ -3,11 +3,10 @@ package com.ptut.expense.shared
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.shared.Currencies
-import com.ptut.expense.domain.shared.GroupType
-import com.ptut.expense.domain.shared.NewMember
 import com.ptut.expense.domain.shared.Person
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
@@ -52,7 +51,7 @@ class PeopleViewModel(private val repository: SharedRepository) : ViewModel() {
 
     val uiState: StateFlow<PeopleUiState> = combine(repository.snapshot, query) { snapshot, query ->
         PeopleUiState(rows = snapshot.rows(query), knownPeople = snapshot.people.filterNot { it.archived }, query = query)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PeopleUiState())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), PeopleUiState())
 
     fun search(text: String) {
         query.value = text
@@ -64,9 +63,7 @@ class PeopleViewModel(private val repository: SharedRepository) : ViewModel() {
 
     /** The dashed ADD PERSON row: a one-off bill, a group of two named after them, like Shared's. */
     fun addPerson(name: String, personId: String?, onCreated: (String) -> Unit) {
-        viewModelScope.launch {
-            onCreated(repository.createGroup(name.trim(), GroupType.Other, GroupType.Other.defaultIcon(), listOf(NewMember(name, personId))))
-        }
+        viewModelScope.launch { onCreated(repository.createPersonGroup(name, personId)) }
     }
 
     private fun SharedSnapshot.rows(query: String): List<PeopleRowUiModel> {
@@ -80,9 +77,9 @@ class PeopleViewModel(private val repository: SharedRepository) : ViewModel() {
                 key = "${balance.key}:${balance.currency}",
                 personId = person?.id,
                 name = balance.name,
-                initial = balance.name.initial(),
+                initial = initialOf(balance.name),
                 detail = if (archived) text.person.archived else balance.groupIds.mapNotNull { group(it)?.name }.distinct().joinToString(", "),
-                word = balance.amount.word(),
+                word = balance.amount.tone().personWord(),
                 amount = balance.amount.magnitude().format(Currencies.of(balance.currency).toHomeMoney()),
                 tone = balance.amount.tone(),
                 archived = archived,
@@ -94,9 +91,9 @@ class PeopleViewModel(private val repository: SharedRepository) : ViewModel() {
                 key = person.id,
                 personId = person.id,
                 name = person.name,
-                initial = person.name.initial(),
+                initial = initialOf(person.name),
                 detail = if (person.archived) text.person.archived else text.person.inNoGroup,
-                word = Satang.Zero.word(),
+                word = BalanceTone.Settled.personWord(),
                 amount = Satang.Zero.format(Home.money),
                 tone = BalanceTone.Settled,
                 archived = person.archived,
@@ -107,15 +104,4 @@ class PeopleViewModel(private val repository: SharedRepository) : ViewModel() {
             .filter { match.isEmpty() || it.name.lowercase().contains(match) }
             .sortedBy { it.archived }
     }
-
-    private fun Satang.word(): String {
-        val text = AppText.copy.shared
-        return when (tone()) {
-            BalanceTone.Owed -> text.owesYou
-            BalanceTone.Owe -> text.youOwe
-            BalanceTone.Settled -> text.settledUp
-        }
-    }
-
-    private fun String.initial(): String = trim().firstOrNull()?.uppercase() ?: "?"
 }

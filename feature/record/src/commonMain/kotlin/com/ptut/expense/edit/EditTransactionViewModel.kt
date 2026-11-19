@@ -4,16 +4,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.asEdit
-import com.ptut.expense.domain.displayName
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.ledger.rowWithId
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.TitleChange
@@ -22,10 +23,13 @@ import com.ptut.expense.domain.under
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.Haptics
+import com.ptut.expense.ui.MetaField
 import com.ptut.expense.ui.MetaGlyph
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.TransactionMetaRow
+import com.ptut.expense.ui.displayName
+import com.ptut.expense.ui.inTableLanguage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -93,7 +97,7 @@ class EditTransactionViewModel(
         }
             .stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_GRACE_MILLIS),
+                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
                 initialValue = EditTransactionUiState.Loading,
             )
 
@@ -147,8 +151,9 @@ class EditTransactionViewModel(
         saving = true
         viewModelScope.launch {
             ledger.applyEdit(record.id, edit)
-            // O4: the change flows one way, from History to the shared copy.
-            shared?.followTransaction(record.id, before = record.asEdit(), titleChange = titleChange(record.categoryId, edit.categoryId))
+            // O4: the change flows one way, from History to the shared copy. The edit is already
+            // durable, so a group copy that cannot follow now must not keep the screen open.
+            runSuspendCatching { shared?.followTransaction(record.id, before = record.asEdit(), titleChange = titleChange(record.categoryId, edit.categoryId)) }
             haptics.saved()
             val edited = record.copy(categoryId = edit.categoryId, subCategoryId = edit.subCategoryId, memo = edit.memo)
             toasts?.show(ToastMessage(AppText.copy.record.updated(edited.displayName(known, subCategories))))
@@ -159,8 +164,8 @@ class EditTransactionViewModel(
     /** The old and new category names, for a shared copy whose title was only the old name. Null when the category stayed. */
     private fun titleChange(before: String?, after: String?): TitleChange? {
         if (before == after) return null
-        val from = known.firstOrNull { it.id == before }?.name ?: return null
-        val to = known.firstOrNull { it.id == after }?.name ?: return null
+        val from = known.firstOrNull { it.id == before }?.inTableLanguage()?.name ?: return null
+        val to = known.firstOrNull { it.id == after }?.inTableLanguage()?.name ?: return null
         return TitleChange(from, to)
     }
 
@@ -220,8 +225,8 @@ class EditTransactionViewModel(
      * with nothing in it. The shop line goes the same way on a row with no shop name (#210).
      */
     private fun Transaction.evidence(): List<TransactionMetaRow> = listOfNotNull(
-        counterparty?.let { TransactionMetaRow("MERCHANT", it, icon = MetaGlyph.Merchant) },
-        reference?.let { TransactionMetaRow("REFERENCE", it, icon = MetaGlyph.Tag) },
+        counterparty?.let { TransactionMetaRow(MetaField.Merchant, it, icon = MetaGlyph.Merchant) },
+        reference?.let { TransactionMetaRow(MetaField.Reference, it, icon = MetaGlyph.Tag) },
     )
 
     /**
@@ -261,11 +266,6 @@ class EditTransactionViewModel(
         subCategoryId = subCategoryId,
         occurredAtEpochMillis = occurredAtEpochMillis,
     )
-
-    private companion object {
-        /** Long enough to survive a rotation without restarting the collection. */
-        const val SUBSCRIPTION_GRACE_MILLIS = 5_000L
-    }
 }
 
 /**

@@ -339,7 +339,7 @@ private fun InlineIcons(selected: String, onIcon: (String) -> Unit, onMore: () -
         INLINE_ICONS.forEach { icon ->
             IconTileChoice(
                 icon = icon,
-                label = copy.shell.iconNames[icon.designName] ?: icon.designName.replace('_', ' '),
+                label = PtutIcon.categoryChoices.first { it.icon == icon }.spoken,
                 chosen = icon.designName == selected,
                 onClick = { onIcon(icon.designName) },
                 modifier = Modifier.weight(1f),
@@ -552,7 +552,7 @@ private fun ChoiceSheet(
     SkyBottomSheet(onDismissRequest = onDismiss) {
         Text(
             text = title,
-            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Light),
+            style = MaterialTheme.ptutType.sheetTitle,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = Spacing.md),
         )

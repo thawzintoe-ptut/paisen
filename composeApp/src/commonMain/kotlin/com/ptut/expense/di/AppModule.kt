@@ -1,69 +1,42 @@
 package com.ptut.expense.di
 
 import com.ptut.expense.AppViewModel
-import com.ptut.expense.activity.ActivityViewModel
-import com.ptut.expense.add.AddViewModel
-import com.ptut.expense.agent.LanguageModelPort
-import com.ptut.expense.agent.ModelState
 import com.ptut.expense.agent.SpeechInput
 import com.ptut.expense.agent.agentModule
-import com.ptut.expense.categories.CategoriesViewModel
-import com.ptut.expense.categories.EditCategoryViewModel
-import com.ptut.expense.confirm.ConfirmSlipViewModel
 import com.ptut.expense.data.local.PtutDatabase
 import com.ptut.expense.data.local.PtutDatabaseContext
-import com.ptut.expense.data.local.entity.CurrencyRateEntity
 import com.ptut.expense.data.local.openPtutDatabase
 import com.ptut.expense.data.local.ptutDatabaseBuilder
-import com.ptut.expense.data.repository.DefaultLedgerRepository
-import com.ptut.expense.data.repository.DefaultRuleRepository
 import com.ptut.expense.data.repository.RoomCategoryRepository
 import com.ptut.expense.data.repository.RoomHomeBook
 import com.ptut.expense.data.repository.RoomImportStore
 import com.ptut.expense.data.repository.RoomLedgerArchive
+import com.ptut.expense.data.repository.RoomLedgerRepository
+import com.ptut.expense.data.repository.RoomRuleRepository
 import com.ptut.expense.data.repository.RoomSharedRepository
 import com.ptut.expense.data.repository.RoomWatchedFolderRepository
 import com.ptut.expense.debug.DebugSlipViewModel
-import com.ptut.expense.design.PtutMotion
-import com.ptut.expense.detail.TransactionDetailViewModel
-import com.ptut.expense.domain.Category
-import com.ptut.expense.domain.Direction
-import com.ptut.expense.domain.Home
-import com.ptut.expense.domain.HomeChoice
-import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.categories.CategoryRepository
 import com.ptut.expense.domain.folders.FirstRunFolders
 import com.ptut.expense.domain.folders.FolderCatalog
 import com.ptut.expense.domain.folders.FolderReadTally
 import com.ptut.expense.domain.folders.WatchedFolderRepository
-import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.home.HomeBook
-import com.ptut.expense.domain.inAppLanguage
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.rules.RuleRepository
-import com.ptut.expense.domain.settings.ImportSettings
-import com.ptut.expense.domain.settings.ImportSettingsStore
-import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.settings.AppSettingsStore
 import com.ptut.expense.domain.shared.SharedRepository
-import com.ptut.expense.domain.shared.debtsPaidBy
 import com.ptut.expense.domain.slip.ImportStore
 import com.ptut.expense.domain.slip.SlipPictures
-import com.ptut.expense.edit.EditTransactionViewModel
-import com.ptut.expense.folders.PhotoFoldersViewModel
-import com.ptut.expense.home.HomeViewModel
-import com.ptut.expense.home.WeeklyNoteSettings
 import com.ptut.expense.importer.FakeSlipTextReader
 import com.ptut.expense.importer.SlipDiscards
 import com.ptut.expense.importer.SlipImporter
 import com.ptut.expense.importer.SlipOwnerBook
-import com.ptut.expense.ledger.LedgerScope
-import com.ptut.expense.ledger.LedgerViewModel
-import com.ptut.expense.locale.Language
+import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LanguageStore
-import com.ptut.expense.onboarding.Onboarding
 import com.ptut.expense.onboarding.OnboardingFlag
-import com.ptut.expense.onboarding.OnboardingViewModel
 import com.ptut.expense.platform.UnavailableSlipSource
 import com.ptut.expense.platform.UnavailableSlipTextReader
 import com.ptut.expense.platform.files.LedgerFileStore
@@ -75,112 +48,31 @@ import com.ptut.expense.platform.ocr.SlipTextReader
 import com.ptut.expense.platform.photos.CompositeSlipSource
 import com.ptut.expense.platform.photos.InMemorySlipSource
 import com.ptut.expense.platform.photos.PhotoAccessRequest
-import com.ptut.expense.platform.photos.PhotoSettings
 import com.ptut.expense.platform.photos.SlipSource
-import com.ptut.expense.platform.work.BackgroundImport
-import com.ptut.expense.receipt.DayReceiptViewModel
-import com.ptut.expense.reports.ReportsViewModel
-import com.ptut.expense.resources.Res
-import com.ptut.expense.review.ReviewViewModel
-import com.ptut.expense.settings.AddCurrencyViewModel
-import com.ptut.expense.settings.AssistantModelViewModel
-import com.ptut.expense.settings.BackgroundImportViewModel
-import com.ptut.expense.settings.HomeCurrencyViewModel
-import com.ptut.expense.settings.KeepFailedSlipsViewModel
-import com.ptut.expense.settings.LanguageViewModel
-import com.ptut.expense.settings.LedgerBackupViewModel
-import com.ptut.expense.settings.LicencesViewModel
-import com.ptut.expense.settings.SettingsViewModel
-import com.ptut.expense.settings.SlipImportCadence
-import com.ptut.expense.settings.TimezoneViewModel
-import com.ptut.expense.settings.slipImportCadence
-import com.ptut.expense.shared.AccountViewModel
-import com.ptut.expense.shared.AddExpenseViewModel
-import com.ptut.expense.shared.GroupDetailViewModel
-import com.ptut.expense.shared.JoinViewModel
-import com.ptut.expense.shared.PeopleViewModel
-import com.ptut.expense.shared.RecordPaymentViewModel
-import com.ptut.expense.shared.RepeatExpenseViewModel
 import com.ptut.expense.shared.RepeatRunner
-import com.ptut.expense.shared.SharedActivityViewModel
-import com.ptut.expense.shared.SharedViewModel
-import com.ptut.expense.shared.SignInViewModel
-import com.ptut.expense.shared.WhoPaysWhomViewModel
-import com.ptut.expense.shoprule.ShopRuleViewModel
 import com.ptut.expense.sync.syncModule
 import com.ptut.expense.ui.Haptics
-import com.ptut.expense.ui.ScreenReader
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.screenReader
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
-import kotlinx.datetime.TimeZone
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
-import org.koin.core.scope.Scope
 import org.koin.dsl.bind
 import org.koin.dsl.module
 import kotlin.time.Clock
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 
-/**
- * The graph. It replaces `AppContainer`, which held this same wiring by hand for one slice —
- * the container's constructor was already the thing that would grow with every new seam.
- *
- * [databaseContext] is the one value the graph cannot make for itself: Android resolves its data
- * directory from a `Context` and iOS resolves its own, so the platform entry point passes it in
- * rather than the module reaching for a platform API it cannot see from common code.
- *
- * The DAOs get no bindings of their own. Only the repository asks for them, and three `single`s
- * nothing else resolves would be graph nobody reads.
- */
 /**
  * The screens' half of the graph. It names no platform type, so a test can take these bindings
  * as they ship and swap only the seam underneath — the wiring under test is then the real one.
+ * Each feature area's screens live in their own module beside this one; this holds the shell's.
  *
  * [ToastMessages] is a `single` and not a ViewModel because two state holders share it: the sheet
  * that raises a toast and the shell that renders it. It is the seam that lets them do that without
  * one reaching for the other.
  */
-/**
- * The categories as the reader has them, for a screen that turns an id into a name.
- *
- * Falls back to the seed twice over: while the flow has not emitted — the repository shares
- * eagerly, but a ViewModel built in the same frame as the graph can still arrive first — and where
- * a screen test's graph binds no category table at all. A screen of unnamed rows would be worse
- * than one naming them as installed.
- *
- * Used by the screens that offer a choice as well as the ones that only name. A category carries
- * its own direction now, so `forDirection` filters this list rather than a compiled-in pair — which
- * is what lets a category the reader made reach the sheet that files into it.
- */
-private fun Scope.storedCategories(): List<Category> =
-    getOrNull<CategoryRepository>()?.categories?.value.orEmpty().ifEmpty { Category.seed().map(Category::inAppLanguage) }
-
-private fun Scope.isDebug(): Boolean = getOrNull<AppBuild>()?.debug == true
-
-/** The sub-categories as stored, read when a screen is built, like [storedCategories] (#111). */
-private fun Scope.storedSubCategories(): List<SubCategory> =
-    getOrNull<CategoryRepository>()?.subCategories?.value.orEmpty()
-
-/** [storedSubCategories] as they change, for the tabs, like [liveCategories] (#112). */
-private fun Scope.liveSubCategories(): Flow<List<SubCategory>> =
-    getOrNull<CategoryRepository>()?.subCategories ?: flowOf(emptyList())
-
-/**
- * [storedCategories] as it changes (#115), for the tabs: they keep their holder while the reader
- * is away, so a list read once would miss a rename or a new category until a restart.
- */
-private fun Scope.liveCategories(): Flow<List<Category>> =
-    getOrNull<CategoryRepository>()?.categories?.map { it.ifEmpty { Category.seed().map(Category::inAppLanguage) } } ?: flowOf(Category.seed().map(Category::inAppLanguage))
-
 val viewModelModule: Module = module {
+    includes(appScopeModule, onboardingModule, todayModule, recordModule, settingsModule, sharedModule)
+
     single { ToastMessages() }
     // #114: raised where a save or delete lands, played by the shell like a toast.
     single { Haptics() }
@@ -190,276 +82,14 @@ val viewModelModule: Module = module {
         SlipDiscards(
             importer = get(),
             toasts = get(),
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            scope = appScope(),
             window = { Duration.INFINITE },
         )
     }
 
-    /**
-     * C-4: what Settings may claim about importing is the platform's to say, like the pickers. A
-     * factory, because its lines are words and a single would keep the language it was made in.
-     */
-    factory { slipImportCadence() }
-
-    /**
-     * A `single` for the reason [ToastMessages] is one: three callers share the same answer and
-     * one of them writes it — the shell picks the screen, [OnboardingViewModel] finishes first run,
-     * and each platform's import trigger waits for it before raising FR-2's dialog.
-     */
-    single { Onboarding(flag = get()) }
-
     // getOrNull: a screen test builds a graph with no folder seams in it, and the shell still
     // has to start. On a device the binding is always there.
     viewModel { AppViewModel(toasts = get(), importer = get(), firstRun = getOrNull(), screenReader = get()) }
-    // FR-12: a renamed category has to reach every screen that names one, so these read the
-    // table rather than the compiled-in seed. Read at construction, which is when a screen is
-    // built — a rename shows the next time the screen is opened, not while it is on top.
-    viewModel {
-        val photos = getOrNull<PhotoSettings>()
-        val noteOn = isDebug()
-        HomeViewModel(
-            ledger = get(),
-            // The fact the freshness chip needs, taken off the one object that knows it.
-            isScanning = get<SlipImporter>().isScanning,
-            categories = storedCategories(),
-            categoryUpdates = liveCategories(),
-            subCategoryUpdates = liveSubCategories(),
-            watchedFolders = getOrNull<WatchedFolderRepository>()?.folders ?: flowOf(emptyList()),
-            moodByTimeOfDay = getOrNull<ImportSettings>()?.choices?.map { it.moodByTimeOfDay } ?: flowOf(false),
-            weeklyCheckIn = getOrNull<ImportSettings>()?.choices?.map { it.weeklyCheckIn } ?: flowOf(false),
-            weeklyTarget = getOrNull<ImportSettings>()?.choices?.map { it.weeklyTarget } ?: flowOf(null),
-            // #22: debug builds only until the note has been tried.
-            weeklyNote = getOrNull<ImportSettings>()?.choices?.map {
-                WeeklyNoteSettings(on = noteOn, tone = it.noteTone, hiddenWeek = it.hiddenNoteWeek)
-            } ?: flowOf(WeeklyNoteSettings()),
-            hideNoteFor = { monday -> getOrNull<ImportSettings>()?.hideNoteWeek(monday) },
-            pendingDiscards = get<SlipDiscards>().pending,
-            onlyPickedPhotos = { photos?.onlyPickedPhotos == true },
-        )
-    }
-    // #220: Reports passes the slice it opened; Home's History passes nothing and gets the whole table.
-    viewModel { params ->
-        LedgerViewModel(
-            ledger = get(),
-            categories = storedCategories(),
-            categoryUpdates = liveCategories(),
-            subCategoryUpdates = liveSubCategories(),
-            scope = params.getOrNull<LedgerScope>(),
-        )
-    }
-    viewModel {
-        SettingsViewModel(
-            ledger = get(),
-            settings = get(),
-            cadence = get<SlipImportCadence>(),
-            folders = getOrNull<WatchedFolderRepository>()?.folders ?: flowOf(emptyList()),
-            categoryCounts = getOrNull<CategoryRepository>()?.let { repository ->
-                repository.categories.combine(repository.subCategories) { all, subs -> all.size to subs.size }
-            } ?: flowOf(0 to 0),
-            assistant = getOrNull<LanguageModelPort>()?.state ?: flowOf(ModelState.NotOffered),
-            showAssistant = isDebug(),
-            canLock = getOrNull<DeviceAuth>()?.isAvailable() == true,
-            showNoteTone = isDebug(),
-            showAddCurrency = isDebug(),
-            phoneCurrency = { (getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb).code },
-        )
-    }
-
-    // getOrNull on the schedule: C-4 leaves iOS with no periodic job, so nothing binds one there
-    // and the screen draws no switch. On Android the binding is always present.
-    viewModel {
-        BackgroundImportViewModel(
-            ledger = get(),
-            settings = get(),
-            importer = get(),
-            toasts = get(),
-            cadence = get<SlipImportCadence>(),
-            background = getOrNull<BackgroundImport>(),
-        )
-    }
-    viewModel { KeepFailedSlipsViewModel(ledger = get(), settings = get()) }
-    viewModel { LedgerBackupViewModel(ledger = get(), archive = get(), files = get(), toasts = get()) }
-    viewModel { TimezoneViewModel() }
-    // getOrNull: a screen test's graph binds no store; the choice then lasts until the process ends.
-    viewModel { LanguageViewModel(store = getOrNull(), offered = Language.offered(debug = isDebug())) }
-    viewModel { AssistantModelViewModel(model = get()) }
-    viewModel {
-        val model = getOrNull<LanguageModelPort>()?.state?.value
-        LicencesViewModel(
-            readText = { file -> Res.readBytes(file).decodeToString() },
-            // Gemma's terms apply once the model can be offered; a debug build shows its row already.
-            gemma = isDebug() || (model != null && model != ModelState.NotOffered),
-        )
-    }
-    viewModel { ActivityViewModel(ledger = get(), pendingDiscards = get<SlipDiscards>().pending) }
-    viewModel { SharedViewModel(repository = get(), sync = getOrNull(), runner = getOrNull()) }
-    viewModel { PeopleViewModel(repository = get()) }
-    // Koin's parameters do not carry a null, so a new repeat travels as "".
-    viewModel { (groupId: String, ruleId: String) ->
-        RepeatExpenseViewModel(
-            groupId = groupId,
-            ruleId = ruleId.ifEmpty { null },
-            repository = get(),
-            categories = storedCategories().forDirection(Direction.Expense),
-            toasts = get(),
-            runner = getOrNull(),
-        )
-    }
-    viewModel { SignInViewModel(auth = getOrNull()) }
-    viewModel { AccountViewModel(auth = getOrNull(), sync = getOrNull()) }
-    viewModel { (code: String) -> JoinViewModel(code = code, sync = getOrNull(), auth = getOrNull()) }
-    // One screen per group, like the record screens: a holder that outlived the wrong group would
-    // show one group's balance under another's name.
-    viewModel { (groupId: String) ->
-        GroupDetailViewModel(groupId = groupId, repository = get(), categories = storedCategories(), sync = getOrNull(), runner = getOrNull(), toasts = get(), haptics = get())
-    }
-    viewModel { (groupId: String, expenseId: String, transactionId: String, amount: String, description: String) ->
-        AddExpenseViewModel(
-            groupId = groupId,
-            expenseId = expenseId.ifEmpty { null },
-            repository = get(),
-            categories = storedCategories().forDirection(Direction.Expense),
-            transactionId = transactionId.ifEmpty { null },
-            toasts = get(),
-            haptics = get(),
-            prefillAmount = amount.ifEmpty { null },
-            prefillDescription = description.ifEmpty { null },
-        )
-    }
-    viewModel { (groupId: String) -> WhoPaysWhomViewModel(groupId = groupId, repository = get()) }
-    viewModel { (groupId: String, fromMemberId: String, toMemberId: String) ->
-        RecordPaymentViewModel(groupId = groupId, fromMemberId = fromMemberId, toMemberId = toMemberId, repository = get(), toasts = get(), haptics = get())
-    }
-    viewModel { (groupId: String) ->
-        SharedActivityViewModel(groupId = groupId.ifEmpty { null }, repository = get())
-    }
-    viewModel {
-        // A provider, not the value: the factory below reads the permission each time it resolves (#217).
-        PhotoFoldersViewModel(catalog = get(), folders = get(), access = { get() }, chooser = get())
-    }
-    viewModel { CategoriesViewModel(ledger = get(), categories = get()) }
-    viewModel { (categoryId: String, isNew: Boolean) ->
-        EditCategoryViewModel(categoryId = categoryId, ledger = get(), categories = get(), isNew = isNew, haptics = get(), settings = getOrNull())
-    }
-    viewModel {
-        ReportsViewModel(
-            ledger = get(),
-            categories = storedCategories(),
-            categoryUpdates = liveCategories(),
-            subCategoryUpdates = liveSubCategories(),
-            weeklyTarget = getOrNull<ImportSettings>()?.choices?.map { it.weeklyTarget } ?: flowOf(null),
-        )
-    }
-    // The retention is read when the screen is built, like the categories above: a change made
-    // while the queue is on top shows the next time it is opened, not under the reader's thumb.
-    viewModel {
-        ReviewViewModel(
-            ledger = get(),
-            discards = get(),
-            retention = get<ImportSettings>().choices.value.retention,
-            haptics = get(),
-        )
-    }
-
-    // Takes the slip it is confirming as a parameter: one screen per slip, and a holder that
-    // outlived the wrong one would offer the reader a different slip's amount.
-    viewModel { (slipId: String) ->
-        ConfirmSlipViewModel(
-            slipId = slipId,
-            ledger = get(),
-            importer = get(),
-            toasts = get(),
-            discards = get(),
-            categories = storedCategories(),
-            offersPlanned = isDebug(),
-            subCategories = storedSubCategories(),
-            // "A slip closes the debt": debug builds only until it has been tried with real groups.
-            debtsFor = { amount, payee ->
-                if (isDebug()) getOrNull<SharedRepository>()?.snapshot?.value?.debtsPaidBy(amount, payee).orEmpty() else emptyList()
-            },
-            recordPayment = { draft -> getOrNull<SharedRepository>()?.recordPayment(draft) },
-            haptics = get(),
-        )
-    }
-    // Takes its row as a parameter for the same reason the confirm screen does: one screen per
-    // record, and a holder that outlived the wrong one would offer the wrong row to delete.
-    // One day's receipt (#120), by its ISO date: one screen per day.
-    viewModel { (date: String) ->
-        DayReceiptViewModel(date = date, ledger = get(), categories = storedCategories(), subCategories = storedSubCategories())
-    }
-    viewModel { (transactionId: String) ->
-        TransactionDetailViewModel(
-            transactionId = transactionId,
-            ledger = get(),
-            toasts = get(),
-            // getOrNull, like the shell's first-run seam: a screen test builds a graph with
-            // no rules table in it, and the record still has to draw.
-            categories = storedCategories(),
-            subCategories = storedSubCategories(),
-            rules = getOrNull(),
-            haptics = get(),
-            shared = getOrNull(),
-            // #22: debug builds only until the weekly note has been tried.
-            offersPlanned = isDebug(),
-        )
-    }
-    viewModel { (transactionId: String) ->
-        EditTransactionViewModel(
-            transactionId = transactionId,
-            ledger = get(),
-            known = storedCategories(),
-            subCategories = storedSubCategories(),
-            haptics = get(),
-            shared = getOrNull(),
-            toasts = get(),
-        )
-    }
-
-    viewModel {
-        // A lambda, not a list: the sheet's Expense/Income toggle re-asks on every switch, and the
-        // holder lives as long as the shell, so each ask reads the table as it is now (#115).
-        val scope = this
-        AddViewModel(
-            ledger = get(),
-            toasts = get(),
-            categories = { scope.storedCategories().forDirection(it) },
-            subCategories = { scope.storedSubCategories() },
-            haptics = get(),
-            agent = getOrNull(),
-            reader = getOrNull(),
-            speech = getOrNull(),
-            offersCurrencies = isDebug(),
-            startingCurrency = { get<ImportSettings>().choices.value.addCurrency?.let(Currencies::of) ?: (getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb) },
-            lastRate = { code -> getOrNull<ImportStore>()?.rateFor(code) },
-            saveRate = { code, rate ->
-                getOrNull<PtutDatabase>()?.sharedDao()?.upsertRate(CurrencyRateEntity(code, rate.unscaled, rate.scale, Clock.System.now().toEpochMilliseconds(), Home.money.code))
-            },
-        )
-    }
-
-    viewModel { HomeCurrencyViewModel(book = get()) }
-    viewModel { AddCurrencyViewModel(settings = get(), phoneCurrency = { (getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb) }) }
-
-    viewModel { (shop: String) ->
-        ShopRuleViewModel(shop = shop, rules = get(), categories = storedCategories())
-    }
-
-    viewModel {
-        OnboardingViewModel(
-            onboarding = get(),
-            photoAccess = get(),
-            archive = getOrNull(),
-            files = getOrNull(),
-            toasts = get(),
-            homeBook = getOrNull(),
-            // #41: debug builds first; release stays baht and Bangkok.
-            suggestedHome = if (isDebug()) {
-                HomeChoice((getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb).toHomeMoney(), phoneZone())
-            } else {
-                null
-            },
-        )
-    }
 }
 
 /**
@@ -476,16 +106,17 @@ val viewModelModule: Module = module {
  * nothing else resolves would be graph nobody reads.
  */
 val ledgerModule: Module = module {
+    includes(appScopeModule)
 
     single<LedgerRepository> {
         val database = get<PtutDatabase>()
-        DefaultLedgerRepository(
+        RoomLedgerRepository(
             transactionDao = database.transactionDao(),
             queuedSlipDao = database.queuedSlipDao(),
             importRunDao = database.importRunDao(),
-            // Its own scope rather than any viewModelScope: these flows are eagerly shared and
+            // The app scope rather than any viewModelScope: these flows are eagerly shared and
             // the repository is a single, so they have to outlive every screen that reads them.
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            scope = appScope(),
         )
     }
 
@@ -507,7 +138,7 @@ val ledgerModule: Module = module {
      * lambda and not a value: this is a `single`, and a retention read once at construction would
      * keep deleting on the old schedule until the process restarted.
      */
-    single { ImportSettings(store = get()) }
+    single { AppSettings(store = get()) }
     single<HomeBook> {
         val database = get<PtutDatabase>()
         RoomHomeBook(
@@ -519,7 +150,7 @@ val ledgerModule: Module = module {
     }
 
     single {
-        val settings = get<ImportSettings>()
+        val settings = get<AppSettings>()
         SlipImporter(
             source = get(),
             reader = get(),
@@ -554,9 +185,9 @@ val ledgerModule: Module = module {
         RoomCategoryRepository(
             categoryDao = database.categoryDao(),
             subCategoryDao = database.subCategoryDao(),
-            // Its own scope, like the rules' was: a single whose flow is eagerly shared has to
-            // outlive every screen reading it.
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            scope = appScope(),
+            language = AppText.language,
+            seedNames = { AppText.copy.categories.seedNames },
         )
     }
 
@@ -565,29 +196,25 @@ val ledgerModule: Module = module {
     single<WatchedFolderRepository> {
         RoomWatchedFolderRepository(
             dao = get<PtutDatabase>().watchedFolderDao(),
-            // Its own scope, like the rules': a single whose flow is eagerly shared has to outlive
-            // every screen reading it.
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            scope = appScope(),
         )
     } bind FolderReadTally::class
 
     single<RuleRepository> {
-        DefaultRuleRepository(
+        RoomRuleRepository(
             ruleDao = get<PtutDatabase>().ruleDao(),
-            // Its own scope, like the ledger's: this is a single and its flow is eagerly shared,
-            // so it has to outlive every screen that reads it.
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            scope = appScope(),
         )
     }
 
-    // v2's shared costs (#133). Its own scope for the reason every repository here has one.
+    // v2's shared costs (#133). The app scope for the reason every repository here takes it.
     single<SharedRepository> {
         val database = get<PtutDatabase>()
         RoomSharedRepository(
             dao = database.sharedDao(),
             transactionDao = database.transactionDao(),
             ledger = get(),
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            scope = appScope(),
         )
     }
 }
@@ -610,13 +237,8 @@ fun dataModule(databaseContext: PtutDatabaseContext): Module = module {
     /** FR-22 at both ends is a system picker, so the platform supplies it. */
     single<LedgerFileStore> { ledgerFileStore(databaseContext) }
 
-    /**
-     * First run's two platform halves: where the answer survives, and how the photo dialog is
-     * raised. They sit here rather than in [viewModelModule] for the same reason the pickers do —
-     * that module names no platform type, so a test can take it as it ships and fake only these.
-     */
     /** NFR-4 and FR-3's answers, where they survive a process death. */
-    single<ImportSettingsStore> { importSettingsStore(databaseContext) }
+    single<AppSettingsStore> { appSettingsStore(databaseContext) }
     single { PhoneCurrency { phoneCountry(databaseContext) } }
     single<LanguageStore> { languageStore(databaseContext) }
     single { repeatReminders(databaseContext) }
@@ -624,12 +246,17 @@ fun dataModule(databaseContext: PtutDatabaseContext): Module = module {
     single { screenReader(databaseContext) }
     single { RepeatRunner(repository = get(), reminders = get()) }
 
+    /**
+     * First run's two platform halves: where the answer survives, and how the photo dialog is
+     * raised. They sit here rather than in [viewModelModule] for the same reason the pickers do —
+     * that module names no platform type, so a test can take it as it ships and fake only these.
+     */
     single<OnboardingFlag> { onboardingFlag(databaseContext) }
     single<PhotoAccessRequest> { photoAccessRequest(databaseContext) }
 
     /** #25: the lock reads the switch each time, so turning it off in Settings takes effect at once. */
     single<DeviceAuth> { deviceAuth(databaseContext) }
-    single { AppLock(enabled = { get<ImportSettings>().choices.value.appLock }, nowMillis = { Clock.System.now().toEpochMilliseconds() }) }
+    single { AppLock(enabled = { get<AppSettings>().choices.value.appLock }, nowMillis = { Clock.System.now().toEpochMilliseconds() }) }
 
     /** FR-5: what the platform can offer, and what the reader chose out of it. */
     single<FolderCatalog> { folderCatalog(databaseContext) }

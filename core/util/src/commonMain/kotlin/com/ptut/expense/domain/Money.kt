@@ -125,10 +125,15 @@ fun Satang.formatCompact(money: HomeMoney = Home.money): String =
  */
 fun Satang.abbreviated(money: HomeMoney = Home.money): String {
     val whole = (if (raw < 0) -raw else raw) / minorPerWhole(money)
-    if (whole < 1_000) return whole.toString()
-    val thousands = whole / 100 / 10.0
-    return if (whole % 1_000 < 50) "${whole / 1_000}k" else "${thousands}k"
+    if (whole < THOUSAND) return whole.toString()
+    // Truncated to one decimal of a thousand: 1,299 is "1.2k", never "1.3k".
+    val thousands = whole / HUNDRED / TENTHS_PER_ONE
+    return if (whole % THOUSAND < HUNDRED / 2) "${whole / THOUSAND}k" else "${thousands}k"
 }
+
+private const val THOUSAND = 1_000L
+private const val HUNDRED = 100L
+private const val TENTHS_PER_ONE = 10.0
 
 /**
  * Magnitude only — the sign is applied by the caller that knows the direction. #42: in the home's
@@ -155,7 +160,8 @@ fun pow10(exponent: Int): Long {
     return result
 }
 
-private fun groupThousands(value: Long): String {
+/** "1,850,000": [value]'s digits in threes, with no symbol. */
+fun groupThousands(value: Long): String {
     val digits = value.toString()
     if (digits.length <= 3) return digits
     return buildString {

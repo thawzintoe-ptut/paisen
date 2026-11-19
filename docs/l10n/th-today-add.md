@@ -59,7 +59,6 @@ Please check these against a Thai phone:
 | {n} new shops | ร้านใหม่ {n} ร้าน | HomeCopy.kt `newShops` |
 | {n} unreadable amounts | จำนวนเงินที่อ่านไม่ได้ {n} รายการ | HomeCopy.kt `unreadableAmounts` |
 | {n} unread slips | สลิปที่ยังไม่ได้อ่าน {n} ใบ | HomeCopy.kt `unreadSlips` |
-| {a}, {b} | {a}, {b} | HomeCopy.kt `reasonSeparator` |
 | Good morning | อรุณสวัสดิ์ | HomeCopy.kt `goodMorning` |
 | Yesterday came to {spent} — {comparison}. | เมื่อวานใช้ไป {spent} — {comparison} | HomeCopy.kt `yesterdayCameTo` |
 | Your day, wrapped | สรุปวันนี้ | HomeCopy.kt `dayWrapped` |

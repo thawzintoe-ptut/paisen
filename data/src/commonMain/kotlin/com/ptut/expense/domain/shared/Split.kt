@@ -110,6 +110,16 @@ fun shares(check: SplitCheck, totalSatang: Satang, members: List<SplitMember>, w
     }
 }
 
+/** True when no part is negative and the parts make [total] exactly, counted so that no step can wrap a `Long`. */
+fun List<Long>.sumsTo(total: Long): Boolean {
+    var left = total
+    for (part in this) {
+        if (part < 0 || part > left) return false
+        left -= part
+    }
+    return left == 0L
+}
+
 /** p29's GIVE TO <name>: whatever is left goes on [memberId], the field edited last. */
 fun Map<String, Long>.giveLeftTo(memberId: String, left: Long): Map<String, Long> =
     toMutableMap().apply { this[memberId] = ((this[memberId] ?: 0L) + left).coerceAtLeast(0L) }

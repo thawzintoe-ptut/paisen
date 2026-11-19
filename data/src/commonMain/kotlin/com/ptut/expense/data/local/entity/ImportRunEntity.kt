@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.ptut.expense.domain.ImportFailureKind
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ImportRun
 
@@ -35,6 +36,8 @@ data class ImportRunEntity(
     val queued: Int = 0,
     @ColumnInfo(defaultValue = "")
     val folders: String = "",
+    /** Added in schema 23: [ImportFailureKind]'s name. Null on every row written before it. */
+    val failureKind: String? = null,
 ) {
     companion object {
         /**
@@ -67,6 +70,7 @@ fun ImportRunEntity.toDomain(): ImportRun = ImportRun(
     },
     slipsFound = slipsFound,
     failureReason = failureReason,
+    failureKind = failureKind?.let { stored -> ImportFailureKind.entries.firstOrNull { it.name == stored } ?: ImportFailureKind.Other },
     filed = filed,
     queued = queued,
     folders = folders.split(FOLDER_SEPARATOR).filter { it.isNotEmpty() },

@@ -1,7 +1,5 @@
 package com.ptut.expense.domain
 
-import com.ptut.expense.locale.AppText
-
 /** [share] is a whole percent of the period's spending, so the bar and the number agree. */
 data class CategorySpend(
     val category: Category,
@@ -19,10 +17,13 @@ data class SubCategorySpend(val name: String, val total: Satang)
  * answers no question the reader actually has.
  *
  * Nothing is dropped (#115): spend under a category [categories] does not hold counts under one
- * [UnknownCategory] row, so the rows always add up to the period's total.
+ * [unknown] row, so the rows always add up to the period's total. [unsorted] names a parent's
+ * spend that no sub-category holds.
  */
 fun List<Transaction>.spendByCategory(
     categories: List<Category>,
+    unknown: Category,
+    unsorted: String,
     subCategories: List<SubCategory> = emptyList(),
 ): List<CategorySpend> {
     val spent = filter { it.direction == Direction.Expense }
@@ -30,7 +31,7 @@ fun List<Transaction>.spendByCategory(
     if (total == Satang.Zero) return emptyList()
 
     return spent
-        .groupBy { transaction -> categories.firstOrNull { it.id == transaction.categoryId } ?: UnknownCategory }
+        .groupBy { transaction -> categories.firstOrNull { it.id == transaction.categoryId } ?: unknown }
         .map { (category, rows) ->
             val categoryTotal = rows.map { it.amount }.sum()
             CategorySpend(
@@ -40,7 +41,7 @@ fun List<Transaction>.spendByCategory(
                 // is derived from it. Do not "fix" this into Satang arithmetic.
                 share = ((categoryTotal.raw * 100.0) / total.raw).toInt(),
                 count = rows.size,
-                subCategories = rows.splitUnder(category.id, categoryTotal, subCategories),
+                subCategories = rows.splitUnder(category.id, categoryTotal, subCategories, unsorted),
             )
         }
         .sortedByDescending { it.total }
@@ -54,6 +55,7 @@ private fun List<Transaction>.splitUnder(
     categoryId: String,
     categoryTotal: Satang,
     subCategories: List<SubCategory>,
+    unsorted: String,
 ): List<SubCategorySpend> {
     val mine = subCategories.under(categoryId).associateBy { it.id }
     val filed = mapNotNull { row -> mine[row.subCategoryId]?.let { sub -> sub to row.amount } }
@@ -63,9 +65,5 @@ private fun List<Transaction>.splitUnder(
         .map { (sub, amounts) -> SubCategorySpend(sub.name, amounts.sum()) }
         .sortedByDescending { it.total }
     val rest = categoryTotal - filed.map { it.second }.sum()
-    return if (rest == Satang.Zero) bySub else bySub + SubCategorySpend(AppText.copy.phrases.unsorted, rest)
+    return if (rest == Satang.Zero) bySub else bySub + SubCategorySpend(unsorted, rest)
 }
-
-/** Where spend goes when its category is not in the list a screen holds. */
-val UnknownCategory: Category
-    get() = Category(id = "unknown", name = AppText.copy.phrases.unknownCategory, icon = "more_horiz")

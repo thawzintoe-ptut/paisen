@@ -12,9 +12,9 @@ import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.WeeklyTarget
-import com.ptut.expense.domain.settings.FakeImportSettingsStore
-import com.ptut.expense.domain.settings.ImportChoices
-import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.settings.AppChoices
+import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.settings.FakeAppSettingsStore
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Rate
 import kotlinx.coroutines.test.TestResult
@@ -54,7 +54,7 @@ class RoomHomeBookTest {
     }
 
     @Test
-    fun aLedgerMadeBeforeHomeGetsItsRowFromTheCopy() = withBook(ImportChoices(homeCurrency = "MMK", homeZone = "Asia/Yangon")) { book, database, _ ->
+    fun aLedgerMadeBeforeHomeGetsItsRowFromTheCopy() = withBook(AppChoices(homeCurrency = "MMK", homeZone = "Asia/Yangon")) { book, database, _ ->
         book.reconcile()
 
         assertEquals(LedgerMetaEntity(currency = "MMK", zone = "Asia/Yangon"), database.ledgerMetaDao().read())
@@ -73,7 +73,7 @@ class RoomHomeBookTest {
     // #47
 
     @Test
-    fun aBahtLedgerWithRowsMovesToKyatAndEveryRowKeepsWhatItWas() = withBook(ImportChoices(weeklyTarget = WeeklyTarget("food", Satang(200_000)))) { book, database, settings ->
+    fun aBahtLedgerWithRowsMovesToKyatAndEveryRowKeepsWhatItWas() = withBook(AppChoices(weeklyTarget = WeeklyTarget("food", Satang(200_000)))) { book, database, settings ->
         val dao = database.transactionDao()
         dao.insert(TransactionDraft(Satang(10_000), Direction.Expense, "food").toEntity("baht", 1L, 1L))
         dao.insert(TransactionDraft(Satang(24_190), Direction.Expense, "food", foreign = ForeignAmount("MMK", 29_500, Rate.parse("8.2", 1_000)!!)).toEntity("kyat", 2L, 2L))
@@ -157,7 +157,7 @@ class RoomHomeBookTest {
     }
 
     @Test
-    fun aCopyLeftBehindByADeathAfterTheRowsMovedIsCorrectedAtLaunch() = withBook(ImportChoices(homeCurrency = "THB", weeklyTarget = WeeklyTarget("food", Satang(200_000)))) { book, database, settings ->
+    fun aCopyLeftBehindByADeathAfterTheRowsMovedIsCorrectedAtLaunch() = withBook(AppChoices(homeCurrency = "THB", weeklyTarget = WeeklyTarget("food", Satang(200_000)))) { book, database, settings ->
         database.ledgerMetaDao().write(LedgerMetaEntity(currency = "MMK", zone = "Asia/Yangon"))
 
         book.reconcile()
@@ -178,9 +178,9 @@ class RoomHomeBookTest {
         assertEquals(kyat, Home.choice.value)
     }
 
-    private fun withBook(choices: ImportChoices = ImportChoices(), test: suspend (RoomHomeBook, PtutDatabase, ImportSettings) -> Unit): TestResult = runTest {
+    private fun withBook(choices: AppChoices = AppChoices(), test: suspend (RoomHomeBook, PtutDatabase, AppSettings) -> Unit): TestResult = runTest {
         val database = Room.inMemoryDatabaseBuilder<PtutDatabase>().openPtutDatabase()
-        val settings = ImportSettings(FakeImportSettingsStore(choices))
+        val settings = AppSettings(FakeAppSettingsStore(choices))
         try {
             test(RoomHomeBook(database.ledgerMetaDao(), database.transactionDao(), settings, rates = database.sharedDao(), clock = FixedClock), database, settings)
         } finally {

@@ -1,0 +1,334 @@
+package com.ptut.expense.nav
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.composable
+import androidx.navigation.toRoute
+import com.ptut.expense.categories.CategoriesView
+import com.ptut.expense.categories.CategoriesViewModel
+import com.ptut.expense.categories.EditCategoryView
+import com.ptut.expense.categories.EditCategoryViewModel
+import com.ptut.expense.debug.DebugSlipPanel
+import com.ptut.expense.debug.DebugSlipViewModel
+import com.ptut.expense.design.Spacing
+import com.ptut.expense.di.AppBuild
+import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.folders.PhotoFoldersView
+import com.ptut.expense.folders.PhotoFoldersViewModel
+import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.platform.lock.AppLock
+import com.ptut.expense.platform.lock.DeviceAuth
+import com.ptut.expense.settings.AddCurrencyView
+import com.ptut.expense.settings.AddCurrencyViewModel
+import com.ptut.expense.settings.AssistantModelView
+import com.ptut.expense.settings.AssistantModelViewModel
+import com.ptut.expense.settings.BackgroundImportView
+import com.ptut.expense.settings.BackgroundImportViewModel
+import com.ptut.expense.settings.ExportDataView
+import com.ptut.expense.settings.FEEDBACK_ADDRESS
+import com.ptut.expense.settings.HomeCurrencyView
+import com.ptut.expense.settings.HomeCurrencyViewModel
+import com.ptut.expense.settings.ImportDataView
+import com.ptut.expense.settings.KeepFailedSlipsView
+import com.ptut.expense.settings.KeepFailedSlipsViewModel
+import com.ptut.expense.settings.LanguageView
+import com.ptut.expense.settings.LanguageViewModel
+import com.ptut.expense.settings.LedgerBackupViewModel
+import com.ptut.expense.settings.LicencesView
+import com.ptut.expense.settings.LicencesViewModel
+import com.ptut.expense.settings.SettingsAction
+import com.ptut.expense.settings.SettingsView
+import com.ptut.expense.settings.SettingsViewModel
+import com.ptut.expense.settings.SlipOwnerDialog
+import com.ptut.expense.settings.TimezoneView
+import com.ptut.expense.settings.TimezoneViewModel
+import com.ptut.expense.settings.destination
+import com.ptut.expense.settings.feedbackMail
+import com.ptut.expense.settings.focusedRow
+import com.ptut.expense.shared.AccountCard
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
+
+/** Settings and every screen a Settings row opens. */
+internal fun NavGraphBuilder.settingsRoutes(nav: NavHostController) {
+    composable<PtutRoute.Settings> { entry ->
+        val settings = koinViewModel<SettingsViewModel>()
+        val state by settings.uiState.collectAsStateWithLifecycle()
+        // The switch in the background import row is that screen's own lever (#168).
+        val background = koinViewModel<BackgroundImportViewModel>()
+        val uriHandler = LocalUriHandler.current
+        val build = koinInject<AppBuild>()
+        val toasts = koinInject<ToastMessages>()
+        val scope = rememberCoroutineScope()
+        val noEmailApp = LocalCopy.current.settings.noEmailApp(FEEDBACK_ADDRESS)
+        val deviceAuth = koinInject<DeviceAuth>()
+        val appLock = koinInject<AppLock>()
+        val unlockReason = LocalCopy.current.settings.unlockReason
+        // #26: the one row that opens a dialog, not a screen.
+        var editingOwner by rememberSaveable { mutableStateOf(false) }
+        if (editingOwner) {
+            SlipOwnerDialog(
+                current = koinInject<AppSettings>().choices.value.slipOwner.name,
+                onSave = {
+                    settings.setSlipOwner(it)
+                    editingOwner = false
+                },
+                onDismiss = { editingOwner = false },
+            )
+        }
+        SettingsView(
+            uiState = state,
+            // Every row but one is a destination, so the screen navigates and the state
+            // holder holds no action — an operation started here would report its result
+            // over whichever screen the reader had moved on to.
+            onAction = { action ->
+                if (action == SettingsAction.Feedback) {
+                    // The phone's own mail app writes and sends it. Android throws when it has none.
+                    runCatching { uriHandler.openUri(feedbackMail(build)) }
+                        .onFailure { scope.launch { toasts.show(ToastMessage(noEmailApp, ToastTone.Error)) } }
+                } else if (action == SettingsAction.SlipOwner) {
+                    editingOwner = true
+                } else if (action == SettingsAction.NoteTone) {
+                    settings.switchNoteTone()
+                } else {
+                    action.destination()?.let { nav.navigate(it) }
+                }
+            },
+            focusRow = entry.toRoute<PtutRoute.Settings>().focusedRow(),
+            onSwitch = { action, on ->
+                when (action) {
+                    SettingsAction.MoodByTimeOfDay -> settings.setMoodByTimeOfDay(on)
+
+                    SettingsAction.WeeklyCheckIn -> settings.setWeeklyCheckIn(on)
+
+                    SettingsAction.Transparency -> settings.setTransparency(on)
+
+                    SettingsAction.AppLock -> settings.setAppLock(
+                        on = on,
+                        authenticate = { deviceAuth.authenticate(unlockReason) },
+                        onTurnedOn = appLock::unlock,
+                    )
+
+                    SettingsAction.BackgroundImport -> background.setRunning(on)
+
+                    // Rows with no switch.
+                    SettingsAction.SlipSource, SettingsAction.KeepFailedSlips, SettingsAction.SlipOwner,
+                    SettingsAction.Activity, SettingsAction.Categories, SettingsAction.NoteTone,
+                    SettingsAction.Language, SettingsAction.ExportLedger, SettingsAction.ImportLedger,
+                    SettingsAction.Timezone, SettingsAction.HomeCurrency, SettingsAction.AddCurrency,
+                    SettingsAction.Assistant, SettingsAction.Feedback, SettingsAction.Licences,
+                    -> Unit
+                }
+            },
+            account = { AccountCard(Modifier.padding(horizontal = Spacing.sm)) },
+            footer = {
+                Column {
+                    // Absent from a release build rather than hidden in one: the
+                    // graph binds nothing this needs unless the entry point said
+                    // debug.
+                    if (koinInject<AppBuild>().debug) {
+                        val debug = koinViewModel<DebugSlipViewModel>()
+                        val summary by debug.summary.collectAsStateWithLifecycle()
+                        DebugSlipPanel(
+                            summary = summary,
+                            onInjectReadable = debug::injectReadable,
+                            onInjectSameMerchant = debug::injectSameMerchant,
+                            onInjectUnreadable = debug::injectUnreadable,
+                            modifier = Modifier.padding(Spacing.sm),
+                        )
+                    }
+                }
+            },
+        )
+    }
+
+    composable<PtutRoute.BackgroundImport> {
+        val background = koinViewModel<BackgroundImportViewModel>()
+        val state by background.uiState.collectAsStateWithLifecycle()
+        BackgroundImportView(
+            uiState = state,
+            onBack = { nav.popBackStack() },
+            onSetRunning = background::setRunning,
+            onCheckNow = background::checkNow,
+        )
+    }
+
+    composable<PtutRoute.KeepFailedSlips> {
+        val keep = koinViewModel<KeepFailedSlipsViewModel>()
+        val state by keep.uiState.collectAsStateWithLifecycle()
+        KeepFailedSlipsView(
+            uiState = state,
+            onBack = { nav.popBackStack() },
+            onChoose = keep::choose,
+        )
+    }
+
+    // One class for both ends of FR-22. Each screen resolves its own instance,
+    // which is fine — they are separate destinations, so only one is ever on top.
+    composable<PtutRoute.ExportData> {
+        val backup = koinViewModel<LedgerBackupViewModel>()
+        val state by backup.uiState.collectAsStateWithLifecycle()
+        ExportDataView(
+            uiState = state,
+            onBack = { nav.popBackStack() },
+            onExport = backup::export,
+        )
+    }
+
+    composable<PtutRoute.ImportData> {
+        val backup = koinViewModel<LedgerBackupViewModel>()
+        val state by backup.uiState.collectAsStateWithLifecycle()
+        ImportDataView(
+            uiState = state,
+            onBack = { nav.popBackStack() },
+            onChooseFile = backup::chooseFile,
+            onImport = backup::restore,
+            onCancel = backup::cancelRestore,
+        )
+    }
+
+    composable<PtutRoute.Language> {
+        val language = koinViewModel<LanguageViewModel>()
+        val state by language.uiState.collectAsStateWithLifecycle()
+        LanguageView(
+            uiState = state,
+            onBack = { nav.popBackStack() },
+            onChoose = language::choose,
+        )
+    }
+
+    composable<PtutRoute.AddCurrency> {
+        val currency = koinViewModel<AddCurrencyViewModel>()
+        val state by currency.uiState.collectAsStateWithLifecycle()
+        AddCurrencyView(
+            uiState = state,
+            onBack = { nav.popBackStack() },
+            onChoose = currency::choose,
+        )
+    }
+
+    composable<PtutRoute.HomeCurrency> {
+        val homeCurrency = koinViewModel<HomeCurrencyViewModel>()
+        val state by homeCurrency.uiState.collectAsStateWithLifecycle()
+        HomeCurrencyView(
+            uiState = state,
+            onBack = { nav.popBackStack() },
+            onChoose = homeCurrency::choose,
+            onRate = homeCurrency::typeRate,
+            onConfirmConvert = homeCurrency::confirmConvert,
+            onCancelConvert = homeCurrency::cancelConvert,
+            onExport = { nav.navigate(PtutRoute.ExportData) },
+        )
+    }
+
+    composable<PtutRoute.Timezone> {
+        TimezoneView(
+            uiState = koinViewModel<TimezoneViewModel>().uiState,
+            onBack = { nav.popBackStack() },
+        )
+    }
+
+    composable<PtutRoute.AssistantModel> {
+        val assistant = koinViewModel<AssistantModelViewModel>()
+        val state by assistant.uiState.collectAsStateWithLifecycle()
+        AssistantModelView(
+            uiState = state,
+            onAct = assistant::act,
+            onBack = { nav.popBackStack() },
+        )
+    }
+
+    composable<PtutRoute.Licences> {
+        val licences = koinViewModel<LicencesViewModel>()
+        val state by licences.uiState.collectAsStateWithLifecycle()
+        LicencesView(
+            uiState = state,
+            onToggle = licences::toggle,
+            onBack = { nav.popBackStack() },
+        )
+    }
+
+    composable<PtutRoute.Categories> {
+        val categories = koinViewModel<CategoriesViewModel>()
+        val state by categories.uiState.collectAsStateWithLifecycle()
+        val created by categories.justCreated.collectAsStateWithLifecycle()
+
+        // A new category is opened for editing at once: naming it is the first thing
+        // screen 12a is for, so asking in a dialog first would ask twice.
+        LaunchedEffect(created) {
+            created?.let {
+                categories.openedCreated()
+                nav.navigate(PtutRoute.EditCategory(it, isNew = true))
+            }
+        }
+
+        CategoriesView(
+            uiState = state,
+            onBack = { nav.popBackStack() },
+            onOpen = { nav.navigate(PtutRoute.EditCategory(it)) },
+            onNew = { categories.newCategory() },
+            onMove = { id, by -> categories.move(id, by) },
+        )
+    }
+
+    composable<PtutRoute.EditCategory> { entry ->
+        val route = entry.toRoute<PtutRoute.EditCategory>()
+        val edit = koinViewModel<EditCategoryViewModel> { parametersOf(route.categoryId, route.isNew) }
+        val state by edit.uiState.collectAsStateWithLifecycle()
+        val deleted by edit.isDeleted.collectAsStateWithLifecycle()
+
+        // The category is gone before the screen is, so leaving cannot cancel the
+        // delete — the order the record screen already uses.
+        LaunchedEffect(deleted) { if (deleted) nav.popBackStack() }
+
+        EditCategoryView(
+            uiState = state,
+            onBack = { nav.popBackStack() },
+            onRename = edit::rename,
+            onIcon = edit::chooseIcon,
+            onDirection = edit::chooseDirection,
+            onColor = edit::chooseColor,
+            onSave = { edit.save() },
+            onAddSubCategory = { edit.addSubCategory(it) },
+            onRenameSubCategory = { id, name -> edit.renameSubCategory(id, name) },
+            onRemoveSubCategory = { edit.removeSubCategory(it) },
+            onDelete = { edit.delete(it) },
+            onTarget = edit::typeTarget,
+        )
+    }
+
+    composable<PtutRoute.PhotoFolders> {
+        val folders = koinViewModel<PhotoFoldersViewModel>()
+        val state by folders.uiState.collectAsStateWithLifecycle()
+
+        PhotoFoldersView(
+            uiState = state,
+            onBack = { nav.popBackStack() },
+            onToggle = folders::onToggle,
+            onSave = { folders.save() },
+            onChooseAnother = { folders.chooseMore() },
+        )
+        // Access granted in the system settings shows on return, not after a restart (#217).
+        LifecycleResumeEffect(folders) {
+            folders.refresh()
+            onPauseOrDispose { }
+        }
+    }
+}

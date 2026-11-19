@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.EvidenceRetention
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.QueuedSlip
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.evidenceDaysRemaining
 import com.ptut.expense.domain.isAutomatic
@@ -54,7 +55,7 @@ class ReviewViewModel(
     ) { slips, snapshot, pending -> slips.filterNot { it.id in pending }.toUiState(snapshot.filedRows()) }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS),
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
             initialValue = emptyList<QueuedSlip>().toUiState(emptyList()),
         )
 
@@ -109,10 +110,5 @@ class ReviewViewModel(
             evidenceDaysRemaining(it.capturedAtEpochMillis, clock.now().toEpochMilliseconds(), retention)
         }
         return AppText.copy.slips.retentionNote(retention.inWholeDays, soonest)
-    }
-
-    private companion object {
-        /** Survives a rotation without keeping the query open behind a screen nobody is on. */
-        const val SUBSCRIPTION_TIMEOUT_MILLIS = 5_000L
     }
 }

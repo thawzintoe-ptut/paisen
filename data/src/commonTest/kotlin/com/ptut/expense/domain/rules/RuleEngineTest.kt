@@ -35,4 +35,12 @@ class RuleEngineTest {
     fun `no rules at all is not an error`() {
         assertNull(RuleEngine.categoryFor("SHOPEEPAY", emptyList()))
     }
+
+    @Test
+    fun `a remembered merchant is found for its shop on the engine key`() {
+        val known = listOf(RememberedMerchant("r1", "Foodland Rama IV", "groceries", slipCount = 3))
+
+        assertEquals("r1", known.forShop("  foodland rama iv ")?.id)
+        assertNull(known.forShop("Foodland Rama"))
+    }
 }

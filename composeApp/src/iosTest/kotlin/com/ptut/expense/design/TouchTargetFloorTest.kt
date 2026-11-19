@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import com.ptut.expense.NoDeviceAuth
 import com.ptut.expense.PtutApp
+import com.ptut.expense.add.AddActions
 import com.ptut.expense.add.AddSheet
 import com.ptut.expense.add.AddUiState
 import com.ptut.expense.confirm.ConfirmSlipUiState
@@ -41,8 +42,8 @@ import com.ptut.expense.domain.backup.MergeReport
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.SampleLedgerRepository
-import com.ptut.expense.domain.settings.FakeImportSettingsStore
-import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.settings.FakeAppSettingsStore
 import com.ptut.expense.domain.slip.SlipPictures
 import com.ptut.expense.edit.EditTransactionUiState
 import com.ptut.expense.edit.EditTransactionView
@@ -221,15 +222,17 @@ class TouchTargetFloorTest {
             PtutTheme {
                 AddSheet(
                     uiState = AddUiState(category = groceries, subCategories = subs, subCategory = subs.first()),
-                    onType = {},
-                    onKind = {},
-                    onCategory = {},
-                    onSubCategory = {},
-                    onTime = {},
-                    onOpenMemo = {},
-                    onMemo = {},
-                    onCloseMemo = {},
-                    onSave = {},
+                    actions = AddActions(
+                        onType = {},
+                        onKind = {},
+                        onCategory = {},
+                        onSubCategory = {},
+                        onTime = {},
+                        onOpenMemo = {},
+                        onMemo = {},
+                        onCloseMemo = {},
+                        onSave = {},
+                    ),
                 )
             }
         }
@@ -254,8 +257,6 @@ class TouchTargetFloorTest {
                         categories = Category.seed().forDirection(Direction.Expense),
                         subCategories = subs,
                         subCategory = subs.first(),
-                        saving = false,
-                        saved = false,
                     ),
                     onType = {},
                     onCategory = {},
@@ -389,7 +390,7 @@ class TouchTargetFloorTest {
                     // default for a phone that has already been through it.
                     // NFR-4 and FR-3's answers. The ledger module owns the live copy,
                     // and this graph does not load it.
-                    single { ImportSettings(FakeImportSettingsStore()) }
+                    single { AppSettings(FakeAppSettingsStore()) }
                     single<OnboardingFlag> { FakeOnboardingFlag(finished = firstRunAnswered) }
                     single<PhotoAccessRequest> { FakePhotoAccessRequest() }
                     // Today's Fix reads its steps from here when photo access is limited.

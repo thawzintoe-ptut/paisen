@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.HomeTime
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.WeeklyTarget
@@ -14,11 +15,15 @@ import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.minorPerWhole
-import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.runSuspendCatching
+import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.suggestedTarget
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.targetCopy
 import com.ptut.expense.ui.Haptics
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +34,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.datetime.LocalDate
 import kotlin.time.Clock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -52,8 +56,10 @@ class EditCategoryViewModel(
     private val haptics: Haptics = Haptics(),
     private val newId: () -> String = { Uuid.random().toString() },
     /** #21: where the one weekly target lives. Null in a graph with no settings: the field is not drawn. */
-    private val settings: ImportSettings? = null,
-    private val today: () -> LocalDate = { Clock.System.now().toEpochMilliseconds().dateIn(HomeTime) },
+    private val settings: AppSettings? = null,
+    /** Where a failed save or delete is said. Null in a graph that binds none. */
+    private val toasts: ToastMessages? = null,
+    private val clock: Clock = Clock.System,
 ) : ViewModel() {
 
     /** Null until the reader types. Absent means "as stored", which is not the same as blank. */
@@ -79,19 +85,17 @@ class EditCategoryViewModel(
      * promise "nothing moves" over a category holding forty rows and never correct itself.
      */
     val uiState: StateFlow<EditCategoryUiState> = combine(
-        combine(ledger.allTransactions, categories.categories, categories.subCategories, ::Triple),
+        combine(ledger.allTransactions, categories.categories, categories.subCategories, ::Stored),
         typedName,
         chosenIcon,
-        combine(chosenDirection, chosenColor, subEdits, ::Triple),
+        combine(chosenDirection, chosenColor, subEdits, ::Choices),
         combine(movedCount, rulesMoved, settings?.choices?.map { it.weeklyTarget } ?: flowOf(null), typedTarget) { moved, rules, stored, typed ->
             Counts(moved, rules, stored, typed)
         },
-    ) { held, typed, icon, chosen, counts ->
-        state(held.first, held.second, held.third, typed, icon, chosen.first, chosen.second, chosen.third, counts)
-    }
+    ) { stored, typed, icon, choices, counts -> state(stored, typed, icon, choices, counts) }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
             initialValue = EditCategoryUiState(),
         )
 
@@ -135,16 +139,19 @@ class EditCategoryViewModel(
         val name = typedName.value?.trim().orEmpty().ifEmpty { held.name }
         val edits = subEdits.value
 
-        categories.save(
-            held.copy(
-                name = name,
-                icon = chosenIcon.value ?: held.icon,
-                direction = chosenDirection.value ?: held.direction,
-                color = chosenColor.value ?: held.color,
-            ),
-            subCategories = edits.toSave(categories.subCategories.value),
-            removedSubCategoryIds = edits.removed.toList(),
-        )
+        // A failed write keeps every edit on screen, so Save can be tapped again.
+        runSuspendCatching {
+            categories.save(
+                held.copy(
+                    name = name,
+                    icon = chosenIcon.value ?: held.icon,
+                    direction = chosenDirection.value ?: held.direction,
+                    color = chosenColor.value ?: held.color,
+                ),
+                subCategories = edits.toSave(categories.subCategories.value),
+                removedSubCategoryIds = edits.removed.toList(),
+            )
+        }.onFailure { return@launch saysItFailed() }
         saveTarget()
         haptics.saved()
         typedName.value = null
@@ -158,9 +165,9 @@ class EditCategoryViewModel(
     private fun saveTarget() {
         val typed = typedTarget.value ?: return
         val store = settings ?: return
-        val baht = typed.toLongOrNull()
+        val wholeUnits = typed.toLongOrNull()
         when {
-            baht != null && baht > 0 -> store.setWeeklyTarget(WeeklyTarget(categoryId, Satang.ofMinorUnits(baht * minorPerWhole())))
+            wholeUnits != null && wholeUnits > 0 -> store.setWeeklyTarget(WeeklyTarget(categoryId, Satang.ofMinorUnits(wholeUnits * minorPerWhole())))
             store.choices.value.weeklyTarget?.categoryId == categoryId -> store.setWeeklyTarget(null)
         }
         typedTarget.value = null
@@ -204,11 +211,15 @@ class EditCategoryViewModel(
 
     /** FR-18: only ever called with an answer to where the transactions go. */
     fun delete(moveTo: String) = viewModelScope.launch {
-        categories.delete(categoryId, moveTo)
+        runSuspendCatching { categories.delete(categoryId, moveTo) }.onFailure { return@launch saysItFailed() }
         // #21: the target goes with its category.
         if (settings?.choices?.value?.weeklyTarget?.categoryId == categoryId) settings.setWeeklyTarget(null)
         haptics.deleted()
         closed.value = true
+    }
+
+    private suspend fun saysItFailed() {
+        toasts?.show(ToastMessage(AppText.copy.settings.didNotWork, tone = ToastTone.Error))
     }
 
     /** What NEW CATEGORY opens on: last in the reader's order, so no category they know moves. */
@@ -220,16 +231,18 @@ class EditCategoryViewModel(
     }
 
     private fun state(
-        snapshot: LedgerSnapshot,
-        known: List<Category>,
-        subs: List<SubCategory>,
+        read: Stored,
         typed: String?,
         icon: String?,
-        direction: Direction?,
-        color: String?,
-        edits: SubCategoryEdits,
+        choices: Choices,
         counts: Counts,
     ): EditCategoryUiState {
+        val snapshot = read.snapshot
+        val known = read.known
+        val subs = read.subs
+        val direction = choices.direction
+        val color = choices.color
+        val edits = choices.edits
         val stored = known.firstOrNull { it.id == categoryId }
         val held = stored ?: draft(known) ?: return EditCategoryUiState()
         // All time, not this month: a count is what a sub-category holds (p20).
@@ -238,14 +251,9 @@ class EditCategoryViewModel(
             is LedgerSnapshot.Rows -> snapshot.transactions
         }
         val mine = subs.filter { it.categoryId == categoryId }
-        // A blank name is not a change worth offering: save falls back to the stored one, so
-        // a lit button over an empty field would report a write that never happened.
-        val edited = (typed != null && typed.isNotBlank() && typed.trim() != held.name) ||
-            (icon != null && icon != held.icon) ||
-            (direction != null && direction != held.direction) ||
-            (color != null && color != held.color) ||
-            edits.changes(mine) ||
-            counts.typedTarget?.let { it.toLongOrNull() != counts.target?.takeIf { t -> t.categoryId == categoryId }?.amount?.wholeBaht() } == true
+        val myTarget = counts.target?.takeIf { it.categoryId == categoryId }
+        val edited = isEdited(held, typed, icon, direction, color, edits.changes(mine)) ||
+            counts.typedTarget?.let { it.toLongOrNull() != myTarget?.amount?.wholeUnits() } == true
         // Never itself, and never the other direction: delete must not turn spending into income.
         val destinations = known.filter { it.id != categoryId && it.direction == held.direction }
 
@@ -269,13 +277,24 @@ class EditCategoryViewModel(
             // A draft has nothing to delete, and the last of its direction has nowhere to send its rows.
             canDelete = stored != null && destinations.isNotEmpty(),
             showsTarget = settings != null && (direction ?: held.direction) == Direction.Expense,
-            target = counts.typedTarget ?: counts.target?.takeIf { it.categoryId == categoryId }?.amount?.wholeBaht()?.toString().orEmpty(),
-            targetHint = rows.suggestedTarget(categoryId, today())?.let { targetCopy().usualWeek(it.formatCompact()) } ?: targetCopy().fieldHint,
+            target = counts.typedTarget ?: myTarget?.amount?.wholeUnits()?.toString().orEmpty(),
+            targetHint = rows.suggestedTarget(categoryId, clock.now().dateIn(HomeTime))?.let { targetCopy().usualWeek(it.formatCompact()) } ?: targetCopy().fieldHint,
             targetNote = counts.target?.takeIf { it.categoryId != categoryId && !counts.typedTarget.isNullOrEmpty() }?.let { other ->
                 targetCopy().replaces(other.amount.formatCompact(), known.firstOrNull { it.id == other.categoryId }?.name.orEmpty())
             },
         )
     }
+
+    /**
+     * A blank name is not a change worth offering: save falls back to the stored one, so a lit
+     * button over an empty field would report a write that never happened.
+     */
+    private fun isEdited(held: Category, typed: String?, icon: String?, direction: Direction?, color: String?, subCategoriesChanged: Boolean): Boolean =
+        (typed != null && typed.isNotBlank() && typed.trim() != held.name) ||
+            (icon != null && icon != held.icon) ||
+            (direction != null && direction != held.direction) ||
+            (color != null && color != held.color) ||
+            subCategoriesChanged
 
     /** #219: the shop rules move with the rows, so the line says so before the tap. */
     private fun consequence(count: Int, rules: Int): String {
@@ -310,9 +329,15 @@ private data class SubCategoryEdits(
         added + stored.mapNotNull { sub -> renamed[sub.id]?.takeIf { it != sub.name }?.let { sub.copy(name = it) } }
 }
 
+/** What the screen reads from storage, by name rather than as a Triple. */
+private data class Stored(val snapshot: LedgerSnapshot, val known: List<Category>, val subs: List<SubCategory>)
+
+/** The direction, colour and sub-category edits the reader is holding until Save. */
+private data class Choices(val direction: Direction?, val color: String?, val edits: SubCategoryEdits)
+
 /** What the screen counts beside the category itself: rows and rules that would move, and the target. */
 private data class Counts(val moved: Int, val rules: Int, val target: WeeklyTarget?, val typedTarget: String?)
 
 private const val MAX_TARGET_DIGITS = 7
 
-private fun Satang.wholeBaht(): Long = toMinorUnits() / minorPerWhole()
+private fun Satang.wholeUnits(): Long = toMinorUnits() / minorPerWhole()

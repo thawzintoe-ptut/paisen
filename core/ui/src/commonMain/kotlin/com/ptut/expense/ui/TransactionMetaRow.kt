@@ -11,10 +11,13 @@ package com.ptut.expense.ui
  * disagreeing about what a row looks like.
  */
 data class TransactionMetaRow(
-    val label: String,
+    val field: MetaField,
     val value: String,
     val icon: String,
 )
+
+/** Which fact a meta row states. The screen turns it into a label in the reader's language. */
+enum class MetaField { Merchant, Category, Paid, Note, Date, Source, Reference }
 
 /**
  * The glyphs a meta row draws, named once.

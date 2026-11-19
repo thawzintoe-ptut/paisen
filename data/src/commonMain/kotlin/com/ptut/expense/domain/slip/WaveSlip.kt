@@ -2,6 +2,7 @@ package com.ptut.expense.domain.slip
 
 import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.shared.MAX_AMOUNT_WHOLE_DIGITS
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.toInstant
 
@@ -88,6 +89,7 @@ object WaveSlip : SlipFormat {
     /** `1,000.00` to satang, counted and never divided (FR-9). */
     private fun parseAmount(figure: String): Satang? {
         val digits = figure.replace(",", "")
+        if (digits.substringBefore('.').length > MAX_AMOUNT_WHOLE_DIGITS) return null
         val baht = digits.substringBefore('.').toLongOrNull() ?: return null
         val satang = digits.substringAfter('.', "00").padEnd(2, '0').take(2).toLongOrNull() ?: return null
         return Satang.ofMinorUnits(baht * SATANG_PER_BAHT + satang)

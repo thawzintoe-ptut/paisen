@@ -3,9 +3,9 @@ package com.ptut.expense.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.ImportOutcome
-import com.ptut.expense.domain.elapsedPhrase
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.ledger.LedgerRepository
-import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.importer.ImportSummary
 import com.ptut.expense.importer.SlipImporter
 import com.ptut.expense.locale.AppText
@@ -13,6 +13,8 @@ import com.ptut.expense.platform.work.BackgroundImport
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
+import com.ptut.expense.ui.elapsedPhrase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -45,7 +47,7 @@ data class BackgroundImportUiState(
  */
 class BackgroundImportViewModel(
     ledger: LedgerRepository,
-    private val settings: ImportSettings,
+    private val settings: AppSettings,
     private val importer: SlipImporter,
     private val toasts: ToastMessages,
     private val cadence: SlipImportCadence,
@@ -62,7 +64,7 @@ class BackgroundImportViewModel(
         state(since, choices.backgroundImport, scanning)
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
+        started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
         initialValue = state(
             since = null,
             running = settings.choices.value.backgroundImport,
@@ -87,16 +89,12 @@ class BackgroundImportViewModel(
         viewModelScope.launch {
             try {
                 toasts.show(importer.run().toast())
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failure: Exception) {
-                // The importer journals a scan it could not start, so anything reaching here is
-                // past that — the reader is looking at the screen and is told rather than left
-                // with a button that appeared to do nothing.
-                toasts.show(
-                    ToastMessage(
-                        text = failure.message ?: AppText.copy.settings.scanCouldNotRun,
-                        tone = ToastTone.Error,
-                    ),
-                )
+                // Past the importer's own journal, so it is the ledger failing. Copy only: the
+                // exception's text is English or "Job was cancelled", never the reader's words.
+                toasts.show(ToastMessage(text = AppText.copy.settings.scanCouldNotRun, tone = ToastTone.Error))
             } finally {
                 checking.value = false
             }

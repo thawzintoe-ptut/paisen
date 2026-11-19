@@ -7,11 +7,13 @@ import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.backup.BackupPreview
+import com.ptut.expense.domain.backup.BackupProblem
 import com.ptut.expense.domain.backup.BackupUnreadable
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.MergeReport
 import com.ptut.expense.domain.ledger.FakeLedger
 import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
@@ -145,7 +147,7 @@ class LedgerBackupViewModelTest : ViewModelTest() {
     fun `a file from a newer version gets the refused state with its reason and no toast`() = runTest {
         val backup = viewModel(
             files = RecordingFiles(reads = "not a ledger"),
-            archive = FakeArchive(failsWith = BackupUnreadable(NEWER_FORMAT)),
+            archive = FakeArchive(failsWith = BackupUnreadable(BackupProblem.OtherVersion(9))),
         )
         val uiState = collected(backup)
 
@@ -162,7 +164,7 @@ class LedgerBackupViewModelTest : ViewModelTest() {
 
     @Test
     fun `choosing another file that reads clears the refusal and shows its preview`() = runTest {
-        val archive = FakeArchive(failsWith = BackupUnreadable(NEWER_FORMAT))
+        val archive = FakeArchive(failsWith = BackupUnreadable(BackupProblem.OtherVersion(9)))
         val backup = viewModel(files = RecordingFiles(reads = "a file"), archive = archive)
         val uiState = collected(backup)
 
@@ -179,7 +181,7 @@ class LedgerBackupViewModelTest : ViewModelTest() {
     @Test
     fun `backing out of the picker keeps the refusal on screen`() = runTest {
         val files = RecordingFiles(reads = "not a ledger")
-        val backup = viewModel(files = files, archive = FakeArchive(failsWith = BackupUnreadable(NEWER_FORMAT)))
+        val backup = viewModel(files = files, archive = FakeArchive(failsWith = BackupUnreadable(BackupProblem.OtherVersion(9))))
         val uiState = collected(backup)
 
         backup.chooseFile()
@@ -200,18 +202,18 @@ class LedgerBackupViewModelTest : ViewModelTest() {
         toasts.messages.test {
             backup.chooseFile()
             runCurrent()
-            archive.failsOnRestoreWith = BackupUnreadable("This file counts in MMK")
+            archive.failsOnRestoreWith = BackupUnreadable(BackupProblem.OtherHome(file = "MMK", here = "THB"))
             backup.restore()
             runCurrent()
 
-            assertEquals("This file counts in MMK", uiState.value.refused)
+            assertEquals("This file counts in MMK. This phone counts in THB.", uiState.value.refused)
             assertNull(uiState.value.preview)
             expectNoEvents()
         }
     }
 
     @Test
-    fun `a failure that is not a refusal of the file stays an error toast`() = runTest {
+    fun `a failure that is not a refusal of the file is an error toast in the app copy`() = runTest {
         val backup = viewModel(
             files = RecordingFiles(reads = "a file"),
             archive = FakeArchive(failsWith = IllegalStateException("The disk is full")),
@@ -224,7 +226,7 @@ class LedgerBackupViewModelTest : ViewModelTest() {
 
             val toast = awaitItem()
             assertEquals(ToastTone.Error, toast.tone)
-            assertEquals("The disk is full", toast.text)
+            assertEquals(AppText.copy.settings.didNotWork, toast.text)
             assertNull(uiState.value.refused)
         }
     }

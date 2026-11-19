@@ -13,6 +13,7 @@ import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionSource
 import com.ptut.expense.domain.shared.Rate
+import com.ptut.expense.domain.shared.readableRate
 
 /**
  * FR-9: money is [amountMinor], an INTEGER count of satang. No column here is REAL.
@@ -140,11 +141,7 @@ fun TransactionDraft.toEntity(
     reference = null,
     memo = memo,
     filedAt = filedAt,
-    currency = foreign?.currency ?: Home.money.code,
-    originalMinor = foreign?.originalMinor,
-    rateUnscaled = foreign?.rate?.unscaled,
-    rateScale = foreign?.rate?.scale,
-)
+).withForeign(foreign)
 
 /**
  * The whole row back, for FR-21's undo. Unlike [TransactionDraft.toEntity] this mints nothing:
@@ -168,6 +165,10 @@ fun Transaction.toEntity() = TransactionEntity(
     sourceFolder = sourceFolder,
     ruleId = ruleId,
     planned = planned,
+).withForeign(foreign)
+
+/** [foreign]'s three columns, or the home's code and none for a row in home money (#44). */
+internal fun TransactionEntity.withForeign(foreign: ForeignAmount?) = copy(
     currency = foreign?.currency ?: Home.money.code,
     originalMinor = foreign?.originalMinor,
     rateUnscaled = foreign?.rate?.unscaled,
@@ -182,5 +183,7 @@ internal fun TransactionEntity.foreignAmount(): ForeignAmount? {
     val original = originalMinor ?: return null
     val unscaled = rateUnscaled ?: return null
     val scale = rateScale ?: return null
+    // A rate [Rate] refuses would throw on every read of the row, so it reads as home money too.
+    if (!readableRate(unscaled, scale)) return null
     return ForeignAmount(currency, original, Rate(unscaled, scale))
 }

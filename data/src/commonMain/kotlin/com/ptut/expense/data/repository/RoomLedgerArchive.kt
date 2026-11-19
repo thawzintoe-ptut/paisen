@@ -30,6 +30,7 @@ import com.ptut.expense.domain.backup.BackupMember
 import com.ptut.expense.domain.backup.BackupPayment
 import com.ptut.expense.domain.backup.BackupPerson
 import com.ptut.expense.domain.backup.BackupPreview
+import com.ptut.expense.domain.backup.BackupProblem
 import com.ptut.expense.domain.backup.BackupRepeat
 import com.ptut.expense.domain.backup.BackupShare
 import com.ptut.expense.domain.backup.BackupShared
@@ -43,7 +44,6 @@ import com.ptut.expense.domain.backup.MergeReport
 import com.ptut.expense.domain.backup.preview
 import com.ptut.expense.domain.home.HomeBook
 import com.ptut.expense.domain.shared.Currencies
-import com.ptut.expense.locale.AppText
 import kotlin.time.Clock
 
 /**
@@ -71,8 +71,16 @@ class RoomLedgerArchive(
             transactions = transactionDao.all().map(TransactionEntity::toBackup),
             shared = sharedDao?.let { exportShared(it) },
             categories = catalogDao?.categories().orEmpty().map(CategoryEntity::toBackup),
-            subCategories = catalogDao?.subCategories().orEmpty().map { BackupSubCategory(it.id, it.categoryId, it.name) },
-            shopRules = catalogDao?.rules().orEmpty().map { BackupShopRule(it.id, it.counterparty, it.categoryId, it.createdAtEpochMillis, it.displayName) },
+            subCategories = catalogDao?.subCategories().orEmpty().map { BackupSubCategory(id = it.id, categoryId = it.categoryId, name = it.name) },
+            shopRules = catalogDao?.rules().orEmpty().map {
+                BackupShopRule(
+                    id = it.id,
+                    counterparty = it.counterparty,
+                    categoryId = it.categoryId,
+                    createdAtEpochMillis = it.createdAtEpochMillis,
+                    displayName = it.displayName,
+                )
+            },
             homeCurrency = Home.money.code,
             homeZone = Home.choice.value.zoneId,
         ),
@@ -93,12 +101,19 @@ class RoomLedgerArchive(
         // Categories before rows, so a row filed under one the reader made keeps it (#215).
         val known = catalogDao?.restore(
             categories = backup.categories.map(BackupCategory::toEntity),
-            subCategories = backup.subCategories.map { SubCategoryEntity(it.id, it.categoryId, it.name) },
+            subCategories = backup.subCategories.map { SubCategoryEntity(id = it.id, categoryId = it.categoryId, name = it.name) },
             // #26: the file keeps no direction on a rule, but a money-in rule always files under a money-in
             // category, and the category keeps its own.
             rules = backup.shopRules.map {
                 val direction = backup.categories.firstOrNull { category -> category.id == it.categoryId }?.direction ?: Direction.Expense.name
-                RuleEntity(it.id, it.counterparty, it.categoryId, it.createdAtEpochMillis, displayName = it.displayName, direction = direction)
+                RuleEntity(
+                    id = it.id,
+                    counterparty = it.counterparty,
+                    categoryId = it.categoryId,
+                    createdAtEpochMillis = it.createdAtEpochMillis,
+                    displayName = it.displayName,
+                    direction = direction,
+                )
             },
         ) ?: categoryDao.ids().toSet()
         val rows = backup.transactions.map { transactionDao.withCheckedSubCategory(it.toEntity(known, backup.homeCode)) }
@@ -119,7 +134,7 @@ class RoomLedgerArchive(
     /** #46: amounts in other money cannot join a ledger with rows; only an empty one can change home. */
     private suspend fun refuseOtherHome(backup: LedgerBackup) {
         if (backup.homeCode == Home.money.code) return
-        if (homeBook?.isEmpty() != true) throw BackupUnreadable(AppText.copy.phrases.backupOtherHome(backup.homeCode, Home.money.code))
+        if (homeBook?.isEmpty() != true) throw BackupUnreadable(BackupProblem.OtherHome(backup.homeCode, Home.money.code))
     }
 
     private fun LedgerBackup.home(): HomeChoice = HomeChoice.of(Currencies.of(homeCode).toHomeMoney(), homeZone ?: HomeChoice.BANGKOK)
@@ -128,36 +143,142 @@ class RoomLedgerArchive(
         val groups = dao.localGroups()
         val ids = groups.map { it.id }
         return BackupShared(
-            people = dao.people().map { BackupPerson(it.id, it.name, it.archived) },
-            groups = groups.map { BackupGroup(it.id, it.name, it.type, it.icon, it.simplifyDebts, it.createdAtEpochMillis, it.meMemberId, it.currency) },
-            members = dao.membersIn(ids).map { BackupMember(it.id, it.groupId, it.name, it.personId, it.archived, it.createdAtEpochMillis, it.promptPayId) },
+            people = dao.people().map { BackupPerson(id = it.id, name = it.name, archived = it.archived) },
+            groups = groups.map {
+                BackupGroup(
+                    id = it.id,
+                    name = it.name,
+                    type = it.type,
+                    icon = it.icon,
+                    simplifyDebts = it.simplifyDebts,
+                    createdAtEpochMillis = it.createdAtEpochMillis,
+                    meMemberId = it.meMemberId,
+                    currency = it.currency,
+                )
+            },
+            members = dao.membersIn(ids).map {
+                BackupMember(
+                    id = it.id,
+                    groupId = it.groupId,
+                    name = it.name,
+                    personId = it.personId,
+                    archived = it.archived,
+                    createdAtEpochMillis = it.createdAtEpochMillis,
+                    promptPayId = it.promptPayId,
+                )
+            },
             versions = dao.versionsIn(ids).map(ExpenseVersionEntity::toBackup),
-            shares = dao.sharesIn(ids).map { BackupShare(it.versionId, it.memberId, it.weight, it.amountMinor, it.amountSatang) },
+            shares = dao.sharesIn(ids).map {
+                BackupShare(
+                    versionId = it.versionId,
+                    memberId = it.memberId,
+                    weight = it.weight,
+                    amountMinor = it.amountMinor,
+                    amountSatang = it.amountSatang,
+                )
+            },
             payments = dao.paymentsIn(ids).map(SharedPaymentEntity::toBackup),
-            links = dao.linksIn(ids).map { BackupLink(it.expenseId, it.transactionId) },
+            links = dao.linksIn(ids).map { BackupLink(expenseId = it.expenseId, transactionId = it.transactionId) },
             repeats = dao.repeatsIn(ids).map {
                 BackupRepeat(
-                    it.id, it.groupId, it.kind, it.frequency, it.startDate, it.endKind, it.endDate, it.endTimes, it.remind, it.active,
-                    it.lastAdded, it.description, it.categoryId, it.currency, it.amountMinor, it.rateUnscaled, it.rateScale,
-                    it.payerMemberId, it.splitMode, it.weights, it.createdAtEpochMillis,
+                    id = it.id,
+                    groupId = it.groupId,
+                    kind = it.kind,
+                    frequency = it.frequency,
+                    startDate = it.startDate,
+                    endKind = it.endKind,
+                    endDate = it.endDate,
+                    endTimes = it.endTimes,
+                    remind = it.remind,
+                    active = it.active,
+                    lastAdded = it.lastAdded,
+                    description = it.description,
+                    categoryId = it.categoryId,
+                    currency = it.currency,
+                    amountMinor = it.amountMinor,
+                    rateUnscaled = it.rateUnscaled,
+                    rateScale = it.rateScale,
+                    payerMemberId = it.payerMemberId,
+                    splitMode = it.splitMode,
+                    weights = it.weights,
+                    createdAtEpochMillis = it.createdAtEpochMillis,
                 )
             },
         )
     }
 
     private suspend fun restoreShared(dao: SharedDao, shared: BackupShared, knownCategories: Set<String>): Int = dao.restoreShared(
-        people = shared.people.map { PersonEntity(it.id, it.name, it.archived) },
-        groups = shared.groups.map { SharedGroupEntity(it.id, it.name, it.type, it.icon, it.simplifyDebts, it.createdAtEpochMillis, it.meMemberId, currency = it.currency ?: HomeMoney.Baht.code) },
-        members = shared.members.map { GroupMemberEntity(it.id, it.groupId, it.name, it.personId, it.archived, it.createdAtEpochMillis, promptPayId = it.promptPayId) },
+        people = shared.people.map { PersonEntity(id = it.id, name = it.name, archived = it.archived) },
+        groups = shared.groups.map {
+            SharedGroupEntity(
+                id = it.id,
+                name = it.name,
+                type = it.type,
+                icon = it.icon,
+                simplifyDebts = it.simplifyDebts,
+                createdAtEpochMillis = it.createdAtEpochMillis,
+                meMemberId = it.meMemberId,
+                currency = it.currency ?: HomeMoney.Baht.code,
+            )
+        },
+        members = shared.members.map {
+            GroupMemberEntity(
+                id = it.id,
+                groupId = it.groupId,
+                name = it.name,
+                personId = it.personId,
+                archived = it.archived,
+                createdAtEpochMillis = it.createdAtEpochMillis,
+                promptPayId = it.promptPayId,
+            )
+        },
         versions = shared.versions.map { it.toEntity(knownCategories) },
-        shares = shared.shares.map { ExpenseShareEntity(it.versionId, it.memberId, it.weight, it.amountMinor, it.amountSatang) },
-        payments = shared.payments.map { SharedPaymentEntity(it.id, it.groupId, it.fromMemberId, it.toMemberId, it.amountSatang, it.method, it.occurredAtEpochMillis, it.authorMemberId, it.createdAtEpochMillis) },
-        links = shared.links.map { ExpenseLinkEntity(it.expenseId, it.transactionId) },
+        shares = shared.shares.map {
+            ExpenseShareEntity(
+                versionId = it.versionId,
+                memberId = it.memberId,
+                weight = it.weight,
+                amountMinor = it.amountMinor,
+                amountSatang = it.amountSatang,
+            )
+        },
+        payments = shared.payments.map {
+            SharedPaymentEntity(
+                id = it.id,
+                groupId = it.groupId,
+                fromMemberId = it.fromMemberId,
+                toMemberId = it.toMemberId,
+                amountSatang = it.amountSatang,
+                method = it.method,
+                occurredAtEpochMillis = it.occurredAtEpochMillis,
+                authorMemberId = it.authorMemberId,
+                createdAtEpochMillis = it.createdAtEpochMillis,
+            )
+        },
+        links = shared.links.map { ExpenseLinkEntity(expenseId = it.expenseId, transactionId = it.transactionId) },
         repeats = shared.repeats.map {
             RepeatRuleEntity(
-                it.id, it.groupId, it.kind, it.frequency, it.startDate, it.endKind, it.endDate, it.endTimes, it.remind, it.active,
-                it.lastAdded, it.description, it.categoryId, it.currency, it.amountMinor, it.rateUnscaled, it.rateScale,
-                it.payerMemberId, it.splitMode, it.weights, it.createdAtEpochMillis,
+                id = it.id,
+                groupId = it.groupId,
+                kind = it.kind,
+                frequency = it.frequency,
+                startDate = it.startDate,
+                endKind = it.endKind,
+                endDate = it.endDate,
+                endTimes = it.endTimes,
+                remind = it.remind,
+                active = it.active,
+                lastAdded = it.lastAdded,
+                description = it.description,
+                categoryId = it.categoryId,
+                currency = it.currency,
+                amountMinor = it.amountMinor,
+                rateUnscaled = it.rateUnscaled,
+                rateScale = it.rateScale,
+                payerMemberId = it.payerMemberId,
+                splitMode = it.splitMode,
+                weights = it.weights,
+                createdAtEpochMillis = it.createdAtEpochMillis,
             )
         },
     )

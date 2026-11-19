@@ -3,6 +3,9 @@ package com.ptut.expense.domain.shared
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.formatDigits
+import com.ptut.expense.domain.groupThousands
+import com.ptut.expense.domain.pow10
 
 /**
  * #181: an expense in another currency, at a rate the user types (decided 13 Oct). Amounts stay
@@ -15,8 +18,6 @@ import com.ptut.expense.domain.Satang
  * many units the rate is typed for: "฿1.38 per 1,000 ₫" reads better than "฿0.00138 per ₫".
  */
 data class Currency(val code: String, val symbol: String, val digits: Int, val rateUnit: Long = 1) {
-    val isBaht: Boolean get() = code == Currencies.Thb.code
-
     /** #44: the ledger's own money, which needs no rate. */
     val isHome: Boolean get() = code == Home.money.code
 
@@ -28,7 +29,7 @@ data class Currency(val code: String, val symbol: String, val digits: Int, val r
 val Currency.pickerLabel: String get() = "$code  $symbol"
 
 object Currencies {
-    val Thb = Currency("THB", "฿", 2)
+    val Thb = HomeMoney.Baht.let { Currency(it.code, it.symbol, it.digits) }
 
     val all: List<Currency> = listOf(
         Thb,
@@ -81,13 +82,15 @@ data class Rate(val unscaled: Long, val scale: Int) {
         const val MAX_SCALE = 9
         private const val MAX_TYPED_DECIMALS = 6
 
+        // 12 whole digits and 6 decimals stay inside a Long's 19.
+        private const val MAX_WHOLE_DIGITS = 12
+
         /** What the user typed as baht for [unit] units, or null when it is not a positive number. */
         fun parse(text: String, unit: Long = 1): Rate? {
-            val clean = text.trim().replace(",", "")
-            if (clean.isEmpty() || clean.count { it == '.' } > 1 || clean.any { !it.isDigit() && it != '.' }) return null
+            val clean = cleanNumber(text) ?: return null
             val whole = clean.substringBefore('.')
             val fraction = clean.substringAfter('.', "")
-            if (fraction.length > MAX_TYPED_DECIMALS || whole.length > 12) return null
+            if (fraction.length > MAX_TYPED_DECIMALS || whole.length > MAX_WHOLE_DIGITS) return null
             var unscaled = (whole + fraction).trimStart('0').ifEmpty { "0" }.toLong()
             var scale = fraction.length + decimalsOf(unit)
             if (unscaled == 0L) return null
@@ -98,6 +101,13 @@ data class Rate(val unscaled: Long, val scale: Int) {
             return if (scale > MAX_SCALE) null else Rate(unscaled, scale)
         }
     }
+}
+
+/** No rate at all, or a whole one [Rate] accepts. Half a rate, a zero or too many decimals is not. */
+fun readableRate(unscaled: Long?, scale: Int?): Boolean = when {
+    unscaled == null && scale == null -> true
+    unscaled == null || scale == null -> false
+    else -> unscaled > 0 && scale in 0..Rate.MAX_SCALE
 }
 
 /** 1 → 0, 1,000 → 3. The units are always a power of ten. */
@@ -196,43 +206,36 @@ private const val PRODUCT_BITS = 128
 private const val HALF_BITS = 32
 private const val LOW_32 = 0xFFFF_FFFFuL
 
-internal fun pow10(exponent: Int): Long {
-    var result = 1L
-    repeat(exponent) { result *= 10 }
-    return result
-}
-
 /** "₫1,850,000", "$240.00": an amount in its own currency, for a row or a field. */
 fun formatMinor(amountMinor: Long, currency: Currency): String {
-    val magnitude = if (amountMinor < 0) -amountMinor else amountMinor
-    val unit = pow10(currency.digits)
-    val whole = groupDigits(magnitude / unit)
     val sign = if (amountMinor < 0) "−" else ""
-    if (currency.digits == 0) return "$sign${currency.symbol}$whole"
-    val fraction = (magnitude % unit).toString().padStart(currency.digits, '0')
-    return "$sign${currency.symbol}$whole.$fraction"
+    return "$sign${currency.symbol}${Satang.ofMinorUnits(amountMinor).formatDigits(currency.toHomeMoney())}"
 }
 
+/** [formatMinor] as a field holds it: digits and '.', no symbol, sign or grouping. */
+fun Currency.typedText(minor: Long): String = formatMinor(minor, this).filter { it.isDigit() || it == '.' }
+
 /** What one rate is typed for: "1,000 K", or "$" for a rate per single unit. */
-fun Currency.rateUnitLabel(): String = if (rateUnit == 1L) symbol else "${groupDigits(rateUnit)} $symbol"
+fun Currency.rateUnitLabel(): String = if (rateUnit == 1L) symbol else "${groupThousands(rateUnit)} $symbol"
 
 /** Typed digits ("1850000", "240.5") to minor units, or null when the text is not an amount. */
 fun parseMinor(text: String, currency: Currency): Long? {
-    val clean = text.trim().replace(",", "")
-    if (clean.isEmpty() || clean.count { it == '.' } > 1 || clean.any { !it.isDigit() && it != '.' }) return null
+    val clean = cleanNumber(text) ?: return null
     val whole = clean.substringBefore('.').ifEmpty { "0" }
     val fraction = clean.substringAfter('.', "")
-    if (fraction.length > currency.digits || whole.length > 13) return null
+    if (fraction.length > currency.digits || whole.length > MAX_AMOUNT_WHOLE_DIGITS) return null
     return whole.toLong() * pow10(currency.digits) + fraction.padEnd(currency.digits, '0').ifEmpty { "0" }.toLong()
 }
 
-private fun groupDigits(value: Long): String {
-    val digits = value.toString()
-    if (digits.length <= 3) return digits
-    return buildString {
-        digits.forEachIndexed { index, digit ->
-            if (index > 0 && (digits.length - index) % 3 == 0) append(',')
-            append(digit)
-        }
-    }
+/**
+ * The most whole digits an amount is read with, typed or off a slip. A longer run is a stuck key
+ * or a misread, and times 100 it would wrap round a Long.
+ */
+const val MAX_AMOUNT_WHOLE_DIGITS = 13
+
+/** [text] without space or thousands commas, or null when it is not digits with at most one '.'. */
+private fun cleanNumber(text: String): String? {
+    val clean = text.trim().replace(",", "")
+    val number = clean.isNotEmpty() && clean.count { it == '.' } <= 1 && clean.all { it.isDigit() || it == '.' }
+    return clean.takeIf { number }
 }

@@ -6,9 +6,9 @@ import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.ledger.FakeLedger
-import com.ptut.expense.domain.settings.ImportChoices
-import com.ptut.expense.domain.settings.ImportSettings
-import com.ptut.expense.domain.settings.importSettings
+import com.ptut.expense.domain.settings.AppChoices
+import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.settings.appSettings
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -38,7 +38,7 @@ class KeepFailedSlipsViewModelTest : ViewModelTest() {
 
     @Test
     fun `choosing a window writes it`() = runTest {
-        val settings = importSettings()
+        val settings = appSettings()
 
         viewModel(settings = settings).choose(30)
 
@@ -48,7 +48,7 @@ class KeepFailedSlipsViewModelTest : ViewModelTest() {
     /** The list is the offer. A window nobody offered would leave the screen with nothing marked. */
     @Test
     fun `a window nobody offered is refused`() = runTest {
-        val settings = importSettings()
+        val settings = appSettings()
 
         viewModel(settings = settings).choose(days = 365)
 
@@ -83,7 +83,7 @@ class KeepFailedSlipsViewModelTest : ViewModelTest() {
     fun `a shortened window moves the deadline in`() = runTest {
         val state = state(
             queued = listOf(slip("old", ageMillis = 2 * DAY)),
-            settings = importSettings(ImportChoices(retention = 3.days)),
+            settings = appSettings(AppChoices(retention = 3.days)),
         )
 
         assertEquals("The oldest has 1 day left", state.deadline)
@@ -102,7 +102,7 @@ class KeepFailedSlipsViewModelTest : ViewModelTest() {
      */
     private fun TestScope.state(
         queued: List<QueuedSlip> = emptyList(),
-        settings: ImportSettings = importSettings(),
+        settings: AppSettings = appSettings(),
     ): KeepFailedSlipsUiState {
         val uiState = viewModel(queued, settings).uiState
         backgroundScope.launch { uiState.collect { } }
@@ -112,7 +112,7 @@ class KeepFailedSlipsViewModelTest : ViewModelTest() {
 
     private fun viewModel(
         queued: List<QueuedSlip> = emptyList(),
-        settings: ImportSettings = importSettings(),
+        settings: AppSettings = appSettings(),
     ) = KeepFailedSlipsViewModel(
         ledger = FakeLedger(queued = queued),
         settings = settings,

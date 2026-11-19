@@ -1,12 +1,8 @@
 package com.ptut.expense.domain.shared
 
-import com.ptut.expense.locale.AppText
 import kotlinx.datetime.DatePeriod
-import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.Month
 import kotlinx.datetime.YearMonth
-import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.number
 import kotlinx.datetime.plus
@@ -55,6 +51,13 @@ data class RepeatRule(
     val weights: Map<String, Long>,
     val createdAtEpochMillis: Long,
 )
+
+/** A stored or received `yyyy-MM-dd`, or null when it is no date at all. */
+fun String.toLocalDateOrNull(): LocalDate? = try {
+    LocalDate.parse(this)
+} catch (notADate: IllegalArgumentException) {
+    null
+}
 
 /** The [index]th date of the repeat, counting [RepeatRule.start] as 0. */
 fun RepeatRule.occurrence(index: Int): LocalDate = when (frequency) {
@@ -120,17 +123,6 @@ fun RepeatRule.next(today: LocalDate, count: Int = NEXT_SHOWN): List<LocalDate> 
 /** The day before [date], when the reminder fires. */
 fun LocalDate.dayBefore(): LocalDate = minus(DatePeriod(days = 1))
 
-/** "The 1st of each month", the On row's words (p33). */
-fun RepeatRule.anchorLine(): String {
-    val phrases = AppText.copy.phrases
-    return when (frequency) {
-        RepeatFrequency.Weekly -> phrases.everyWeekday(start.dayOfWeek.label())
-        RepeatFrequency.TwoWeeks -> phrases.everyOtherWeekday(start.dayOfWeek.label())
-        RepeatFrequency.Monthly -> phrases.monthlyOn(start.day.ordinal())
-        RepeatFrequency.Yearly -> phrases.yearlyOn(start.day, start.month.label())
-    }
-}
-
 /** #189: an added date has a fixed id, so phones that add it at once write one entry. */
 fun RepeatRule.entryId(date: LocalDate): String = "repeat:$id:$date"
 
@@ -140,12 +132,6 @@ private fun LocalDate.monthsLater(index: Int): LocalDate {
     val target = YearMonth(months / MONTHS_PER_YEAR, months % MONTHS_PER_YEAR + 1)
     return LocalDate(target.year, target.month, minOf(day, target.numberOfDays))
 }
-
-fun Int.ordinal(): String = AppText.copy.phrases.ordinal(this)
-
-private fun DayOfWeek.label(): String = AppText.copy.calendar.weekdays[isoDayNumber - 1]
-
-private fun Month.label(): String = AppText.copy.calendar.monthsShort[number - 1]
 
 private const val WEEK = 7
 private const val MONTHS_PER_YEAR = 12

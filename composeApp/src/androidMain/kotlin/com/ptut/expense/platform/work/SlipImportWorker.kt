@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.ptut.expense.domain.ImportOutcome
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.importer.SlipImporter
 import com.ptut.expense.shared.RepeatRunner
 import com.ptut.expense.sync.SharedSync
@@ -36,10 +37,10 @@ class SlipImportWorker(context: Context, parameters: WorkerParameters) :
      */
     override suspend fun doWork(): Result {
         val outcome = importer.run().outcome
-        // Pull first, as the app does when it opens: a repeat entry another phone already added
-        // arrives before this phone makes its own copy under the same id.
-        runCatching { sync?.syncAll() }
-        runCatching { repeats.run() }
+        // A one-off scan runs each time the app opens, so it keeps the hourly shared sync matched to the sign-in.
+        applicationContext.matchSharedSyncTo(sync?.takeIf { it.available }?.isSignedIn == true)
+        // Here too, not only after the shared pull: repeats in groups on this phone alone need no sign-in.
+        runSuspendCatching { repeats.run() }
         return if (outcome == ImportOutcome.Success) Result.success() else Result.failure()
     }
 }

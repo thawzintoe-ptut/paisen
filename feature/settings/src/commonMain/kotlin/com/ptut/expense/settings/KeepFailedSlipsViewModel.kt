@@ -3,10 +3,10 @@ package com.ptut.expense.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.QueuedSlip
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.evidenceDaysRemaining
 import com.ptut.expense.domain.ledger.LedgerRepository
-import com.ptut.expense.domain.retentionPhrase
-import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.settings.RetentionChoices
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,7 +35,7 @@ data class KeepFailedSlipsUiState(
  */
 class KeepFailedSlipsViewModel(
     ledger: LedgerRepository,
-    private val settings: ImportSettings,
+    private val settings: AppSettings,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
 
@@ -45,7 +45,7 @@ class KeepFailedSlipsViewModel(
     ) { queued, choices -> state(queued, choices.retention) }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
             initialValue = state(emptyList(), settings.choices.value.retention),
         )
 

@@ -52,6 +52,8 @@ import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyChip
+import com.ptut.expense.ui.sky.SkyChoiceMark
+import com.ptut.expense.ui.sky.SkyChoiceRow
 import com.ptut.expense.ui.sky.SkyDiscardSheet
 import com.ptut.expense.ui.sky.SkyHairline
 import com.ptut.expense.ui.sky.SkyKeyValueRow
@@ -306,18 +308,7 @@ private fun Label(text: String) {
 
 @Composable
 private fun SheetChoice(label: String, selected: Boolean, onClick: () -> Unit) {
-    val chosen = LocalCopy.current.shared.chosen
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = Spacing.xs)
-            .tappable(PtutRadii.r12, Role.Button, onClick = onClick)
-            .heightIn(min = SkySizes.transactionRow),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-        if (selected) Text(chosen, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+    SkyChoiceRow(label = label, selected = selected, onClick = onClick, modifier = Modifier.padding(top = Spacing.xs), mark = SkyChoiceMark.Word)
 }
 
 /** The end date can't come before the first date. Material's picker speaks in UTC midnights. */

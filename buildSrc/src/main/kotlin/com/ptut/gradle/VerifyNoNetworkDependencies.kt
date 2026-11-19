@@ -79,7 +79,7 @@ abstract class VerifyNoNetworkDependencies : DefaultTask() {
                 buildString {
                     appendLine("${findings.size} module(s) that can move data off the device:")
                     findings.forEach { appendLine("  $it") }
-                    appendLine("NFR-1: v1 makes no outbound request at all. NFR-2: nothing leaves the device.")
+                    appendLine("This gate denies HTTP clients other than Ktor (sync/ only) and telemetry SDKs.")
                     appendLine("If it arrived transitively, find out who asked for it:")
                     append("  ./gradlew ${path.substringBeforeLast(':')}:dependencies --configuration <name>")
                 },

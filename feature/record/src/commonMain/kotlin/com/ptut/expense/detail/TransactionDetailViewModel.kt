@@ -6,6 +6,8 @@ import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeTime
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
+import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionSource
@@ -13,8 +15,6 @@ import com.ptut.expense.domain.colorName
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayAndMonth
 import com.ptut.expense.domain.dayLabel
-import com.ptut.expense.domain.displayName
-import com.ptut.expense.domain.filedAs
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompactParts
 import com.ptut.expense.domain.iconName
@@ -24,9 +24,10 @@ import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.ledger.rowWithId
 import com.ptut.expense.domain.monthShort
 import com.ptut.expense.domain.periodsMovedByDeleting
-import com.ptut.expense.domain.phrase
 import com.ptut.expense.domain.rules.RememberedMerchant
 import com.ptut.expense.domain.rules.RuleRepository
+import com.ptut.expense.domain.rules.forShop
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
@@ -39,12 +40,15 @@ import com.ptut.expense.domain.timeOfDayIn
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.Haptics
+import com.ptut.expense.ui.MetaField
 import com.ptut.expense.ui.MetaGlyph
 import com.ptut.expense.ui.ToastAction
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
 import com.ptut.expense.ui.TransactionMetaRow
+import com.ptut.expense.ui.displayName
+import com.ptut.expense.ui.filedAs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -52,6 +56,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlin.time.Clock
@@ -95,9 +100,7 @@ class TransactionDetailViewModel(
     private val shared: SharedRepository? = null,
 ) : ViewModel() {
 
-    private val asking = MutableStateFlow(false)
-
-    private val alsoRemove = MutableStateFlow(true)
+    private val deleteAsk = MutableStateFlow(DeleteAsk())
 
     private val gone = MutableStateFlow(false)
 
@@ -112,19 +115,18 @@ class TransactionDetailViewModel(
         // Rules are observed too, so a rule changed elsewhere redraws the card (#117).
         combine(
             ledger.allTransactions,
-            asking,
+            deleteAsk,
             rules?.rules ?: flowOf(emptyList()),
             shared?.snapshot ?: flowOf(SharedSnapshot.Empty),
-            alsoRemove,
-        ) { rows, confirming, known, groups, remove ->
+        ) { rows, ask, known, groups ->
             when (val state = detailOf(rows, known)) {
-                is TransactionDetailUiState.Loaded -> state.withShared(groups).copy(confirmingDelete = confirming, alsoRemoveFromGroup = remove)
+                is TransactionDetailUiState.Loaded -> state.withShared(groups).copy(confirmingDelete = ask.confirming, alsoRemoveFromGroup = ask.alsoRemove)
                 else -> state
             }
         }
             .stateIn(
                 scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
+                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
                 initialValue = TransactionDetailUiState.Loading,
             )
 
@@ -233,28 +235,27 @@ class TransactionDetailViewModel(
     private fun Transaction.ruleFooter(known: List<RememberedMerchant>): String {
         val text = AppText.copy.record
         val merchant = counterparty ?: return text.handFooter
-        val key = merchant.trim().lowercase()
-        val rule = known.firstOrNull { it.counterparty.trim().lowercase() == key }
+        val rule = known.forShop(merchant)
         val sortedInto = rule?.let { held -> categories.firstOrNull { it.id == held.categoryId }?.name }
             ?: return text.onlyThisOne
         return text.staysSorted(shownShop(merchant, AppText.copy.slips.unknownShop), sortedInto)
     }
 
     private fun Transaction.metaRows(): List<TransactionMetaRow> = listOfNotNull(
-        TransactionMetaRow("CATEGORY", filedAs(categories, subCategories), icon = MetaGlyph.Tag),
+        TransactionMetaRow(MetaField.Category, filedAs(categories, subCategories), icon = MetaGlyph.Tag),
         // #33: what was paid in kyat and the rate that made it baht.
         foreign?.let { paid ->
             val currency = Currencies.of(paid.currency)
-            TransactionMetaRow("PAID", currencyCopy().atRate(formatMinor(paid.originalMinor, currency), Home.money.symbol, paid.rate.typedFor(currency.rateUnit), currency.rateUnitLabel()), icon = MetaGlyph.Tag)
+            TransactionMetaRow(MetaField.Paid, currencyCopy().atRate(formatMinor(paid.originalMinor, currency), Home.money.symbol, paid.rate.typedFor(currency.rateUnit), currency.rateUnitLabel()), icon = MetaGlyph.Tag)
         },
         // In full here: a row's name is only the note's first line, cut to fit (#210).
-        memo?.let { TransactionMetaRow("NOTE", it, icon = MetaGlyph.Note) },
-        TransactionMetaRow("DATE", occurredAt(), icon = MetaGlyph.Time),
-        TransactionMetaRow("SOURCE", provenance(), icon = MetaGlyph.Source),
+        memo?.let { TransactionMetaRow(MetaField.Note, it, icon = MetaGlyph.Note) },
+        TransactionMetaRow(MetaField.Date, occurredAt(), icon = MetaGlyph.Time),
+        TransactionMetaRow(MetaField.Source, provenance(), icon = MetaGlyph.Source),
         // The handoff asks for the reference in monospace "as on confirm slip". #20 moved
         // tabular figures onto every type slot, so confirm slip no longer marks it either and a
         // per-field flag here would be a switch that changes nothing.
-        TransactionMetaRow("REFERENCE", reference ?: NOT_RECORDED, icon = MetaGlyph.Tag),
+        TransactionMetaRow(MetaField.Reference, reference ?: NOT_RECORDED, icon = MetaGlyph.Tag),
     )
 
     private fun Transaction.occurredAt(): String =
@@ -272,12 +273,12 @@ class TransactionDetailViewModel(
     private fun Transaction.provenance(): String {
         val origin = origin()
         val corrected = editedAt ?: return origin
-        return "$origin · ${AppText.copy.record.editedOn(corrected.dateIn(zone).dayAndMonth())}"
+        return "$origin${Separators.DOT}${AppText.copy.record.editedOn(corrected.dateIn(zone).dayAndMonth())}"
     }
 
     private fun Transaction.origin(): String = when (source) {
         // "K PLUS slip · Screenshots" once the folder is stored (#170).
-        TransactionSource.Scan -> listOfNotNull(AppText.copy.record.kplusSlip, sourceFolder).joinToString(" · ")
+        TransactionSource.Scan -> listOfNotNull(AppText.copy.record.kplusSlip, sourceFolder).joinToString(Separators.DOT)
 
         TransactionSource.Share -> AppText.copy.record.sharedSlip
 
@@ -302,17 +303,17 @@ class TransactionDetailViewModel(
     }
 
     fun setAlsoRemove(on: Boolean) {
-        alsoRemove.value = on
+        deleteAsk.update { it.copy(alsoRemove = on) }
     }
 
     /** FR-21: the tap asks, it does not delete. Nothing reaches the ledger until [confirmDelete]. */
     fun askToDelete() {
-        asking.value = true
+        deleteAsk.update { it.copy(confirming = true) }
     }
 
     /** The calm option. Named for its outcome, the way the button the reader taps is. */
     fun keepIt() {
-        asking.value = false
+        deleteAsk.update { it.copy(confirming = false) }
     }
 
     /**
@@ -326,17 +327,18 @@ class TransactionDetailViewModel(
     fun confirmDelete() {
         val row = ledger.allTransactions.value.rowWithId(transactionId) ?: return
         val name = row.displayName(categories, subCategories)
-        asking.value = false
+        val ask = deleteAsk.value
+        deleteAsk.value = ask.copy(confirming = false)
         val repository = shared
         val expense = repository?.snapshot?.value?.sharedExpenseOf(row.id)
         val group = expense?.let { repository.snapshot.value.group(it.groupId) }
         // #186: ticked removes the group's copy too; unticked keeps it and only the link goes.
-        val removing = expense?.takeIf { alsoRemove.value }
-        val removeShared = removing != null
+        val removing = expense?.takeIf { ask.alsoRemove }
         val text = AppText.copy.record
         viewModelScope.launch {
             ledger.delete(row.id)
-            if (removing != null) repository.removeExpense(removing.id)
+            // The row is already gone, so a group copy that will not go must not keep the screen open.
+            val removeShared = removing != null && runSuspendCatching { repository.removeExpense(removing.id) }.isSuccess
             haptics.deleted()
             toasts.show(
                 ToastMessage(
@@ -357,6 +359,9 @@ class TransactionDetailViewModel(
         }
     }
 }
+
+/** The delete question: whether it is open, and whether the group's copy goes too (#186). */
+private data class DeleteAsk(val confirming: Boolean = false, val alsoRemove: Boolean = true)
 
 /** TalkBack reads "−" as "dash", so the direction is spoken as a word beside the figure. */
 private fun Direction.spokenVerb(): String = when (this) {

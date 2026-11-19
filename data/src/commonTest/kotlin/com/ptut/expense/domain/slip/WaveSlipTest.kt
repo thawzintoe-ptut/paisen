@@ -77,6 +77,13 @@ class WaveSlipTest {
     }
 
     @Test
+    fun `an amount too long to be money is not read as one`() {
+        val huge = listOf("Amount", "${Long.MAX_VALUE}.00 THB", "Fee", "0.00 THB", "Total", "${Long.MAX_VALUE}.00 THB")
+
+        assertEquals(null, assertIs<SlipRead.Partial>(WaveSlip.parse(receipt(values = huge))).amount)
+    }
+
+    @Test
     fun `a receipt with no readable name is still a slip`() {
         val lines = receipt().filterNot { it.startsWith("MR.") || it.startsWith("MS.") }
 

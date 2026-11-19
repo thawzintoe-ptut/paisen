@@ -14,3 +14,7 @@ fun List<Transaction>.savedOn(day: LocalDate, zone: TimeZone = HomeTime): List<T
         val filedAt = row.filedAt ?: return@filter false
         filedAt.dateIn(zone) == day && row.occurredAtEpochMillis.dateIn(zone) != day
     }.sortedByDescending { it.filedAt }
+
+/** What went out on [day], on [zone] days. Income never counts. */
+fun List<Transaction>.spentOn(day: LocalDate, zone: TimeZone = HomeTime): Satang =
+    filter { it.direction == Direction.Expense && it.occurredAtEpochMillis.dateIn(zone) == day }.map { it.amount }.sum()

@@ -1,9 +1,6 @@
 package com.ptut.expense.domain.backup
 
-import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.HomeMoney
-import com.ptut.expense.domain.TransactionSource
-import com.ptut.expense.locale.AppText
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -62,24 +59,17 @@ data class LedgerBackup(
             val backup = try {
                 codec.decodeFromString<LedgerBackup>(text)
             } catch (failure: SerializationException) {
-                throw BackupUnreadable(AppText.copy.phrases.backupNotReadable)
+                throw BackupUnreadable(BackupProblem.NotReadable)
             }
             // Refused, not read as far as it goes. A newer format means fields this build does not
             // know about, and a total missing a field it never saw looks like a correct total.
             if (backup.format !in READABLE) {
-                throw BackupUnreadable(AppText.copy.phrases.backupOtherVersion(backup.format))
+                throw BackupUnreadable(BackupProblem.OtherVersion(backup.format))
             }
             // The whole file is refused over one unreadable direction rather than defaulted.
             // Guessing turns income into spend, and that shows only as a smaller month.
-            backup.transactions.forEach { row ->
-                row.direction.checked(Direction.entries.map(Direction::name), "direction")
-                row.source.checked(TransactionSource.entries.map(TransactionSource::name), "source")
-            }
+            backup.refuseUnreadableRows()
             return backup
-        }
-
-        private fun String.checked(allowed: List<String>, field: String) {
-            if (this !in allowed) throw BackupUnreadable(AppText.copy.phrases.backupUnknownValue(field, this))
         }
     }
 }

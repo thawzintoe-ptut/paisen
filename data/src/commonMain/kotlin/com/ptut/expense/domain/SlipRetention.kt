@@ -1,6 +1,5 @@
 package com.ptut.expense.domain
 
-import com.ptut.expense.locale.AppText
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 
@@ -29,6 +28,3 @@ fun evidenceDaysRemaining(
     val wholeDay = 1.days.inWholeMilliseconds
     return ((remaining + wholeDay - 1) / wholeDay).toInt()
 }
-
-/** How long a kept slip lives, in the words every screen says it in. One place, so none drift. */
-fun retentionPhrase(retention: Duration): String = AppText.copy.phrases.days(retention.inWholeDays)

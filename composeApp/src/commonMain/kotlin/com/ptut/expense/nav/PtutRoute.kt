@@ -189,9 +189,9 @@ sealed interface PtutRoute {
     @Serializable
     data class RecordPayment(val groupId: String, val fromMemberId: String, val toMemberId: String) : PtutRoute
 
-    /** #140: every group's timeline, or one group's when [groupId] is set. */
+    /** #140: every group's timeline. One group's is the Activity tab of its screen (#64). */
     @Serializable
-    data class SharedActivity(val groupId: String? = null) : PtutRoute
+    data object SharedActivity : PtutRoute
 
     /** #185: set up a repeat in [groupId], or change the one [ruleId] names. */
     @Serializable

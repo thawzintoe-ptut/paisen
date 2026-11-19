@@ -65,6 +65,7 @@ import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyChip
+import com.ptut.expense.ui.sky.SkyChoiceRow
 import com.ptut.expense.ui.sky.SkyDateTimeRow
 import com.ptut.expense.ui.sky.SkyDiscardSheet
 import com.ptut.expense.ui.sky.SkyEmptyState
@@ -223,8 +224,8 @@ private fun Form(state: AddExpenseUiState.Ready, actions: AddExpenseActions, mod
             Text(words.currency, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.sm))
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 state.currencies.forEach { currency ->
-                    ChoiceRow(
-                        text = "${currency.code}  ${currency.symbol}",
+                    SkyChoiceRow(
+                        label = "${currency.code}  ${currency.symbol}",
                         selected = currency == form.currency,
                         onClick = {
                             sheet = null
@@ -239,8 +240,8 @@ private fun Form(state: AddExpenseUiState.Ready, actions: AddExpenseActions, mod
             Text(text.common.category, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.sm))
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 state.categories.forEach { category ->
-                    ChoiceRow(
-                        text = category.name,
+                    SkyChoiceRow(
+                        label = category.name,
                         selected = category.id == form.categoryId,
                         icon = PtutIcon.named(category.icon),
                         onClick = {
@@ -463,8 +464,8 @@ private fun SplitOptions(state: AddExpenseUiState.Ready, actions: AddExpenseActi
         SkyBottomSheet(onDismissRequest = { payerOpen = false }) {
             Text(text.shared.paidBy, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.sm))
             state.payers.forEach { payer ->
-                ChoiceRow(
-                    text = payer.name,
+                SkyChoiceRow(
+                    label = payer.name,
                     selected = payer.name == state.payerName,
                     onClick = {
                         payerOpen = false
@@ -619,23 +620,6 @@ private fun IconRow(icon: PtutIcon, onClick: (() -> Unit)? = null, content: @Com
         content()
     }
     SkyHairline()
-}
-
-@Composable
-private fun ChoiceRow(text: String, selected: Boolean, onClick: () -> Unit, icon: PtutIcon? = null) {
-    val chosen = LocalCopy.current.shared.chosen
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = SkySizes.transactionRow)
-            .tappable(PtutRadii.r12, Role.Button, onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-    ) {
-        icon?.let { Icon(it.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.barGlyph)) }
-        Text(text, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-        if (selected) Icon(PtutIcon.Check.image, contentDescription = chosen, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.cardGlyph))
-    }
 }
 
 /** #214: back and the iOS swipe close Split options and return to the form, not leave the screen. */

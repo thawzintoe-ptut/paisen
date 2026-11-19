@@ -6,27 +6,16 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import com.ptut.expense.domain.ImportFailureKind
 import com.ptut.expense.domain.folders.WatchedFolderRepository
 import com.ptut.expense.domain.folders.watched
+import com.ptut.expense.importer.ScanStopped
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.FileNotFoundException
 import java.io.IOException
 import kotlin.time.Clock
-
-private const val MILLIS_PER_SECOND = 1_000L
-
-/**
- * How many pictures one run may read, across every folder together.
- *
- * A folder added later is read from its own beginning, and Screenshots can hold thousands. Without
- * a ceiling that first run does not finish inside the fifteen minutes WorkManager allows it, the
- * floor never advances, and the next run starts the same work again — a scan that burns the battery
- * every quarter of an hour and never gets anywhere. With one, every run finishes and every run
- * leaves the floor higher than it found it.
- */
-private const val BATCH_CAP = 200
 
 /** DATE_ADDED is seconds, DATE_TAKEN is milliseconds, and only one of them is ever set. */
 private val PROJECTION = arrayOf(
@@ -37,6 +26,9 @@ private val PROJECTION = arrayOf(
 
 private const val OLDEST_FIRST = "${MediaStore.Images.Media.DATE_ADDED} ASC"
 
+/** Under SQLite's oldest limit of 999 bound values per query. */
+private const val IDS_PER_QUERY = 500
+
 private const val PICKS_FILE = "picked_photos"
 private const val FINISHED = "finished"
 
@@ -45,7 +37,7 @@ private const val FINISHED = "finished"
  * success, so a silent empty answer would leave the banner green while nothing was being watched.
  * The importer journals this message, so it is written for the person reading it.
  */
-class PhotoAccessDenied : IllegalStateException(AppText.copy.folders.androidAccessDenied)
+class PhotoAccessDenied : ScanStopped(ImportFailureKind.PhotoAccessDenied, AppText.copy.folders.androidAccessDenied)
 
 /**
  * FR-2 and FR-5: every folder the reader watches, read through MediaStore.
@@ -74,14 +66,8 @@ class MediaStoreSlipSource(
 
     private val context = context.applicationContext
 
-    /** `DATE_ADDED` per candidate, so a read that fails can hold its folder behind that row. */
-    private var batch = emptyMap<String, Long>()
-
-    /** Which folder listed a candidate, so [holdBelow] knows whose floor to keep down. */
-    private var folderOf = emptyMap<String, String>()
-
-    /** Listed-through per folder, held until the next scan settles it. */
-    private var pending = mutableMapOf<String, Long>()
+    /** Floors in `DATE_ADDED` seconds, so a read that fails can hold its folder behind that row. */
+    private val floors = ScanFloors(folders, clock)
 
     /** Picks listed by the previous run, finished when the next scan settles them. */
     private var pendingPicks = mutableSetOf<String>()
@@ -98,16 +84,14 @@ class MediaStoreSlipSource(
         val watched = folders.folders.value.watched()
         if (watched.isEmpty()) return@withContext emptyList()
 
-        // An even share rather than first-come: one folder mid-backfill would otherwise take every
-        // run's budget, and the folders behind it would read "Not checked" for as long as it took.
-        val share = maxOf(1, BATCH_CAP / watched.size)
+        val share = floors.shareFor(watched.size)
         val listedAt = clock.now().toEpochMilliseconds()
 
         val found = mutableListOf<SlipCandidate>()
         val addedAt = mutableMapOf<String, Long>()
         val owner = mutableMapOf<String, String>()
         // Skipped at every level: floors left low by "Select photos" would list these again after "Allow all".
-        val finished = finishedPicks()
+        val finished = if (level == PhotoAccessLevel.All) forgetDeletedPicks() else finishedPicks()
 
         for (folder in watched) {
             val floor = folders.scannedThroughSeconds(folder.id)
@@ -119,15 +103,16 @@ class MediaStoreSlipSource(
                 owner[id] = folder.id
                 found += SlipCandidate(id, row.capturedAtEpochMillis, folder.id, folder.name)
             }
-            if (level == PhotoAccessLevel.All) rows.maxOfOrNull { it.addedAtSeconds }?.let { pending[folder.id] = it }
+            if (level == PhotoAccessLevel.All) {
+                rows.maxOfOrNull { it.addedAtSeconds }?.let { floors.listedThrough(folder.id, it) }
+            }
 
             // Stamped as looked-at now, at the floor it already had. That is what tells a folder
             // holding nothing apart from one nothing has ever looked in.
             folders.recordScan(folder.id, floor, listedAt)
         }
 
-        batch = addedAt
-        folderOf = owner
+        floors.handOut(addedAt, owner)
         if (level == PhotoAccessLevel.Picked) pendingPicks = addedAt.keys.toMutableSet()
         // Oldest first across the whole run, so a run that stops early has still made progress
         // in order rather than part-way through each folder at once.
@@ -163,32 +148,51 @@ class MediaStoreSlipSource(
         finishedPicks.edit().putStringSet(FINISHED, finishedPicks() + ids).apply()
     }
 
+    /**
+     * Under "Allow all" every row is visible, so a finished pick MediaStore no longer lists was
+     * deleted and has nothing left to skip. Under "Select photos" an unticked pick also vanishes, so the set stays.
+     */
+    private fun forgetDeletedPicks(): Set<String> {
+        val finished = finishedPicks()
+        if (finished.isEmpty()) return finished
+        val gone = finished - finished.chunked(IDS_PER_QUERY).flatMapTo(mutableSetOf(), ::stillListed)
+        if (gone.isEmpty()) return finished
+        synchronized(this) {
+            finishedPicks.edit().putStringSet(FINISHED, finishedPicks() - gone).apply()
+        }
+        return finished - gone
+    }
+
+    /** The [ids] MediaStore still lists. No answer keeps them all, since a wrong prune lists a slip twice. */
+    private fun stillListed(ids: List<String>): Set<String> {
+        val cursor = context.contentResolver.query(
+            imageCollection,
+            arrayOf(MediaStore.Images.Media._ID),
+            "${MediaStore.Images.Media._ID} IN (${ids.joinToString(",") { "?" }})",
+            ids.toTypedArray(),
+            null,
+        ) ?: return ids.toSet()
+        return cursor.use { rows ->
+            val id = rows.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+            buildSet { while (rows.moveToNext()) add(rows.getLong(id).toString()) }
+        }
+    }
+
     /** A copy: the set SharedPreferences hands out must not be changed in place. */
     private fun finishedPicks(): Set<String> = finishedPicks.getStringSet(FINISHED, null)?.toSet().orEmpty()
 
-    /**
-     * Commits the floors handed out by the previous run. Nothing is written while a batch is in
-     * flight, so a process that died mid-run lists the same batch again — bounded by [BATCH_CAP] —
-     * and the hash journal recognises whatever did land the first time.
-     */
+    /** Picks settle with the floors: the previous run's are finished before this one lists. */
     private suspend fun settlePreviousBatch() {
         if (pendingPicks.isNotEmpty()) {
             finish(pendingPicks)
             pendingPicks = mutableSetOf()
         }
-        if (pending.isEmpty()) return
-        val settling = pending
-        pending = mutableMapOf()
-        val at = clock.now().toEpochMilliseconds()
-        settling.forEach { (folderId, through) -> folders.recordScan(folderId, through, at) }
+        floors.settlePrevious()
     }
 
     private fun holdBelow(id: String) {
         pendingPicks.remove(id)
-        val folderId = folderOf[id] ?: return
-        val seconds = batch[id] ?: return
-        val listed = pending[folderId] ?: return
-        pending[folderId] = minOf(listed, seconds - 1)
+        floors.holdBelow(id)
     }
 
     /**
@@ -206,7 +210,7 @@ class MediaStoreSlipSource(
             "$match AND ${MediaStore.Images.Media.DATE_ADDED} > ?",
             arrayOf(wanted, after.toString()),
             OLDEST_FIRST,
-        ) ?: throw IllegalStateException(AppText.copy.folders.libraryNoAnswer)
+        ) ?: throw ScanStopped(ImportFailureKind.LibraryNoAnswer, AppText.copy.folders.libraryNoAnswer)
 
         return cursor.use { it.readRows(cap, skip) }
     }

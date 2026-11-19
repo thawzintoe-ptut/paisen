@@ -1,12 +1,16 @@
 package com.ptut.expense.folders
 
 import com.ptut.expense.domain.folders.DeviceFolder
+import com.ptut.expense.domain.folders.FakeFolders
 import com.ptut.expense.domain.folders.FolderCatalog
 import com.ptut.expense.domain.folders.WatchedFolder
 import com.ptut.expense.domain.folders.WatchedFolderRepository
+import com.ptut.expense.locale.AppText
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -171,6 +175,49 @@ class PhotoFoldersViewModelTest {
     }
 
     @Test
+    fun `one folder failing does not stop the rest and the ticks stay for another save`() = runTest {
+        val toasts = ToastMessages()
+        val repository = RefusingFolders(refuses = "camera")
+        val catalog = FakeCatalog(listOf(device("camera"), device("kplus")))
+        val model = watching(PhotoFoldersViewModel(catalog, repository, toasts = toasts))
+        runCurrent()
+
+        model.onToggle("camera")
+        model.onToggle("kplus")
+        model.save()
+        runCurrent()
+
+        assertEquals(ToastMessage(AppText.copy.folders.notSaved, tone = ToastTone.Error), toasts.messages.first())
+        assertEquals(listOf("kplus"), repository.folders.value.filter { it.watched }.map { it.id })
+        assertTrue(model.uiState.value.canSave)
+    }
+
+    @Test
+    fun `a catalogue that throws says so and leaves the screen usable`() = runTest {
+        val toasts = ToastMessages()
+        val model = watching(PhotoFoldersViewModel(BrokenCatalog(), FakeFolders(), toasts = toasts))
+        runCurrent()
+
+        assertEquals(ToastMessage(AppText.copy.folders.notRead, tone = ToastTone.Error), toasts.messages.first())
+        assertTrue(model.uiState.value.rows.isEmpty())
+    }
+
+    @Test
+    fun `a chooser that throws says so and still reads the folders again`() = runTest {
+        val toasts = ToastMessages()
+        val model = watching(
+            PhotoFoldersViewModel(FakeCatalog(listOf(device("kplus"))), FakeFolders(), chooser = { error("no screen") }, toasts = toasts),
+        )
+        runCurrent()
+
+        model.chooseMore()
+        runCurrent()
+
+        assertEquals(ToastMessage(AppText.copy.settings.didNotWork, tone = ToastTone.Error), toasts.messages.first())
+        assertEquals(listOf("kplus"), model.uiState.value.rows.map { it.id })
+    }
+
+    @Test
     fun `a catalogue answering with nothing is a permission problem`() = runTest {
         val empty = viewModel(offers = emptyList(), watched = emptyList())
         runCurrent()
@@ -202,27 +249,15 @@ class PhotoFoldersViewModelTest {
         override suspend fun available(): List<DeviceFolder> = offers
     }
 
-    private class FakeFolders(seed: List<WatchedFolder> = emptyList()) : WatchedFolderRepository {
-        private val state = MutableStateFlow(seed)
-        override val folders: StateFlow<List<WatchedFolder>> = state
+    private class BrokenCatalog : FolderCatalog {
+        override suspend fun available(): List<DeviceFolder> = error("MediaStore is gone")
+    }
 
+    private class RefusingFolders(private val refuses: String, private val held: FakeFolders = FakeFolders()) :
+        WatchedFolderRepository by held {
         override suspend fun watch(id: String, name: String, path: String) {
-            val held = state.value.firstOrNull { it.id == id }
-            state.value = state.value.filterNot { it.id == id } +
-                (held?.copy(watched = true) ?: WatchedFolder(id, name, path, slipsRead = 0, checked = false))
+            check(id != refuses) { "disk full" }
+            held.watch(id, name, path)
         }
-
-        /** Off, not gone — the row keeps its count, which is what the real repository does. */
-        override suspend fun stopWatching(id: String) {
-            state.value = state.value.map { if (it.id == id) it.copy(watched = false) else it }
-        }
-
-        override suspend fun known(): List<WatchedFolder> = state.value
-
-        override suspend fun scannedThroughSeconds(id: String): Long = 0L
-
-        override suspend fun recordScan(id: String, throughSeconds: Long, checkedAtEpochMillis: Long) = Unit
-
-        override suspend fun addSlipsRead(id: String, read: Int) = Unit
     }
 }

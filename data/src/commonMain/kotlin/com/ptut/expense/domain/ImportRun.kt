@@ -7,6 +7,9 @@ package com.ptut.expense.domain
  */
 enum class ImportOutcome { Running, Success, Failure }
 
+/** #69: why a scan could not run, kept beside the sentence so Today needs no text match to pick the fix. */
+enum class ImportFailureKind { PhotoAccessDenied, LibraryNoAnswer, Other }
+
 /**
  * One pass of the importer: what the journal records, and what the Activity screen reads. FR-5.
  *
@@ -23,6 +26,8 @@ data class ImportRun(
     val outcome: ImportOutcome,
     val slipsFound: Int,
     val failureReason: String?,
+    /** Null on a failure journalled before schema 23, which only kept [failureReason]. */
+    val failureKind: ImportFailureKind? = null,
     /** What the run wrote: rows filed without asking, and slips it queued for the reader (#170). */
     val filed: Int = 0,
     val queued: Int = 0,

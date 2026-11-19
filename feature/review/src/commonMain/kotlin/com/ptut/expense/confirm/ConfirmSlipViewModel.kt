@@ -10,6 +10,7 @@ import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayAndMonth
@@ -19,6 +20,7 @@ import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.rules.ShopNames
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.PaymentDraft
 import com.ptut.expense.domain.shared.PaymentMethod
@@ -38,6 +40,7 @@ import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -75,11 +78,11 @@ class ConfirmSlipViewModel(
     private val debtsFor: (Satang, String?) -> List<SlipDebt> = { _, _ -> emptyList() },
     private val recordPayment: suspend (PaymentDraft) -> Unit = {},
     private val clock: Clock = Clock.System,
-    /** Injected so a test can name the rows it wrote. Random everywhere else. */
-    /** #114: a haptic on every save and delete, played by the shell. */
     /** #22: debug builds only until the weekly note has been tried. */
     private val offersPlanned: Boolean = false,
+    /** #114: a haptic on every save and delete, played by the shell. */
     private val haptics: Haptics = Haptics(),
+    /** Injected so a test can name the rows it wrote. Random everywhere else. */
     private val newId: () -> String = { Uuid.random().toString() },
 ) : ViewModel() {
 
@@ -112,7 +115,8 @@ class ConfirmSlipViewModel(
             state.value = found.toUiState().copy(debtMatch = debtMatch())
             if (found.isForeign) viewModelScope.launch { loadRate(found.currency) }
         } else {
-            state.update { it.copy(phase = ConfirmSlipPhase.Ready) }
+            // A later sight never undoes a save in flight or one already done.
+            state.update { if (it.done) it else it.copy(phase = ConfirmSlipPhase.Ready) }
         }
     }
 
@@ -120,7 +124,7 @@ class ConfirmSlipViewModel(
     private suspend fun leave() {
         // Before Room answers the queue is empty too, so a slip not seen yet gets a moment first.
         if (slip == null) delay(MISSING_GRACE)
-        state.update { if (it.saving || it.saved || it.dismissed) it else it.copy(phase = ConfirmSlipPhase.Missing) }
+        state.update { if (it.done) it else it.copy(phase = ConfirmSlipPhase.Missing) }
     }
 
     fun type(entry: AmountEntry) = state.update { it.copy(entry = entry).withHome() }
@@ -201,35 +205,43 @@ class ConfirmSlipViewModel(
         // A read shop stays the rule's key, so its next slip still matches; a name typed over it is
         // what rows show. A slip that read no shop takes the typed name as its shop.
         val shop = if (current.shopRead) slip.merchant else typed.ifEmpty { null }
-        state.update { it.copy(saving = true) }
+        state.update { it.copy(phase = ConfirmSlipPhase.Saving) }
         viewModelScope.launch {
-            importer.confirm(
-                ConfirmedSlip(
-                    transactionId = newId(),
-                    ruleId = newId(),
-                    queuedSlipId = slip.id,
-                    counterparty = shop,
-                    categoryId = category.id,
-                    subCategoryId = current.subCategory?.id,
-                    amount = amount,
-                    occurredAtEpochMillis = slip.occurredAtEpochMillis,
-                    reference = slip.note.takeIf { it.isNotBlank() },
-                    confirmedAtEpochMillis = clock.now().toEpochMilliseconds(),
-                    // What the parser read, not what the reader typed over it. FR-7 kept this
-                    // null when the figure did not read, and null is what screen 11c wants too.
-                    readAmount = if (foreign == null) slip.amount else slip.amount?.let { ForeignAmount(slip.currency, it.toMinorUnits(), foreign.rate).inHome },
-                    folder = slip.sourceFolder,
-                    displayName = typed.takeIf { current.shopRead && it.isNotEmpty() && it != slip.merchant },
-                    direction = slip.direction,
-                    planned = current.planned && slip.direction == Direction.Expense,
-                    foreign = foreign,
-                ),
-            )
+            val filed = runSuspendCatching {
+                importer.confirm(
+                    ConfirmedSlip(
+                        transactionId = newId(),
+                        ruleId = newId(),
+                        queuedSlipId = slip.id,
+                        counterparty = shop,
+                        categoryId = category.id,
+                        subCategoryId = current.subCategory?.id,
+                        amount = amount,
+                        occurredAtEpochMillis = slip.occurredAtEpochMillis,
+                        reference = slip.note.takeIf { it.isNotBlank() },
+                        confirmedAtEpochMillis = clock.now().toEpochMilliseconds(),
+                        // What the parser read, not what the reader typed over it. FR-7 kept this
+                        // null when the figure did not read, and null is what screen 11c wants too.
+                        readAmount = if (foreign == null) slip.amount else slip.amount?.let { ForeignAmount(slip.currency, it.toMinorUnits(), foreign.rate).inHome },
+                        folder = slip.sourceFolder,
+                        displayName = typed.takeIf { current.shopRead && it.isNotEmpty() && it != slip.merchant },
+                        direction = slip.direction,
+                        planned = current.planned && slip.direction == Direction.Expense,
+                        foreign = foreign,
+                    ),
+                )
+            }
+            if (filed.isFailure) {
+                // #76's shape: Confirm unlocks and the typed form stays, so a second tap can try again.
+                toasts.show(ToastMessage(AppText.copy.slips.slipNotSaved, tone = ToastTone.Error))
+                state.update { it.copy(phase = ConfirmSlipPhase.Ready) }
+                return@launch
+            }
             haptics.saved()
             val shown = typed.ifEmpty { null } ?: shop?.let { shownShop(it, AppText.copy.slips.unknownShop) }
             val saved = AppText.copy.slips.saved(amount.formatCompact(), slip.occurredAtEpochMillis.filedDay(), category.name, shown)
             toasts.show(ToastMessage(saved))
-            state.update { it.copy(saving = false, saved = true) }
+            state.update { it.copy(phase = ConfirmSlipPhase.Saved) }
         }
     }
 
@@ -241,11 +253,11 @@ class ConfirmSlipViewModel(
     fun notMine() {
         val slip = slip ?: return
         if (state.value.saving) return
-        state.update { it.copy(saving = true) }
+        state.update { it.copy(phase = ConfirmSlipPhase.Saving) }
         viewModelScope.launch {
             discards.discard(slip.id)
             haptics.deleted()
-            state.update { it.copy(saving = false, dismissed = true) }
+            state.update { it.copy(phase = ConfirmSlipPhase.Dismissed) }
         }
     }
 
@@ -269,20 +281,28 @@ class ConfirmSlipViewModel(
         val slip = slip ?: return
         val debt = debts.getOrNull(chosenDebt) ?: return
         if (state.value.saving) return
-        state.update { it.copy(saving = true) }
+        state.update { it.copy(phase = ConfirmSlipPhase.Saving) }
         viewModelScope.launch {
-            recordPayment(
-                PaymentDraft(debt.groupId, debt.fromMemberId, debt.toMemberId, debt.amount, PaymentMethod.BankTransfer, slip.occurredAtEpochMillis),
-            )
+            val recorded = runSuspendCatching {
+                recordPayment(
+                    PaymentDraft(debt.groupId, debt.fromMemberId, debt.toMemberId, debt.amount, PaymentMethod.BankTransfer, slip.occurredAtEpochMillis),
+                )
+            }
+            if (recorded.isFailure) {
+                // As save: the debt card stays and unlocks, so a second tap can try again.
+                toasts.show(ToastMessage(AppText.copy.shared.payment.didntSave, tone = ToastTone.Error))
+                state.update { it.copy(phase = ConfirmSlipPhase.Ready) }
+                return@launch
+            }
             debts = emptyList()
             val text = AppText.copy.slips
             haptics.saved()
             toasts.show(ToastMessage(text.debtRecorded(debt.amount.format(), debt.toName, debt.groupName)))
             if (keepInSpending) {
-                state.update { it.copy(saving = false, debtMatch = null, debtPaidNote = text.debtKeepNote(debt.toName)) }
+                state.update { it.copy(phase = ConfirmSlipPhase.Ready, debtMatch = null, debtPaidNote = text.debtKeepNote(debt.toName)) }
             } else {
                 // Dismissed first, so the queue emptying reads as this screen's own doing.
-                state.update { it.copy(saving = false, debtMatch = null, dismissed = true) }
+                state.update { it.copy(phase = ConfirmSlipPhase.Dismissed, debtMatch = null) }
                 importer.discard(slip.id)
             }
         }
@@ -320,14 +340,12 @@ class ConfirmSlipViewModel(
         categories = categories.forDirection(this?.direction ?: Direction.Expense),
         moneyIn = this?.direction == Direction.Income,
         offersPlanned = offersPlanned && this?.direction != Direction.Income,
-        saving = false,
-        saved = false,
         shopRead = this?.reason != ReviewReason.Unreadable,
         nameable = this?.merchant?.isReaderNoise() == true,
         shopName = this?.merchant?.takeUnless { it.isReaderNoise() }?.let { ShopNames.of(it) ?: it }.orEmpty(),
         slipId = this?.id.orEmpty(),
         pictureCaption = this?.let {
-            listOfNotNull(it.sourceFolder, it.occurredAtEpochMillis.dateIn(HomeTime).dayAndMonth()).joinToString(" · ")
+            listOfNotNull(it.sourceFolder, it.occurredAtEpochMillis.dateIn(HomeTime).dayAndMonth()).joinToString(Separators.DOT)
         }.orEmpty(),
     )
 
@@ -339,8 +357,8 @@ class ConfirmSlipViewModel(
 
     /** Today lists only today (FR-16), so a slip from another day says where it went. */
     private fun Long.filedDay(): String {
-        val day = Instant.fromEpochMilliseconds(this).toLocalDateTime(HomeTime).date
-        return if (day == clock.now().toLocalDateTime(HomeTime).date) AppText.copy.slips.savedToday else day.dayLabel()
+        val day = dateIn(HomeTime)
+        return if (day == clock.now().dateIn(HomeTime)) AppText.copy.slips.savedToday else day.dayLabel()
     }
 
     private val QueuedSlip.isForeign: Boolean get() = currency != Home.money.code

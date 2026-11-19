@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.coroutines.cancellation.CancellationException
 
 private const val ANY_IMAGE = "image/"
 
@@ -51,6 +52,8 @@ class SharedSlipReceiver(
         scope.launch {
             val added = try {
                 copying.withLock { inbox.pictureAddedBy { inbox.accept(slip) } }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failure: Exception) {
                 // The share sheet has closed by now, so a toast is the only place left to say it.
                 toasts.show(

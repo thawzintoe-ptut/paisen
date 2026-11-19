@@ -10,6 +10,7 @@ import com.ptut.expense.importer.SlipImporter
 import com.ptut.expense.platform.photos.InMemorySlipSource
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -35,7 +36,7 @@ class DebugSlipViewModelTest : ViewModelTest() {
         override fun now(): Instant = Instant.fromEpochMilliseconds(1_755_000_000_000)
     }
 
-    private val importer = SlipImporter(source, FakeSlipTextReader(), store, clock)
+    private val importer = SlipImporter(source, FakeSlipTextReader(), store, clock, work = EmptyCoroutineContext)
 
     private val viewModel = DebugSlipViewModel(source, importer, clock)
 

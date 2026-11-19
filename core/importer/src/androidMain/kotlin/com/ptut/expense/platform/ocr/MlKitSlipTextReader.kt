@@ -19,9 +19,8 @@ private const val UPRIGHT = 0
 /**
  * FR-6 on Android, through ML Kit's bundled Latin model.
  *
- * Bundled and not the Play-services build: NFR-1 says v1 makes no outbound request at all, and the
- * sibling artifact downloads its model on first use. The version catalog says the same thing next
- * to the dependency, and `verifyNoNetworkDependencies` holds the classpath to it.
+ * Bundled and not the Play-services build: slips and their text never leave the phone, and the
+ * sibling artifact downloads its model on first use. `verifyNoNetworkDependencies` holds to it.
  *
  * C-3: there is no Thai model, so a Thai merchant line comes back as noise or not at all. That is
  * an outcome the parser is expected to meet, not a failure to hide here.
@@ -35,12 +34,17 @@ class MlKitSlipTextReader : SlipTextReader {
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     }
 
-    override suspend fun read(bytes: ByteArray): List<String> {
-        val slip = withContext(Dispatchers.Default) {
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-        } ?: throw IllegalArgumentException("Those bytes are not a picture this phone can decode")
+    override suspend fun read(bytes: ByteArray): List<String> = withContext(Dispatchers.Default) {
+        val slip = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            ?: throw IllegalArgumentException("Those bytes are not a picture this phone can decode")
 
-        return recognizer.process(InputImage.fromBitmap(slip, UPRIGHT)).await().linesTopToBottom()
+        val reading = recognizer.process(InputImage.fromBitmap(slip, UPRIGHT))
+        try {
+            reading.await().linesTopToBottom()
+        } finally {
+            // A run holds up to 200 full-size slips. A cancelled read may still be in ML Kit, so only a finished one frees.
+            if (reading.isComplete) slip.recycle()
+        }
     }
 }
 

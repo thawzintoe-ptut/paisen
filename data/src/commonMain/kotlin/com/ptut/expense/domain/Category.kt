@@ -1,7 +1,5 @@
 package com.ptut.expense.domain
 
-import com.ptut.expense.locale.AppText
-
 /**
  * [icon] is a Material Symbols name, resolved to a glyph in the UI layer. [color] is a
  * [com.ptut.expense.design.CategoryTint] name, resolved the same way — a String and not the enum,
@@ -71,17 +69,18 @@ fun List<Category>.forDirection(direction: Direction): List<Category> =
     filter { it.direction == direction }
 
 /**
- * An installed category the reader never renamed, named in the app's language. A name they gave
- * stays theirs. Only the screens see this: the table keeps the installed English name.
+ * An installed category the reader never renamed, named in the app's language by [seedNames]
+ * (installed id to translated name). A name they gave stays theirs. Only the screens see this:
+ * the table keeps the installed English name.
  */
-fun Category.inAppLanguage(): Category {
+fun Category.inAppLanguage(seedNames: Map<String, String>): Category {
     val installed = Category.seed().firstOrNull { it.id == id } ?: return this
     if (name != installed.name) return this
-    return AppText.copy.categories.seedNames[id]?.let { copy(name = it) } ?: this
+    return seedNames[id]?.let { copy(name = it) } ?: this
 }
 
 /** The other way, before a save: a translated installed name goes back into the table as the English one. */
-fun Category.inTableLanguage(): Category {
+fun Category.inTableLanguage(seedNames: Map<String, String>): Category {
     val installed = Category.seed().firstOrNull { it.id == id } ?: return this
-    return if (name == AppText.copy.categories.seedNames[id]) copy(name = installed.name) else this
+    return if (name == seedNames[id]) copy(name = installed.name) else this
 }

@@ -1,5 +1,6 @@
 package com.ptut.expense.platform.photos
 
+import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import com.ptut.expense.locale.AppText
@@ -7,10 +8,28 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.util.UUID
 
 /** `filesDir`, not `cacheDir`: a slip waiting to be read is evidence, and the system empties caches. */
 private const val INBOX_FOLDER = "shared-slips"
+
+/** A phone screenshot is a few megabytes. Past this it is not a slip, and reading it could end the process. */
+internal const val MAX_PICTURE_BYTES = 20L * 1024 * 1024
+
+/** Copies this stream into [to] and stops at [cap] bytes. False when there was more, so the copy is not the whole. */
+internal fun InputStream.copyUpTo(cap: Long, to: OutputStream): Boolean {
+    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    var copied = 0L
+    while (true) {
+        val read = read(buffer)
+        if (read < 0) return true
+        if (copied + read > cap) return false
+        to.write(buffer, 0, read)
+        copied += read
+    }
+}
 
 /**
  * FR-1: the pictures the share sheet handed over, waiting for the next import run.
@@ -34,20 +53,29 @@ class SharedSlipInbox(context: Context) : SlipSource {
      * sheet has already closed by the time this runs and a toast is all that is left to say it.
      */
     suspend fun accept(picture: Uri) = withContext(Dispatchers.IO) {
-        val bytes = try {
-            context.contentResolver.openInputStream(picture)?.use { it.readBytes() }
-        } catch (unreadable: IOException) {
-            throw IOException(AppText.copy.slips.shareNotOpened, unreadable)
-        } catch (refused: SecurityException) {
-            throw SecurityException(AppText.copy.slips.shareRefused, refused)
-        }
+        // A provider's picture only: a file path could name one of this app's own files.
+        if (picture.scheme != ContentResolver.SCHEME_CONTENT) throw IOException(AppText.copy.slips.shareNotOpened)
 
-        if (bytes == null || bytes.isEmpty()) {
-            throw IOException(AppText.copy.slips.shareEmpty)
-        }
+        // Copied beside the inbox and moved in whole, so a run never reads half a picture.
+        val staged = File(context.filesDir, "$INBOX_FOLDER-${UUID.randomUUID()}")
+        try {
+            val whole = try {
+                context.contentResolver.openInputStream(picture)?.use { shared -> staged.outputStream().use { shared.copyUpTo(MAX_PICTURE_BYTES, it) } }
+            } catch (unreadable: IOException) {
+                throw IOException(AppText.copy.slips.shareNotOpened, unreadable)
+            } catch (refused: SecurityException) {
+                throw SecurityException(AppText.copy.slips.shareRefused, refused)
+            }
 
-        inbox.mkdirs()
-        File(inbox, UUID.randomUUID().toString()).writeBytes(bytes)
+            if (whole == null || staged.length() == 0L) throw IOException(AppText.copy.slips.shareEmpty)
+            // No slip is this large, and the importer holds each picture in memory to read it.
+            if (!whole) throw IOException(AppText.copy.slips.shareNotOpened)
+
+            inbox.mkdirs()
+            if (!staged.renameTo(File(inbox, UUID.randomUUID().toString()))) throw IOException(AppText.copy.slips.shareNotOpened)
+        } finally {
+            staged.delete()
+        }
     }
 
     override suspend fun candidates(): List<SlipCandidate> = withContext(Dispatchers.IO) {

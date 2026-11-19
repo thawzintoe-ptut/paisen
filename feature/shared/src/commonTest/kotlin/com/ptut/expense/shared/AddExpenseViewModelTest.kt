@@ -2,31 +2,30 @@ package com.ptut.expense.shared
 
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.Category
-import com.ptut.expense.domain.inAppLanguage
 import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.ExpenseChanged
+import com.ptut.expense.domain.shared.QuickSplit
 import com.ptut.expense.domain.shared.Rate
+import com.ptut.expense.domain.shared.SharedTextLimits
 import com.ptut.expense.domain.shared.SplitMode
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.Language
 import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.inAppLanguage
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class AddExpenseViewModelTest : ViewModelTest() {
-
-    @AfterTest
-    fun backToEnglish() {
-        AppText.use(Language.English)
-    }
 
     /** #6: the second tap lands while the first save is still writing. */
     @Test
@@ -48,6 +47,26 @@ class AddExpenseViewModelTest : ViewModelTest() {
 
         assertEquals(1, repository.expenses.size)
         assertEquals(1, closed)
+    }
+
+    /** The rules refuse a longer text for good, and the expense would be taken back. */
+    @Test
+    fun `a description and note longer than the group takes are cut to its limits`() = runTest {
+        val repository = FakeSharedRepository()
+        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed())
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        viewModel.setAmount("240")
+        viewModel.setDescription("d".repeat(SharedTextLimits.DESCRIPTION + 50))
+        viewModel.setNote("n".repeat(SharedTextLimits.NOTE + 50))
+        runCurrent()
+
+        viewModel.save {}
+        runCurrent()
+
+        val saved = repository.expenses.single()
+        assertEquals(SharedTextLimits.DESCRIPTION, saved.description.length)
+        assertEquals(SharedTextLimits.NOTE, saved.note?.length)
     }
 
     /** The title syncs to every member, so it must not carry the writer's language. */
@@ -196,21 +215,164 @@ class AddExpenseViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `exact shares that miss the total say so`() = runTest {
+    fun `a failed save brings Save back and says so and the next tap saves`() = runTest {
+        val repository = FakeSharedRepository()
+        val toasts = ToastMessages()
+        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed(), toasts = toasts)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        viewModel.setAmount("240")
+        viewModel.setDescription("Groceries")
+        runCurrent()
+        repository.failNextExpenseWith = IllegalStateException("write failed")
+        var closed = 0
+
+        viewModel.save { closed++ }
+        runCurrent()
+
+        assertTrue(viewModel.ready().canSave)
+        assertEquals("240", viewModel.ready().form.amountText)
+        assertEquals(AppText.copy.shared.expense.didntSave, toasts.messages.first().text)
+        assertEquals(0, closed)
+
+        repository.gate.complete(Unit)
+        viewModel.save { closed++ }
+        runCurrent()
+
+        assertEquals(1, repository.expenses.size)
+        assertEquals(1, closed)
+    }
+
+    @Test
+    fun `another phone's change keeps the form says so and the next save writes over it`() = runTest {
+        val repository = FakeSharedRepository()
+        val toasts = ToastMessages()
+        val viewModel = viewModel(repository, toasts)
+        viewModel.setAmount("240")
+        runCurrent()
+        repository.failNextExpenseWith = ExpenseChanged(latestVersionId = "v9", removed = false)
+
+        viewModel.save()
+        runCurrent()
+
+        assertTrue(viewModel.ready().canSave)
+        assertEquals(AppText.copy.shared.expense.changedElsewhere, toasts.messages.first().text)
+        assertFalse(viewModel.isSaved.value)
+
+        repository.gate.complete(Unit)
+        viewModel.save()
+        runCurrent()
+
+        assertEquals("v9", repository.expenses.single().baseVersionId)
+        assertTrue(viewModel.isSaved.value)
+    }
+
+    @Test
+    fun `a saved expense says what it means for you and tells the screen to leave`() = runTest {
+        val repository = FakeSharedRepository()
+        val toasts = ToastMessages()
+        val viewModel = viewModel(repository, toasts)
+        viewModel.setAmount("240")
+        viewModel.setDescription("Groceries")
+        runCurrent()
+        val meaning = viewModel.ready().meaning
+
+        repository.gate.complete(Unit)
+        viewModel.save()
+        runCurrent()
+
+        assertEquals("you are owed ฿120", meaning)
+        assertEquals("Added Groceries · you are owed ฿120", toasts.messages.first().text)
+        assertTrue(viewModel.isSaved.value)
+    }
+
+    @Test
+    fun `a percent split that adds to a hundred pays each their part`() = runTest {
+        val repository = FakeSharedRepository()
+        val viewModel = viewModel(repository)
+        viewModel.setAmount("100")
+        viewModel.setSplitMode(SplitMode.Percent)
+        viewModel.setWeight("me", "60")
+        viewModel.setWeight("aye", "40")
+        runCurrent()
+
+        val split = viewModel.ready().split
+        assertTrue(split.complete)
+        assertEquals(listOf("฿60.00", "฿40.00"), split.rows.map { it.detail })
+
+        repository.gate.complete(Unit)
+        viewModel.save()
+        runCurrent()
+        assertEquals(mapOf("me" to 6_000L, "aye" to 4_000L), repository.expenses.single().weights)
+    }
+
+    @Test
+    fun `shares split the amount in proportion`() = runTest {
+        val repository = FakeSharedRepository()
+        val viewModel = viewModel(repository)
+        viewModel.setAmount("90")
+        viewModel.setSplitMode(SplitMode.Shares)
+        viewModel.setWeight("me", "2")
+        viewModel.setWeight("aye", "1")
+        runCurrent()
+
+        assertEquals(listOf("฿60.00", "฿30.00"), viewModel.ready().split.rows.map { it.detail })
+
+        repository.gate.complete(Unit)
+        viewModel.save()
+        runCurrent()
+        assertEquals(mapOf("me" to 2L, "aye" to 1L), repository.expenses.single().weights)
+    }
+
+    @Test
+    fun `owed in full by the other person puts the whole amount on you`() = runTest {
+        val repository = FakeSharedRepository()
+        val viewModel = viewModel(repository)
+        viewModel.setAmount("240")
+        viewModel.setQuickSplit("aye", QuickSplit.OwedInFull)
+        runCurrent()
+
+        val ready = viewModel.ready()
+        assertEquals("aye", ready.form.payerMemberId)
+        assertEquals(SplitMode.Shares, ready.form.splitMode)
+        assertTrue(ready.quick.rows.single { it.selected }.owe)
+
+        repository.gate.complete(Unit)
+        viewModel.save()
+        runCurrent()
+        assertEquals(mapOf("me" to 1L), repository.expenses.single().weights)
+    }
+
+    @Test
+    fun `a payer chip moves owed in full to the new payer`() = runTest {
+        val viewModel = viewModel(FakeSharedRepository())
+        viewModel.setAmount("240")
+        viewModel.setQuickSplit("me", QuickSplit.OwedInFull)
+        viewModel.setQuickPayer("aye")
+        runCurrent()
+
+        assertEquals(mapOf("me" to "1"), viewModel.ready().form.weightTexts)
+    }
+
+    @Test
+    fun `give to puts what is left on the field edited last`() = runTest {
         val viewModel = viewModel(FakeSharedRepository())
         viewModel.setAmount("100")
         viewModel.setSplitMode(SplitMode.Exact)
         viewModel.setWeight("me", "30")
         viewModel.setWeight("aye", "30")
         runCurrent()
+        assertEquals(AppText.copy.shared.expense.giveTo("Aye"), viewModel.ready().split.giveToLabel)
 
-        val split = viewModel.ready().split
-        assertNotNull(split.leftTitle)
-        assertEquals(false, split.complete)
+        viewModel.giveLeftToLastEdited()
+        runCurrent()
+
+        assertEquals("70.00", viewModel.ready().form.weightTexts["aye"])
+        assertTrue(viewModel.ready().split.complete)
     }
 
-    private fun TestScope.viewModel(repository: FakeSharedRepository): AddExpenseViewModel {
-        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed())
+    private fun TestScope.viewModel(repository: FakeSharedRepository, toasts: ToastMessages? = null): AddExpenseViewModel {
+        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed(), toasts = toasts)
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         return viewModel

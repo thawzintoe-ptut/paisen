@@ -47,7 +47,6 @@ import com.ptut.expense.design.ptutIcon
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.Satang
-import com.ptut.expense.domain.categoryAndProvenance
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.formatParts
@@ -56,6 +55,7 @@ import com.ptut.expense.locale.CommonCopy
 import com.ptut.expense.locale.HomeCopy
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.noteCopy
+import com.ptut.expense.ui.categoryAndProvenance
 import com.ptut.expense.ui.sky.SkyEmptyState
 import com.ptut.expense.ui.sky.SkyMoodCard
 import com.ptut.expense.ui.sky.SkyPageSheet
@@ -352,10 +352,9 @@ private fun ImportStatus(
             modifier = modifier,
         )
 
-        // What stopped, then what still counts (#69).
         is ImportStatusUiModel.Failing -> SkyWarningBanner(
             title = text.scansFailing,
-            body = "${status.reason.line(text)}\n${text.stillCounts}",
+            body = status.body,
             actionLabel = fix?.let { text.fix },
             onAction = fix?.let { { onFixImport(it) } },
             modifier = modifier,
@@ -369,12 +368,6 @@ private fun ImportStatus(
             modifier = modifier,
         )
     }
-}
-
-private fun ImportStopReason.line(text: HomeCopy): String = when (this) {
-    ImportStopReason.PhotoAccessOff -> text.stopAccessOff
-    ImportStopReason.LibraryNoAnswer -> text.stopNoAnswer
-    is ImportStopReason.Other -> said.replaceFirstChar { it.uppercase() }
 }
 
 /** #68: a transaction row's shape in the quiet fill. Still on purpose: the pulse dot already moves. */

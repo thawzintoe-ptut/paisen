@@ -1,9 +1,11 @@
 package com.ptut.expense.home
 
+import app.cash.turbine.TurbineTestContext
 import app.cash.turbine.test
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.ImportFailureKind
 import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ImportRun
@@ -18,6 +20,7 @@ import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.TransactionSource
 import com.ptut.expense.domain.WeeklyTarget
+import com.ptut.expense.domain.format
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.locale.BurmeseCopy
@@ -168,6 +171,7 @@ class HomeViewModelTest : ViewModelTest() {
 
             val state = awaitItem() as HomeUiState.Success
             assertEquals(ImportStatusUiModel.Failing(ImportStopReason.PhotoAccessOff), state.importStatus)
+            assertEquals("${EnglishCopy.home.stopAccessOff}\n${EnglishCopy.home.stillCounts}", (state.importStatus as ImportStatusUiModel.Failing).body)
             assertEquals(ImportFix.AllowAllPhotos, state.importFix)
         }
     }
@@ -184,6 +188,37 @@ class HomeViewModelTest : ViewModelTest() {
             assertEquals(HomeUiState.Loading, awaitItem())
 
             assertEquals(ImportStatusUiModel.Failing(ImportStopReason.PhotoAccessOff), (awaitItem() as HomeUiState.Success).importStatus)
+        }
+    }
+
+    @Test
+    fun aJournalledKindIsReadWithoutMatchingTheSentence() = runTest {
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            sinceLastImportMillis = FIVE_MINUTES,
+            runs = listOf(scan(ImportOutcome.Failure, reason = "worded in a later release", kind = ImportFailureKind.LibraryNoAnswer)),
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            assertEquals(ImportStatusUiModel.Failing(ImportStopReason.LibraryNoAnswer), (awaitItem() as HomeUiState.Success).importStatus)
+        }
+    }
+
+    @Test
+    fun anOtherKindKeepsItsSentenceEvenWhenItReadsLikeAccessOff() = runTest {
+        val said = EnglishCopy.folders.androidAccessDenied
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            sinceLastImportMillis = FIVE_MINUTES,
+            runs = listOf(scan(ImportOutcome.Failure, reason = said, kind = ImportFailureKind.Other)),
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            assertEquals(ImportStatusUiModel.Failing(ImportStopReason.Other(said)), (awaitItem() as HomeUiState.Success).importStatus)
         }
     }
 
@@ -217,6 +252,7 @@ class HomeViewModelTest : ViewModelTest() {
 
             val state = awaitItem() as HomeUiState.Success
             assertEquals(ImportStatusUiModel.Failing(ImportStopReason.Other("the folder could not be read")), state.importStatus)
+            assertEquals("The folder could not be read\n${EnglishCopy.home.stillCounts}", (state.importStatus as ImportStatusUiModel.Failing).body)
             assertEquals(ImportFix.AllowAllPhotos, state.importFix)
         }
     }
@@ -466,13 +502,14 @@ class HomeViewModelTest : ViewModelTest() {
         }
     }
 
-    private fun scan(outcome: ImportOutcome, reason: String? = null) = ImportRun(
+    private fun scan(outcome: ImportOutcome, reason: String? = null, kind: ImportFailureKind? = null) = ImportRun(
         id = outcome.name,
         startedAtEpochMillis = 0L,
         finishedAtEpochMillis = null,
         outcome = outcome,
         slipsFound = 0,
         failureReason = reason,
+        failureKind = kind,
     )
 
     private suspend fun importFixFor(sinceLastImportMillis: Long?): ImportFix? {
@@ -702,6 +739,107 @@ class HomeViewModelTest : ViewModelTest() {
         capturedAtEpochMillis = 0L,
     )
 
+    @Test
+    fun theMorningCardRecapsYesterdaysSpendingAndOpensItsReceipt() = runTest {
+        val yesterday = listOf(
+            spent("y1", at(2026, 8, 13, 9, 0), Satang(15_500)),
+            spent("y2", at(2026, 8, 13, 20, 0), Satang(15_500)),
+            spent("y3", at(2026, 8, 13, 12, 0), Satang(900_000)).copy(direction = Direction.Income),
+        )
+        val viewModel = viewModel(transactions = emptyList(), saved = yesterday, now = bangkok(2026, 8, 14, 8), mood = true)
+
+        viewModel.uiState.test {
+            val card = assertNotNull(awaitSuccess().moodCard)
+            assertEquals(EnglishCopy.home.goodMorning, card.lead)
+            assertEquals(EnglishCopy.home.yesterdayCameTo("฿310", ""), card.line)
+            assertEquals("wb_twilight", card.glyph)
+            assertEquals("2026-08-13", card.receiptDate)
+        }
+    }
+
+    @Test
+    fun theEveningCardWrapsTodaysPurchases() = runTest {
+        val today = listOf(spent("e1", at(2026, 8, 14, 9, 0), Satang(15_500)), spent("e2", at(2026, 8, 14, 13, 0), Satang(15_500)))
+        val viewModel = viewModel(transactions = today, now = bangkok(2026, 8, 14, 19), mood = true)
+
+        viewModel.uiState.test {
+            val card = assertNotNull(awaitSuccess().moodCard)
+            assertEquals(EnglishCopy.home.dayWrapped, card.lead)
+            assertEquals(EnglishCopy.home.wrapLine(2, Satang(31_000).format()), card.line)
+            assertEquals("2026-08-14", card.receiptDate)
+        }
+    }
+
+    @Test
+    fun aMorningAfterADayWithNoSpendingHasNoMoodCard() = runTest {
+        val viewModel = viewModel(transactions = emptyList(), now = bangkok(2026, 8, 14, 8), mood = true)
+
+        viewModel.uiState.test {
+            assertNull(awaitSuccess().moodCard)
+        }
+    }
+
+    @Test
+    fun theComparedCardRisesOverAUsualFriday() = runTest {
+        val fridays = listOf(
+            spent("f1", at(2026, 7, 24, 12, 0), Satang(10_000)),
+            spent("f2", at(2026, 7, 31, 12, 0), Satang(10_000)),
+            spent("f3", at(2026, 8, 7, 12, 0), Satang(10_000)),
+        )
+        val today = listOf(spent("f4", at(2026, 8, 14, 10, 0), Satang(15_500)))
+        val viewModel = viewModel(transactions = today, saved = fridays)
+
+        viewModel.uiState.test {
+            val compared = assertNotNull(awaitSuccess().compared)
+            assertEquals("trending_up", compared.glyph)
+        }
+    }
+
+    @Test
+    fun topCategoriesAreTheBiggestSpendFirst() = runTest {
+        val today = listOf(
+            spent("c1", at(2026, 8, 14, 9, 0), Satang(5_000)).copy(categoryId = "transport"),
+            spent("c2", at(2026, 8, 14, 10, 0), Satang(50_000)).copy(categoryId = "food"),
+            spent("c3", at(2026, 8, 14, 11, 0), Satang(20_000)).copy(categoryId = "groceries"),
+        )
+        val viewModel = viewModel(transactions = today)
+
+        viewModel.uiState.test {
+            assertEquals(listOf("Food & drink", "Groceries", "Transport"), awaitSuccess().topCategories.map { it.name })
+        }
+    }
+
+    @Test
+    fun theMonthTabCountsTheBangkokMonthToTodayOnly() = runTest {
+        val rows = listOf(
+            spent("m1", at(2026, 8, 1, 0, 30), Satang(10_000)),
+            spent("m2", at(2026, 8, 14, 9, 0), Satang(20_000)),
+            spent("m3", at(2026, 7, 31, 23, 30), Satang(40_000)),
+            spent("m4", at(2026, 8, 20, 9, 0), Satang(80_000)),
+        )
+        val viewModel = viewModel(transactions = emptyList(), saved = rows)
+        viewModel.show(HomePeriod.Month)
+
+        viewModel.uiState.test {
+            var state = awaitSuccess()
+            while (state.period != HomePeriod.Month) state = awaitSuccess()
+            assertEquals(Satang(30_000), state.summary.expense)
+            assertTrue(state.heroLabel.startsWith(EnglishCopy.home.spentThisMonth), state.heroLabel)
+        }
+    }
+
+    private suspend fun TurbineTestContext<HomeUiState>.awaitSuccess(): HomeUiState.Success {
+        var state = awaitItem()
+        while (state !is HomeUiState.Success) state = awaitItem()
+        return state
+    }
+
+    private fun spent(id: String, occurred: Long, amount: Satang) =
+        saved(id, occurred, filed = 0L).copy(amount = amount)
+
+    private fun bangkok(year: Int, month: Int, day: Int, hour: Int): Instant =
+        LocalDateTime(year, month, day, hour, 0).toInstant(BangkokTime)
+
     private fun viewModel(
         transactions: List<Transaction>,
         sinceLastImportMillis: Long? = 0L,
@@ -715,12 +853,14 @@ class HomeViewModelTest : ViewModelTest() {
         target: WeeklyTarget? = null,
         note: WeeklyNoteSettings = WeeklyNoteSettings(),
         scanning: Flow<Boolean> = flowOf(false),
+        mood: Boolean = false,
     ) = HomeViewModel(
         ledger = FakeLedger(transactions, sinceLastImportMillis, queued, all = transactions + saved, runs = runs),
         isScanning = scanning,
         subCategoryUpdates = subCategories,
         onlyPickedPhotos = onlyPickedPhotos,
         weeklyCheckIn = flowOf(weeklyCheckIn),
+        moodByTimeOfDay = flowOf(mood),
         weeklyTarget = flowOf(target),
         weeklyNote = flowOf(note),
         clock = object : Clock {

@@ -150,7 +150,7 @@ private fun NameRow(name: String, enabled: Boolean, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
     ) {
-        MemberAvatar(label = name.trim().firstOrNull()?.uppercase() ?: "?", isMe = false)
+        MemberAvatar(label = initialOf(name), isMe = false)
         Text(name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }

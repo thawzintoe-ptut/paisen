@@ -11,6 +11,8 @@ data class FoldersCopy(
     val slipsRead: (Int) -> String = { count -> "$count ${if (count == 1) "slip" else "slips"} read" },
     val noSlipsYet: String = "No slips found yet",
     val notChecked: String = "Not checked",
+    val notRead: String = "The phone's folders could not be read. Try again.",
+    val notSaved: String = "Some folders did not change. Tap Save to try again.",
     val images: (Int) -> String = { count -> "$count ${if (count == 1) "image" else "images"}" },
     val summary: (Int, Int) -> String = { watched, read ->
         "$watched ${if (watched == 1) "folder" else "folders"} watched · $read ${if (read == 1) "slip" else "slips"} read so far"
@@ -50,6 +52,8 @@ val BurmeseFolders = FoldersCopy(
     slipsRead = { count -> "စလစ် ${count.inMyanmarDigits()} ခု ဖတ်ပြီး" },
     noSlipsYet = "စလစ် မတွေ့သေးဘူး",
     notChecked = "မစစ်ရသေးဘူး",
+    notRead = "ဖုန်းထဲက ဖိုဒါတွေကို ဖတ်လို့ မရဘူး။ ထပ်ကြိုးစားပါ။",
+    notSaved = "ဖိုဒါတချို့ မပြောင်းရသေးဘူး။ ထပ်ကြိုးစားဖို့ သိမ်းမယ် ကို နှိပ်ပါ။",
     images = { count -> "ပုံ ${count.inMyanmarDigits()}" },
     summary = { watched, read -> "ဖိုဒါ ${watched.inMyanmarDigits()} ခု စောင့်ကြည့်နေတယ် · အခုထိ စလစ် ${read.inMyanmarDigits()} ခု ဖတ်ပြီး" },
     allFoldersListed = "ပုံပါတဲ့ ဖိုဒါ အားလုံးကို အပေါ်မှာ ပြထားတယ်။",
@@ -87,6 +91,8 @@ val ThaiFolders = FoldersCopy(
     slipsRead = { count -> "อ่านสลิปแล้ว $count ใบ" },
     noSlipsYet = "ยังไม่พบสลิป",
     notChecked = "ยังไม่ได้ตรวจ",
+    notRead = "อ่านโฟลเดอร์ในโทรศัพท์ไม่ได้ ลองอีกครั้ง",
+    notSaved = "บางโฟลเดอร์ยังไม่เปลี่ยน แตะบันทึกเพื่อลองอีกครั้ง",
     images = { count -> "$count รูป" },
     summary = { watched, read -> "ติดตาม $watched โฟลเดอร์ · อ่านสลิปแล้ว $read ใบ" },
     allFoldersListed = "ทุกโฟลเดอร์ในโทรศัพท์ที่มีรูปแสดงอยู่ด้านบนแล้ว",

@@ -58,7 +58,7 @@ internal fun stampedWrite(name: String, fields: Fields, stamp: String, create: B
     if (create) {
         put("currentDocument", buildJsonObject { put("exists", false) })
     } else {
-        put("updateMask", buildJsonObject { put("fieldPaths", buildJsonArray { fields.keys.forEach { add(JsonPrimitive(it)) } }) })
+        put("updateMask", fieldMaskJson(fields))
     }
     put(
         "updateTransforms",
@@ -72,6 +72,9 @@ internal fun stampedWrite(name: String, fields: Fields, stamp: String, create: B
         },
     )
 }
+
+/** A write's `updateMask`: only [fields]' keys change. */
+internal fun fieldMaskJson(fields: Fields): JsonObject = buildJsonObject { put("fieldPaths", buildJsonArray { fields.keys.forEach { add(JsonPrimitive(it)) } }) }
 
 /** When the server read a `runQuery` answer, from its first element; null for an empty answer. */
 internal fun readTimeOf(results: JsonElement): Long? = results.arrayOrEmpty().firstOrNull()

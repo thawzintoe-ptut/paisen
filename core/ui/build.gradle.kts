@@ -20,9 +20,7 @@ kotlin {
             implementation(projects.core.util)
             implementation(projects.core.locale)
             implementation(projects.core.platform)
-        }
-        commonTest.dependencies {
-            // PtutIconTest checks every seeded category names a drawn icon.
+            // The wording two or more features share for :data's types (row names, backups, trends).
             implementation(projects.data)
         }
     }

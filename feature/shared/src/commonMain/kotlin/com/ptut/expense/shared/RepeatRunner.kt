@@ -1,6 +1,7 @@
 package com.ptut.expense.shared
 
 import com.ptut.expense.domain.HomeTime
+import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.RepeatRule
@@ -18,7 +19,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.atTime
 import kotlinx.datetime.toInstant
-import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 
 /**
@@ -33,7 +33,7 @@ class RepeatRunner(
     private val running = Mutex()
 
     suspend fun run() = running.withLock {
-        val today = clock.now().toLocalDateTime(HomeTime).date
+        val today = clock.now().dateIn(HomeTime)
         repository.addDueRepeats(today)
         if (reminders.allowed()) reminders.replaceAll(plans())
     }
@@ -41,7 +41,7 @@ class RepeatRunner(
     /** The next reminder of each repeat that asks for one, at 09:00 Bangkok the day before. */
     private fun plans(): List<ReminderPlan> {
         val now = clock.now()
-        val today = now.toLocalDateTime(HomeTime).date
+        val today = now.dateIn(HomeTime)
         val snapshot = repository.snapshot.value
         val text = AppText.copy.shared.repeat
         return snapshot.repeats.filter { it.active && it.remind }.mapNotNull { rule ->

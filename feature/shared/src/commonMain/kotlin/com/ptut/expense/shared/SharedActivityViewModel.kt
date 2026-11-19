@@ -3,9 +3,10 @@ package com.ptut.expense.shared
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.HomeTime
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.dateIn
-import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.ExpenseCause
@@ -14,20 +15,22 @@ import com.ptut.expense.domain.shared.SharedEvent
 import com.ptut.expense.domain.shared.SharedExpense
 import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedRepository
+import com.ptut.expense.domain.shared.effectFor
 import com.ptut.expense.domain.shared.events
 import com.ptut.expense.domain.shared.formatMinor
 import com.ptut.expense.domain.shared.moneyFormat
-import com.ptut.expense.domain.sum
 import com.ptut.expense.domain.timeOfDayIn
 import com.ptut.expense.locale.AppText
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.LocalDate
 import kotlin.time.Clock
-import kotlin.time.Instant
 
 /** p32's filters. */
 enum class ActivityFilter { All, Expenses, Payments, Edits }
@@ -49,7 +52,8 @@ data class SharedEntryUiModel(
     val paymentId: String? = null,
 )
 
-data class SharedActivityDay(val label: String, val entries: List<SharedEntryUiModel>)
+/** [date] keys the day in a list: [label] has no year, so it repeats a year apart. */
+data class SharedActivityDay(val date: LocalDate, val label: String, val entries: List<SharedEntryUiModel>)
 
 /** [fresh] is #64's "New since you last looked": others' changes after the mark, kept out of [days]. */
 data class SharedActivityUiState(
@@ -67,13 +71,15 @@ class SharedActivityViewModel(
     private val groupId: String?,
     repository: SharedRepository,
     private val clock: Clock = Clock.System,
+    /** Where the snapshot is mapped; tests hand in their own. */
+    private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     private val filter = MutableStateFlow(ActivityFilter.All)
     private val seenMark = MutableStateFlow<Long?>(null)
 
     val uiState: StateFlow<SharedActivityUiState> = combine(repository.snapshot, filter, seenMark) { snapshot, filter, since ->
-        val today = clock.now().toLocalDateTime(HomeTime).date
+        val today = clock.now().dateIn(HomeTime)
         val text = AppText.copy.shared
         val entries = snapshot.events(groupId)
             .filter { event ->
@@ -85,21 +91,16 @@ class SharedActivityViewModel(
                 }
             }
             .mapNotNull { event -> snapshot.group(event.groupId)?.let { event to it } }
-        val (fresh, earlier) = entries.partition { (event, group) -> event.isNewTo(group, since) }
+        val (fresh, earlier) = entries.partition { (event, group) -> group.isNewToMe(event.authorMemberId, event.atEpochMillis, since) }
         SharedActivityUiState(
             title = groupId?.let { snapshot.group(it)?.name?.let(text.log.groupTitle) } ?: text.activity,
             filter = filter,
             fresh = fresh.map { (event, group) -> event.entry(group) },
             days = earlier
-                .groupBy { (event, _) -> Instant.fromEpochMilliseconds(event.atEpochMillis).dateIn(HomeTime) }
-                .map { (date, rows) ->
-                    SharedActivityDay(
-                        label = if (date == today) AppText.copy.common.today.uppercase() else date.dayLabel().uppercase(),
-                        entries = rows.map { (event, group) -> event.entry(group) },
-                    )
-                },
+                .groupBy { (event, _) -> event.atEpochMillis.dateIn(HomeTime) }
+                .map { (date, rows) -> SharedActivityDay(date, dayHeading(date, today), rows.map { (event, group) -> event.entry(group) }) },
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SharedActivityUiState(AppText.copy.shared.activity, ActivityFilter.All, emptyList()))
+    }.flowOn(work).stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), SharedActivityUiState(AppText.copy.shared.activity, ActivityFilter.All, emptyList()))
 
     fun show(filter: ActivityFilter) {
         this.filter.value = filter
@@ -108,11 +109,6 @@ class SharedActivityViewModel(
     /** #64: the group screen's mark; null, as on a first visit, makes nothing new. */
     fun since(mark: Long?) {
         seenMark.value = mark
-    }
-
-    private fun SharedEvent.isNewTo(group: SharedGroup, mark: Long?): Boolean {
-        val author = authorMemberId
-        return mark != null && author != null && !group.isMe(author) && atEpochMillis > mark
     }
 
     private fun SharedEvent.entry(group: SharedGroup): SharedEntryUiModel {
@@ -135,7 +131,7 @@ class SharedActivityViewModel(
                     },
                     before = null,
                     after = null,
-                    line = listOfNotNull(said ?: text.notInvolved, time).joinToString(" · "),
+                    line = listOfNotNull(said ?: text.notInvolved, time).joinToString(Separators.DOT),
                     tone = tone,
                     expenseId = expense.id,
                 )
@@ -175,7 +171,7 @@ class SharedActivityViewModel(
                     title = text.removed(author, last.description),
                     before = null,
                     after = null,
-                    line = listOfNotNull(said?.let(text.itWas), time).joinToString(" · "),
+                    line = listOfNotNull(said?.let(text.itWas), time).joinToString(Separators.DOT),
                     tone = BalanceTone.Settled,
                 )
             }
@@ -217,9 +213,7 @@ class SharedActivityViewModel(
 
     /** What an expense means for you, in the group's money, or null when you are not in it; and its tone. */
     private fun SharedExpense.forMe(group: SharedGroup): Pair<String?, BalanceTone> {
-        val me = group.meMemberId
-        val mine = shares.filter { it.memberId == me }.map { it.satang }.sum()
-        val effect = (if (payerMemberId == me) satang else Satang.Zero) - mine
+        val effect = effectFor(group.meMemberId)
         val text = AppText.copy.shared.log
         val money = group.moneyFormat()
         return when {

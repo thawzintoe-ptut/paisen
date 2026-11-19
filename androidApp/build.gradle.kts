@@ -150,13 +150,18 @@ androidComponents {
         }
         verifyNoNetworkDependencies.configure { dependsOn(dependencies) }
 
-        // One check per module that keeps composeResources: the fonts in :core:ui, the Zawgyi model in :core:agent.
-        listOf("core/ui", "core/agent").forEach { module ->
-            val name = module.substringAfterLast('/').replaceFirstChar(Char::uppercase)
+        // One check per module that keeps composeResources, so a new module's files are checked too.
+        val resourceModules = rootProject.subprojects
+            .filter { it.file("src/commonMain/composeResources").isDirectory }
+            .sortedBy { it.path }
+        check(resourceModules.isNotEmpty()) { "verifyBundledResources found no module with composeResources." }
+        resourceModules.forEach { module ->
+            val name = module.path.split(':').filter(String::isNotEmpty)
+                .joinToString("") { it.replaceFirstChar(Char::uppercase) }
             val resources = tasks.register<VerifyBundledResources>("verifyBundledResources$suffix$name") {
                 group = "verification"
-                description = "Fails when the merged ${variant.name} assets lack a $module composeResources file."
-                resourceRoot.set(rootProject.layout.projectDirectory.dir("$module/src/commonMain/composeResources"))
+                description = "Fails when the merged ${variant.name} assets lack a ${module.path} composeResources file."
+                resourceRoot.set(module.layout.projectDirectory.dir("src/commonMain/composeResources"))
                 mergedAssets.set(variant.artifacts.get(SingleArtifact.ASSETS))
                 receipt.set(layout.buildDirectory.file("reports/verifyBundledResources/${variant.name}-$name.txt"))
             }

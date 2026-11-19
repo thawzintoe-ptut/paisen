@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.agent.LanguageModelPort
 import com.ptut.expense.agent.ModelState
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +28,7 @@ class AssistantModelViewModel(private val model: LanguageModelPort) : ViewModel(
 
     val uiState: StateFlow<AssistantModelUiState> = model.state
         .map(::uiStateOf)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), uiStateOf(model.state.value))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), uiStateOf(model.state.value))
 
     fun act(action: AssistantAction) {
         viewModelScope.launch {

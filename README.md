@@ -67,12 +67,13 @@ those slips and turns them into a record of where your money went.
 > you choose: on Android, saying an expense in a language your phone cannot recognise offline sends
 > your voice to Google, and Quick add says so first.
 
-PaiSeN itself uses the network only for shared groups, and only after you sign in to share. Everything that is sent,
-and where, is in [PRIVACY.md](PRIVACY.md).
+PaiSeN itself uses the network for shared groups, after you sign in to share, and to check with
+Firebase Remote Config which features are on, which sends nothing about your spending. Everything
+that is sent, and where, is in [PRIVACY.md](PRIVACY.md).
 
 #### CI checks these promises on every push
 
-- [x] No analytics or crash-reporting SDK, and no HTTP client except the one shared groups use
+- [x] No analytics or crash-reporting SDK, and no HTTP client except the one shared groups and the feature check use
 - [x] Network code only inside the sync module
 - [x] No telemetry upload service in the merged Android manifest
 - [x] No account number in the slip test data

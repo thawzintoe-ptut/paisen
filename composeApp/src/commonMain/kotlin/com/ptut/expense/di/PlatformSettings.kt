@@ -1,7 +1,7 @@
 package com.ptut.expense.di
 
 import com.ptut.expense.data.local.PtutDatabaseContext
-import com.ptut.expense.domain.settings.ImportSettingsStore
+import com.ptut.expense.domain.settings.AppSettingsStore
 import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.StartingCurrency
 import kotlinx.datetime.TimeZone
@@ -12,7 +12,7 @@ import kotlinx.datetime.TimeZone
  *
  * Takes the platform handle the graph already carries, exactly as [onboardingFlag] does.
  */
-expect fun importSettingsStore(context: PtutDatabaseContext): ImportSettingsStore
+expect fun appSettingsStore(context: PtutDatabaseContext): AppSettingsStore
 
 /**
  * The country the phone reports, two letters, or null. Android asks the mobile network the phone is

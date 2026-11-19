@@ -8,16 +8,34 @@ import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
+import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.TransactionSource
 import com.ptut.expense.domain.ledger.FakeLedger
 import com.ptut.expense.domain.ledger.rows
 import com.ptut.expense.domain.rules.RememberedMerchant
 import com.ptut.expense.domain.rules.RuleRepository
+import com.ptut.expense.domain.shared.ExpenseDraft
+import com.ptut.expense.domain.shared.GroupType
+import com.ptut.expense.domain.shared.Member
+import com.ptut.expense.domain.shared.NewMember
+import com.ptut.expense.domain.shared.PaymentDraft
+import com.ptut.expense.domain.shared.Rate
+import com.ptut.expense.domain.shared.RepeatRule
+import com.ptut.expense.domain.shared.Share
+import com.ptut.expense.domain.shared.SharedExpense
+import com.ptut.expense.domain.shared.SharedGroup
+import com.ptut.expense.domain.shared.SharedRepository
+import com.ptut.expense.domain.shared.SharedSnapshot
+import com.ptut.expense.domain.shared.SplitMode
+import com.ptut.expense.domain.shared.TitleChange
+import com.ptut.expense.domain.shared.TransactionSeed
+import com.ptut.expense.ui.MetaField
 import com.ptut.expense.ui.ToastMessages
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.toInstant
 import kotlin.test.Test
@@ -128,8 +146,8 @@ class TransactionDetailViewModelTest : ViewModelTest() {
             assertEquals("local_grocery_store", state.categoryIcon)
 
             assertEquals(
-                listOf("CATEGORY", "DATE", "SOURCE", "REFERENCE"),
-                state.rows.map { it.label },
+                listOf(MetaField.Category, MetaField.Date, MetaField.Source, MetaField.Reference),
+                state.rows.map { it.field },
             )
             assertEquals(
                 listOf("Groceries", "Fri 14 Aug, 18:30", "K PLUS slip", "0138K4"),
@@ -144,7 +162,7 @@ class TransactionDetailViewModelTest : ViewModelTest() {
             filedSlip.copy(subCategoryId = "supermarket"),
             subCategories = listOf(SubCategory("supermarket", "groceries", "Supermarket")),
         ) { state ->
-            assertEquals("Groceries › Supermarket", state.rows.single { it.label == "CATEGORY" }.value)
+            assertEquals("Groceries › Supermarket", state.rows.single { it.field == MetaField.Category }.value)
         }
     }
 
@@ -158,7 +176,7 @@ class TransactionDetailViewModelTest : ViewModelTest() {
         loaded(corrected) { state ->
             assertEquals(
                 "K PLUS slip · edited 15 Aug",
-                state.rows.single { it.label == "SOURCE" }.value,
+                state.rows.single { it.field == MetaField.Source }.value,
             )
         }
     }
@@ -170,7 +188,7 @@ class TransactionDetailViewModelTest : ViewModelTest() {
     @Test
     fun `a category that is gone leaves the row uncategorised rather than blank`() = runTest {
         loaded(filedSlip.copy(categoryId = null)) { state ->
-            assertEquals("Uncategorised", state.rows.single { it.label == "CATEGORY" }.value)
+            assertEquals("Uncategorised", state.rows.single { it.field == MetaField.Category }.value)
             assertEquals("more_horiz", state.categoryIcon)
         }
     }
@@ -281,8 +299,8 @@ class TransactionDetailViewModelTest : ViewModelTest() {
 
         loaded(byHand) { state ->
             assertEquals("Groceries", state.merchant)
-            assertEquals("Added by hand", state.rows.single { it.label == "SOURCE" }.value)
-            assertEquals("—", state.rows.single { it.label == "REFERENCE" }.value)
+            assertEquals("Added by hand", state.rows.single { it.field == MetaField.Source }.value)
+            assertEquals("—", state.rows.single { it.field == MetaField.Reference }.value)
             assertEquals(
                 "Deleting it here takes ฿642.50 off this month.",
                 state.consequence,
@@ -468,6 +486,52 @@ class TransactionDetailViewModelTest : ViewModelTest() {
         }
     }
 
+    @Test
+    fun `a group copy that cannot be removed still deletes the row and leaves the screen`() = runTest {
+        val ledger = FakeLedger(listOf(filedSlip))
+        val toasts = ToastMessages()
+        val viewModel = TransactionDetailViewModel(
+            transactionId = filedSlip.id,
+            ledger = ledger,
+            toasts = toasts,
+            clock = fixedClock,
+            shared = UnreachableGroup(linkedTo = filedSlip.id),
+        )
+
+        toasts.messages.test {
+            viewModel.uiState.test {
+                awaitLoaded()
+                cancelAndIgnoreRemainingEvents()
+            }
+            viewModel.confirmDelete()
+            runCurrent()
+
+            assertEquals(emptyList<Transaction>(), ledger.allTransactions.value.rows())
+            assertEquals("Deleted Foodland Rama IV", awaitItem().text)
+            assertTrue(viewModel.isDeleted.value)
+        }
+    }
+
+    @Test
+    fun `unticking also remove keeps the ask open with the box clear`() = runTest {
+        val viewModel = TransactionDetailViewModel(
+            transactionId = filedSlip.id,
+            ledger = FakeLedger(listOf(filedSlip)),
+            toasts = ToastMessages(),
+            clock = fixedClock,
+        )
+
+        viewModel.uiState.test {
+            awaitLoaded()
+            viewModel.askToDelete()
+            viewModel.setAlsoRemove(false)
+            var state = awaitItem().loaded()
+            while (state.alsoRemoveFromGroup) state = awaitItem().loaded()
+            assertTrue(state.confirmingDelete)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     private fun viewModel(ledger: FakeLedger, toasts: ToastMessages = ToastMessages()) =
         TransactionDetailViewModel(
             transactionId = filedSlip.id,
@@ -519,4 +583,55 @@ private class StaticRules(held: List<RememberedMerchant>) : RuleRepository {
 
     override suspend fun rename(id: String, displayName: String?): Unit =
         error("The record never names a rule; the shop rule screen does")
+}
+
+/** One group holding a copy of the row, which can be read but never removed, as offline. */
+private class UnreachableGroup(linkedTo: String) : SharedRepository {
+    private val group = SharedGroup(
+        id = "g1",
+        name = "Flat 12",
+        type = GroupType.Flat,
+        icon = "home",
+        simplifyDebts = true,
+        createdAtEpochMillis = 0,
+        meMemberId = "me",
+        members = listOf(Member("me", "g1", "Ko Ko", personId = null)),
+    )
+    private val expense = SharedExpense(
+        id = "e1", versionId = "e1-v1", version = 1, groupId = "g1", description = "Groceries", occurredAtEpochMillis = 0,
+        categoryId = null, subCategoryId = null, note = null, currency = "THB", amountMinor = 64_250, rate = null,
+        satang = Satang(64_250), payerMemberId = "me", splitMode = SplitMode.Equally, shares = listOf(Share("me", 1, 64_250, Satang(64_250))),
+        authorMemberId = "me", createdAtEpochMillis = 0, removed = false,
+    )
+
+    override val snapshot: StateFlow<SharedSnapshot> = MutableStateFlow(
+        SharedSnapshot(groups = listOf(group), people = emptyList(), expenseVersions = listOf(expense), payments = emptyList(), links = mapOf("e1" to linkedTo)),
+    )
+
+    override suspend fun removeExpense(expenseId: String) = error("offline")
+
+    override suspend fun followTransaction(transactionId: String, before: TransactionEdit, titleChange: TitleChange?) = unused()
+    override suspend fun createGroup(name: String, type: GroupType, icon: String, members: List<NewMember>, currency: String): String = unused()
+    override suspend fun addMembers(groupId: String, members: List<NewMember>) = unused()
+    override suspend fun setSimplifyDebts(groupId: String, on: Boolean) = unused()
+    override suspend fun setPromptPay(groupId: String, promptPayId: String?) = unused()
+    override suspend fun editGroup(groupId: String, name: String, type: GroupType, icon: String) = unused()
+    override suspend fun deleteGroup(groupId: String) = unused()
+    override suspend fun setPersonArchived(personId: String, archived: Boolean) = unused()
+    override suspend fun removeMember(groupId: String, memberId: String) = unused()
+    override suspend fun saveExpense(draft: ExpenseDraft): String = unused()
+    override suspend fun recordPayment(draft: PaymentDraft): String = unused()
+    override suspend fun transactionSeed(transactionId: String): TransactionSeed? = unused()
+    override suspend fun removePayment(paymentId: String) = unused()
+    override suspend fun putBackPayment(paymentId: String) = unused()
+    override suspend fun restoreExpense(expenseId: String) = unused()
+    override suspend fun relink(expenseId: String, transactionId: String) = unused()
+    override suspend fun saveRepeat(rule: RepeatRule): String = unused()
+    override suspend fun stopRepeat(ruleId: String) = unused()
+    override suspend fun setRepeatReminder(ruleId: String, on: Boolean) = unused()
+    override suspend fun addDueRepeats(today: LocalDate): Int = unused()
+    override suspend fun lastRate(currency: String, into: String): Rate? = unused()
+    override suspend fun markSeen(groupId: String, atEpochMillis: Long) = unused()
+
+    private fun unused(): Nothing = error("The record only removes a group copy")
 }

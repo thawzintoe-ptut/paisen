@@ -22,7 +22,7 @@ class SettingsFocusTest {
     }
 
     @Test
-    fun `Settings opened from the bar is focused on nothing`() {
+    fun `settings opened from the bar is focused on nothing`() {
         assertNull(PtutRoute.Settings().focusedRow())
     }
 

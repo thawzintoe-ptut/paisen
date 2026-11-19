@@ -35,7 +35,13 @@ fun startPushAfterSignIn(context: Context) {
  * A phone without Google Play services gets no token and polls as before.
  */
 private fun startPush(context: Context) {
-    if (!FirebaseConfig.pushEnabled || FirebaseConfig.ANDROID_APP_ID.isEmpty() || FirebaseConfig.SENDER_ID.isEmpty()) return
+    if (!FirebaseConfig.pushEnabled || !firebaseAppReady(context)) return
+    FirebaseMessaging.getInstance().register()
+}
+
+/** Makes the default FirebaseApp from `firebase.properties` once; false when the build has no Android app id. */
+internal fun firebaseAppReady(context: Context): Boolean {
+    if (!FirebaseConfig.enabled || FirebaseConfig.ANDROID_APP_ID.isEmpty() || FirebaseConfig.SENDER_ID.isEmpty()) return false
     if (FirebaseApp.getApps(context).isEmpty()) {
         val options = FirebaseOptions.Builder()
             .setApplicationId(FirebaseConfig.ANDROID_APP_ID)
@@ -45,7 +51,7 @@ private fun startPush(context: Context) {
             .build()
         FirebaseApp.initializeApp(context, options)
     }
-    FirebaseMessaging.getInstance().register()
+    return true
 }
 
 /** A tapped notification's group, from `MainActivity`; the shell opens it once it has drawn. */

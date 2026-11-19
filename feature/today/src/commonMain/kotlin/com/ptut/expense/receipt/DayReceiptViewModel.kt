@@ -5,22 +5,25 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.HomeTime
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayLabel
-import com.ptut.expense.domain.differencePhrase
-import com.ptut.expense.domain.displayName
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatDigits
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.spentOn
 import com.ptut.expense.domain.spoken
 import com.ptut.expense.domain.timeOfDayIn
 import com.ptut.expense.domain.usualDay
 import com.ptut.expense.domain.yearLabel
+import com.ptut.expense.home.differencePhrase
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.ui.displayName
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -76,17 +79,17 @@ class DayReceiptViewModel(
                 is LedgerSnapshot.Rows -> receiptOf(snapshot.transactions)
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DayReceiptUiState.Loading)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), DayReceiptUiState.Loading)
 
     private fun receiptOf(rows: List<Transaction>): DayReceiptUiState.Loaded {
         val text = AppText.copy.receipt
         val spending = rows
             .filter { it.direction == Direction.Expense && it.occurredAtEpochMillis.dateIn(HomeTime) == day }
             .sortedBy { it.occurredAtEpochMillis }
-        val total = spending.fold(Satang.Zero) { sum, row -> sum + row.amount }
+        val total = rows.spentOn(day)
         return DayReceiptUiState.Loaded(
             title = title(),
-            heading = "${day.dayLabel()} ${day.yearLabel()}".uppercase() + " · ${text.city}",
+            heading = "${day.dayLabel()} ${day.yearLabel()}".uppercase() + "${Separators.DOT}${text.city}",
             lines = spending.map { row ->
                 val time = row.occurredAtEpochMillis.timeOfDayIn(HomeTime)
                 val name = row.displayName(categories, subCategories)

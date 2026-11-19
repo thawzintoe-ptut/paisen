@@ -52,7 +52,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.ptut.expense.design.PtutIcon
@@ -505,7 +504,7 @@ private fun NothingToChart(period: ReportPeriod) {
     val text = LocalCopy.current.reports
     Text(
         text = text.nothingToChart,
-        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Light),
+        style = MaterialTheme.ptutType.sheetTitle,
         color = MaterialTheme.colorScheme.onSurface,
     )
     Text(

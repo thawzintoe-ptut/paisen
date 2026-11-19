@@ -4,9 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeTime
-import com.ptut.expense.domain.backup.BackupUnreadable
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.backup.LedgerArchive
-import com.ptut.expense.domain.backup.phrase
+import com.ptut.expense.domain.backup.RestoreDriver
+import com.ptut.expense.domain.backup.RestoreStep
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayAndMonth
 import com.ptut.expense.domain.ledger.LedgerRepository
@@ -16,13 +17,14 @@ import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
+import com.ptut.expense.ui.phrase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 
 data class LedgerBackupUiState(
@@ -50,9 +52,6 @@ data class LedgerBackupUiState(
     val refused: String? = null,
 )
 
-/** A file read and counted, held until the reader says Import or Cancel (#220). */
-private data class ChosenFile(val text: String, val holds: String)
-
 /**
  * FR-22, both directions, behind the two Settings rows that name them.
  *
@@ -75,19 +74,16 @@ class LedgerBackupViewModel(
      */
     private val busy = MutableStateFlow(false)
 
-    private val chosen = MutableStateFlow<ChosenFile?>(null)
-
-    private val refused = MutableStateFlow<String?>(null)
+    private val restoring = RestoreDriver(archive)
 
     val uiState: StateFlow<LedgerBackupUiState> = combine(
         ledger.allTransactions,
         busy,
-        chosen,
-        refused,
-    ) { snapshot, working, file, reason -> state(snapshot, working, file?.holds, reason) }
+        restoring.step,
+    ) { snapshot, working, step -> state(snapshot, working, step.preview(), step.refusal()) }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
             initialValue = state(LedgerSnapshot.Unanswered, working = false, preview = null, refused = null),
         )
 
@@ -104,8 +100,7 @@ class LedgerBackupViewModel(
      */
     fun chooseFile() = whileFree {
         val text = files.read() ?: return@whileFree
-        refused.value = null
-        refusing { chosen.value = ChosenFile(text = text, holds = archive.preview(text).phrase()) }
+        restoring.read(text)
     }
 
     /**
@@ -113,24 +108,13 @@ class LedgerBackupViewModel(
      * #46: a file an empty ledger takes its home from rebuilds the shell, which comes back here.
      */
     fun restore() = whileFree {
-        val file = chosen.value ?: return@whileFree
-        chosen.value = null
-        refusing { toasts.show(ToastMessage(Home.fromSettings { archive.restore(file.text) }.phrase())) }
+        // #73: a file the archive refuses gets the refused state, not a toast; it wrote nothing.
+        val merged = restoring.import { merge -> Home.fromSettings { merge() } } ?: return@whileFree
+        toasts.show(ToastMessage(merged.phrase()))
     }
 
     /** Cancel on the preview: the file is let go and nothing has changed. */
-    fun cancelRestore() {
-        chosen.value = null
-    }
-
-    /** #73: a file the archive refuses gets the refused state, not a toast; it wrote nothing. */
-    private suspend fun refusing(work: suspend () -> Unit) {
-        try {
-            work()
-        } catch (refusal: BackupUnreadable) {
-            refused.value = refusal.message ?: AppText.copy.phrases.backupNotReadable
-        }
-    }
+    fun cancelRestore() = restoring.cancel()
 
     private fun whileFree(work: suspend () -> Unit) {
         if (busy.value) return
@@ -138,15 +122,11 @@ class LedgerBackupViewModel(
         viewModelScope.launch {
             try {
                 work()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failure: Exception) {
-                // The message is written for the reader — the file format and the unwired seam
-                // both say what is wrong in words. A bare class name would not.
-                toasts.show(
-                    ToastMessage(
-                        text = failure.message ?: AppText.copy.settings.didNotWork,
-                        tone = ToastTone.Error,
-                    ),
-                )
+                // Copy only: RestoreDriver keeps a refused file on screen, and any other message is the platform's English.
+                toasts.show(ToastMessage(text = AppText.copy.settings.didNotWork, tone = ToastTone.Error))
             } finally {
                 busy.value = false
             }
@@ -155,7 +135,7 @@ class LedgerBackupViewModel(
 
     /** The home date, so two exports on the same evening in two zones do not disagree. */
     private fun fileName(): String {
-        val today = clock.now().toLocalDateTime(HomeTime).date
+        val today = clock.now().dateIn(HomeTime)
         return "ptut-ledger-$today.json"
     }
 
@@ -186,4 +166,8 @@ class LedgerBackupViewModel(
             }
         }
     }
+
+    private fun RestoreStep.preview(): String? = (this as? RestoreStep.Preview)?.holds?.phrase()
+
+    private fun RestoreStep.refusal(): String? = (this as? RestoreStep.Refused)?.reason?.phrase()
 }

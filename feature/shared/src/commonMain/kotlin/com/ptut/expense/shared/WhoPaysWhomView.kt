@@ -30,13 +30,13 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
+import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.ui.sky.SkyBottomSheet
@@ -106,7 +106,7 @@ internal fun WhoPaysWhomContent(
             Text(text.settle.toSettle(state.groupName), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 state.headline,
-                style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Light),
+                style = MaterialTheme.ptutType.pageTitle,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(top = Spacing.xs),
             )

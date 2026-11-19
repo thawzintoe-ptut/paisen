@@ -6,6 +6,7 @@ import com.ptut.expense.data.local.entity.SubCategoryEntity
 import com.ptut.expense.data.local.openPtutDatabase
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.FiledSlip
 import com.ptut.expense.domain.slip.QueuedSlipEntry
@@ -80,6 +81,14 @@ class RoomImportStoreTest {
         assertNull(saved.subCategoryId)
     }
 
+    @Test
+    fun aSavedRateIsTheNextRateForItsCurrency() = withStore { store, _ ->
+        store.saveRate("MMK", Rate(138, 5))
+
+        assertEquals(Rate(138, 5), store.rateFor("MMK"))
+        assertNull(store.rateFor("USD"))
+    }
+
     private fun withStore(test: suspend (RoomImportStore, PtutDatabase) -> Unit): TestResult = runTest {
         val database = Room.inMemoryDatabaseBuilder<PtutDatabase>().openPtutDatabase()
         val store = RoomImportStore(
@@ -89,6 +98,7 @@ class RoomImportStoreTest {
             importRunDao = database.importRunDao(),
             ruleDao = database.ruleDao(),
             slipConfirmationDao = database.slipConfirmationDao(),
+            sharedDao = database.sharedDao(),
         )
         try {
             test(store, database)

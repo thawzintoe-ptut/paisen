@@ -1,13 +1,14 @@
 import BackgroundTasks
 import ComposeApp
 import FirebaseCore
+import FirebaseInstallations
 import FirebaseMessaging
 import UIKit
 import UserNotifications
 
 /// Shared-group pushes. Firebase Messaging lives here, in the Swift target only, so the Kotlin
 /// framework gains no SDK. Kotlin decides what a token or a group id means (`IosPush.kt`).
-final class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNotificationCenterDelegate {
+final class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNotificationCenterDelegate, IosInstallationBridge {
     /// Nil in a checkout without the gitignored plist: the app still runs, it just registers no token.
     private var messaging: Messaging? {
         FirebaseApp.app() == nil ? nil : Messaging.messaging()
@@ -20,6 +21,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNU
         if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
             FirebaseApp.configure()
             Messaging.messaging().delegate = self
+            IosFlagsKt.installInstallationBridge(bridge: self)
             application.registerForRemoteNotifications()
         }
         UNUserNotificationCenter.current().delegate = self
@@ -60,17 +62,24 @@ final class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNU
         messaging?.apnsToken = deviceToken
     }
 
-    /// A content-available push woke the app in the background; the shell syncs while iOS allows.
-    /// An active app already heard the same push through `willPresent`, so it is not told twice.
+    /// A content-available push woke the app in the background: no screen is open to sync, so Kotlin
+    /// syncs here and iOS hears when it finishes. An active app already heard it through `willPresent`.
     func application(
         _ application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        if application.applicationState != .active, let groupId = Self.groupId(in: userInfo) {
-            IosPushKt.receivePushInForeground(groupId: groupId, uid: Self.uid(in: userInfo))
+        guard application.applicationState != .active, Self.groupId(in: userInfo) != nil else {
+            completionHandler(.noData)
+            return
         }
-        completionHandler(.newData)
+        IosSharedRefreshKt.runPushSync(uid: Self.uid(in: userInfo)) { result in
+            switch result {
+            case .newdata: completionHandler(.newData)
+            case .failed: completionHandler(.failed)
+            default: completionHandler(.noData)
+            }
+        }
     }
 
     /// FCM addresses this iPhone by its Firebase installation ID (`FirebaseMessagingInstallationIdEnabled`).
@@ -101,6 +110,20 @@ final class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNU
             IosPushKt.receivePushTap(groupId: groupId, uid: Self.uid(in: response.notification.request.content.userInfo))
         }
         completionHandler()
+    }
+
+    /// Remote Config's fetch (`FlagRefresh.kt`) asks for this installation, its token and the plist's app id.
+    func installation(completion: @escaping (String?, String?, String?) -> Void) {
+        guard let app = FirebaseApp.app() else {
+            completion(nil, nil, nil)
+            return
+        }
+        let installations = Installations.installations()
+        installations.installationID { id, _ in
+            installations.authTokenForcingRefresh(false) { result, _ in
+                completion(id, result?.authToken, app.options.googleAppID)
+            }
+        }
     }
 
     private static func groupId(in userInfo: [AnyHashable: Any]) -> String? {

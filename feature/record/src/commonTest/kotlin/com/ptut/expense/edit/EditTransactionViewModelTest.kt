@@ -8,18 +8,34 @@ import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
+import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.TransactionSource
 import com.ptut.expense.domain.ledger.FakeLedger
 import com.ptut.expense.domain.ledger.rows
 import com.ptut.expense.domain.rules.RememberedMerchant
 import com.ptut.expense.domain.rules.RuleRepository
+import com.ptut.expense.domain.shared.ExpenseDraft
+import com.ptut.expense.domain.shared.GroupType
+import com.ptut.expense.domain.shared.NewMember
+import com.ptut.expense.domain.shared.PaymentDraft
+import com.ptut.expense.domain.shared.Rate
+import com.ptut.expense.domain.shared.RepeatRule
+import com.ptut.expense.domain.shared.SharedRepository
+import com.ptut.expense.domain.shared.SharedSnapshot
+import com.ptut.expense.domain.shared.TitleChange
+import com.ptut.expense.domain.shared.TransactionSeed
+import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.Language
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.BACKSPACE
+import com.ptut.expense.ui.MetaField
+import com.ptut.expense.ui.inAppLanguage
 import com.ptut.expense.ui.press
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.toInstant
 import kotlin.test.Test
@@ -352,7 +368,7 @@ class EditTransactionViewModelTest : ViewModelTest() {
     @Test
     fun `the merchant and the reference render as evidence and the time is a field`() = runTest {
         loaded { state ->
-            assertEquals(listOf("MERCHANT", "REFERENCE"), state.evidence.map { it.label })
+            assertEquals(listOf(MetaField.Merchant, MetaField.Reference), state.evidence.map { it.field })
             assertEquals(listOf("Foodland Rama IV", "0138K4"), state.evidence.map { it.value })
             assertEquals(filedSlip.occurredAtEpochMillis, state.occurredAtEpochMillis)
         }
@@ -362,7 +378,7 @@ class EditTransactionViewModelTest : ViewModelTest() {
     @Test
     fun `a hand typed row carries no reference line`() = runTest {
         loaded(handTyped) { state ->
-            assertEquals(emptyList(), state.evidence.map { it.label })
+            assertEquals(emptyList(), state.evidence.map { it.field })
         }
     }
 
@@ -387,7 +403,7 @@ class EditTransactionViewModelTest : ViewModelTest() {
     @Test
     fun `a slip with no reference is not told its reference stays as read`() = runTest {
         loaded(slipWithoutReference) { state ->
-            assertFalse(state.evidence.any { it.label == "REFERENCE" })
+            assertFalse(state.evidence.any { it.field == MetaField.Reference })
             assertTrue(state.notice.startsWith("The shop came from the slip"))
             assertFalse(state.notice.contains("reference"))
         }
@@ -432,6 +448,50 @@ class EditTransactionViewModelTest : ViewModelTest() {
 
         assertEquals(before, rules.rules.value)
         assertEquals(0, rules.writes, "the edit reached the shop rules")
+    }
+
+    @Test
+    fun `a group copy that cannot follow still leaves the edit saved`() = runTest {
+        val ledger = FakeLedger(listOf(filedSlip))
+        val viewModel = EditTransactionViewModel(
+            transactionId = "t1",
+            ledger = ledger,
+            shared = TitleRecordingShared(failFollow = true),
+        )
+
+        viewModel.uiState.test {
+            skipItems(1)
+            viewModel.choose(transport)
+            viewModel.save()
+            runCurrent()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertTrue(viewModel.isSaved.value)
+        assertEquals("transport", ledger.allTransactions.value.rows().single().categoryId)
+    }
+
+    /** Shared titles are stored in English, so a rename made in Burmese has to compare English names. */
+    @Test
+    fun `a category change made in Burmese renames the shared title by its English names`() = runTest {
+        AppText.use(Language.Burmese)
+        val shared = TitleRecordingShared()
+        val viewModel = EditTransactionViewModel(
+            transactionId = "t1",
+            ledger = FakeLedger(listOf(filedSlip)),
+            known = Category.seed().map(Category::inAppLanguage),
+            shared = shared,
+        )
+
+        viewModel.uiState.test {
+            skipItems(1)
+            viewModel.choose(transport.inAppLanguage())
+            viewModel.save()
+            runCurrent()
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        assertEquals(TitleChange(from = "Groceries", to = "Transport"), shared.titleChanges.single())
     }
 
     /**
@@ -503,4 +563,41 @@ private class RecordingRules(initial: List<RememberedMerchant>) : RuleRepository
     override suspend fun rename(id: String, displayName: String?) {
         writes++
     }
+}
+
+/** Only the follow is answered; any other call is the edit screen reaching past its job. */
+private class TitleRecordingShared(private val failFollow: Boolean = false) : SharedRepository {
+    val titleChanges = mutableListOf<TitleChange?>()
+
+    override val snapshot: StateFlow<SharedSnapshot> = MutableStateFlow(SharedSnapshot.Empty)
+
+    override suspend fun followTransaction(transactionId: String, before: TransactionEdit, titleChange: TitleChange?) {
+        if (failFollow) error("offline")
+        titleChanges += titleChange
+    }
+
+    override suspend fun createGroup(name: String, type: GroupType, icon: String, members: List<NewMember>, currency: String): String = unused()
+    override suspend fun addMembers(groupId: String, members: List<NewMember>) = unused()
+    override suspend fun setSimplifyDebts(groupId: String, on: Boolean) = unused()
+    override suspend fun setPromptPay(groupId: String, promptPayId: String?) = unused()
+    override suspend fun editGroup(groupId: String, name: String, type: GroupType, icon: String) = unused()
+    override suspend fun deleteGroup(groupId: String) = unused()
+    override suspend fun setPersonArchived(personId: String, archived: Boolean) = unused()
+    override suspend fun removeMember(groupId: String, memberId: String) = unused()
+    override suspend fun saveExpense(draft: ExpenseDraft): String = unused()
+    override suspend fun removeExpense(expenseId: String) = unused()
+    override suspend fun recordPayment(draft: PaymentDraft): String = unused()
+    override suspend fun transactionSeed(transactionId: String): TransactionSeed? = unused()
+    override suspend fun removePayment(paymentId: String) = unused()
+    override suspend fun putBackPayment(paymentId: String) = unused()
+    override suspend fun restoreExpense(expenseId: String) = unused()
+    override suspend fun relink(expenseId: String, transactionId: String) = unused()
+    override suspend fun saveRepeat(rule: RepeatRule): String = unused()
+    override suspend fun stopRepeat(ruleId: String) = unused()
+    override suspend fun setRepeatReminder(ruleId: String, on: Boolean) = unused()
+    override suspend fun addDueRepeats(today: LocalDate): Int = unused()
+    override suspend fun lastRate(currency: String, into: String): Rate? = unused()
+    override suspend fun markSeen(groupId: String, atEpochMillis: Long) = unused()
+
+    private fun unused(): Nothing = error("Edit transaction only follows a transaction")
 }

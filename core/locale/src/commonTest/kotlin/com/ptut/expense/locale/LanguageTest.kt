@@ -22,12 +22,16 @@ class LanguageTest {
     /** Decision 4: an install with no saved choice follows a Thai phone, after an update too. */
     @Test
     fun `a phone set to Thai opens in Thai when nothing is saved`() {
-        assertEquals(Language.Thai, Language.atLaunch(saved = null, phoneTag = "th-TH", debug = false))
-        assertEquals(Language.Thai, Language.atLaunch(saved = null, phoneTag = "th-TH", debug = true))
+        assertEquals(Language.Thai, Language.atLaunch(saved = null, phoneTag = "th-TH", offersUnreleased = true))
+    }
+
+    @Test
+    fun `a saved Thai opens in English once the Thai switch is off`() {
+        assertEquals(Language.English, Language.atLaunch(saved = Language.Thai, phoneTag = "th-TH", offersUnreleased = false))
     }
 
     @Test
     fun `a saved choice wins over the phone's language`() {
-        assertEquals(Language.Burmese, Language.atLaunch(saved = Language.Burmese, phoneTag = "th-TH", debug = false))
+        assertEquals(Language.Burmese, Language.atLaunch(saved = Language.Burmese, phoneTag = "th-TH", offersUnreleased = false))
     }
 }

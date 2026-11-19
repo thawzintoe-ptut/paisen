@@ -10,6 +10,7 @@ import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedRepository
+import com.ptut.expense.locale.AppText
 import org.koin.core.module.Module
 import org.koin.core.scope.Scope
 import org.koin.dsl.module
@@ -55,7 +56,7 @@ val agentModule: Module = module {
 
 /** The categories as stored, or the seed while the table has not answered, as the screens read them. */
 private fun Scope.agentCategories(): List<Category> =
-    getOrNull<CategoryRepository>()?.categories?.value.orEmpty().ifEmpty { Category.seed().map(Category::inAppLanguage) }
+    getOrNull<CategoryRepository>()?.categories?.value.orEmpty().ifEmpty { Category.seed().map { it.inAppLanguage(AppText.copy.categories.seedNames) } }
 
 /** The sub-categories as stored. None while the table has not answered: the seed has none. */
 private fun Scope.agentSubCategories(): List<SubCategory> = getOrNull<CategoryRepository>()?.subCategories?.value.orEmpty()

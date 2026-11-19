@@ -17,7 +17,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.Spacing
-import com.ptut.expense.domain.settings.ImportSettings
+import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.platform.lock.AppLock
 import com.ptut.expense.platform.lock.DeviceAuth
@@ -41,7 +41,7 @@ internal fun AppLockGate(content: @Composable () -> Unit) {
     val lock = koinInject<AppLock>()
     val auth = koinInject<DeviceAuth>()
     val locked by lock.locked.collectAsStateWithLifecycle()
-    val choices by koinInject<ImportSettings>().choices.collectAsStateWithLifecycle()
+    val choices by koinInject<AppSettings>().choices.collectAsStateWithLifecycle()
     val text = LocalCopy.current.settings
     val scope = rememberCoroutineScope()
 

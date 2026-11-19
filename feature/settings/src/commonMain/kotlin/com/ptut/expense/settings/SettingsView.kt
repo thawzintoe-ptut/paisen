@@ -78,10 +78,10 @@ fun SettingsView(
             )
         }
         account?.let { item { it() } }
-        uiState.rows.groupBy { it.group }.entries.sortedBy { it.key }.forEach { (_, group) ->
-            item {
+        uiState.groups.forEach { group ->
+            item(key = group.group.name) {
                 SkyGroupedCard(
-                    rows = group.map<SettingsRowUiModel, @Composable () -> Unit> { row ->
+                    rows = group.rows.map<SettingsRowUiModel, @Composable () -> Unit> { row ->
                         {
                             SettingsRow(
                                 row = row,

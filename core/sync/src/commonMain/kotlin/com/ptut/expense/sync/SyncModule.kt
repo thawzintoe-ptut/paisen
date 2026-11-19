@@ -7,6 +7,12 @@ import com.ptut.expense.sync.auth.FirebaseAuthApi
 import com.ptut.expense.sync.auth.FirebaseAuthRepository
 import com.ptut.expense.sync.auth.GoogleOAuth
 import com.ptut.expense.sync.auth.tokenStore
+import com.ptut.expense.sync.flags.FeatureFlags
+import com.ptut.expense.sync.flags.FlagCache
+import com.ptut.expense.sync.flags.FlagRefresh
+import com.ptut.expense.sync.flags.RemoteConfigApi
+import com.ptut.expense.sync.flags.flagCache
+import com.ptut.expense.sync.flags.installationSource
 import com.ptut.expense.sync.push.PushRegistrar
 import com.ptut.expense.sync.push.PushSender
 import com.ptut.expense.sync.push.PushTokenHolder
@@ -43,6 +49,18 @@ fun syncModule(databaseContext: PtutDatabaseContext): Module = module {
         )
     }
     single { GoogleOAuth(get(), FirebaseConfig.GOOGLE_IOS_CLIENT_ID) }
+    single<FlagCache> { flagCache(databaseContext) }
+    // Read once at start, so a fetch only changes the next launch.
+    single { FeatureFlags(get<FlagCache>().read().entries) }
+    single {
+        val configured = FirebaseConfig.enabled && FirebaseConfig.SENDER_ID.isNotEmpty()
+        FlagRefresh(
+            fetch = if (configured) RemoteConfigApi(get(), FirebaseConfig.API_KEY, FirebaseConfig.SENDER_ID)::fetch else null,
+            cache = get(),
+            installation = installationSource(databaseContext),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+        )
+    }
     // The platform's push service hands its token here; registering waits for a signed-in account.
     single { PushTokenHolder() }
     single {

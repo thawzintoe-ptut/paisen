@@ -2,6 +2,7 @@ package com.ptut.expense.shared
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.shared.PromptPay
 import com.ptut.expense.domain.shared.SharedRepository
@@ -9,8 +10,11 @@ import com.ptut.expense.domain.shared.currenciesOf
 import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.whoPaysWhom
 import com.ptut.expense.locale.AppText
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -49,7 +53,12 @@ sealed interface WhoPaysWhomUiState {
 }
 
 /** #184: the payments that settle one group, from #135, and the switch back to the original pairings. */
-class WhoPaysWhomViewModel(private val groupId: String, private val repository: SharedRepository) : ViewModel() {
+class WhoPaysWhomViewModel(
+    private val groupId: String,
+    private val repository: SharedRepository,
+    /** Where the snapshot is mapped; tests hand in their own. */
+    private val work: CoroutineDispatcher = Dispatchers.Default,
+) : ViewModel() {
 
     val uiState: StateFlow<WhoPaysWhomUiState> = repository.snapshot.map { snapshot ->
         val group = snapshot.group(groupId) ?: return@map WhoPaysWhomUiState.Missing
@@ -93,7 +102,7 @@ class WhoPaysWhomViewModel(private val groupId: String, private val repository: 
             currencyNote = foreign.takeIf { it.isNotEmpty() }?.let { text.converted(it, group.currency) },
             firstMine = cards.firstOrNull { it.fromIsMe || it.toIsMe },
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WhoPaysWhomUiState.Missing)
+    }.flowOn(work).stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), WhoPaysWhomUiState.Missing)
 
     /** True when [text] is a PromptPay ID and was saved for my name in this group, as on the group's own sheet. */
     fun setPromptPay(text: String): Boolean {

@@ -1,7 +1,9 @@
 package com.ptut.expense.add
 
 import com.ptut.expense.ViewModelTest
+import com.ptut.expense.agent.AgentContext
 import com.ptut.expense.agent.AgentLoop
+import com.ptut.expense.agent.AgentReader
 import com.ptut.expense.agent.Heard
 import com.ptut.expense.agent.NormaliserSource
 import com.ptut.expense.agent.SpeechInput
@@ -40,6 +42,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 private val Food = Category("food", "Food & drink", "restaurant")
 private val Groceries = Category.seed().first { it.id == "groceries" }
@@ -709,6 +712,86 @@ class AddViewModelTest : ViewModelTest() {
         assertTrue(assertNotNull(voice.noteFor(SpeechLanguage.Thai)).contains("Download"))
         assertTrue(assertNotNull(voice.noteFor(SpeechLanguage.Burmese)).contains("Google"))
     }
+
+    @Test
+    fun `a reader that throws unlocks Quick add and keeps the sentence`() = runTest {
+        val viewModel = AddViewModel(
+            ledger = RecordingLedger(),
+            toasts = ToastMessages(),
+            agent = AgentLoop(normaliser = NormaliserSource { null }, model = UnavailableLanguageModel(), context = { error("disk") }),
+        )
+
+        viewModel.quickAdd("coffee 50")
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.reading)
+        assertEquals("coffee 50", state.askText)
+        assertEquals(AskNote("Could not read that. Fill it in below.", problem = true), state.askNote)
+    }
+
+    @Test
+    fun `a question whose answer throws says it could not read it`() = runTest {
+        val unreadable = object : LedgerRepository by RecordingLedger() {
+            override val recentTransactions: StateFlow<LedgerSnapshot> get() = error("disk")
+        }
+        val viewModel = AddViewModel(
+            ledger = RecordingLedger(),
+            toasts = ToastMessages(),
+            agent = AgentLoop(normaliser = NormaliserSource { null }, model = UnavailableLanguageModel(), context = { known() }),
+            reader = AgentReader(unreadable),
+        )
+
+        viewModel.quickAdd("how much today")
+        runCurrent()
+
+        assertFalse(viewModel.uiState.value.reading)
+        assertEquals(true, viewModel.uiState.value.askNote?.problem)
+    }
+
+    @Test
+    fun `a rate that fails to save still saves the row and unlocks the sheet`() = runTest {
+        val ledger = RecordingLedger()
+        val viewModel = AddViewModel(
+            ledger = ledger,
+            toasts = ToastMessages(),
+            offersCurrencies = true,
+            startingCurrency = { Currencies.Thb },
+            saveRate = { _, _ -> error("disk") },
+        )
+        viewModel.chooseCurrency(Currencies.of("USD"))
+        runCurrent()
+        viewModel.type(entryOf("12.50"))
+        viewModel.typeRate("33.4")
+        viewModel.choose(Food)
+
+        viewModel.save()
+        runCurrent()
+
+        assertEquals(1, ledger.recorded.size)
+        assertTrue(viewModel.uiState.value.saved)
+        assertFalse(viewModel.uiState.value.saving)
+    }
+
+    @Test
+    fun `the rate sheet replaces the note sheet and a late note close leaves it open`() = runTest {
+        val viewModel = inCurrencies(rates = mutableMapOf("USD" to Rate.parse("33.4")!!))
+        viewModel.chooseCurrency(Currencies.of("USD"))
+        runCurrent()
+
+        viewModel.openMemo()
+        viewModel.openRate()
+        assertFalse(viewModel.uiState.value.editingMemo)
+        assertTrue(viewModel.uiState.value.editingRate)
+
+        viewModel.closeMemo()
+        assertEquals(AddOverlay.Rate, viewModel.uiState.value.overlay)
+
+        viewModel.closeRate(keep = true)
+        assertEquals(AddOverlay.None, viewModel.uiState.value.overlay)
+    }
+
+    private fun known() = AgentContext(categories = Category.seed(), subCategories = emptyList(), groups = emptyList(), rowIds = emptySet(), now = Instant.parse("2026-10-15T05:00:00Z"))
 
     private fun onlineBurmese() = FakeSpeech(VoiceLanguages(heard = emptySet(), online = setOf(SpeechLanguage.Burmese)), preferred = SpeechLanguage.Burmese)
 

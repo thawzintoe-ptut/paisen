@@ -21,7 +21,7 @@ struct ContentView: View {
                 // SwiftUI inset as well would pad twice and leave the bars unpainted.
                 .ignoresSafeArea()
             // #25: with App lock on, the app switcher shows a blank screen, not the ledger.
-            // The key is the one UserDefaultsImportSettingsStore writes.
+            // The key is the one UserDefaultsAppSettingsStore writes.
             if phase != .active && UserDefaults.standard.bool(forKey: "ptut-app-lock") {
                 Color(uiColor: .systemBackground).ignoresSafeArea()
             }

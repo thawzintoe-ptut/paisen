@@ -22,6 +22,8 @@ class FakeCategories(
      * race against the screen's first frame, and a fake that answers instantly cannot show that.
      */
     private val countDelay: Duration = Duration.ZERO,
+    /** Every write throws, as a full disk or a closed database would. */
+    private val failWrites: Boolean = false,
 ) : CategoryRepository {
 
     private val known = MutableStateFlow(seed)
@@ -35,12 +37,14 @@ class FakeCategories(
     override val subCategories: StateFlow<List<SubCategory>> = finer
 
     override suspend fun save(category: Category, subCategories: List<SubCategory>, removedSubCategoryIds: List<String>) {
+        check(!failWrites) { "disk full" }
         known.value = known.value.filterNot { it.id == category.id } + category
         val changed = subCategories.map { it.id }.toSet() + removedSubCategoryIds
         finer.value = finer.value.filterNot { it.id in changed } + subCategories
     }
 
     override suspend fun reorder(ordered: List<Category>) {
+        check(!failWrites) { "disk full" }
         val places = ordered.withIndex().associate { (place, it) -> it.id to place }
         known.value = known.value.map { it.copy(sortOrder = places[it.id] ?: it.sortOrder) }
     }
@@ -62,6 +66,7 @@ class FakeCategories(
 
     override suspend fun delete(categoryId: String, moveTo: String) {
         require(categoryId != moveTo) { "A category cannot be the place its own transactions go" }
+        check(!failWrites) { "disk full" }
         movedTo = categoryId to moveTo
         known.value = known.value.filterNot { it.id == categoryId }
         finer.value = finer.value.filterNot { it.categoryId == categoryId }

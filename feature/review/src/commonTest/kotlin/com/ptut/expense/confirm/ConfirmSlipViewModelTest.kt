@@ -21,6 +21,8 @@ import com.ptut.expense.domain.shared.PaymentDraft
 import com.ptut.expense.domain.shared.PaymentMethod
 import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.shared.SlipDebt
+import com.ptut.expense.domain.slip.ConfirmedSlip
+import com.ptut.expense.domain.slip.ImportStore
 import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.domain.slip.SlipParser
 import com.ptut.expense.domain.slip.SlipRead
@@ -381,6 +383,45 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         assertEquals(1, store.confirmed.size)
     }
 
+    @Test
+    fun `a save that fails unlocks Confirm and says so so the slip can be tried again`() = runTest {
+        val store = InMemoryImportStore()
+        var fails = true
+        val failing = object : ImportStore by store {
+            override suspend fun confirm(slip: ConfirmedSlip) {
+                if (fails) throw IllegalStateException("disk full") else store.confirm(slip)
+            }
+        }
+        val toasts = ToastMessages()
+        val viewModel = ConfirmSlipViewModel(
+            slipId = "q1",
+            ledger = FakeLedger(listOf(slip(amount = Satang(48_500)))),
+            importer = SlipImporter(FakeSlipSource(), FakeSlipTextReader(), failing),
+            toasts = toasts,
+            discards = SlipDiscards(SlipImporter(FakeSlipSource(), FakeSlipTextReader(), failing), toasts, CoroutineScope(Dispatchers.Main)) { Duration.ZERO },
+            newId = { "generated" },
+        )
+
+        viewModel.choose(food)
+        viewModel.save()
+        runCurrent()
+
+        val failed = viewModel.uiState.value
+        assertFalse(failed.saving)
+        assertFalse(failed.saved)
+        assertTrue(failed.canSave)
+        val toast = toasts.messages.first()
+        assertEquals("This slip was not saved. Try Confirm again.", toast.text)
+        assertEquals(ToastTone.Error, toast.tone)
+
+        fails = false
+        viewModel.save()
+        runCurrent()
+
+        assertEquals(1, store.confirmed.size)
+        assertTrue(viewModel.uiState.value.saved)
+    }
+
     // NFR-5
 
     @Test
@@ -477,6 +518,41 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         assertEquals("ko", recorded.single().toMemberId)
     }
 
+    @Test
+    fun `a debt payment that fails keeps the question and the slip and says so`() = runTest {
+        val toasts = ToastMessages()
+        val store = InMemoryImportStore()
+        val viewModel = viewModel(
+            slip(amount = Owed),
+            store = store,
+            toasts = toasts,
+            debts = listOf(ayeDebt),
+            recordPayment = { throw IllegalStateException("offline") },
+        )
+
+        viewModel.payDebt(keepInSpending = false)
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertEquals(ConfirmSlipPhase.Ready, state.phase)
+        assertFalse(state.saving)
+        assertFalse(state.dismissed)
+        assertEquals(1, state.debtMatch?.choices?.size)
+        val toast = toasts.messages.first()
+        assertEquals("Couldn't record this payment", toast.text)
+        assertEquals(ToastTone.Error, toast.tone)
+    }
+
+    @Test
+    fun `a debt paid and kept in my spending leaves Confirm ready to file it`() = runTest {
+        val viewModel = viewModel(slip(amount = Owed), debts = listOf(ayeDebt))
+
+        viewModel.payDebt(keepInSpending = true)
+        runCurrent()
+
+        assertEquals(ConfirmSlipPhase.Ready, viewModel.uiState.value.phase)
+    }
+
     private val ayeDebt = SlipDebt("flat", "Flat 12", "me", "aye", "Aye", Owed)
 
     private fun viewModel(
@@ -487,6 +563,7 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         subCategories: List<SubCategory> = emptyList(),
         debts: List<SlipDebt> = emptyList(),
         recorded: MutableList<PaymentDraft> = mutableListOf(),
+        recordPayment: suspend (PaymentDraft) -> Unit = { recorded += it },
     ) = ConfirmSlipViewModel(
         slipId = slip.id,
         ledger = FakeLedger(listOf(slip)),
@@ -495,7 +572,7 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         discards = SlipDiscards(SlipImporter(source, FakeSlipTextReader(), store), toasts, CoroutineScope(Dispatchers.Main)) { Duration.ZERO },
         subCategories = subCategories,
         debtsFor = { amount, _ -> debts.filter { it.amount == amount } },
-        recordPayment = { recorded += it },
+        recordPayment = recordPayment,
         clock = object : Clock {
             override fun now(): Instant = this@ConfirmSlipViewModelTest.now
         },

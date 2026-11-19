@@ -273,6 +273,18 @@ interface SharedDao {
         insertShares(shares)
     }
 
+    /** One pull's entries in one transaction: a first pull of hundreds commits once, not once each. */
+    @Transaction
+    suspend fun receiveLog(
+        versions: List<Pair<ExpenseVersionEntity, List<ExpenseShareEntity>>>,
+        payments: List<SharedPaymentEntity>,
+        removals: List<PaymentRemovalEntity>,
+    ) {
+        versions.forEach { (version, shares) -> receiveVersion(version, shares) }
+        payments.forEach { insertPaymentIfNew(it) }
+        removals.forEach { insertPaymentRemovalIfNew(it) }
+    }
+
     @Query("SELECT id FROM shared_group WHERE remote = 1")
     suspend fun remoteGroupIds(): List<String>
 
@@ -344,9 +356,6 @@ interface SharedDao {
     suspend fun insertMembersIfNew(members: List<GroupMemberEntity>)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertVersionsIfNew(versions: List<ExpenseVersionEntity>)
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertPaymentsIfNew(payments: List<SharedPaymentEntity>)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -356,6 +365,9 @@ interface SharedDao {
      * A restore adds what is not here and never replaces (FR-22). Parents go first so every
      * foreign key holds; a link whose transaction this ledger lacks is dropped, not failed on.
      * Returns how many groups were new.
+     *
+     * A file only fills the groups it holds, and never one this phone syncs: rows aimed at a synced
+     * group, or at one of its expenses, would move its balances and upload from here as this member's.
      */
     @Transaction
     suspend fun restoreShared(
@@ -368,15 +380,22 @@ interface SharedDao {
         links: List<ExpenseLinkEntity>,
         repeats: List<RepeatRuleEntity> = emptyList(),
     ): Int {
+        val synced = remoteGroupIds()
+        val open = groups.map { it.id }.toSet() - synced.toSet()
+        val syncedExpenses = synced.chunked(SQLITE_VARIABLES).flatMap { versionsIn(it) }.map { it.expenseId }.toSet()
+        val placed = versions.filter { it.groupId in open && it.expenseId !in syncedExpenses }
+
         insertPeopleIfNew(people)
         val added = insertGroupsIfNew(groups).count { it != -1L }
-        insertMembersIfNew(members)
-        insertVersionsIfNew(versions)
-        insertSharesIfNew(shares)
-        insertPaymentsIfNew(payments)
+        insertMembersIfNew(members.filter { it.groupId in open })
+        // Shares follow a version this restore added. One already here keeps the split it has.
+        val sharesOf = shares.groupBy { it.versionId }
+        placed.forEach { version -> if (insertVersionIfNew(version) != -1L) insertSharesIfNew(sharesOf[version.versionId].orEmpty()) }
+        insertPaymentsIfNew(payments.filter { it.groupId in open })
+        val expenses = placed.map { it.expenseId }.toSet()
         val held = links.map { it.transactionId }.chunked(SQLITE_VARIABLES).flatMap { heldTransactionIds(it) }.toSet()
-        insertLinksIfNew(links.filter { it.transactionId in held })
-        insertRepeatsIfNew(repeats)
+        insertLinksIfNew(links.filter { it.expenseId in expenses && it.transactionId in held })
+        insertRepeatsIfNew(repeats.filter { it.groupId in open })
         return added
     }
 

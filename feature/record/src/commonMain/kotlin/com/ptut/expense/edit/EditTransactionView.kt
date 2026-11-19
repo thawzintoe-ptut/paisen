@@ -34,10 +34,10 @@ import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptutIcon
 import com.ptut.expense.design.ptutType
+import com.ptut.expense.detail.skyLabel
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.SubCategory
-import com.ptut.expense.locale.Copy
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.KeyboardAmountField
@@ -193,7 +193,7 @@ private fun Form(
             Column {
                 SkyHairline()
                 // Evidence, not preferences: what the row already says, never typed over.
-                state.evidence.forEach { row -> SkyKeyValueRow(label = row.label.skyLabel(copy), value = row.value) }
+                state.evidence.forEach { row -> SkyKeyValueRow(label = row.field.skyLabel(copy), value = row.value) }
                 SkyDateTimeRow(epochMillis = state.occurredAtEpochMillis, onPick = onTime)
                 NoteRow(memo = state.memo, onOpenMemo = onOpenMemo)
             }
@@ -236,12 +236,4 @@ private fun UnderlinedAmount(state: EditTransactionUiState.Loaded, onType: (Amou
             Text(read, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
         }
     }
-}
-
-/** The evidence rows' names as p18 writes them. */
-private fun String.skyLabel(copy: Copy): String = when (this) {
-    "MERCHANT" -> copy.record.shopLabel
-    "DATE & TIME" -> copy.record.whenLabel
-    "REFERENCE" -> copy.record.referenceLabel
-    else -> lowercase().replaceFirstChar { it.uppercase() }
 }
