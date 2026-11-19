@@ -1,10 +1,11 @@
 import type { Device } from './firestore';
+import { noticeData, type Notice } from './notice';
 
-export interface Notice {
-  groupId: string;
+/** One notice on its way: the group's stored name as the title, and who sent it. */
+export interface Outgoing {
+  notice: Notice;
   title: string;
-  /** No `th` from an app built before Thai; a Thai phone then gets `en`. */
-  body: { en: string; my: string; th?: string };
+  senderUid: string;
 }
 
 export type SendResult = 'sent' | 'dead' | 'failed';
@@ -24,12 +25,12 @@ export async function sendToDevice(
   projectId: string,
   accessToken: string,
   device: Device,
-  notice: Notice,
+  outgoing: Outgoing,
 ): Promise<SendResult> {
   const response = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
     method: 'POST',
     headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ message: messageFor(device, notice) }),
+    body: JSON.stringify({ message: messageFor(device, outgoing) }),
   });
   if (response.ok) return 'sent';
 
@@ -57,20 +58,20 @@ function targetOf(device: Device): Record<string, string> {
   return device.token.includes(':') ? { token: device.token } : { fid: device.token };
 }
 
-function messageFor(device: Device, notice: Notice): Record<string, unknown> {
-  const body = notice.body[device.language] ?? notice.body.en;
+function messageFor(device: Device, { notice, title, senderUid }: Outgoing): Record<string, unknown> {
+  const { body, ...event } = noticeData(notice, senderUid, device.language);
   if (device.platform === 'android') {
     return {
       ...targetOf(device),
       // `uid` is the account this device was registered for; the phone drops a push for any other.
-      data: { groupId: notice.groupId, uid: device.uid, title: notice.title, body },
+      data: { groupId: notice.groupId, uid: device.uid, title, body, ...event },
       android: { priority: 'high' },
     };
   }
   return {
     ...targetOf(device),
-    notification: { title: notice.title, body },
-    data: { groupId: notice.groupId, uid: device.uid },
+    notification: { title, body },
+    data: { groupId: notice.groupId, uid: device.uid, ...event },
     apns: {
       headers: { 'apns-priority': '10' },
       payload: { aps: { 'content-available': 1 } },

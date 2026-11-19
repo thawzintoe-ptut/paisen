@@ -52,17 +52,35 @@ export async function readGroup(
   };
 }
 
-/** Every registered phone of the given accounts. */
+/**
+ * The registered phones of the given accounts, at most [perAccount] read for each (M7): a member
+ * can register any number of device documents, and each one read costs quota.
+ */
 export async function devicesFor(
   projectId: string,
   accessToken: string,
   uids: string[],
+  perAccount: number,
 ): Promise<Device[]> {
   const devices: Device[] = [];
   for (let start = 0; start < uids.length; start += IN_CHUNK) {
-    devices.push(...(await queryDevices(projectId, accessToken, uids.slice(start, start + IN_CHUNK))));
+    const chunk = uids.slice(start, start + IN_CHUNK);
+    const limit = chunk.length * perAccount;
+    const found = await queryDevices(projectId, accessToken, chunk, limit);
+    devices.push(...found);
+    // A full page may hold one account's many documents and none of another's: those ask alone.
+    for (const uid of crowdedOut(chunk, found, limit)) {
+      devices.push(...(await queryDevices(projectId, accessToken, [uid], perAccount)));
+    }
   }
   return devices;
+}
+
+/** Accounts a query capped at [limit] may have left out: none unless the page came back full. */
+export function crowdedOut(uids: string[], found: Device[], limit: number): string[] {
+  if (found.length < limit) return [];
+  const seen = new Set(found.map((device) => device.uid));
+  return uids.filter((uid) => !seen.has(uid));
 }
 
 export async function deleteDevice(projectId: string, accessToken: string, token: string): Promise<void> {
@@ -72,9 +90,11 @@ export async function deleteDevice(projectId: string, accessToken: string, token
   });
 }
 
-async function queryDevices(projectId: string, accessToken: string, uids: string[]): Promise<Device[]> {
+async function queryDevices(projectId: string, accessToken: string, uids: string[], limit: number): Promise<Device[]> {
+  // No orderBy: newest-first by updatedAt would need a composite index with uid.
   const query = {
     structuredQuery: {
+      limit,
       from: [{ collectionId: 'devices' }],
       where: {
         fieldFilter: {

@@ -189,7 +189,7 @@ Delete `release/0.1` when that version is no longer supported.
 
 ### Branch protection
 
-`main` and the release tags are protected by three rulesets. Their JSON files are in [`.github/rulesets`](.github/rulesets).
+`main`, the `release/*` branches and the release tags are protected by four rulesets. Their JSON files are in [`.github/rulesets`](.github/rulesets).
 To set them up again, go to **Settings → Rules → Rulesets → New ruleset → Import a ruleset** and
 import each file.
 
@@ -198,6 +198,10 @@ import each file.
 | `main: no rewrites` | no deletion, no force push, linear history | nobody |
 | `main: checks` | pull request (0 approvals, squash or rebase), both CI jobs green | repository admins, so the maintainer can push small fixes directly |
 | `release tags locked` | `v*` tags can't be moved or deleted | repository admins, so no workflow can rewrite or remove a release |
+| `release branches locked` | `release/*` can't be created, pushed to or deleted; changes need a pull request | repository admins, so only the maintainer makes a hotfix branch |
+
+The `release` environment holds the signing and Firebase keys. It has you as required reviewer and
+accepts only `main` and `v*` tags, so no other branch can sign a build.
 
 No ruleset blocks creating a `v*` tag. A repository owned by a personal account can't let GitHub
 Actions bypass a ruleset, and **Cut release** has to create tags. It refuses to run from any branch

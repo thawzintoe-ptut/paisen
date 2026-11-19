@@ -84,8 +84,10 @@ const keyCache = new Map<string, CryptoKey>();
 async function signingKey(kid: string): Promise<CryptoKey> {
   const cached = keyCache.get(kid);
   if (cached) return cached;
-  const pem = (await certificates(kid))[kid];
-  if (!pem) throw unauthorized();
+  // Own keys only: a kid such as "__proto__" would otherwise read Object.prototype and throw a 500.
+  const certs = await certificates(kid);
+  const pem: unknown = Object.hasOwn(certs, kid) ? certs[kid] : undefined;
+  if (typeof pem !== 'string' || pem.length === 0) throw unauthorized();
   const key = await crypto.subtle.importKey('spki', spkiFromCertificate(pemToDer(pem)), RSA, false, [
     'verify',
   ]);
@@ -95,7 +97,7 @@ async function signingKey(kid: string): Promise<CryptoKey> {
 
 async function certificates(kid: string): Promise<Record<string, string>> {
   const fresh = certCache !== undefined && certCache.expiresAt > Date.now();
-  if (fresh && kid in certCache!.certs) return certCache!.certs;
+  if (fresh && Object.hasOwn(certCache!.certs, kid)) return certCache!.certs;
   // A kid the fresh set lacks means Google rotated, so skip the edge cache. Once a minute at most,
   // or a flood of made-up kids would turn into a flood of fetches.
   const bypassEdge = fresh;

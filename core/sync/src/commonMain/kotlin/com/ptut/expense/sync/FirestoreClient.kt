@@ -94,7 +94,9 @@ internal interface Firestore {
 
     fun appendWrite(relative: String, field: String, values: List<String>): JsonObject
 
-    fun removeWrite(relative: String, field: String, values: List<String>): JsonObject
+    fun removeWrite(relative: String, field: String, values: List<String>, alsoSet: Fields = emptyMap()): JsonObject
+
+    fun stampedUpdateWrite(relative: String, fields: Fields, stamp: String): JsonObject
 }
 
 /**
@@ -229,25 +231,19 @@ internal class FirestoreClient(
     /** A write that adds [values] to an array field, leaving the ones already there. */
     override fun appendWrite(relative: String, field: String, values: List<String>): JsonObject = arrayWrite(relative, field, values, "appendMissingElements")
 
-    /** A write that takes [values] out of an array field. */
-    override fun removeWrite(relative: String, field: String, values: List<String>): JsonObject = arrayWrite(relative, field, values, "removeAllFromArray")
+    /** A write that takes [values] out of an array field, and sets [alsoSet] in the same update. */
+    override fun removeWrite(relative: String, field: String, values: List<String>, alsoSet: Fields): JsonObject =
+        if (alsoSet.isEmpty()) arrayWrite(relative, field, values, "removeAllFromArray") else removeAndSetWrite(pathOf(relative), field, values, alsoSet)
+
+    /** Changes [fields] and has the server stamp [stamp] with the commit time. */
+    override fun stampedUpdateWrite(relative: String, fields: Fields, stamp: String): JsonObject = stampedWrite(pathOf(relative), fields, stamp, create = false)
 
     private fun arrayWrite(relative: String, field: String, values: List<String>, transform: String): JsonObject = buildJsonObject {
         put(
             "transform",
             buildJsonObject {
                 put("document", pathOf(relative))
-                put(
-                    "fieldTransforms",
-                    buildJsonArray {
-                        add(
-                            buildJsonObject {
-                                put("fieldPath", field)
-                                put(transform, buildJsonObject { put("values", buildJsonArray { values.forEach { add(it.toFirestoreValue()) } }) })
-                            },
-                        )
-                    },
-                )
+                put("fieldTransforms", buildJsonArray { add(arrayTransform(field, values, transform)) })
             },
         )
     }

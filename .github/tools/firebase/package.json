@@ -1,0 +1,8 @@
+{
+  "name": "paisen-release-tools",
+  "private": true,
+  "description": "The Firebase CLI that release.yml sends builds to App Distribution with. Installed with npm ci --ignore-scripts, so CI gets exactly the files in package-lock.json.",
+  "dependencies": {
+    "firebase-tools": "15.34.0"
+  }
+}

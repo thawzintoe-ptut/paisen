@@ -11,11 +11,21 @@ FIREBASE_PROJECT_ID = "paisen-expense"
 
 # FIREBASE_SERVICE_ACCOUNT is a secret: `npx wrangler secret put FIREBASE_SERVICE_ACCOUNT`.
 
+# Builds up to v0.4.0-rc.1 send their own sentences, cleaned and cut here. Set "refuse" once none is in use.
+LEGACY_NOTICES = "accept"
+
+# Without both limiters every call gets 503; only `.dev.vars` may set ALLOW_NO_LIMITER = "true".
 # 30 notices a minute per account: a phone back online sends one per change it uploads, far fewer than this.
 [[ratelimits]]
 name = "PUSH_LIMITER"
 namespace_id = "1001"
 simple = { limit = 30, period = 60 }
+
+# Per CF-Connecting-IP, before the token check. Generous, since mobile carriers put many phones on one address.
+[[ratelimits]]
+name = "IP_LIMITER"
+namespace_id = "1002"
+simple = { limit = 120, period = 60 }
 
 [observability]
 enabled = true

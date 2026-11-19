@@ -2,7 +2,7 @@
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
 import {
   doc, getDoc, getDocs, setDoc, updateDoc, writeBatch, arrayRemove, arrayUnion, serverTimestamp,
-  collection, query, where,
+  collection, query, where, Timestamp,
 } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
 
@@ -13,7 +13,7 @@ const env = await initializeTestEnvironment({
 });
 const as = (uid) => env.authenticatedContext(uid, { auth_time: AUTH_TIME }).firestore();
 
-async function seed({ group = {}, members = {} } = {}) {
+async function seed({ group = {}, members = {}, invite = {} } = {}) {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
@@ -21,7 +21,7 @@ async function seed({ group = {}, members = {} } = {}) {
       name: 'Trip', type: 'Trip', icon: 'group', simplifyDebts: true, createdAt: 1,
       creatorUid: 'alice', memberUids: ['alice', 'bob'], inviteCode: 'CODE1', inviteActive: true, ...group,
     });
-    await setDoc(doc(db, 'invites/CODE1'), { groupId: 'g1', groupName: 'Trip', active: true, creatorUid: 'alice' });
+    await setDoc(doc(db, 'invites/CODE1'), { groupId: 'g1', groupName: 'Trip', active: true, creatorUid: 'alice', ...invite });
     await setDoc(doc(db, 'groups/g1/members/mAlice'), { name: 'Alice', claimedByUid: 'alice', archived: false, createdAt: 1, ...members.mAlice });
     await setDoc(doc(db, 'groups/g1/members/mBob'), { name: 'Bob', claimedByUid: 'bob', archived: false, createdAt: 1, promptPay: '0812345678', ...members.mBob });
     await setDoc(doc(db, 'groups/g1/members/mCara'), { name: 'Cara', claimedByUid: null, archived: false, createdAt: 1, ...members.mCara });
@@ -390,6 +390,55 @@ await check('10.16 an account lists its own device documents', 'allow', {}, () =
 await check('10.17 anyone signed in looks an invite up by its code', 'allow', {}, () => getDoc(doc(as('eve'), 'invites/CODE1')));
 await check('10.18 nobody lists the invites', 'deny', {}, () => getDocs(collection(as('alice'), 'invites')));
 await check('10.19 someone signed out reads the group', 'deny', {}, () => getDoc(doc(env.unauthenticatedContext().firestore(), 'groups/g1')));
+
+// 11. H3: delete for everyone
+const deleted = { group: { deleted: true, inviteActive: false } };
+// What SharedSync.deleteForEveryone sends: one commit, every PromptPay ID cleared, the server's time stamped.
+const deleteCommit = (uid, { at = serverTimestamp(), clear = ['mBob'] } = {}) => {
+  const db = as(uid);
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'invites/CODE1'), { active: false });
+  batch.update(doc(db, 'groups/g1'), { deleted: true, inviteActive: false, deletedAt: at });
+  clear.forEach((mid) => batch.update(doc(db, `groups/g1/members/${mid}`), { promptPay: null }));
+  return batch.commit();
+};
+await check('11.1 app delete-for-everyone with the server\'s time and the PromptPay IDs cleared', 'allow', {}, () => deleteCommit('alice'));
+await check('11.2 delete stamped with a time the phone chose', 'deny', {}, () => deleteCommit('alice', { at: Timestamp.fromMillis(1) }));
+await check('11.3 a member who is not the creator sends the delete', 'deny', {}, () => deleteCommit('bob'));
+await check('11.4 creator clears someone\'s PromptPay ID in a live group', 'deny', {}, () => updateDoc(doc(as('alice'), 'groups/g1/members/mBob'), { promptPay: null }));
+await check('11.5 creator stamps a time without deleting', 'deny', {}, () => updateDoc(doc(as('alice'), 'groups/g1'), { deletedAt: serverTimestamp() }));
+await check('11.6 deleted group: a member still reads its document', 'allow', deleted, () => getDoc(doc(as('bob'), 'groups/g1')));
+await check('11.7 deleted group: a member lists the names', 'deny', deleted, () => getDocs(collection(as('bob'), 'groups/g1/members')));
+await check('11.8 deleted group: a member lists the entries', 'deny', deleted, () => getDocs(collection(as('bob'), 'groups/g1/entries')));
+await check('11.9 deleted group: a member lists the repeats', 'deny', deleted, () => getDocs(collection(as('bob'), 'groups/g1/repeats')));
+await check('11.10 deleted group: the restore query still finds it, so the phone drops it', 'allow', deleted, () => getDocs(query(collection(as('bob'), 'groups'), where('memberUids', 'array-contains', 'bob'))));
+
+// 12. L2: a creator who deletes their account switches the invite off as they leave
+const leaveWith = (uid, mid, group) => {
+  const db = as(uid);
+  const batch = writeBatch(db);
+  batch.update(doc(db, `groups/g1/members/${mid}`), { claimedByUid: null, promptPay: null });
+  batch.update(doc(db, 'groups/g1'), { memberUids: arrayRemove(uid), ...group });
+  return batch.commit();
+};
+await check('12.1 creator leaves and switches the invite off in one commit', 'allow', {}, () => leaveWith('alice', 'mAlice', { inviteActive: false }));
+await check('12.2 creator leaves and switches the invite on', 'deny', { group: { inviteActive: false } }, () => leaveWith('alice', 'mAlice', { inviteActive: true }));
+await check('12.3 a member who is not the creator leaves and switches the invite off', 'deny', {}, () => leaveWith('bob', 'mBob', { inviteActive: false }));
+await check('12.4 creator leaves and also changes the code', 'deny', {}, () => leaveWith('alice', 'mAlice', { inviteActive: false, inviteCode: 'CODE9' }));
+await check('12.5 after it, the code lets nobody in', 'deny', {}, async () => {
+  await leaveWith('alice', 'mAlice', { inviteActive: false });
+  return setDoc(doc(as('eve'), 'groups/g1/joins/eve'), { code: 'CODE1', at: 1 });
+});
+
+// 13. Invites that end
+const past = { invite: { expiresAt: Timestamp.fromMillis(Date.now() - 60_000) } };
+const future = { invite: { expiresAt: Timestamp.fromMillis(Date.now() + 86_400_000) } };
+await check('13.1 creator makes an invite with an end date, as the app does', 'allow', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite({ expiresAt: Timestamp.fromMillis(Date.now() + 90 * 86_400_000) })));
+await check('13.2 invite with an end date that is not a time', 'deny', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite({ expiresAt: 'never' })));
+await check('13.3 join document on an invite past its end date', 'deny', past, () => setDoc(doc(as('eve'), 'groups/g1/joins/eve'), { code: 'CODE1', at: 1 }));
+await check('13.4 join document on an invite before its end date', 'allow', future, () => setDoc(doc(as('eve'), 'groups/g1/joins/eve'), { code: 'CODE1', at: 1 }));
+await check('13.5 someone who joined before the end date reads the names after it', 'deny', past, () => getDocs(collection(as('mallory'), 'groups/g1/members')));
+await check('13.6 joiner adds themselves on an invite past its end date', 'deny', past, () => updateDoc(doc(as('mallory'), 'groups/g1'), { memberUids: arrayUnion('mallory') }));
 
 await env.cleanup();
 for (const [status, expect, name, why] of results) console.log(`${status}  ${expect.padEnd(5)}  ${name}${why ? `  -> ${why}` : ''}`);

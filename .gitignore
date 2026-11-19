@@ -58,6 +58,11 @@ keystore.properties
 # Android Studio's Generate Signed Bundle writes here. Release files come from CI, not git.
 /androidApp/release/
 
+# The Firebase CLI's deploy cache and log, and the Playwright MCP's browser output.
+.firebase/
+firebase-debug.log
+.playwright-mcp/
+
 # Decisions, requirements and design notes stay on this machine and never reach GitHub.
 /docs/adr/
 /docs/superpowers/specs/

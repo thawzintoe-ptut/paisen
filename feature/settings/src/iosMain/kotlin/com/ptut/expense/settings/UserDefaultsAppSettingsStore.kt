@@ -6,6 +6,16 @@ import com.ptut.expense.domain.settings.AppChoices
 import com.ptut.expense.domain.settings.AppSettingsStore
 import com.ptut.expense.domain.slip.SlipOwner
 import com.ptut.expense.locale.NoteTone
+import com.ptut.expense.platform.files.documentsDirectory
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import okio.FileSystem
+import okio.Path
+import okio.Path.Companion.toPath
 import platform.Foundation.NSUserDefaults
 import kotlin.time.Duration.Companion.days
 
@@ -25,18 +35,29 @@ private const val HIDDEN_NOTE_WEEK = "ptut-hidden-note-week"
 private const val ADD_CURRENCY = "ptut-add-currency"
 private const val HOME_CURRENCY = "ptut-home-currency"
 private const val HOME_ZONE = "ptut-home-zone"
+private const val OWNER_FILE = "slip-owner.json"
+private const val NAME_FIELD = "name"
+private const val CANDIDATE_FIELD = "candidate"
 
 /**
  * The iOS half of [AppSettingsStore]. Every key is written together, so a zero retention read back
  * from `integerForKey` means nobody has written one — `NSUserDefaults` answers 0 for a missing key and
  * has no way to tell that apart from a stored 0, which is not a retention this app offers.
+ *
+ * M13: the slip owner's real name lives in [ownerFile] under Documents, which iCloud and computer
+ * backups skip; `NSUserDefaults` is in those backups.
  */
-class UserDefaultsAppSettingsStore : AppSettingsStore {
+class UserDefaultsAppSettingsStore(
+    private val defaults: NSUserDefaults = NSUserDefaults.standardUserDefaults,
+    private val ownerFile: Path = requireNotNull(documentsDirectory().path) { "iOS documents directory has no path" }.toPath() / OWNER_FILE,
+) : AppSettingsStore {
 
-    private val defaults = NSUserDefaults.standardUserDefaults
+    private val files = FileSystem.SYSTEM
 
     override fun read(): AppChoices {
+        moveOwnerOutOfDefaults()
         val shipped = AppChoices()
+        val owner = readOwner()
         val storedDays = defaults.integerForKey(RETENTION_DAYS).toInt()
         return AppChoices(
             backgroundImport = defaults.objectForKey(BACKGROUND_IMPORT)
@@ -56,11 +77,7 @@ class UserDefaultsAppSettingsStore : AppSettingsStore {
             weeklyTarget = defaults.stringForKey(TARGET_CATEGORY)?.let { id ->
                 defaults.integerForKey(TARGET_SATANG).takeIf { it > 0L }?.let { WeeklyTarget(id, Satang.ofMinorUnits(it)) }
             },
-            slipOwner = SlipOwner(
-                name = defaults.stringForKey(OWNER_NAME),
-                candidate = defaults.stringForKey(OWNER_CANDIDATE),
-                seen = defaults.integerForKey(OWNER_SEEN).toInt(),
-            ),
+            slipOwner = owner.copy(seen = defaults.integerForKey(OWNER_SEEN).toInt()),
             noteTone = NoteTone.entries.firstOrNull { it.name == defaults.stringForKey(NOTE_TONE) } ?: shipped.noteTone,
             hiddenNoteWeek = defaults.stringForKey(HIDDEN_NOTE_WEEK),
             addCurrency = defaults.stringForKey(ADD_CURRENCY),
@@ -70,14 +87,14 @@ class UserDefaultsAppSettingsStore : AppSettingsStore {
     }
 
     override fun write(choices: AppChoices) {
+        moveOwnerOutOfDefaults()
         defaults.setBool(choices.backgroundImport, BACKGROUND_IMPORT)
         defaults.setInteger(choices.retention.inWholeDays, RETENTION_DAYS)
         defaults.setBool(choices.moodByTimeOfDay, MOOD_BY_TIME_OF_DAY)
         defaults.setBool(choices.transparency, TRANSPARENCY)
         defaults.setBool(choices.appLock, APP_LOCK)
         defaults.setBool(choices.weeklyCheckIn, WEEKLY_CHECK_IN)
-        writeOptional(choices.slipOwner.name, OWNER_NAME)
-        writeOptional(choices.slipOwner.candidate, OWNER_CANDIDATE)
+        writeOwner(choices.slipOwner.name, choices.slipOwner.candidate)
         defaults.setInteger(choices.slipOwner.seen.toLong(), OWNER_SEEN)
         defaults.setObject(choices.noteTone.name, NOTE_TONE)
         writeOptional(choices.hiddenNoteWeek, HIDDEN_NOTE_WEEK)
@@ -97,4 +114,36 @@ class UserDefaultsAppSettingsStore : AppSettingsStore {
     private fun writeOptional(value: String?, key: String) {
         if (value == null) defaults.removeObjectForKey(key) else defaults.setObject(value, key)
     }
+
+    /** Builds before M13 kept the name in `NSUserDefaults`; it moves once, and a file already there wins. */
+    private fun moveOwnerOutOfDefaults() {
+        val name = defaults.stringForKey(OWNER_NAME)
+        val candidate = defaults.stringForKey(OWNER_CANDIDATE)
+        if (name == null && candidate == null) return
+        if (files.exists(ownerFile) || writeOwner(name, candidate)) {
+            defaults.removeObjectForKey(OWNER_NAME)
+            defaults.removeObjectForKey(OWNER_CANDIDATE)
+        }
+    }
+
+    /** A missing or unreadable file reads as no owner learned yet, as a fresh install does. */
+    private fun readOwner(): SlipOwner = runCatching {
+        val fields = Json.parseToJsonElement(files.read(ownerFile) { readUtf8() }).jsonObject
+        SlipOwner(
+            name = fields[NAME_FIELD]?.jsonPrimitive?.contentOrNull,
+            candidate = fields[CANDIDATE_FIELD]?.jsonPrimitive?.contentOrNull,
+        )
+    }.getOrDefault(SlipOwner())
+
+    private fun writeOwner(name: String?, candidate: String?): Boolean = runCatching {
+        if (name == null && candidate == null) {
+            files.delete(ownerFile)
+        } else {
+            val fields = buildJsonObject {
+                name?.let { put(NAME_FIELD, JsonPrimitive(it)) }
+                candidate?.let { put(CANDIDATE_FIELD, JsonPrimitive(it)) }
+            }
+            files.write(ownerFile) { writeUtf8(fields.toString()) }
+        }
+    }.isSuccess
 }

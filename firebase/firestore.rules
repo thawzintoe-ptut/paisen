@@ -20,9 +20,12 @@ service cloud.firestore {
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
     function onlyChanged(keys) { return changed().hasOnly(keys); }
     function invitePath(code) { return /databases/$(database)/documents/invites/$(code); }
-    // The group names its one live code, so an old invite left active can never let anyone in.
+    // The group names its one live code, so an old invite left active can never let anyone in. An
+    // invite made with an end date stops on it; one made before invites had one never does.
     function validInvite(gid, code) {
-      return exists(invitePath(code)) && get(invitePath(code)).data.groupId == gid && get(invitePath(code)).data.active == true
+      let invite = get(invitePath(code)).data;
+      return exists(invitePath(code)) && invite.groupId == gid && invite.active == true
+        && (invite.get('expiresAt', null) == null || request.time < invite.expiresAt)
         && groupData(gid).inviteCode == code && groupData(gid).inviteActive == true;
     }
     // Names every phone can show, and a push title FCM takes.
@@ -67,11 +70,18 @@ service cloud.firestore {
       function groupFieldsOk() {
         let group = request.resource.data;
         return group.keys().hasOnly(['name', 'type', 'icon', 'simplifyDebts', 'createdAt', 'currency', 'creatorUid',
-            'memberUids', 'inviteCode', 'inviteActive', 'deleted'])
+            'memberUids', 'inviteCode', 'inviteActive', 'deleted', 'deletedAt'])
           && textUpTo(group.get('icon', ''), 64) && group.get('simplifyDebts', true) is bool
           && group.get('createdAt', 0) is int && textOrNull(group.get('inviteCode', null), 64)
-          && group.get('inviteActive', false) is bool && group.get('deleted', false) is bool;
+          && group.get('inviteActive', false) is bool && group.get('deleted', false) is bool
+          && (group.get('deletedAt', null) == null || group.deletedAt is timestamp);
       }
+      // H3: a delete carries the server's own time, so the clean-up can tell when 30 days have passed.
+      function deletedNow() {
+        return !changed().hasAny(['deletedAt'])
+          || (request.resource.data.deletedAt == request.time && request.resource.data.deleted == true);
+      }
+      function leavesAlone() { return uidsBefore().hasAll(uidsAfter()) && uidsBefore().removeAll(uidsAfter()) == [request.auth.uid]; }
       allow create: if signedIn() && groupFieldsOk()
         && request.resource.data.creatorUid == request.auth.uid
         && request.resource.data.memberUids == [request.auth.uid]
@@ -82,13 +92,15 @@ service cloud.firestore {
             && (!changed().hasAny(['name']) || groupName(request.resource.data.name))
             && (!changed().hasAny(['type']) || groupTypeOk()))
         // Only the creator changes or switches off the invite (#190), or deletes the group for everyone.
-        || (isCreator(gid) && onlyChanged(['inviteCode', 'inviteActive', 'deleted']) && groupFieldsOk())
+        || (isCreator(gid) && onlyChanged(['inviteCode', 'inviteActive', 'deleted', 'deletedAt']) && groupFieldsOk() && deletedNow())
         // Someone who joined with a live code adds themselves, and removes nobody, while the group is live.
         || (joinedAfter(gid) && liveNow() && onlyChanged(['memberUids']) && uidsAfter().size() <= 100
             && uidsAfter().hasAll(uidsBefore()) && uidsAfter().removeAll(uidsBefore()) == [request.auth.uid])
         // A member leaves, when they delete their account (#187), and adds nobody.
-        || (isMember(gid) && onlyChanged(['memberUids'])
-            && uidsBefore().hasAll(uidsAfter()) && uidsBefore().removeAll(uidsAfter()) == [request.auth.uid])
+        || (isMember(gid) && onlyChanged(['memberUids']) && leavesAlone())
+        // L2: a creator deleting their account switches the invite off as they go; nobody else could.
+        || (isCreator(gid) && isMember(gid) && onlyChanged(['memberUids', 'inviteActive'])
+            && request.resource.data.inviteActive == false && leavesAlone())
         // The creator takes one other account out, with the name it claimed: it can no longer read or write here.
         || (isCreator(gid) && onlyChanged(['memberUids'])
             && uidsBefore().hasAll(uidsAfter()) && uidsBefore().removeAll(uidsAfter()).size() == 1
@@ -115,7 +127,8 @@ service cloud.firestore {
           return request.resource.data.keys().hasOnly(['name', 'claimedByUid', 'archived', 'createdAt', 'promptPay'])
             && request.resource.data.get('archived', false) is bool && request.resource.data.get('createdAt', 0) is int;
         }
-        allow read: if isMember(gid) || joined(gid);
+        // H3: a group deleted for everyone shows nothing but its own document, which tells phones it went.
+        allow read: if (isMember(gid) || joined(gid)) && live(gid);
         // A member adds a name; the creator adds their own, already claimed, when sharing (#190);
         // someone joining adds themselves ("I'm not on the list").
         allow create: if ownPromptPay() && validPromptPay() && live(gid) && memberName(request.resource.data.name)
@@ -147,7 +160,10 @@ service cloud.firestore {
           || (isMember(gid) && resource.data.claimedByUid == request.auth.uid && onlyChanged(['promptPay']) && validPromptPay())
           // Letting your own claim go (#187).
           || (isMember(gid) && onlyChanged(['claimedByUid', 'promptPay']) && noPromptPay()
-              && resource.data.claimedByUid == request.auth.uid && request.resource.data.claimedByUid == null);
+              && resource.data.claimedByUid == request.auth.uid && request.resource.data.claimedByUid == null)
+          // H3: deleting the group for everyone clears every PromptPay ID, in the same commit.
+          || (isCreator(gid) && onlyChanged(['promptPay']) && noPromptPay()
+              && getAfter(groupPath(gid)).data.get('deleted', false) == true);
         allow delete: if false;
       }
 
@@ -199,7 +215,7 @@ service cloud.firestore {
           return entry().keys().hasOnly(['kind', 'authorUid', 'createdAt', 'syncedAt', 'authorMemberId', 'paymentId', 'removed'])
             && shortId(entry().paymentId) && entry().get('removed', false) is bool;
         }
-        allow read: if isMember(gid);
+        allow read: if isMember(gid) && live(gid);
         allow create: if isMember(gid) && live(gid) && entry().authorUid == request.auth.uid
           && signedByWriter()
           && entry().kind in ['version', 'payment', 'paymentRemoval']
@@ -230,7 +246,7 @@ service cloud.firestore {
             && currencyCode(repeat.currency) && money(repeat.amountMinor) && rateOk(repeat)
             && shortId(repeat.payerMemberId) && splitModeOk(repeat.splitMode) && textUpTo(repeat.get('weights', ''), 8000);
         }
-        allow read: if isMember(gid);
+        allow read: if isMember(gid) && live(gid);
         allow create: if isMember(gid) && live(gid) && request.resource.data.authorUid == request.auth.uid
           && validRepeat()
           && request.resource.data.syncedAt == request.time;
@@ -284,8 +300,9 @@ service cloud.firestore {
       allow get: if signedIn();
       allow list: if false;
       allow create: if isCreator(request.resource.data.groupId) && request.resource.data.creatorUid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['groupId', 'groupName', 'active', 'creatorUid']) && code.size() <= 64
-        && textUpTo(request.resource.data.get('groupName', ''), 100) && request.resource.data.get('active', false) is bool;
+        && request.resource.data.keys().hasOnly(['groupId', 'groupName', 'active', 'creatorUid', 'expiresAt']) && code.size() <= 64
+        && textUpTo(request.resource.data.get('groupName', ''), 100) && request.resource.data.get('active', false) is bool
+        && (request.resource.data.get('expiresAt', null) == null || request.resource.data.expiresAt is timestamp);
       // Only switching it off: the group it points at never changes.
       allow update: if isCreator(resource.data.groupId) && onlyChanged(['active']) && request.resource.data.active is bool;
       allow delete: if false;

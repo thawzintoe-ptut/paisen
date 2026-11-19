@@ -91,6 +91,9 @@ internal fun Fields.int(key: String): Int? = (this[key] as? Long)?.toInt()
 
 internal fun Fields.bool(key: String): Boolean = this[key] as? Boolean ?: false
 
+/** A timestamp field, which reads back as its text; null when absent or unreadable. */
+internal fun Fields.instant(key: String): Instant? = string(key)?.let { runCatching { Instant.parse(it) }.getOrNull() }
+
 @Suppress("UNCHECKED_CAST")
 internal fun Fields.list(key: String): List<Any?> = this[key] as? List<Any?> ?: emptyList()
 

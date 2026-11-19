@@ -41,6 +41,24 @@ Project settings → General → Add app (Android `com.ptut.expense`, iOS `com.p
 Copy *Web API key* into `apiKey=` and the project ID into `projectId=`.
 The key shows only after Authentication is set up. Leave its application restriction at *None*
 in Google Cloud: the app calls REST without Android or iOS app headers, so a restricted key fails.
+
+Limit what the key can call instead. Google Cloud console → APIs & Services → Credentials → the key
+in `apiKey=` (*Browser key*) → API restrictions → **Restrict key**, and tick only:
+
+| API | Called for |
+|---|---|
+| Identity Toolkit API | sign-in and account deletion |
+| Token Service API | refreshing the sign-in |
+| Firebase Remote Config API | the feature switches |
+| Firebase Installations API | Android: the installation behind push and Remote Config |
+| FCM Registration API | Android: registering the phone for push |
+
+Firestore needs no entry: the app sends it the signed-in user's token, not the key. The *iOS key*
+in `GoogleService-Info.plist` is used only by the Messaging and Installations SDKs on iPhone; restrict
+it to Firebase Installations API and FCM Registration API. After a change, sign in, open a shared
+group and check that a push arrives on both phones; a call to an API left out answers 403
+`API_KEY_SERVICE_BLOCKED`.
+
 `androidApp/google-services.json` and `iosApp/iosApp/GoogleService-Info.plist` are kept locally
 (gitignored) as the source of the client IDs: the web client is the json's `client_type` 3, the iOS
 client is the plist's `CLIENT_ID`. The app reads neither file, and no Google Services plugin is added.
@@ -48,8 +66,10 @@ client is the plist's `CLIENT_ID`. The app reads neither file, and no Google Ser
 ## 5. Invite links (Hosting)
 
 1. Build → Hosting → Get started. The default domain is `<projectId>.web.app`; put it in `linkDomain=`.
-2. `hosting/.well-known/assetlinks.json`: replace the placeholder with the SHA-256 of each Android
-   signing key (`keytool -list -v -keystore <keystore>`).
+2. `hosting/.well-known/assetlinks.json`: replace the placeholder with the SHA-256 of the upload key
+   and of Play's app signing key (`keytool -list -v -keystore <keystore>`). Never add a debug key: it is not
+   kept secret, so any app built with it could then open `/join/` links. A debug build does not open them, and
+   joins by typing the code (**Shared → + → Join with a code**).
 3. `hosting/.well-known/apple-app-site-association`: replace `REPLACE_WITH_TEAM_ID` with the Apple
    Team ID.
 4. Xcode → iosApp target → Build Settings → `PAISEN_LINK_DOMAIN` = the same domain. The entitlements

@@ -52,6 +52,9 @@ internal class FakeFirestore : Firestore {
     val refusing = mutableMapOf<String, Int>()
     val calls = mutableListOf<String>()
     val writes = mutableListOf<String>()
+
+    /** The fields each create sent, by path. */
+    val created = mutableMapOf<String, Fields>()
     var readTime = 1_000L
 
     /** Runs before each write, so a test can change the world mid-push. */
@@ -66,7 +69,10 @@ internal class FakeFirestore : Firestore {
     override suspend fun changedSince(parent: String, collection: String, field: String, since: Long): Pulled =
         answer("since $parent/$collection") { Pulled(collections["$parent/$collection"].orEmpty(), readTime) }
 
-    override suspend fun create(collection: String, id: String, fields: Fields): Boolean = write("create", "$collection/$id") { "$collection/$id" !in docs }
+    override suspend fun create(collection: String, id: String, fields: Fields): Boolean = write("create", "$collection/$id") {
+        created["$collection/$id"] = fields
+        "$collection/$id" !in docs
+    }
 
     override suspend fun patch(path: String, fields: Fields) = write("patch", path) {}
 
@@ -91,7 +97,10 @@ internal class FakeFirestore : Firestore {
 
     override fun appendWrite(relative: String, field: String, values: List<String>): JsonObject = described("append $relative $field $values", relative)
 
-    override fun removeWrite(relative: String, field: String, values: List<String>): JsonObject = described("remove $relative $field $values", relative)
+    override fun removeWrite(relative: String, field: String, values: List<String>, alsoSet: Fields): JsonObject =
+        described("remove $relative $field $values" + if (alsoSet.isEmpty()) "" else " set $alsoSet", relative)
+
+    override fun stampedUpdateWrite(relative: String, fields: Fields, stamp: String): JsonObject = described("update $relative ${fields.keys} stamp $stamp", relative)
 
     private fun described(write: String, path: String): JsonObject = buildJsonObject {
         put(WRITE, write)
@@ -314,7 +323,9 @@ internal class FakeSharedDao : SharedDao {
 
     override suspend fun claimMember(memberId: String, name: String, uid: String?) = error("unused")
 
-    override suspend fun setInvite(groupId: String, code: String?, active: Boolean) = error("unused")
+    override suspend fun setInvite(groupId: String, code: String?, active: Boolean) {
+        groups[groupId]?.let { groups[groupId] = it.copy(inviteCode = code, inviteActive = active) }
+    }
 
     override suspend fun markSeen(groupId: String, at: Long) = error("unused")
 
@@ -435,7 +446,9 @@ internal class FakeAuth(uid: String) : AuthRepository {
         account.value = Account.SignedOut
     }
 
-    override suspend fun deleteAccount() = error("unused")
+    override suspend fun deleteAccount() {
+        account.value = Account.SignedOut
+    }
 }
 
 internal class TestClock(var nowMillis: Long) : Clock {

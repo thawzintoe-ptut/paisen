@@ -73,6 +73,29 @@ internal fun stampedWrite(name: String, fields: Fields, stamp: String, create: B
     )
 }
 
+/**
+ * One write that takes [values] out of the array [field] and sets [fields] on an existing document,
+ * so the rules see both changes as one update.
+ */
+internal fun removeAndSetWrite(name: String, field: String, values: List<String>, fields: Fields): JsonObject = buildJsonObject {
+    put(
+        "update",
+        buildJsonObject {
+            put("name", name)
+            put("fields", fields.toFirestoreFields())
+        },
+    )
+    put("updateMask", fieldMaskJson(fields))
+    put("updateTransforms", buildJsonArray { add(arrayTransform(field, values, "removeAllFromArray")) })
+    put("currentDocument", buildJsonObject { put("exists", true) })
+}
+
+/** One field transform that adds or takes out [values] in the array [field]. */
+internal fun arrayTransform(field: String, values: List<String>, transform: String): JsonObject = buildJsonObject {
+    put("fieldPath", field)
+    put(transform, buildJsonObject { put("values", buildJsonArray { values.forEach { add(it.toFirestoreValue()) } }) })
+}
+
 /** A write's `updateMask`: only [fields]' keys change. */
 internal fun fieldMaskJson(fields: Fields): JsonObject = buildJsonObject { put("fieldPaths", buildJsonArray { fields.keys.forEach { add(JsonPrimitive(it)) } }) }
 

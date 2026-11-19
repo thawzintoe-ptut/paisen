@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.ExperimentalUuidApi
@@ -288,7 +289,8 @@ class SharedSync internal constructor(
         // Fails closed: a new code is never made while the old one may still be live.
         group.inviteCode?.let { old -> firestore.patch("invites/$old", mapOf("active" to false)) }
         val code = InviteLinks.newCode()
-        firestore.create("invites", code, mapOf("groupId" to groupId, "groupName" to group.name, "active" to true, "creatorUid" to account.uid))
+        val expiresAt = clock.now() + INVITE_LIFETIME
+        firestore.create("invites", code, mapOf("groupId" to groupId, "groupName" to group.name, "active" to true, "creatorUid" to account.uid, "expiresAt" to expiresAt))
         firestore.patch("groups/$groupId", mapOf("inviteCode" to code, "inviteActive" to true))
         dao.setInvite(groupId, code, true)
         return code
@@ -308,7 +310,7 @@ class SharedSync internal constructor(
         val account = signedIn()
         // #218: a mistyped code is not an expired one, and says so.
         val invite = firestore.get("invites/$code")?.fields ?: throw JoinException(AppText.copy.shared.sync.noSuchCode)
-        if (!invite.bool("active")) throw JoinException(EXPIRED)
+        if (!invite.bool("active") || invite.instant("expiresAt")?.let { it <= clock.now() } == true) throw JoinException(EXPIRED)
         val groupId = invite.string("groupId") ?: throw JoinException(EXPIRED)
         val join = mapOf("code" to code, "at" to now())
         try {
@@ -368,16 +370,21 @@ class SharedSync internal constructor(
 
     /**
      * The creator removes a shared group for everyone: the invite stops working and the group is
-     * marked deleted, so each member's phone drops it on its next pull. Firestore keeps the
-     * documents (its rules delete nothing); nobody can open them from the app again.
+     * marked deleted, so each member's phone drops it on its next pull. Its names and log can no
+     * longer be read; the documents stay until the clean-up removes them.
      */
     suspend fun deleteForEveryone(groupId: String) {
         account()
         val group = requireNotNull(dao.group(groupId)) { "No group $groupId" }
         // Before the write: the Worker sends nothing for a group already deleted.
         pusher.noticesFor(groupId)?.deleted()?.let { pushes?.tellFirst(groupId, it) }
-        group.inviteCode?.let { firestore.patch("invites/$it", mapOf("active" to false)) }
-        firestore.patch("groups/$groupId", mapOf("deleted" to true, "inviteActive" to false))
+        // H3: every PromptPay ID goes in the same commit, and the server's time dates the clean-up.
+        val withPromptPay = firestore.list("groups/$groupId/members").filter { it.fields.string("promptPay") != null }
+        firestore.commit(
+            listOfNotNull(group.inviteCode?.let { firestore.updateWrite("invites/$it", mapOf("active" to false)) }) +
+                firestore.stampedUpdateWrite("groups/$groupId", mapOf("deleted" to true, "inviteActive" to false), DELETED_AT) +
+                withPromptPay.map { firestore.updateWrite("groups/$groupId/members/${it.id}", mapOf("promptPay" to null)) },
+        )
         running.withLock { dao.forgetGroup(groupId) }
     }
 
@@ -422,7 +429,10 @@ class SharedSync internal constructor(
     private suspend fun leaveAll() {
         val account = account()
         dao.remoteGroupIds().forEach { groupId ->
-            val writes = firestore.leaveWrites(groupId, dao.group(groupId)?.meMemberId, account.uid)
+            val group = dao.group(groupId)
+            // L2: nobody else can switch this creator's invite off, so it goes off as they leave for good.
+            val created = group?.creatorUid == account.uid
+            val writes = firestore.leaveWrites(groupId, group?.meMemberId, account.uid, closeInvite = created)
             try {
                 pusher.noticesFor(groupId)?.left()?.let { pushes?.tellFirst(groupId, it) }
                 firestore.commit(writes)
@@ -430,6 +440,8 @@ class SharedSync internal constructor(
                 // Not a member any more (left elsewhere, or taken out by the creator): nothing to leave.
                 if (refused.status != FirestoreStatus.FORBIDDEN) throw refused
             }
+            // The group's switch already refuses every join; this makes the link say "expired" at once.
+            if (created) group?.inviteCode?.let { code -> runSuspendCatching { firestore.patch("invites/$code", mapOf("active" to false)) } }
         }
         runSuspendCatching { firestore.delete("sessions/${account.uid}") }
     }
@@ -527,6 +539,12 @@ private val EXPIRED: String get() = AppText.copy.shared.sync.inviteExpired
 
 /** What a sync that never started says: nothing changed, nothing failed. */
 private val QUIET = SyncOutcome(groupsChanged = false, failed = false)
+
+/** How long a new invite lets people in; old invites, made with no end date, never stop on their own. */
+private val INVITE_LIFETIME = 90.days
+
+/** The server's time on a group deleted for everyone, which the clean-up reads. */
+private const val DELETED_AT = "deletedAt"
 
 /** How often [SharedSync.syncAll] checks the account's session and looks for groups to bring back. */
 private val ACCOUNT_CHECK_EVERY = 10.minutes

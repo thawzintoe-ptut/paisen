@@ -19,6 +19,19 @@ class FirestoreQueriesTest {
     }
 
     @Test
+    fun aLeaveThatAlsoSwitchesTheInviteOffIsOneUpdateOfAnExistingGroup() {
+        val write = removeAndSetWrite("projects/p/databases/(default)/documents/groups/g1", "memberUids", listOf("u1"), mapOf("inviteActive" to false))
+
+        assertEquals(
+            """{"update":{"name":"projects/p/databases/(default)/documents/groups/g1","fields":{"inviteActive":{"booleanValue":false}}},""" +
+                """"updateMask":{"fieldPaths":["inviteActive"]},""" +
+                """"updateTransforms":[{"fieldPath":"memberUids","removeAllFromArray":{"values":[{"stringValue":"u1"}]}}],""" +
+                """"currentDocument":{"exists":true}}""",
+            write.toString(),
+        )
+    }
+
+    @Test
     fun aStampedCreateRefusesAnExistingDocumentAndLetsTheServerSetTheTime() {
         val write = stampedWrite("projects/p/databases/(default)/documents/groups/g1/entries/e1", mapOf("kind" to "version"), "syncedAt", create = true)
 

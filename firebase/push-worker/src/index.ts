@@ -1,22 +1,26 @@
 import { accessToken, verifyIdToken } from './auth';
-import { sendToDevice, type Notice } from './fcm';
-import { deleteDevice, devicesFor, readGroup, type Device } from './firestore';
+import { sendToDevice } from './fcm';
+import { deleteDevice, devicesFor, readGroup, type Device, type Group } from './firestore';
 import { HttpError, json } from './http';
+import { MAX_BODY_BYTES, RefusalCache, clientIp, declaredLength, limit, readJsonBody } from './limits';
+import { parseNotice } from './notice';
 
 export interface Env {
   FIREBASE_PROJECT_ID: string;
   FIREBASE_SERVICE_ACCOUNT: string;
-  /** Per account, so one looping phone cannot use up the day's Worker and Firestore quota. Absent in `wrangler dev`. */
+  /** Per account, so one looping phone cannot use up the day's Worker and Firestore quota. */
   PUSH_LIMITER?: RateLimit;
+  /** Per address, before the token check, so a flood of made-up tokens costs no certificate work. */
+  IP_LIMITER?: RateLimit;
+  /** "true" only in `.dev.vars`: without it a missing limiter refuses every call. */
+  ALLOW_NO_LIMITER?: string;
+  /** "accept" while builds up to v0.4.0-rc.1 still send their own sentences; "refuse" after. */
+  LEGACY_NOTICES?: string;
 }
 
-const MAX_ID_LENGTH = 1500;
-const MAX_TITLE_LENGTH = 200;
-const MAX_BODY_LENGTH = 1000;
-// What reaches a lock screen: the app's own sentences are far shorter.
-const SENT_BODY_LENGTH = 300;
 // Phones one account can be sent to. One phone holds an account at a time; the rest are reinstalls.
 const DEVICES_PER_ACCOUNT = 5;
+const refusals = new RefusalCache(5 * 60_000, 5_000);
 
 export default {
   async fetch(request, env, ctx): Promise<Response> {
@@ -34,26 +38,35 @@ async function notify(request: Request, env: Env, ctx: ExecutionContext): Promis
   if (new URL(request.url).pathname !== '/notify') throw new HttpError(404, 'not found');
   if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405, { allow: 'POST' });
 
+  await limit(env.IP_LIMITER, clientIp(request), env.ALLOW_NO_LIMITER);
+  if (declaredLength(request) > MAX_BODY_BYTES) throw new HttpError(413, 'body too large');
   const uid = await verifyIdToken(bearerToken(request), env.FIREBASE_PROJECT_ID);
   // Before any Firestore read, so a flood costs nothing past this line.
-  if (env.PUSH_LIMITER && !(await env.PUSH_LIMITER.limit({ key: uid })).success) {
-    throw new HttpError(429, 'too many notices');
-  }
-  const notice = parseNotice(await request.json().catch(() => undefined));
+  await limit(env.PUSH_LIMITER, uid, env.ALLOW_NO_LIMITER);
+  const notice = parseNotice(await readJsonBody(request), env.LEGACY_NOTICES !== 'refuse');
+  const now = Date.now();
+  const known = refusals.get(notice.groupId, uid, now);
+  if (known) throw known;
   const token = await accessToken(env.FIREBASE_SERVICE_ACCOUNT);
 
   const group = await readGroup(env.FIREBASE_PROJECT_ID, token, notice.groupId);
-  if (group === null) throw new HttpError(404, 'group not found');
-  if (!group.memberUids.includes(uid)) throw new HttpError(403, 'not a member');
-  // The creator's phone sends "deleted for everyone" before it marks the group, so nothing after that is news.
-  if (group.deleted) throw new HttpError(410, 'group deleted');
+  const refusal = refusalFor(group, uid);
+  if (refusal !== undefined || group === null) {
+    const error = refusal ?? new HttpError(404, 'group not found');
+    refusals.remember(notice.groupId, uid, error, now);
+    throw error;
+  }
 
-  // The title is the group's stored name; only the sentence comes from the member's phone.
-  const titled = { ...notice, title: group.name ?? notice.title };
+  // The title is the group's stored name; an old build's own title only when there is none.
+  const title = group.name ?? (notice.shape === 'legacy' ? notice.title : 'PaiSeN');
   const others = group.memberUids.filter((member) => member !== uid);
-  const devices = others.length === 0 ? [] : newestPerAccount(await devicesFor(env.FIREBASE_PROJECT_ID, token, others));
+  const devices =
+    others.length === 0
+      ? []
+      : newestPerAccount(await devicesFor(env.FIREBASE_PROJECT_ID, token, others, DEVICES_PER_ACCOUNT));
+  const outgoing = { notice, title, senderUid: uid };
   const results = await Promise.all(
-    devices.map((device) => sendToDevice(env.FIREBASE_PROJECT_ID, token, device, titled)),
+    devices.map((device) => sendToDevice(env.FIREBASE_PROJECT_ID, token, device, outgoing)),
   );
 
   const dead = devices.filter((_, index) => results[index] === 'dead');
@@ -61,6 +74,15 @@ async function notify(request: Request, env: Env, ctx: ExecutionContext): Promis
     Promise.all(dead.map((device) => deleteDevice(env.FIREBASE_PROJECT_ID, token, device.token))),
   );
   return json({ sent: results.filter((result) => result === 'sent').length });
+}
+
+/** Why [uid] may not notify [group], or undefined when it may. */
+export function refusalFor(group: Group | null, uid: string): HttpError | undefined {
+  if (group === null) return new HttpError(404, 'group not found');
+  if (!group.memberUids.includes(uid)) return new HttpError(403, 'not a member');
+  // The creator's phone sends "deleted for everyone" before it marks the group, so nothing after that is news.
+  if (group.deleted) return new HttpError(410, 'group deleted');
+  return undefined;
 }
 
 /** At most [DEVICES_PER_ACCOUNT] phones per account, the most recently registered first. */
@@ -76,32 +98,4 @@ function bearerToken(request: Request): string {
   const header = request.headers.get('authorization') ?? '';
   if (!header.startsWith('Bearer ')) throw new HttpError(401, 'missing token');
   return header.slice('Bearer '.length).trim();
-}
-
-function parseNotice(body: unknown): Notice {
-  const fields = asRecord(body);
-  const sentences = asRecord(fields?.body);
-  const groupId = text(fields?.groupId, MAX_ID_LENGTH);
-  const title = text(fields?.title, MAX_TITLE_LENGTH);
-  const en = text(sentences?.en, MAX_BODY_LENGTH);
-  const my = text(sentences?.my, MAX_BODY_LENGTH);
-  // Optional, since apps built before Thai never send it. When sent, it is checked like the others.
-  const th = text(sentences?.th, MAX_BODY_LENGTH);
-  const badTh = sentences?.th !== undefined && !th;
-  if (!groupId || groupId.includes('/') || !title || !en || !my || badTh) throw new HttpError(400, 'bad body');
-  return { groupId, title, body: { en: clip(en), my: clip(my), th: th === undefined ? undefined : clip(th) } };
-}
-
-/** A long description still sends, cut to what a banner shows. */
-function clip(sentence: string): string {
-  const characters = Array.from(sentence);
-  return characters.length <= SENT_BODY_LENGTH ? sentence : `${characters.slice(0, SENT_BODY_LENGTH - 1).join('')}…`;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined;
-}
-
-function text(value: unknown, maxLength: number): string | undefined {
-  return typeof value === 'string' && value.length > 0 && value.length <= maxLength ? value : undefined;
 }

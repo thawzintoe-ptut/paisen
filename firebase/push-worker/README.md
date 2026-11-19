@@ -3,24 +3,32 @@
 A Cloudflare Worker with one route, `POST /notify`. A phone calls it right after it writes a change
 to a shared group. The Worker checks the phone's Firebase ID token, checks the caller is a member of
 the group, reads the other members' phones from `devices/`, and sends one Firebase Cloud Messaging
-(FCM) message per phone in that phone's language. The phone builds both sentences; the Worker holds
-no copy.
+(FCM) message per phone in that phone's language.
 
 No runtime dependencies: WebCrypto checks the ID token and signs the service-account JWT, and
 Firestore and FCM are called over REST.
 
-Request: `Authorization: Bearer <Firebase ID token>` and a JSON body
+Request: `Authorization: Bearer <Firebase ID token>` and a JSON body of at most 8 KB. The structured
+shape names what happened, never a sentence:
 
 ```json
-{ "groupId": "…", "title": "Trip", "body": { "en": "Mali added Dinner · ฿320", "my": "…", "th": "…" } }
+{ "groupId": "…", "kind": "paid", "about": "<payment id>", "from": "<member id>", "to": "<member id>", "amount": 32000, "currency": "THB" }
 ```
 
-The notice's title is the group's name as Firestore stores it; the phone's `title` is used only when
-the group has no name. The sentences in `body` come from the member's phone. `th` is optional: apps
-built before Thai send only `en` and `my`, and a phone set to Thai then gets `en`.
+`kind` is one of the names in `src/notice.ts`; ids match `[A-Za-z0-9_-]{1,128}`, `amount` is whole
+minor units. Each phone gets them as FCM data with `by` (the sender's uid), to word the sentence from
+its own copy of the group. Until an app build does, and for builds up to v0.4.0-rc.1, `body` is
+"1 new" in the phone's language.
 
-Reply: `{ "sent": n }`. Status 401 for a bad or missing token, 403 when the caller is not a member,
-400 for a bad body, 404 when the group does not exist, 405 for any method but POST.
+Builds up to v0.4.0-rc.1 send the old shape, `{ "groupId", "title", "body": { "en", "my", "th"? } }`.
+While `LEGACY_NOTICES = "accept"` it still goes out, with links and hidden characters removed and cut
+to 160 characters. Set `"refuse"` once no such build is in use; it then gets 400.
+
+The notice's title is the group's name as Firestore stores it.
+
+Reply: `{ "sent": n }`. Status 400 for a bad body, 401 for a bad or missing token, 403 when the caller
+is not a member, 404 when the group does not exist, 405 for any method but POST, 410 for a deleted
+group, 413 for a body over 8 KB, 429 past a rate limit, 503 when a limiter binding is missing.
 
 ## Before the first deploy
 
@@ -61,15 +69,21 @@ deploy; the Worker reads the secret at each request.
 
 ```bash
 npx tsc --noEmit
-npx wrangler dev     # local run; put FIREBASE_SERVICE_ACCOUNT='{...}' in .dev.vars (gitignored here)
+npx wrangler dev     # local run; put FIREBASE_SERVICE_ACCOUNT='{...}' in .dev.vars (gitignored here),
+                     # and ALLOW_NO_LIMITER=true there if the limiters are not available locally
 ```
 
 ## Files
 
-- `src/index.ts`: the route, body check, membership check, fan-out.
+- `src/index.ts`: the route, membership check, fan-out.
+- `src/notice.ts`: both body shapes, the old shape's clean-up, the FCM data fields.
+- `src/limits.ts`: the per-address and per-account limiters, the 8 KB body cap, the short cache of
+  refused account and group pairs.
 - `src/auth.ts`: ID token check against Google's `securetoken` certificates, service-account
   access token, both cached in the isolate.
-- `src/firestore.ts`: `groups/{gid}` read, `devices` query in chunks of 30, device delete.
+- `src/firestore.ts`: `groups/{gid}` read, `devices` query in chunks of 30 capped at 5 per account,
+  device delete.
 - `src/fcm.ts`: one FCM HTTP v1 message per device, sent to its Firebase installation ID (`fid`);
   an ID FCM rejects marks the device dead.
-- `wrangler.toml`: name, `FIREBASE_PROJECT_ID`. The secret is never in this file.
+- `wrangler.toml`: name, `FIREBASE_PROJECT_ID`, `LEGACY_NOTICES`, both limiters. The secret is never
+  in this file.

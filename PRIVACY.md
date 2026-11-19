@@ -24,9 +24,9 @@ The app has no ads, no analytics and no crash reporting. It does not sell or sha
 
 The app also turns off Android cloud backup, Android phone-to-phone transfer and iCloud backup for
 its ledger. To move your ledger to a new phone, use **Settings › Export** and **Import**. The export
-file goes only where you choose to put it. On iPhone, the app's settings, which include the account
-name it learned from your own slips, are still part of an iCloud or computer backup of the phone if
-you have one turned on.
+file goes only where you choose to put it. On iPhone, the account name the app learns from your own
+slips stays out of backups too. The app's other settings are still part of an iCloud or computer
+backup of the phone if you have one turned on.
 
 If you save a "Pay me" picture, it goes to your phone's Pictures folder, where your other apps with
 photo access can see it.

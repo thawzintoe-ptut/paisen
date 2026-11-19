@@ -211,14 +211,16 @@ internal suspend fun SharedDao.groupOf(groupId: String): SharedGroup? = group(gr
 
 /**
  * [uid] lets go of [memberId] in [groupId] and leaves it, in one commit; with [archive] the name
- * is removed too, which the rules allow only together with its account going.
+ * is removed too, which the rules allow only together with its account going. [closeInvite]: the
+ * creator leaving for good switches the invite off, since nobody else can (L2).
  */
-internal fun Firestore.leaveWrites(groupId: String, memberId: String?, uid: String, archive: Boolean = false): List<JsonObject> = listOfNotNull(
-    memberId?.let {
-        val removed = if (archive) mapOf("archived" to true) else emptyMap()
-        updateWrite("groups/$groupId/members/$it", removed + mapOf("claimedByUid" to null, "promptPay" to null))
-    },
-    removeWrite("groups/$groupId", "memberUids", listOf(uid)),
-)
+internal fun Firestore.leaveWrites(groupId: String, memberId: String?, uid: String, archive: Boolean = false, closeInvite: Boolean = false): List<JsonObject> =
+    listOfNotNull(
+        memberId?.let {
+            val removed = if (archive) mapOf("archived" to true) else emptyMap()
+            updateWrite("groups/$groupId/members/$it", removed + mapOf("claimedByUid" to null, "promptPay" to null))
+        },
+        removeWrite("groups/$groupId", "memberUids", listOf(uid), alsoSet = if (closeInvite) mapOf("inviteActive" to false) else emptyMap()),
+    )
 
 private fun FirestoreException.isPermanent(): Boolean = FirestoreStatus.isPermanent(status)

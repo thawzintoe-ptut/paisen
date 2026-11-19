@@ -15,6 +15,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 class SharedSyncTest {
 
@@ -259,5 +260,98 @@ class SharedSyncTest {
         assertEquals(2, firestore.calls.count { it == "list groups/g1/members" })
     }
 
+    @Test
+    fun `a new invite stops letting people in after ninety days`() = runTest {
+        holds("g1")
+        createdHere("g1")
+
+        val code = sync.newInvite("g1")
+
+        assertEquals(Instant.fromEpochMilliseconds(clock.nowMillis + NINETY_DAYS), firestore.created.getValue("invites/$code")["expiresAt"])
+    }
+
+    @Test
+    fun `an invite past its end date says it has expired and writes nothing`() = runTest {
+        firestore.docs["invites/C1"] = invite(expiresAt = "1970-01-01T00:16:00Z")
+
+        val expired = assertFailsWith<JoinException> { sync.openJoin("C1") }
+
+        assertEquals(AppText.copy.shared.sync.inviteExpired, expired.message)
+        assertTrue(firestore.writes.isEmpty())
+    }
+
+    @Test
+    fun `an invite before its end date and one with no end date still open`() = runTest {
+        firestore.docs["invites/C1"] = invite(expiresAt = "2100-01-01T00:00:00Z")
+        firestore.docs["invites/C2"] = invite(expiresAt = null)
+
+        assertEquals("g1", sync.openJoin("C1").groupId)
+        assertEquals("g1", sync.openJoin("C2").groupId)
+    }
+
+    @Test
+    fun `deleting for everyone clears every PromptPay ID and stamps the time in one commit`() = runTest {
+        holds("g1")
+        createdHere("g1")
+        val paid = memberDoc("bo").let { it.copy(fields = it.fields + ("promptPay" to "08" + "12345678")) }
+        firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), paid)
+
+        sync.deleteForEveryone("g1")
+
+        assertEquals(
+            listOf(
+                "commit update invites/C1 [active], update groups/g1 [deleted, inviteActive] stamp deletedAt, " +
+                    "update groups/g1/members/bo [promptPay]",
+            ),
+            firestore.writes,
+        )
+        assertNull(dao.groups["g1"])
+    }
+
+    @Test
+    fun `a creator deleting their account switches the invite off as they leave`() = runTest {
+        holds("g1")
+        createdHere("g1")
+
+        sync.deleteAccount()
+
+        assertEquals(
+            listOf(
+                "commit update groups/g1/members/me-g1 [claimedByUid, promptPay], remove groups/g1 memberUids [$UID] set {inviteActive=false}",
+                "patch invites/C1",
+                "delete sessions/$UID",
+            ),
+            firestore.writes,
+        )
+    }
+
+    @Test
+    fun `a member who did not create the group leaves its invite alone when deleting their account`() = runTest {
+        holds("g1")
+        dao.groups["g1"] = dao.groups.getValue("g1").copy(creatorUid = "uid-2", inviteCode = "C1", inviteActive = true)
+
+        sync.deleteAccount()
+
+        assertEquals(
+            listOf("commit update groups/g1/members/me-g1 [claimedByUid, promptPay], remove groups/g1 memberUids [$UID]", "delete sessions/$UID"),
+            firestore.writes,
+        )
+    }
+
     private fun holds(vararg ids: String) = holdGroups(dao, firestore, *ids)
+
+    /** This account made [groupId] and its live code is C1. */
+    private fun createdHere(groupId: String) {
+        dao.groups[groupId] = dao.groups.getValue(groupId).copy(creatorUid = UID, inviteCode = "C1", inviteActive = true)
+    }
+
+    private fun invite(expiresAt: String?) = FirestoreDoc(
+        id = "C1",
+        name = "invites/C1",
+        fields = mapOf("groupId" to "g1", "groupName" to "Flat", "active" to true, "creatorUid" to "uid-2", "expiresAt" to expiresAt),
+    )
+
+    private companion object {
+        const val NINETY_DAYS = 90L * 24 * 60 * 60 * 1000
+    }
 }
