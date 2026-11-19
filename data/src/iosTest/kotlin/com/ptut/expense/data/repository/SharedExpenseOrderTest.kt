@@ -105,11 +105,11 @@ class SharedExpenseOrderTest {
         val expenseId = shared.saveExpense(dinner(group, 30_000).copy(description = "Food & drink"))
         val row = ownRow()
 
-        editInHistory(row, before = 30_000, edit = TransactionEdit(Satang(30_000), "travel", memo = null), TitleChange("Food & drink", "Travel"))
+        editInHistory(row, before = 30_000, edit = TransactionEdit(Satang(30_000), "transport", memo = null), TitleChange("Food & drink", "Transport"))
 
         val latest = dao.latestVersion(expenseId)!!
-        assertEquals("travel", latest.categoryId)
-        assertEquals("Travel", latest.description)
+        assertEquals("transport", latest.categoryId)
+        assertEquals("Transport", latest.description)
     }
 
     @Test
@@ -130,7 +130,7 @@ class SharedExpenseOrderTest {
         val expenseId = shared.saveExpense(dinner(group, 30_000))
         val row = ownRow()
 
-        editInHistory(row, before = 30_000, edit = TransactionEdit(Satang(30_000), "travel", memo = null), TitleChange("Food & drink", "Travel"))
+        editInHistory(row, before = 30_000, edit = TransactionEdit(Satang(30_000), "transport", memo = null), TitleChange("Food & drink", "Transport"))
 
         assertEquals("Dinner", dao.latestVersion(expenseId)!!.description)
     }
