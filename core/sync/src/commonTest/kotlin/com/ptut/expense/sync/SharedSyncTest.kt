@@ -340,16 +340,34 @@ class SharedSyncTest {
 
     @Test
     fun `opening an invite that lists its names writes nothing and offers them`() = runTest {
-        firestore.docs["invites/C1"] = invite(expiresAt = null, names = listOf(mapOf("id" to "bo", "name" to "Bo")))
+        firestore.docs["invites/C1"] = invite(expiresAt = null, names = "$BO\tBo\n")
         firestore.hidden += "groups/g1"
 
         val choice = sync.openJoin("C1")
 
-        assertEquals(listOf("bo" to "Bo"), choice.names)
+        assertEquals(listOf(BO to "Bo"), choice.names)
         assertEquals("C1", choice.code)
         assertFalse(choice.member)
         assertTrue(firestore.writes.isEmpty())
         assertTrue(firestore.calls.none { it.startsWith("list") })
+    }
+
+    @Test
+    fun `an invite's names under ids the app never makes are left out`() = runTest {
+        firestore.docs["invites/C1"] = invite(expiresAt = null, names = "mBob\tAye\n$BO\tBo\n$BO\t\nbroken line\n")
+        firestore.hidden += "groups/g1"
+
+        assertEquals(listOf(BO to "Bo"), sync.openJoin("C1").names)
+    }
+
+    @Test
+    fun `an invite the rules no longer show says it has expired and writes nothing`() = runTest {
+        firestore.hidden += "invites/C1"
+
+        val expired = assertFailsWith<JoinException> { sync.openJoin("C1") }
+
+        assertEquals(AppText.copy.shared.sync.inviteExpired, expired.message)
+        assertTrue(firestore.writes.isEmpty())
     }
 
     @Test
@@ -367,7 +385,7 @@ class SharedSyncTest {
     @Test
     fun `a member opening the link again registers nothing and is offered their own name`() = runTest {
         holds("g1")
-        firestore.docs["invites/C1"] = invite(expiresAt = null, names = emptyList())
+        firestore.docs["invites/C1"] = invite(expiresAt = null, names = "")
 
         val choice = sync.openJoin("C1")
 
@@ -377,15 +395,48 @@ class SharedSyncTest {
     }
 
     @Test
-    fun `picking a name registers the join in the same commit`() = runTest {
+    fun `picking a name registers the join and checks the name before claiming it`() = runTest {
         holds("g1")
+        firestore.docs["groups/g1/members/$BO"] = named(BO, "Bo")
 
-        sync.join(JoinChoice("g1", "Flat", listOf("bo" to "Bo"), code = "C1"), "bo")
+        sync.join(pickFromInvite("Bo"), BO)
 
         assertEquals(
-            "commit set groups/g1/joins/$UID [code], update groups/g1/members/bo [claimedByUid], append groups/g1 memberUids [$UID]",
-            firestore.writes.first(),
+            listOf("create groups/g1/joins/$UID", "commit update groups/g1/members/$BO [claimedByUid], append groups/g1 memberUids [$UID]"),
+            firestore.writes.take(2),
         )
+        assertTrue("get groups/g1/members/$BO" in firestore.calls)
+    }
+
+    @Test
+    fun `a name the invite showed under someone else's id is not claimed`() = runTest {
+        firestore.docs["groups/g1/members/$BO"] = named(BO, "Bob")
+
+        val taken = assertFailsWith<JoinException> { sync.join(pickFromInvite("Aye"), BO) }
+
+        assertEquals(AppText.copy.shared.sync.nameTaken, taken.message)
+        assertEquals(listOf("create groups/g1/joins/$UID"), firestore.writes)
+    }
+
+    @Test
+    fun `a name someone holds by the time it is picked is not claimed`() = runTest {
+        firestore.docs["groups/g1/members/$BO"] = named(BO, "Bo", holder = "uid-2")
+
+        val taken = assertFailsWith<JoinException> { sync.join(pickFromInvite("Bo"), BO) }
+
+        assertEquals(AppText.copy.shared.sync.nameTaken, taken.message)
+        assertTrue(firestore.writes.none { it.startsWith("commit") })
+    }
+
+    @Test
+    fun `a name claimed between the check and the commit says so`() = runTest {
+        firestore.docs["groups/g1/members/$BO"] = named(BO, "Bo")
+        firestore.refusing["groups/g1/members/$BO"] = 403
+        firestore.beforeWrite = { if (it == "commit") firestore.docs["groups/g1/members/$BO"] = named(BO, "Bo", holder = "uid-2") }
+
+        val taken = assertFailsWith<JoinException> { sync.join(pickFromInvite("Bo"), BO) }
+
+        assertEquals(AppText.copy.shared.sync.nameTaken, taken.message)
     }
 
     @Test
@@ -398,48 +449,83 @@ class SharedSyncTest {
     }
 
     @Test
-    fun `a refused pick from the invite's names registers the join to tell a taken name`() = runTest {
-        firestore.refusing["groups/g1/members/bo"] = 403
-        firestore.docs["groups/g1/members/bo"] = heldDoc("bo", "uid-2")
-
-        val taken = assertFailsWith<JoinException> { sync.join(JoinChoice("g1", "Flat", listOf("bo" to "Bo"), code = "C1"), "bo") }
-
-        assertEquals(AppText.copy.shared.sync.nameTaken, taken.message)
-        assertEquals(listOf("create groups/g1/joins/$UID"), firestore.writes)
-    }
-
-    @Test
-    fun `a refused pick whose code has stopped says the invite expired`() = runTest {
+    fun `a pick whose code has stopped says the invite expired`() = runTest {
         firestore.refusing["groups/g1/joins/$UID"] = 403
-        firestore.docs["groups/g1/members/bo"] = heldDoc("bo", "uid-2")
 
-        val expired = assertFailsWith<JoinException> { sync.join(JoinChoice("g1", "Flat", listOf("bo" to "Bo"), code = "C1"), "bo") }
+        val expired = assertFailsWith<JoinException> { sync.join(pickFromInvite("Bo"), BO) }
 
         assertEquals(AppText.copy.shared.sync.inviteExpired, expired.message)
+        assertTrue(firestore.writes.isEmpty())
     }
 
     @Test
     fun `a new invite lists the names nobody holds and the old one is emptied`() = runTest {
         holds("g1")
         createdHere("g1")
-        dao.members["bo"] = GroupMemberEntity("bo", "g1", "Bo", personId = null, archived = false, createdAtEpochMillis = 2)
-        dao.members["cy"] = GroupMemberEntity("cy", "g1", "Cy", personId = null, archived = true, createdAtEpochMillis = 3)
+        dao.members[BO] = GroupMemberEntity(BO, "g1", "Bo", personId = null, archived = false, createdAtEpochMillis = 2)
+        dao.members["cy"] = GroupMemberEntity("cy", "g1", "Cy", personId = null, archived = false, createdAtEpochMillis = 3)
 
         val code = sync.newInvite("g1")
 
-        assertEquals(listOf(mapOf("id" to "bo", "name" to "Bo")), firestore.created.getValue("invites/$code")[INVITE_NAMES])
-        assertEquals(mapOf("active" to false, INVITE_NAMES to emptyList<String>()), firestore.sent["invites/C1"])
+        assertEquals("$BO\tBo\n", firestore.created.getValue("invites/$code")[INVITE_NAMES])
+        assertEquals(mapOf("active" to false, INVITE_NAMES to ""), firestore.sent["invites/C1"])
     }
 
     @Test
     fun `a pull that sees a new name nobody holds puts it on the live invite`() = runTest {
-        holds("g1")
-        firestore.docs["groups/g1"] = groupDoc("g1").let { it.copy(fields = it.fields + ("inviteCode" to "C1") + ("inviteActive" to true)) }
-        firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), memberDoc("bo"))
+        holdsWithLiveInvite(invite(expiresAt = null, names = ""))
 
         sync.syncGroup("g1")
 
-        assertEquals(mapOf(INVITE_NAMES to listOf(mapOf("id" to "bo", "name" to "bo"))), firestore.sent["invites/C1"])
+        assertEquals(mapOf(INVITE_NAMES to "$BO\tBo\n"), firestore.sent["invites/C1"])
+    }
+
+    @Test
+    fun `names are not put on an invite past its end date`() = runTest {
+        holdsWithLiveInvite(invite(expiresAt = "1970-01-01T00:16:00Z", names = ""))
+
+        sync.syncGroup("g1")
+
+        assertTrue("get invites/C1" in firestore.calls)
+        assertNull(firestore.sent["invites/C1"])
+    }
+
+    @Test
+    fun `names are not put on an invite the rules no longer show`() = runTest {
+        holdsWithLiveInvite(invite(expiresAt = null, names = ""))
+        firestore.hidden += "invites/C1"
+
+        sync.syncGroup("g1")
+
+        assertTrue("get invites/C1" in firestore.calls)
+        assertNull(firestore.sent["invites/C1"])
+    }
+
+    @Test
+    fun `the same names are not sent to the invite again`() = runTest {
+        holdsWithLiveInvite(invite(expiresAt = null, names = "$BO\tBo\n"))
+
+        sync.syncGroup("g1")
+
+        assertNull(firestore.sent["invites/C1"])
+    }
+
+    @Test
+    fun `sharing makes a new code once the live one has passed its end date`() = runTest {
+        holds("g1")
+        createdHere("g1")
+        firestore.docs["invites/C1"] = invite(expiresAt = "1970-01-01T00:16:00Z")
+
+        assertTrue(sync.share("g1") != "C1")
+    }
+
+    @Test
+    fun `sharing keeps a live code that is still open`() = runTest {
+        holds("g1")
+        createdHere("g1")
+        firestore.docs["invites/C1"] = invite(expiresAt = "2100-01-01T00:00:00Z")
+
+        assertEquals("C1", sync.share("g1"))
     }
 
     private fun holds(vararg ids: String) = holdGroups(dao, firestore, *ids)
@@ -449,8 +535,19 @@ class SharedSyncTest {
         dao.groups[groupId] = dao.groups.getValue(groupId).copy(creatorUid = UID, inviteCode = "C1", inviteActive = true)
     }
 
+    /** g1 on this phone, its live code C1 held by [invite], and a name Bo that nobody holds yet. */
+    private fun holdsWithLiveInvite(invite: FirestoreDoc) {
+        holds("g1")
+        firestore.docs["groups/g1"] = groupDoc("g1").let { it.copy(fields = it.fields + ("inviteCode" to "C1") + ("inviteActive" to true)) }
+        firestore.docs["invites/C1"] = invite
+        firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), named(BO, "Bo"))
+    }
+
+    /** Bo, as an invite's names showed it, under [shown]. */
+    private fun pickFromInvite(shown: String) = JoinChoice("g1", "Flat", listOf(BO to shown), code = "C1")
+
     /** An invite to g1; [names] null is one made by a build before L4. */
-    private fun invite(expiresAt: String?, names: List<Map<String, String>>? = null) = FirestoreDoc(
+    private fun invite(expiresAt: String?, names: String? = null) = FirestoreDoc(
         id = "C1",
         name = "invites/C1",
         fields = mapOf("groupId" to "g1", "groupName" to "Flat", "active" to true, "creatorUid" to "uid-2", "expiresAt" to expiresAt) +

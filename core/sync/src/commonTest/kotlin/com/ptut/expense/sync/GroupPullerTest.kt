@@ -203,12 +203,12 @@ class GroupPullerTest {
         val published = mutableListOf<String>()
         val puller = GroupPuller(firestore, dao, clock, { published += it }) { UID }
         holds("g1")
-        firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), memberDoc("bo"))
+        firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), named(BO, "Bo"))
         puller.pull("g1")
 
         clock.nowMillis += TEN_MINUTES
         puller.pull("g1")
-        firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), heldDoc("bo", "uid-2"))
+        firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), named(BO, "Bo", holder = "uid-2"))
         clock.nowMillis += TEN_MINUTES
         puller.pull("g1")
 

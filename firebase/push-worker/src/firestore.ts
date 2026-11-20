@@ -12,14 +12,15 @@ export interface Device {
 // Firestore allows at most 30 values in one `in` filter.
 const IN_CHUNK = 30;
 
-interface FirestoreValue {
+export interface FirestoreValue {
   stringValue?: string;
   booleanValue?: boolean;
   integerValue?: string;
+  timestampValue?: string;
   arrayValue?: { values?: FirestoreValue[] };
 }
 
-interface FirestoreDocument {
+export interface FirestoreDocument {
   name: string;
   fields?: Record<string, FirestoreValue>;
 }
@@ -133,6 +134,51 @@ function toDevice(document: FirestoreDocument): Device | undefined {
     language: language === 'my' || language === 'th' ? language : 'en',
     updatedAt: Number(fields.updatedAt?.integerValue ?? 0) || 0,
   };
+}
+
+/** Documents a structured query under [parent] ('' for the root) returns. */
+export async function runQuery(
+  projectId: string,
+  accessToken: string,
+  parent: string,
+  structuredQuery: Record<string, unknown>,
+): Promise<FirestoreDocument[]> {
+  const at = parent === '' ? documentsUrl(projectId) : `${documentsUrl(projectId)}/${parent}`;
+  const response = await fetch(`${at}:runQuery`, {
+    method: 'POST',
+    headers: { ...authHeaders(accessToken), 'content-type': 'application/json' },
+    body: JSON.stringify({ structuredQuery }),
+  });
+  if (!response.ok) throw new HttpError(502, `firestore query failed: ${response.status}`);
+  const rows = (await response.json()) as Array<{ document?: FirestoreDocument }>;
+  return rows.flatMap((row) => (row.document ? [row.document] : []));
+}
+
+/** The names of the subcollections directly under [path]. */
+export async function collectionIds(projectId: string, accessToken: string, path: string): Promise<string[]> {
+  const response = await fetch(`${documentsUrl(projectId)}/${path}:listCollectionIds`, {
+    method: 'POST',
+    headers: { ...authHeaders(accessToken), 'content-type': 'application/json' },
+    body: JSON.stringify({ pageSize: 100 }),
+  });
+  if (!response.ok) throw new HttpError(502, `firestore list failed: ${response.status}`);
+  return ((await response.json()) as { collectionIds?: string[] }).collectionIds ?? [];
+}
+
+/** Up to 500 writes in one call; each one stands alone, so a run that stops halfway loses nothing. */
+export async function batchWrite(projectId: string, accessToken: string, writes: unknown[]): Promise<void> {
+  if (writes.length === 0) return;
+  const response = await fetch(`${documentsUrl(projectId)}:batchWrite`, {
+    method: 'POST',
+    headers: { ...authHeaders(accessToken), 'content-type': 'application/json' },
+    body: JSON.stringify({ writes }),
+  });
+  if (!response.ok) throw new HttpError(502, `firestore write failed: ${response.status}`);
+}
+
+/** A document's full resource name, as a batch write's delete takes it. */
+export function documentName(projectId: string, path: string): string {
+  return `projects/${projectId}/databases/(default)/documents/${path}`;
 }
 
 function stringArray(value: FirestoreValue | undefined): string[] {

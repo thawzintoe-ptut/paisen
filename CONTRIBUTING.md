@@ -66,6 +66,28 @@ git push                          # pre-push runs the checks
 Then open a pull request into `main`. CI runs the Android and iOS jobs, and both must pass before
 the pull request can be merged.
 
+## Dependency checksums
+
+Gradle refuses any library or plugin whose SHA-256 is not in `gradle/verification-metadata.xml`.
+After you change a version in `gradle/libs.versions.toml`, refresh the file from an empty Gradle
+home, so it lists what a clean CI runner downloads, and commit it with the bump:
+
+```bash
+GRADLE_USER_HOME=$(mktemp -d) ./gradlew --write-verification-metadata sha256 help :buildSrc:test \
+  spotlessCheck testAndroidHostTest :androidApp:assembleRelease :androidApp:bundleRelease \
+  :androidApp:lintDebug compileKotlinIosSimulatorArm64 :composeApp:linkDebugFrameworkIosSimulatorArm64 \
+  iosArm64ResolveResourcesFromDependencies
+```
+
+The last task pulls the iPhone builds' Compose resources, which only Xcode and the release
+framework ask for. Then build the app once in Xcode, or with `xcodebuild` for the simulator.
+
+A Mac never downloads the Linux `aapt2` that CI uses, so after an AGP bump add it to the `aapt2`
+entry by hand: the `shasum -a 256` of `aapt2-<version>-linux.jar` from
+`https://dl.google.com/dl/android/maven2/com/android/tools/build/aapt2/<version>/`. Dependabot
+cannot refresh the file, so its Gradle PRs carry the `needs-checksums` label and fail CI until you
+run the command on the PR branch and push the result.
+
 ## Commit messages and pull request titles
 
 ```
@@ -91,8 +113,8 @@ contribution is licensed under GPL-3.0 too.
 ### Releases
 
 Releases are tags on `main`, and the **Cut release** workflow makes them; nobody numbers a release
-by hand. The tag starts the **Release** workflow: it runs the same checks as a pull request,
-builds a signed APK and AAB with the version taken from the tag, and creates the GitHub release with
+by hand. The tag starts **Beta Release** (an rc tag) or **Production Release**: it runs the same
+checks as a pull request, builds a signed APK and AAB with the version taken from the tag, and creates the GitHub release with
 the APK. There are no release branches until one is needed.
 
 | Tag | Release | Notes come from | versionCode |
@@ -138,9 +160,9 @@ Play gets the notes cut to 500 characters, with a link to the full notes on GitH
 
 1. **Candidates are automatic.** When CI passes on a push to `main` that holds a `feat:` or `fix:`
    since the last tag, **Cut release** tags the next candidate on that commit and starts
-   **Release**. A push of only docs, tests or build changes waits for the next one.
+   **Beta Release**. A push of only docs, tests or build changes waits for the next one.
 2. **Production is a button.** **Actions → Cut release → Run workflow → production** tags the latest
-   candidate as `vX.Y.Z` on its own commit and starts **Release**. Play production still waits for
+   candidate as `vX.Y.Z` on its own commit and starts **Production Release**. Play production still waits for
    your approval in the `production` environment.
 3. **A candidate by hand**, for a build-only change or for `1.0.0`: the same button with
    `candidate`, and a bump if the commits cannot say it.
@@ -160,8 +182,9 @@ Play gets the notes cut to 500 characters, with a link to the full notes on GitH
    git push origin "$tag"
    ```
 
-   If **Cut release** made the tag but **Release** did not start, the run's summary says so: start
-   it by hand with **Actions → Release → Run workflow → Use workflow from** that tag.
+   If **Cut release** made the tag but the release did not start, the run's summary says so: start
+   it by hand with **Actions → Beta Release** (or **Production Release**) **→ Run workflow → Use
+   workflow from** that tag.
 4. The APK is on the GitHub release, and so is the unsigned IPA when `IOS_SIDELOAD_ENABLED` is on.
    The AAB for Play is in the workflow run's artifacts (7 days).
 5. With `IOS_ENABLED`, a beta tag also builds an ad hoc IPA: `v0.2.0-rc.1` becomes version 0.2.0,

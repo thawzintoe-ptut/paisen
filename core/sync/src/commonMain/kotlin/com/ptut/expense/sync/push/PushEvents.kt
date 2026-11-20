@@ -1,9 +1,15 @@
 package com.ptut.expense.sync.push
 
+import com.ptut.expense.domain.shared.SharedSnapshot
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * A push that arrived while the app was open: no banner, a sync at once. The platform offers the
@@ -33,4 +39,13 @@ object GroupLinks {
     fun consume() {
         pending.value = null
     }
+}
+
+/**
+ * L5: [groupId] when this phone holds that group, read once Room has answered; null for any other
+ * id, so a tap that names a group this phone does not hold opens nothing.
+ */
+suspend fun heldGroup(groupId: String?, snapshot: Flow<SharedSnapshot>, wait: Duration = 5.seconds): String? {
+    if (groupId.isNullOrBlank()) return null
+    return withTimeoutOrNull(wait) { snapshot.first { it !== SharedSnapshot.Empty } }?.group(groupId)?.id
 }

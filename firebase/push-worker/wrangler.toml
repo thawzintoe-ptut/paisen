@@ -27,5 +27,9 @@ name = "IP_LIMITER"
 namespace_id = "1002"
 simple = { limit = 120, period = 60 }
 
+# H3: once a day, groups deleted for everyone more than 30 days ago lose every document (src/cleanup.ts).
+[triggers]
+crons = ["17 3 * * *"]
+
 [observability]
 enabled = true

@@ -70,6 +70,16 @@ internal fun memberDoc(id: String) = FirestoreDoc(
     fields = mapOf("name" to id, "archived" to false, "createdAt" to 1L, "claimedByUid" to if (id.startsWith("me-")) UID else null),
 )
 
+/** A member id in the shape the app makes, which an invite's names must use. */
+internal const val BO = "0b0b0b0b-0000-4000-8000-b0b0b0b0b0b1"
+
+/** A name called [name], held by [holder] or by nobody. */
+internal fun named(id: String, name: String, holder: String? = null) = FirestoreDoc(
+    id = id,
+    name = "groups/g1/members/$id",
+    fields = mapOf("name" to name, "archived" to false, "createdAt" to 1L, "claimedByUid" to holder),
+)
+
 /** A PromptPay ID in the form the app saves, split so no scanner reads it as a real phone number. */
 internal const val PROMPT_PAY = "08" + "12345678"
 

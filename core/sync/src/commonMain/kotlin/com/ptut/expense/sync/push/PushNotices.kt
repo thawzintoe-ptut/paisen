@@ -2,7 +2,6 @@ package com.ptut.expense.sync.push
 
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeMoney
-import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.shared.ExpenseCause
 import com.ptut.expense.domain.shared.LogOrder
 import com.ptut.expense.domain.shared.Member
@@ -10,12 +9,13 @@ import com.ptut.expense.domain.shared.PaymentRemoval
 import com.ptut.expense.domain.shared.RepeatRule
 import com.ptut.expense.domain.shared.SharedExpense
 import com.ptut.expense.domain.shared.SharedPayment
-import com.ptut.expense.locale.Language
+import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.locale.SharedCopy
 
 /**
- * The words for each change a member makes, in every language at once. [actor] is the name this
- * phone's member carries in the group, which is the name the other phones show for it.
+ * The notice for each change a member makes, as ids and amounts. [actor] is the name this phone's
+ * member carries in the group; it words [sentence] here, while the other phones find the name by
+ * the sender's account.
  */
 class PushNotices(
     private val groupName: String,
@@ -27,54 +27,56 @@ class PushNotices(
 
     fun expense(version: SharedExpense, history: List<SharedExpense>): PushNotice {
         val previous = history.filter { it.id == version.id && LogOrder.compare(it, version) < 0 }.maxWithOrNull(LogOrder)
-        val amount = version.satang.formatCompact(money)
-        return notice { shared ->
-            val push = shared.push
-            val what = version.description.trim().ifEmpty { push.anExpense }
-            when {
-                previous == null && version.cause == ExpenseCause.REPEAT -> push.repeatAdded(what, amount)
-                previous == null -> push.added(actor, what, amount)
-                version.removed -> push.removed(actor, what)
-                previous.removed -> push.putBack(actor, what)
-                else -> push.edited(actor, what)
-            }
+        val kind = when {
+            previous == null && version.cause == ExpenseCause.REPEAT -> PushKind.RepeatAdded
+            previous == null -> PushKind.ExpenseAdded
+            version.removed -> PushKind.ExpenseRemoved
+            previous.removed -> PushKind.ExpensePutBack
+            else -> PushKind.ExpenseEdited
         }
+        val added = kind == PushKind.ExpenseAdded || kind == PushKind.RepeatAdded
+        return PushNotice(kind, about = version.versionId, amount = version.satang.toMinorUnits().takeIf { added }, currency = money.code.takeIf { added })
     }
 
-    fun payment(payment: SharedPayment): PushNotice = notice { shared ->
-        val nameOf = { id: String -> members.firstOrNull { it.id == id }?.name ?: shared.someone }
-        shared.push.paid(nameOf(payment.fromMemberId), nameOf(payment.toMemberId), payment.amount.formatCompact(money))
-    }
+    fun payment(payment: SharedPayment): PushNotice = PushNotice(
+        PushKind.Paid,
+        about = payment.id,
+        from = payment.fromMemberId,
+        to = payment.toMemberId,
+        amount = payment.amount.toMinorUnits(),
+        currency = money.code,
+    )
 
     fun paymentRemoval(removal: PaymentRemoval): PushNotice =
-        notice { shared -> if (removal.removed) shared.push.paymentRemoved(actor) else shared.push.paymentPutBack(actor) }
+        PushNotice(if (removal.removed) PushKind.PaymentRemoved else PushKind.PaymentPutBack, about = removal.paymentId)
 
-    fun repeat(rule: RepeatRule, isNew: Boolean): PushNotice = notice { shared ->
-        when {
-            isNew -> shared.push.repeatSetUp(actor, rule.description)
-            !rule.active -> shared.push.repeatStopped(actor, rule.description)
-            else -> shared.push.repeatChanged(actor, rule.description)
+    fun repeat(rule: RepeatRule, isNew: Boolean): PushNotice {
+        val kind = when {
+            isNew -> PushKind.RepeatSetUp
+            !rule.active -> PushKind.RepeatStopped
+            else -> PushKind.RepeatChanged
         }
+        return PushNotice(kind, about = rule.id)
     }
 
-    fun personAdded(name: String): PushNotice = notice { it.push.addedPerson(actor, name) }
+    fun personAdded(name: String): PushNotice = PushNotice(PushKind.PersonAdded, about = memberNamed(name))
 
-    fun personRemoved(name: String): PushNotice = notice { it.push.removedPerson(actor, name) }
+    fun personRemoved(name: String): PushNotice = PushNotice(PushKind.PersonRemoved, about = memberNamed(name))
 
-    fun nameChanged(): PushNotice = notice { it.push.changedName(actor) }
+    fun nameChanged(): PushNotice = PushNotice(PushKind.NameChanged)
 
-    fun renamed(): PushNotice = notice { it.push.renamed(actor, groupName) }
+    fun renamed(): PushNotice = PushNotice(PushKind.Renamed)
 
-    fun joined(): PushNotice = notice { it.push.joined(actor) }
+    fun joined(): PushNotice = PushNotice(PushKind.Joined)
 
-    fun left(): PushNotice = notice { it.push.left(actor) }
+    fun left(): PushNotice = PushNotice(PushKind.Left)
 
-    fun deleted(): PushNotice = notice { it.push.deleted(actor) }
+    fun deleted(): PushNotice = PushNotice(PushKind.Deleted)
 
-    private fun notice(sentence: (SharedCopy) -> String) = PushNotice(
-        title = groupName,
-        en = sentence(Language.English.copy.shared),
-        my = sentence(Language.Burmese.copy.shared),
-        th = sentence(Language.Thai.copy.shared),
-    )
+    /** [notice] worded on this phone, for the iOS refresh's local notices about rows others added. */
+    fun sentence(notice: PushNotice, snapshot: SharedSnapshot, copy: SharedCopy): String =
+        pushSentence(notice, members, snapshot, actor, groupName, copy, money)
+
+    // The callers pass a name; the other phones look the member up by id. Same name, same words.
+    private fun memberNamed(name: String): String? = members.firstOrNull { it.name == name }?.id
 }

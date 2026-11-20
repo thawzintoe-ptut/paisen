@@ -283,8 +283,26 @@ class SharedSync internal constructor(
                 pusher.push(quietFor = groupId)
             }
         }
-        return group.inviteCode?.takeIf { group.inviteActive } ?: newInvite(groupId)
+        return group.inviteCode?.takeIf { group.inviteActive && stillOpen(it) } ?: newInvite(groupId)
     }
+
+    /** Whether the invite [code] still lets people in; offline, the code this phone holds is kept. */
+    private suspend fun stillOpen(code: String): Boolean = try {
+        invite(code)?.let(::open) == true
+    } catch (expired: JoinException) {
+        false
+    } catch (unknown: FirestoreException) {
+        true
+    }
+
+    /** The invite's fields, or null when no invite has [code]. One past its end date cannot be read, and says so. */
+    private suspend fun invite(code: String): Fields? = try {
+        firestore.get("invites/$code")?.fields
+    } catch (refused: FirestoreException) {
+        if (refused.status == FirestoreStatus.FORBIDDEN) throw JoinException(EXPIRED) else throw refused
+    }
+
+    private fun open(invite: Fields): Boolean = invite.bool("active") && invite.instant("expiresAt")?.let { it <= clock.now() } != true
 
     /** A fresh code; the old one stops working (#190). Only the creator may do this. */
     suspend fun newInvite(groupId: String): String {
@@ -322,8 +340,8 @@ class SharedSync internal constructor(
     suspend fun openJoin(code: String): JoinChoice {
         val account = signedIn()
         // #218: a mistyped code is not an expired one, and says so.
-        val invite = firestore.get("invites/$code")?.fields ?: throw JoinException(AppText.copy.shared.sync.noSuchCode)
-        if (!invite.bool("active") || invite.instant("expiresAt")?.let { it <= clock.now() } == true) throw JoinException(EXPIRED)
+        val invite = invite(code) ?: throw JoinException(AppText.copy.shared.sync.noSuchCode)
+        if (!open(invite)) throw JoinException(EXPIRED)
         val groupId = invite.string("groupId") ?: throw JoinException(EXPIRED)
         val groupName = invite.string("groupName") ?: AppText.copy.shared.sync.aGroup
         // Readable to an account already in, or one that registered this code before; M1: a member registers nothing.
@@ -384,13 +402,17 @@ class SharedSync internal constructor(
                 create = true,
             )
         }
-        // L4: the join is registered in the commit that picks the name, not when the link opened.
-        val registered = choice.code?.takeUnless { choice.member }?.let { firestore.upsertWrite("groups/$groupId/joins/${account.uid}", mapOf("code" to it)) }
+        // L4: the join is registered once a name is picked, never when the link opened. Any member can
+        // write the invite's copy of the names, so the name is checked against the group's own first.
+        if (choice.code != null && !choice.member) {
+            register(groupId, choice.code)
+            if (memberId != null && !stillAsShown(choice, memberId)) throw JoinException(AppText.copy.shared.sync.nameTaken)
+        }
         try {
-            firestore.commit(listOfNotNull(registered, claim, firestore.appendWrite("groups/$groupId", "memberUids", listOf(account.uid))))
+            firestore.commit(listOf(claim, firestore.appendWrite("groups/$groupId", "memberUids", listOf(account.uid))))
         } catch (refused: FirestoreException) {
             if (refused.status != FirestoreStatus.FORBIDDEN) throw refused
-            throw JoinException(if (memberId != null && claimedSince(choice, memberId)) AppText.copy.shared.sync.nameTaken else EXPIRED)
+            throw JoinException(if (memberId != null && claimedSince(groupId, memberId)) AppText.copy.shared.sync.nameTaken else EXPIRED)
         }
         running.withLock { puller.pull(groupId, meMemberId = mine) }
         val name = choice.mine?.second ?: choice.names.firstOrNull { it.first == memberId }?.second ?: account.name.firstWord()
@@ -398,17 +420,21 @@ class SharedSync internal constructor(
         return groupId
     }
 
-    /**
-     * Step two was refused: someone claimed [memberId] after step one, rather than the invite going
-     * off. A pick from the invite's names left nothing to read the name with, so the join is
-     * registered first; refused, it is the code that stopped.
-     */
-    private suspend fun claimedSince(choice: JoinChoice, memberId: String): Boolean = try {
-        if (choice.code != null && !choice.member) register(choice.groupId, choice.code)
-        firestore.get("groups/${choice.groupId}/members/$memberId")?.fields?.string("claimedByUid") != null
+    /** The picked name is still nobody's and still called what the picker showed. */
+    private suspend fun stillAsShown(choice: JoinChoice, memberId: String): Boolean {
+        val name = try {
+            firestore.get("groups/${choice.groupId}/members/$memberId")?.fields
+        } catch (refused: FirestoreException) {
+            if (refused.status == FirestoreStatus.FORBIDDEN) throw JoinException(EXPIRED) else throw refused
+        } ?: return false
+        val shown = choice.names.firstOrNull { it.first == memberId }?.second
+        return name.string("claimedByUid") == null && !name.bool("archived") && name.string("name") == shown
+    }
+
+    /** Step two was refused: someone claimed [memberId] after step one, rather than the invite going off. */
+    private suspend fun claimedSince(groupId: String, memberId: String): Boolean = try {
+        firestore.get("groups/$groupId/members/$memberId")?.fields?.string("claimedByUid") != null
     } catch (unreadable: FirestoreException) {
-        false
-    } catch (expired: JoinException) {
         false
     }
 
@@ -416,8 +442,13 @@ class SharedSync internal constructor(
     private suspend fun publishNames(groupId: String) {
         val group = dao.group(groupId) ?: return
         val code = group.inviteCode?.takeIf { group.inviteActive } ?: return
-        // A copy for convenience: a refused or lost write waits for the next change of names.
-        runSuspendCatching { firestore.patch("invites/$code", mapOf(INVITE_NAMES to pickableNames(dao.membersOf(groupId)))) }
+        // A copy for convenience: a refused or lost write waits for the next change of names. Read first,
+        // so an invite switched off or past its end date gets none, and the same names are not sent twice.
+        runSuspendCatching {
+            val invite = invite(code)?.takeIf(::open) ?: return@runSuspendCatching
+            val names = pickableNames(dao.membersOf(groupId))
+            if (invite.string(INVITE_NAMES) != names) firestore.patch("invites/$code", mapOf(INVITE_NAMES to names))
+        }
     }
 
     /**
@@ -598,7 +629,7 @@ private val QUIET = SyncOutcome(groupsChanged = false, failed = false)
 private val INVITE_LIFETIME = 90.days
 
 /** An invite switched off, with its names emptied so an old link shows nobody's (L4). */
-private val OFF: Fields = mapOf("active" to false, INVITE_NAMES to emptyList<String>())
+private val OFF: Fields = mapOf("active" to false, INVITE_NAMES to "")
 
 /** The server's time on a group deleted for everyone, which the clean-up reads. */
 private const val DELETED_AT = "deletedAt"

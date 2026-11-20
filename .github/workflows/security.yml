@@ -81,8 +81,11 @@ jobs:
           java-version: '21'
       # Only what ships. buildSrc carries AGP, the Kotlin plugin and their tools on its runtime
       # classpath; reported, they raise alerts no app update can fix.
+      # Lenient here only: it resolves every configuration, Linux toolchains too, and loads its own
+      # graph plugin, none of which gradle/verification-metadata.xml lists. It builds nothing.
       - uses: gradle/actions/dependency-submission@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
+          additional-arguments: --dependency-verification lenient
           dependency-graph-exclude-projects: ':buildSrc'
           dependency-graph-include-configurations: '.*[Rr]untimeClasspath'
           dependency-graph-exclude-configurations: '.*[Tt]est.*'

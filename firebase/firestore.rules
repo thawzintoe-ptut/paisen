@@ -322,15 +322,22 @@ service cloud.firestore {
     // One document per live code, so a code can be looked up without listing anything.
     match /invites/{code} {
       // L4: the names nobody holds yet, so someone opening the link picks one without writing anything.
+      // Rules cannot loop over a list, so they are one text of "id<TAB>name<LF>" lines and one pattern
+      // checks every line: the app's UUID, then 1 to 60 characters.
       function namesOk() {
-        return request.resource.data.get('names', []) is list && request.resource.data.get('names', []).size() <= 100;
+        let names = request.resource.data.get('names', '');
+        return names is string && names.size() <= 25000
+          && names.matches('([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\t[^\\t\\n]{1,60}\\n)*');
       }
+      // An invite made with an end date shows nothing once it has passed, not even its names.
+      function openNow() { return resource.data.get('expiresAt', null) == null || request.time < resource.data.expiresAt; }
       // Kept current by any member, on the group's live invite only.
       function liveInvite() {
         let gid = resource.data.groupId;
-        return resource.data.active == true && groupData(gid).inviteCode == code && groupData(gid).inviteActive == true;
+        return resource.data.active == true && openNow() && groupData(gid).inviteCode == code && groupData(gid).inviteActive == true;
       }
-      allow get: if signedIn();
+      // A code that matches nothing reads as missing, so the app can say so.
+      allow get: if signedIn() && (resource == null || openNow());
       allow list: if false;
       allow create: if isCreator(request.resource.data.groupId) && request.resource.data.creatorUid == request.auth.uid
         && request.resource.data.keys().hasOnly(['groupId', 'groupName', 'active', 'creatorUid', 'expiresAt', 'names']) && code.size() <= 64

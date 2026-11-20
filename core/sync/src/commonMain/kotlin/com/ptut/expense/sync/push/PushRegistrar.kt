@@ -3,6 +3,8 @@ package com.ptut.expense.sync.push
 import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.sync.Firestore
+import com.ptut.expense.sync.FirestoreException
+import com.ptut.expense.sync.FirestoreStatus
 import com.ptut.expense.sync.auth.Account
 import com.ptut.expense.sync.auth.AuthRepository
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +26,7 @@ class PushRegistrar internal constructor(
     /** False in a build with no push Worker: nothing registers. */
     private val enabled: Boolean,
     private val clock: Clock = Clock.System,
+    private val leftovers: PushLeftovers = pushLeftovers(),
 ) {
     /** The token whose document this phone last wrote, so sign-out removes the right one. Set and read from several threads. */
     private val registered = MutableStateFlow<String?>(null)
@@ -34,6 +37,7 @@ class PushRegistrar internal constructor(
             combine(auth.account, tokens.token, AppText.language) { account, token, language -> Triple(account, token, language) }
                 .distinctUntilChanged()
                 .collectLatest { (account, token, language) ->
+                    settleLeftover(account, token)
                     if (account !is Account.SignedIn || token == null) return@collectLatest
                     // A failure waits for the next change or launch; the phone still pulls on its own.
                     runSuspendCatching {
@@ -52,12 +56,39 @@ class PushRegistrar internal constructor(
         }
     }
 
-    /** Called while the account is still signed in, because the rules let only the owner delete. */
+    /**
+     * Called while the account is still signed in, because the rules let only the owner delete. A
+     * delete that fails, offline say, is kept as a [PushLeftover] for a later start to settle.
+     */
     suspend fun forgetDevice() {
         if (!enabled) return
         val token = registered.value ?: tokens.token.value ?: return
-        runSuspendCatching { firestore.delete("devices/$token") }
+        val uid = (auth.account.value as? Account.SignedIn)?.uid
+        val deleted = runSuspendCatching { firestore.delete("devices/$token") }.isSuccess
+        if (!deleted && uid != null) leftovers.write(PushLeftover(token, uid))
         // Only the token deleted here: one registered meanwhile still needs removing.
         registered.compareAndSet(token, null)
+    }
+
+    /**
+     * L3: the same account deletes its old document, or registers this one over it. Signed out or
+     * as another account, the rules allow no delete, so the platform retires the installation ID.
+     */
+    private suspend fun settleLeftover(account: Account, token: String?) {
+        val leftover = leftovers.read() ?: return
+        val owner = (account as? Account.SignedIn)?.uid == leftover.uid
+        val settled = when {
+            owner && leftover.token == token -> true
+            owner -> deleted(leftover.token)
+            else -> leftovers.retire(leftover.token)
+        }
+        if (settled) leftovers.write(null)
+    }
+
+    /** Gone, or refused for good: a document that is not there or not this account's needs nothing more. */
+    private suspend fun deleted(token: String): Boolean {
+        val result = runSuspendCatching { firestore.delete("devices/$token") }
+        val refusal = result.exceptionOrNull() as? FirestoreException
+        return result.isSuccess || (refusal != null && FirestoreStatus.isPermanent(refusal.status))
     }
 }

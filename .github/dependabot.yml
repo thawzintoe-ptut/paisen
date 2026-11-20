@@ -17,6 +17,8 @@ updates:
 
   # Libraries and Gradle plugins from gradle/libs.versions.toml. Versions that only work
   # together share a group, so one PR tests them together.
+  # Dependabot cannot update gradle/verification-metadata.xml, so these PRs fail CI until the
+  # file is refreshed on the PR branch (CONTRIBUTING.md, "Dependency checksums"). The label says so.
   - package-ecosystem: gradle
     directory: /
     schedule:
@@ -25,6 +27,7 @@ updates:
       default-days: 7
     commit-message:
       prefix: build
+    labels: ['dependencies', 'needs-checksums']
     groups:
       # Each KSP release is built for one Kotlin version.
       kotlin:
@@ -34,3 +37,16 @@ updates:
         patterns: ['org.jetbrains.compose*', 'org.jetbrains.androidx.*']
       androidx:
         patterns: ['androidx.*']
+
+  # The Firebase CLI distribute-firebase.yml sends builds with. Its lockfile is what CI installs.
+  - package-ecosystem: npm
+    directory: /.github/tools/firebase
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+    groups:
+      firebase-tools:
+        patterns: ['*']

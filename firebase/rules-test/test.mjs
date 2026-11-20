@@ -472,7 +472,11 @@ await check('14.7 someone not in the group moves their join to the new code', 'a
 });
 
 // 15. L4: the names on the invite, and the join written in the pick commit
-const names = (n) => Array.from({ length: n }, (_, i) => ({ id: `m${i}`, name: `N${i}` }));
+// Member ids as the app makes them: lowercase UUIDs.
+const uuid = (i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`;
+// What the app writes: one "id<TAB>name<LF>" line per name nobody holds.
+const line = (id, name) => `${id}\t${name}\n`;
+const names = (n, name = (i) => `N${i}`) => Array.from({ length: n }, (_, i) => line(uuid(i), name(i))).join('');
 const pickCommit = (uid, code, claim) => {
   const db = as(uid);
   const batch = writeBatch(db);
@@ -482,14 +486,14 @@ const pickCommit = (uid, code, claim) => {
   return batch.commit();
 };
 await check('15.1 creator makes an invite with its names', 'allow', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite({ names: names(2) })));
-await check('15.2 invite with 101 names', 'deny', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite({ names: names(101) })));
-await check('15.3 invite whose names are not a list', 'deny', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite({ names: 'x'.repeat(1000) })));
+await check('15.2 invite whose names pass 25,000 characters', 'deny', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite({ names: names(300, () => 'x'.repeat(60)) })));
+await check('15.3 invite whose names are a list, not text', 'deny', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite({ names: ['x'] })));
 await check('15.4 a member keeps the live invite\'s names current', 'allow', {}, () => updateDoc(doc(as('bob'), 'invites/CODE1'), { names: names(1) }));
 await check('15.5 a member writes names on an invite switched off', 'deny', { invite: { active: false } }, () => updateDoc(doc(as('bob'), 'invites/CODE1'), { names: names(1) }));
 await check('15.6 a member writes names on a code the group moved on from', 'deny', { group: { inviteCode: 'CODE2' } }, () => updateDoc(doc(as('bob'), 'invites/CODE1'), { names: names(1) }));
 await check('15.7 someone with the live code, not in the group, writes the names', 'deny', {}, () => updateDoc(doc(as('mallory'), 'invites/CODE1'), { names: names(1) }));
-await check('15.8 a member writes 101 names', 'deny', {}, () => updateDoc(doc(as('bob'), 'invites/CODE1'), { names: names(101) }));
-await check('15.9 creator switches the invite off and empties its names', 'allow', {}, () => updateDoc(doc(as('alice'), 'invites/CODE1'), { active: false, names: [] }));
+await check('15.8 a member writes names past 25,000 characters', 'deny', {}, () => updateDoc(doc(as('bob'), 'invites/CODE1'), { names: names(300, () => 'x'.repeat(60)) }));
+await check('15.9 creator switches the invite off and empties its names', 'allow', {}, () => updateDoc(doc(as('alice'), 'invites/CODE1'), { active: false, names: '' }));
 await check('15.10 pick commit: join, claim and come in together, nothing written before', 'allow', {}, () => pickCommit('eve', 'CODE1', claimName('eve', 'mCara')));
 await check('15.11 pick commit, "I\'m not on the list"', 'allow', {}, () => pickCommit('eve', 'CODE1', addOwnName('eve')));
 await check('15.12 pick commit with a code that is not the group\'s', 'deny', {}, () => pickCommit('eve', 'CODE9', claimName('eve', 'mCara')));
@@ -541,7 +545,7 @@ await check('16.20 new app leave commit with none stored', 'allow', { pay: {} },
 await check('16.21 new app delete-for-everyone also takes every PromptPay ID away', 'allow', {}, () => {
   const db = as('alice');
   const batch = writeBatch(db);
-  batch.update(doc(db, 'invites/CODE1'), { active: false, names: [] });
+  batch.update(doc(db, 'invites/CODE1'), { active: false, names: '' });
   batch.update(doc(db, 'groups/g1'), { deleted: true, inviteActive: false, deletedAt: serverTimestamp() });
   batch.update(doc(db, 'groups/g1/members/mBob'), { promptPay: null });
   batch.delete(doc(db, 'groups/g1/pay/mBob'));
@@ -552,6 +556,41 @@ await check('16.23 new app moves its ID: stored in pay, cleared from the name', 
   await setDoc(doc(as('bob'), 'groups/g1/pay/mBob'), payDoc());
   return updateDoc(doc(as('bob'), 'groups/g1/members/mBob'), { promptPay: null });
 });
+
+// 17. Review of L4: names die with the invite, and every entry has the app's shape
+const listed = { invite: { names: names(1) } };
+const pastListed = { invite: { names: names(1), expiresAt: Timestamp.fromMillis(Date.now() - 60_000) } };
+const futureListed = { invite: { names: names(1), expiresAt: Timestamp.fromMillis(Date.now() + 86_400_000) } };
+const setNames = (value) => () => updateDoc(doc(as('bob'), 'invites/CODE1'), { names: value });
+await check('17.1 someone with the code reads an invite past its end date', 'deny', pastListed, () => getDoc(doc(as('eve'), 'invites/CODE1')));
+await check('17.2 a member reads an invite past its end date', 'deny', pastListed, () => getDoc(doc(as('bob'), 'invites/CODE1')));
+await check('17.3 someone with the code reads an invite before its end date', 'allow', futureListed, () => getDoc(doc(as('eve'), 'invites/CODE1')));
+await check('17.4 a code that matches nothing reads as missing', 'allow', {}, () => getDoc(doc(as('eve'), 'invites/NOPE')));
+await check('17.5 a member puts names on an invite past its end date', 'deny', pastListed, setNames(names(2)));
+await check('17.6 a member puts names on an invite before its end date', 'allow', futureListed, setNames(names(2)));
+await check('17.7 a name under an id that is not the app\'s', 'deny', listed, setNames(line('mBob', 'Aye')));
+await check('17.8 a name under an id in capitals', 'deny', listed, setNames(line('ABCDEF00-0000-4000-8000-000000000001', 'Aye')));
+await check('17.9 a name of 61 characters', 'deny', listed, setNames(line(uuid(1), 'x'.repeat(61))));
+await check('17.10 a name of 60 characters', 'allow', listed, setNames(line(uuid(1), 'x'.repeat(60))));
+await check('17.11 an empty name', 'deny', listed, setNames(line(uuid(1), '')));
+await check('17.12 names that are not text', 'deny', listed, setNames(7));
+await check('17.13 names as a map of entries', 'deny', listed, setNames({ [uuid(1)]: 'Aye' }));
+await check('17.14 a line with a third part', 'deny', listed, setNames(line(uuid(1), `Aye\t${uuid(2)}`)));
+await check('17.15 one bad line among good ones', 'deny', listed, setNames(names(3) + line('mBob', 'Aye')));
+await check('17.16 names as the earlier list of entries', 'deny', listed, setNames([{ id: uuid(1), name: 'Aye' }]));
+await check('17.17 creator makes an invite with a bad line', 'deny', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite({ names: line('mBob', 'Aye') })));
+await check('17.18 the names emptied', 'allow', listed, setNames(''));
+await check('17.19 a last line with no line break', 'deny', listed, setNames(line(uuid(1), 'Aye').trimEnd()));
+await check('17.20 names in Burmese', 'allow', listed, setNames(line(uuid(1), 'မောင်မောင်')));
+// What SharedSync.join does with a name off the invite: register, read the name as the group holds it, then claim.
+await check('17.21 the pick: join registered, the name read back, then claimed', 'allow', {}, async () => {
+  const db = as('eve');
+  await setDoc(doc(db, 'groups/g1/joins/eve'), { code: 'CODE1' });
+  const cara = await getDoc(doc(db, 'groups/g1/members/mCara'));
+  if (cara.data().name !== 'Cara' || cara.data().claimedByUid !== null) throw new Error('name not as listed');
+  return joinCommit('eve', claimName('eve', 'mCara'));
+});
+await check('17.22 before the join is registered, the name cannot be read', 'deny', {}, () => getDoc(doc(as('eve'), 'groups/g1/members/mCara')));
 
 await env.cleanup();
 for (const [status, expect, name, why] of results) console.log(`${status}  ${expect.padEnd(5)}  ${name}${why ? `  -> ${why}` : ''}`);

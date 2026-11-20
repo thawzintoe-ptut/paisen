@@ -59,21 +59,17 @@ function targetOf(device: Device): Record<string, string> {
 }
 
 function messageFor(device: Device, { notice, title, senderUid }: Outgoing): Record<string, unknown> {
-  const { body, ...event } = noticeData(notice, senderUid, device.language);
+  // `uid` is the account this device was registered for; the phone drops a push for any other.
+  const data = { groupId: notice.groupId, uid: device.uid, title, ...noticeData(notice, senderUid, device.language) };
   if (device.platform === 'android') {
-    return {
-      ...targetOf(device),
-      // `uid` is the account this device was registered for; the phone drops a push for any other.
-      data: { groupId: notice.groupId, uid: device.uid, title, body, ...event },
-      android: { priority: 'high' },
-    };
+    return { ...targetOf(device), data, android: { priority: 'high' } };
   }
+  // M6: data only, so the iPhone words the notice itself and drops one for another account.
   return {
     ...targetOf(device),
-    notification: { title, body },
-    data: { groupId: notice.groupId, uid: device.uid, ...event },
+    data,
     apns: {
-      headers: { 'apns-priority': '10' },
+      headers: { 'apns-priority': '5', 'apns-push-type': 'background' },
       payload: { aps: { 'content-available': 1 } },
     },
   };

@@ -4,6 +4,7 @@ import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
+import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.graphStarted
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.shared.displayName
@@ -61,17 +62,19 @@ fun runSharedRefresh(done: () -> Unit) {
 enum class PushSyncResult { NewData, NoData, Failed }
 
 /**
- * A push that woke the app in the background: the shared groups sync now, since no screen is open
- * to do it, and [done] is called once with what it found. The push's own banner says what changed.
+ * A data push woke the app in the background (M6: every push is data only): the shared groups
+ * sync now, since no screen is open to do it, and the app posts the notice, worded from its own
+ * copy of the group, or an old build's sentence as the Worker cleaned it. [done] is called once.
  */
-fun runPushSync(uid: String?, done: (PushSyncResult) -> Unit) {
+fun runPushSync(userInfo: Map<Any?, *>, done: (PushSyncResult) -> Unit) {
     graphStarted
     val koin = KoinPlatform.getKoin()
     val sync = koin.getOrNull<SharedSync>()
     val repository = koin.getOrNull<SharedRepository>()
     val account = koin.getOrNull<AuthRepository>()?.account?.value as? Account.SignedIn
+    val push = ReceivedPush.from(userInfo.strings())
     // A sign-out made offline leaves the device document behind; only the account the push names syncs.
-    if (sync == null || repository == null || account == null || account.uid != uid || !sync.available) {
+    if (push == null || sync == null || repository == null || account == null || account.uid != push.uid || !sync.available) {
         done(PushSyncResult.NoData)
         return
     }
@@ -79,6 +82,7 @@ fun runPushSync(uid: String?, done: (PushSyncResult) -> Unit) {
         var result = PushSyncResult.Failed
         try {
             val before = repository.snapshot.first { it !== SharedSnapshot.Empty }.entryIds()
+            val words = PushReader(repository.snapshot, sync = { sync.syncAll() }).words(push, AppText.copy.shared)
             val pulled = runSuspendCatching { sync.syncAll() }
             val offline = sync.overallStatus().first().health == SyncHealth.Offline
             val fresh = repository.snapshot.value.entryIds() != before || pulled.getOrDefault(false)
@@ -87,11 +91,17 @@ fun runPushSync(uid: String?, done: (PushSyncResult) -> Unit) {
                 fresh -> PushSyncResult.NewData
                 else -> PushSyncResult.NoData
             }
+            val subject = push.notice?.let { "${it.kind.wire}-${it.about}" } ?: words.body
+            post(words.title, push.groupId, account.uid, "push-${push.groupId}-${subject.hashCode()}", words.body)
         } finally {
             done(result)
         }
     }
 }
+
+/** userInfo's string values by their string keys; `aps` and anything else not a string drops out. */
+private fun Map<Any?, *>.strings(): Map<String, String?> =
+    entries.mapNotNull { (key, value) -> (key as? String)?.let { it to (value as? String) } }.toMap()
 
 /** iOS is taking the time back; what has been posted stays posted. */
 fun cancelSharedRefresh() {
@@ -106,8 +116,8 @@ private fun notifyNew(before: SharedSnapshot, after: SharedSnapshot, uid: String
         val fresh = after.newIn(group, known)
         when {
             fresh.isEmpty() -> Unit
-            fresh.size > SINGLE_NOTICES -> post(group, uid, "summary-${group.id}", summary(group, fresh.map { it.author }))
-            else -> fresh.forEach { post(group, uid, "shared-${it.id}", it.sentence) }
+            fresh.size > SINGLE_NOTICES -> post(group.name, group.id, uid, "summary-${group.id}", summary(group, fresh.map { it.author }))
+            else -> fresh.forEach { post(group.name, group.id, uid, "shared-${it.id}", it.sentence) }
         }
     }
 }
@@ -118,17 +128,20 @@ private fun SharedSnapshot.entryIds(): Set<String> =
     expenseVersions.map { it.versionId }.toSet() + payments.map { it.id } + paymentRemovals.map { it.id }
 
 private fun SharedSnapshot.newIn(group: SharedGroup, known: Set<String>): List<Fresh> {
-    val language = AppText.language.value
-    fun notices(author: String) = PushNotices(group.name, group.displayName(author), group.members)
+    val copy = AppText.copy.shared
+    fun words(author: String, notice: (PushNotices) -> PushNotice): String {
+        val notices = PushNotices(group.name, group.displayName(author), group.members, money = group.moneyFormat())
+        return notices.sentence(notice(notices), this, copy)
+    }
     fun String?.other(): String? = this?.takeIf { !group.isMe(it) }
     val versions = expenseVersions.filter { it.groupId == group.id && it.versionId !in known }.mapNotNull { version ->
-        version.authorMemberId.other()?.let { Fresh(version.versionId, it, notices(it).expense(version, expenseVersions).body(language)) }
+        version.authorMemberId.other()?.let { Fresh(version.versionId, it, words(it) { notices -> notices.expense(version, expenseVersions) }) }
     }
     val paid = payments.filter { it.groupId == group.id && it.id !in known }.mapNotNull { payment ->
-        payment.authorMemberId.other()?.let { Fresh(payment.id, it, notices(it).payment(payment).body(language)) }
+        payment.authorMemberId.other()?.let { Fresh(payment.id, it, words(it) { notices -> notices.payment(payment) }) }
     }
     val removals = paymentRemovals.filter { it.groupId == group.id && it.id !in known }.mapNotNull { removal ->
-        removal.authorMemberId.other()?.let { Fresh(removal.id, it, notices(it).paymentRemoval(removal).body(language)) }
+        removal.authorMemberId.other()?.let { Fresh(removal.id, it, words(it) { notices -> notices.paymentRemoval(removal) }) }
     }
     return versions + paid + removals
 }
@@ -140,12 +153,12 @@ private fun summary(group: SharedGroup, authors: List<String>): String {
 }
 
 /** Delivered at once. The tap opens the group through the same path a push takes ([receivePushTap]). */
-private fun post(group: SharedGroup, uid: String, id: String, body: String) {
+private fun post(title: String, groupId: String, uid: String, id: String, body: String) {
     val content = UNMutableNotificationContent().apply {
-        setTitle(group.name)
+        setTitle(title)
         setBody(body)
         setSound(UNNotificationSound.defaultSound())
-        setUserInfo(mapOf<Any?, Any?>("groupId" to group.id, "uid" to uid))
+        setUserInfo(mapOf<Any?, Any?>("groupId" to groupId, "uid" to uid))
     }
     UNUserNotificationCenter.currentNotificationCenter()
         .addNotificationRequest(UNNotificationRequest.requestWithIdentifier(id, content, trigger = null), withCompletionHandler = null)

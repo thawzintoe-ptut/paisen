@@ -107,8 +107,6 @@ internal class FakeFirestore : Firestore {
 
     override fun stampedUpdateWrite(relative: String, fields: Fields, stamp: String): JsonObject = described("update $relative ${fields.keys} stamp $stamp", relative)
 
-    override fun upsertWrite(relative: String, fields: Fields): JsonObject = described("set $relative ${fields.keys}", relative)
-
     override fun deleteWrite(relative: String): JsonObject = described("delete $relative", relative)
 
     private fun described(write: String, path: String): JsonObject = buildJsonObject {

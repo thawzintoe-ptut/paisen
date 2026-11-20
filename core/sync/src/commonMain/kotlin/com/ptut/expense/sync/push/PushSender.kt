@@ -10,8 +10,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -42,18 +40,7 @@ class PushSender internal constructor(
 
     private suspend fun send(groupId: String, notice: PushNotice) {
         runSuspendCatching {
-            val body = buildJsonObject {
-                put("groupId", groupId)
-                put("title", notice.title)
-                put(
-                    "body",
-                    buildJsonObject {
-                        put("en", notice.en)
-                        put("my", notice.my)
-                        put("th", notice.th)
-                    },
-                )
-            }
+            val body = notice.toWire(groupId)
             http.post("${url.trimEnd('/')}/notify") {
                 header("Authorization", "Bearer ${idToken()}")
                 contentType(ContentType.Application.Json)

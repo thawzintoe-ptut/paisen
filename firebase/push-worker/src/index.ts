@@ -1,4 +1,5 @@
 import { accessToken, verifyIdToken } from './auth';
+import { cleanUp } from './cleanup';
 import { sendToDevice } from './fcm';
 import { deleteDevice, devicesFor, readGroup, type Device, type Group } from './firestore';
 import { HttpError, json } from './http';
@@ -30,6 +31,17 @@ export default {
       if (error instanceof HttpError) return json({ error: error.message }, error.status);
       console.error(error);
       return json({ error: 'internal' }, 500);
+    }
+  },
+
+  // H3, daily (`[triggers] crons`): counts only in the log, never a group's id or name.
+  async scheduled(controller, env): Promise<void> {
+    try {
+      const token = await accessToken(env.FIREBASE_SERVICE_ACCOUNT);
+      const counts = await cleanUp(env.FIREBASE_PROJECT_ID, token, controller.scheduledTime);
+      console.log(JSON.stringify({ cleanup: counts }));
+    } catch (error) {
+      console.error(`cleanup failed: ${error instanceof HttpError ? error.message : 'internal'}`);
     }
   },
 } satisfies ExportedHandler<Env>;

@@ -62,18 +62,23 @@ final class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNU
         messaging?.apnsToken = deviceToken
     }
 
-    /// A content-available push woke the app in the background: no screen is open to sync, so Kotlin
-    /// syncs here and iOS hears when it finishes. An active app already heard it through `willPresent`.
+    /// Every shared-group push is data only (M6). Open, the group refreshes; in the background, Kotlin
+    /// syncs, posts the notice it words itself, and iOS hears when it finishes.
     func application(
         _ application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        guard application.applicationState != .active, Self.groupId(in: userInfo) != nil else {
+        guard let groupId = Self.groupId(in: userInfo) else {
             completionHandler(.noData)
             return
         }
-        IosSharedRefreshKt.runPushSync(uid: Self.uid(in: userInfo)) { result in
+        if application.applicationState == .active {
+            IosPushKt.receivePushInForeground(groupId: groupId, uid: Self.uid(in: userInfo))
+            completionHandler(.noData)
+            return
+        }
+        IosSharedRefreshKt.runPushSync(userInfo: userInfo) { result in
             switch result {
             case .newdata: completionHandler(.newData)
             case .failed: completionHandler(.failed)
@@ -88,8 +93,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNU
         IosPushKt.receivePushToken(token: installationId)
     }
 
-    /// No banner while the app is open: the group refreshes instead. A repeat reminder keeps the
-    /// behaviour it had with no delegate, which is to show nothing in the foreground.
+    /// No banner while the app is open for a notice the app posted itself: the group refreshes instead.
+    /// A repeat reminder keeps the behaviour it had with no delegate, which is to show nothing.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
