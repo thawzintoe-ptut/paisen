@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: .github/tools/firebase
+          sparse-checkout: tools/firebase
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ inputs.platform == 'ios' && format('PaiSeN-ios-ad-hoc-{0}', inputs.version-name) || format('PaiSeN-{0}', inputs.version-name) }}
@@ -45,7 +45,7 @@ jobs:
           package-manager-cache: false
       # Exactly the files in package-lock.json, with no install scripts, before any key is on disk.
       - name: Install the Firebase CLI
-        working-directory: .github/tools/firebase
+        working-directory: tools/firebase
         run: npm ci --ignore-scripts --no-audit --no-fund
       # The app id comes from settings the build already uses, so it is not a second secret to keep in step.
       - name: Send the build to the ${{ inputs.group }} group
@@ -70,7 +70,7 @@ jobs:
             *) echo "::error::platform is '$PLATFORM'; it must be android or ios"; exit 1 ;;
           esac
           printf '%s' "$FIREBASE_DISTRIBUTION_SA_JSON" > "$RUNNER_TEMP/distribution.json"
-          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/distribution.json" .github/tools/firebase/node_modules/.bin/firebase \
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/distribution.json" tools/firebase/node_modules/.bin/firebase \
             appdistribution:distribute "$file" --app "$app_id" --groups "$GROUP" --release-notes-file notes.md
       - name: Remove the key
         if: always()

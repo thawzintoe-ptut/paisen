@@ -19,7 +19,8 @@ permissions:
 # A new push replaces a pull request's run. On main each commit has its own group, because a
 # shared group still cancels a waiting run when a third one arrives.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  # Called from a release, github.workflow is the caller's name; the prefix keeps checks and tests apart.
+  group: tests-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

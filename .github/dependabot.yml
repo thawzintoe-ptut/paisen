@@ -40,7 +40,7 @@ updates:
 
   # The Firebase CLI distribute-firebase.yml sends builds with. Its lockfile is what CI installs.
   - package-ecosystem: npm
-    directory: /.github/tools/firebase
+    directory: /tools/firebase
     schedule:
       interval: monthly
     cooldown:

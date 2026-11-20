@@ -43,6 +43,7 @@ jobs:
     name: ${{ inputs.signing == 'none' && 'Unsigned IPA (sideload)' || 'Signed IPA (ad hoc)' }}
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-26
+    timeout-minutes: 90
     environment: release
     permissions:
       contents: read

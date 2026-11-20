@@ -118,6 +118,11 @@ jobs:
           # Production ships the candidate testers had, so its tag goes on that candidate's commit.
           if [ "$MODE" = production ]; then
             target=$(git rev-list -n 1 "$(scripts/release/next-version.sh --latest)")
+            # A tag on a commit without the release workflow could not start it, and only an admin can delete it.
+            if ! git cat-file -e "$target:.github/workflows/production-release.yml" 2> /dev/null; then
+              echo "::error::The latest candidate (${target:0:7}) predates Production Release. Cut a new candidate with Beta Tag first."
+              exit 1
+            fi
           else
             target=$(git rev-parse HEAD)
           fi
