@@ -1,8 +1,8 @@
-name: Signed build
+name: Build AAB
 
 # US-3: a signed APK and AAB, kept as workflow artifacts for 7 days. Nothing is published.
 # Run by hand it uses versionCode 1, which Play already holds, so Play refuses the upload.
-# release.yml calls it with the tag's version.
+# Beta Release and Production Release call it with the tag's version.
 on:
   workflow_dispatch:
     inputs:

@@ -1,0 +1,162 @@
+name: Cut a release tag
+
+# Nobody numbers a release by hand. Beta Tag, Production Tag and Nightly Beta Release call this
+# with a mode; scripts/release/next-version.sh picks the number:
+#   auto        the next candidate, only when a feat: or fix: landed and every required check passed
+#   candidate   the next candidate on this commit, by hand, with an optional forced bump
+#   production  the latest candidate as vX.Y.Z, on that candidate's own commit
+#
+# The tag starts Beta Release or Production Release by dispatch: a tag pushed with GITHUB_TOKEN
+# starts no workflow, a workflow_dispatch does. No ruleset blocks creating a v* tag, since a
+# personal account's repo can't let GitHub Actions bypass one; "release tags locked" keeps moving
+# and deleting for admins.
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: 'auto, candidate or production'
+        type: string
+        required: true
+      bump:
+        description: 'candidate only: commits, major, minor or patch'
+        type: string
+        default: commits
+
+permissions: {}
+
+jobs:
+  cut:
+    name: Tag and release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # One cut at a time across all three callers: two runs must never pick the same number.
+    concurrency:
+      group: cut-release
+      cancel-in-progress: false
+    permissions:
+      contents: write # create the tag
+      actions: write # start the release workflow on it
+      checks: read # did the required checks pass on this commit?
+    steps:
+      # Releases come from main or a release/* hotfix line, never a feature branch or a tag. The
+      # nightly candidate comes from main only.
+      - name: Check the branch
+        env:
+          REF: ${{ github.ref }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          case "$MODE:$REF" in
+            auto:refs/heads/main | candidate:refs/heads/main | candidate:refs/heads/release/*) ;;
+            production:refs/heads/main | production:refs/heads/release/*) ;;
+            auto:*) echo "::error::The nightly candidate is cut from main only, not ${REF#refs/*/}."; exit 1 ;;
+            candidate:* | production:*) echo "::error::Tags are cut from main or a release/* branch, not ${REF#refs/*/}."; exit 1 ;;
+            *) echo "::error::mode is '$MODE'; it must be auto, candidate or production"; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # every commit and tag, for what changed since the last release
+          persist-credentials: false
+
+      - name: Pick the tag
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode }}
+          BUMP: ${{ inputs.bump }}
+        run: |
+          # The required checks of main, read from the ruleset file so the names live in one place.
+          # Prints "<check> <conclusion>" for each one that has not passed; missing when it never ran.
+          not_passed() {
+            jq -r '.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context' \
+              .github/rulesets/main-checks.json | while read -r check; do
+              state=$(gh api -X GET "repos/$GITHUB_REPOSITORY/commits/$(git rev-parse HEAD)/check-runs" \
+                -f check_name="$check" -f filter=latest \
+                --jq 'if .total_count == 0 then "missing" else (.check_runs[0].conclusion // "running") end')
+              [ "$state" = success ] || echo "'$check' is $state"
+            done
+          }
+          args=()
+          case "$MODE" in
+            auto)
+              # A newer commit tagged by hand already holds this one: never tag backwards.
+              if [ -n "$(git tag -l 'v*' --contains HEAD)" ]; then
+                echo "A release already holds this commit." | tee -a "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+              args=(--auto) ;;
+            production) args=(--final) ;;
+            candidate)
+              # A commit a check failed on would burn a version number on a build that fails its own
+              # checks. No run yet (a release/* branch) is fine: the release runs them.
+              all=$(not_passed)
+              failed=$(printf '%s\n' "$all" | grep -vE '^$| is (missing|running)$' || true)
+              if [ -n "$failed" ]; then
+                echo "::error::No candidate is cut from this commit: $(echo "$failed" | paste -sd ',' -)."
+                exit 1
+              fi
+              [ "$BUMP" = commits ] || args=(--bump "$BUMP") ;;
+          esac
+          status=0
+          tag=$(scripts/release/next-version.sh "${args[@]}" 2> why.txt) || status=$?
+          cat why.txt
+          case "$status" in
+            0) ;;
+            3) { echo "Nothing to release: $(head -1 why.txt)"; } >> "$GITHUB_STEP_SUMMARY"; exit 0 ;;
+            *) echo "::error::$(head -1 why.txt)"; exit 1 ;;
+          esac
+          # The nightly candidate needs main green, not only "not red": a check still running at
+          # night has not proved anything yet.
+          if [ "$MODE" = auto ]; then
+            pending=$(not_passed)
+            if [ -n "$pending" ]; then
+              echo "No $tag tonight: $(echo "$pending" | paste -sd ',' -)." >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::No $tag tonight: $(echo "$pending" | paste -sd ',' -)."
+              exit 1
+            fi
+          fi
+          # Production ships the candidate testers had, so its tag goes on that candidate's commit.
+          if [ "$MODE" = production ]; then
+            target=$(git rev-list -n 1 "$(scripts/release/next-version.sh --latest)")
+          else
+            target=$(git rev-parse HEAD)
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+
+      - name: Create the tag
+        if: steps.pick.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.pick.outputs.tag }}
+          TARGET: ${{ steps.pick.outputs.target }}
+        run: |
+          # Someone tagged by hand since this run picked the number: say where, rather than a bare 422.
+          if held=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha 2> /dev/null); then
+            echo "::error::$TAG already exists (tag object ${held:0:7}). Run the tag workflow again for the next number."
+            exit 1
+          fi
+          object=$(gh api "repos/$GITHUB_REPOSITORY/git/tags" -f tag="$TAG" -f message="$TAG" \
+            -f object="$TARGET" -f type=commit --jq .sha)
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$object" > /dev/null \
+            || { echo "::error::$TAG was refused. Does a tag ruleset block creating v* tags? Only moving and deleting should be blocked."; exit 1; }
+          echo "Tagged \`$TAG\` on ${TARGET:0:7}." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Start the release
+        if: steps.pick.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.pick.outputs.tag }}
+        run: |
+          if [[ "$TAG" == *-rc.* ]]; then
+            file=beta-release.yml title='Beta Release'
+          else
+            file=production-release.yml title='Production Release'
+          fi
+          # The tag stands either way; a release that did not start is one click from here.
+          if ! gh workflow run "$file" --repo "$GITHUB_REPOSITORY" --ref "$TAG"; then
+            echo "$title did not start. Start it by hand: Actions → $title → Run workflow → Use workflow from: tag \`$TAG\`." >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::$TAG exists but $title did not start. Actions → $title → Run workflow → Use workflow from: $TAG"
+            exit 1
+          fi
+          echo "Started **$title** on \`$TAG\`." >> "$GITHUB_STEP_SUMMARY"

@@ -1,7 +1,7 @@
-name: CI
+name: Pull Request
 
 # Trunk-based: every push to main must stay green, and every short-lived branch is
-# checked before it merges back.
+# checked before it merges back. The tests run in unit-tests.yml, side by side with this.
 on:
   push:
     branches: [main]
@@ -14,7 +14,7 @@ on:
         type: boolean
         default: false
 
-# release.yml calls this file too, and gives it the same read-only token.
+# The release workflows call this file too, and give it the same read-only token.
 permissions:
   contents: read
 
@@ -25,10 +25,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  android:
-    name: Build and test (Android)
+  source-rules:
+    name: Source rules
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -58,7 +58,20 @@ jobs:
       - run: ./gradlew spotlessCheck
       # The release number and notes come from the commit titles; their rules are checked on throwaway repos.
       - run: for test in scripts/release/*.test.sh; do "$test"; done
-      - run: ./gradlew testAndroidHostTest
+
+  android:
+    name: Build (Android)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - run: ./gradlew :androidApp:assembleDebug
       # R8 runs only in a release build. Without the upload key the APK stays unsigned, so a
       # missing keep rule fails on the commit that breaks it, not on tag day.
@@ -66,18 +79,15 @@ jobs:
       # Fails on a new lint error; androidApp/lint-baseline.xml holds the old findings. The KMP
       # library modules have no working lint task on AGP 9 yet (KMT-1196), so this is the app only.
       - run: ./gradlew :androidApp:lintDebug
-      - name: Keep the test and lint reports
+      - name: Keep the lint report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-reports-${{ github.job }}-${{ github.run_attempt }}
-          path: |
-            **/build/reports/tests/
-            androidApp/build/reports/lint-results-debug.html
+          name: lint-report-${{ github.job }}-${{ github.run_attempt }}
+          path: androidApp/build/reports/lint-results-debug.html
           retention-days: 7
           if-no-files-found: ignore
 
-  # The two iOS jobs don't need each other, so they run side by side.
   ios-app:
     name: Link and build (iOS)
     # On a push or pull request the input is empty, so iOS runs; an Android release skips it.
@@ -113,38 +123,6 @@ jobs:
           xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug
           -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'
           -derivedDataPath build/dd ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
-
-  ios-test:
-    name: Test (iOS)
-    if: inputs.skip-ios != true
-    runs-on: macos-26
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - run: sudo xcode-select -s /Applications/Xcode_26.6.app
-      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.konan
-          key: konan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/libs.versions.toml') }}
-          restore-keys: konan-${{ runner.os }}-${{ runner.arch }}-
-      # commonTest runs on the JVM everywhere else. Without this the iOS target can stop
-      # compiling and nothing says so — which is how it stayed broken.
-      - run: ./gradlew iosSimulatorArm64Test
-      - name: Keep the test reports
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: test-reports-${{ github.job }}-${{ github.run_attempt }}
-          path: '**/build/reports/tests/'
-          retention-days: 7
-          if-no-files-found: ignore
 
   # The tag the next release would take, in this run's summary, so nobody works it out by hand.
   # Read-only: it tags nothing, and it is not a required check.

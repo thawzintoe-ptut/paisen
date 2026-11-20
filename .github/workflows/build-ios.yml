@@ -2,9 +2,9 @@ name: iOS build
 
 # An iPhone IPA, kept as a workflow artifact for 7 days, in one of two kinds:
 # - none: unsigned, for the GitHub release. Testers sign it with their own free Apple ID in
-#   SideStore or AltStore. release.yml builds it when IOS_SIDELOAD_ENABLED is true.
+#   SideStore or AltStore. Beta and Production Release build it when IOS_SIDELOAD_ENABLED is true.
 # - ad-hoc: for Firebase App Distribution. Needs the paid Apple Developer Program, and only the
-#   iPhones in the profile can install it. release.yml builds it for a beta when IOS_ENABLED is true.
+#   iPhones in the profile can install it. Beta Release builds it when IOS_ENABLED is true.
 on:
   workflow_dispatch:
     inputs:
@@ -52,7 +52,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The same Xcode as ci.yml. The image's default can change without notice.
+      # The same Xcode as pull-request.yml. The image's default can change without notice.
       - run: sudo xcode-select -s /Applications/Xcode_26.6.app
       - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:

@@ -29,9 +29,11 @@
         "strict_required_status_checks_policy": false,
         "do_not_enforce_on_create": false,
         "required_status_checks": [
-          { "context": "Build and test (Android)", "integration_id": 15368 },
+          { "context": "Source rules", "integration_id": 15368 },
+          { "context": "Build (Android)", "integration_id": 15368 },
           { "context": "Link and build (iOS)", "integration_id": 15368 },
-          { "context": "Test (iOS)", "integration_id": 15368 }
+          { "context": "Unit tests (Android)", "integration_id": 15368 },
+          { "context": "Unit tests (iOS)", "integration_id": 15368 }
         ]
       }
     }

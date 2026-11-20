@@ -1,0 +1,70 @@
+name: Release version and notes
+
+# The first job of Beta Release and Production Release: the tag's version, the release notes and the
+# Play notes, as the `notes` artifact. It holds no secret, so the jobs with the Play key run no repo script.
+on:
+  workflow_call:
+    inputs:
+      expect-kind:
+        description: 'beta or production: the kind the calling workflow releases'
+        type: string
+        required: true
+    outputs:
+      name:
+        value: ${{ jobs.meta.outputs.name }}
+      code:
+        value: ${{ jobs.meta.outputs.code }}
+      kind:
+        value: ${{ jobs.meta.outputs.kind }}
+
+permissions: {}
+
+jobs:
+  meta:
+    name: Version and notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      name: ${{ steps.version.outputs.name }}
+      code: ${{ steps.version.outputs.code }}
+      kind: ${{ steps.version.outputs.kind }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # every tag and branch, for the version and branch checks
+          persist-credentials: false
+      # A release comes from main, or from a release/* branch for a hotfix.
+      - name: The tag is on main or a release branch
+        run: |
+          [ "$GITHUB_REF_TYPE" = tag ] || { echo "::error::Run this on a v* tag, not the branch $GITHUB_REF_NAME"; exit 1; }
+          git branch -r --contains "$GITHUB_SHA" | grep -qE '^ *origin/(main|release/.+)$' \
+            || { echo "::error::$GITHUB_REF_NAME is not on main or a release/* branch"; exit 1; }
+      - name: Version
+        id: version
+        run: scripts/release/version.sh "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+      # The tag filters keep rc tags out of Production Release and the other way round; this
+      # catches a run started by hand on the wrong tag.
+      - name: The tag is a ${{ inputs.expect-kind }} tag
+        env:
+          KIND: ${{ steps.version.outputs.kind }}
+          EXPECT: ${{ inputs.expect-kind }}
+        run: |
+          [ "$KIND" = "$EXPECT" ] || { echo "::error::$GITHUB_REF_NAME is a $KIND tag; this workflow releases $EXPECT only"; exit 1; }
+      - name: Release notes
+        env:
+          KIND: ${{ steps.version.outputs.kind }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: scripts/release/notes.sh "$KIND" "$VERSION_NAME" > notes.md
+      - name: Play release notes
+        env:
+          URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+        run: scripts/release/play-notes.sh notes.md "$URL"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: notes
+          path: |
+            notes.md
+            whatsnew/
+          if-no-files-found: error

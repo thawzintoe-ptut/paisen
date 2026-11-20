@@ -1,0 +1,66 @@
+name: GitHub release
+
+# The GitHub release of a tag. `apk` makes it (prerelease for a beta) with the APK and its mapping;
+# `ipa` adds the unsigned IPA afterwards, so the APK is out even when the iPhone build fails.
+on:
+  workflow_call:
+    inputs:
+      version-name:
+        type: string
+        required: true
+      kind:
+        description: 'beta or production'
+        type: string
+        required: true
+      asset:
+        description: 'apk or ipa'
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  release:
+    name: ${{ inputs.asset == 'ipa' && 'GitHub release (iPhone IPA)' || 'GitHub release' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - if: inputs.asset == 'apk'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: PaiSeN-${{ inputs.version-name }}
+      - if: inputs.asset == 'apk'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: notes
+      # A re-run replaces the files on the release that already exists, never makes a second one.
+      - name: Create or update the release
+        if: inputs.asset == 'apk'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          NAME: ${{ inputs.version-name }}
+          KIND: ${{ inputs.kind }}
+        run: |
+          files=("PaiSeN-$NAME.apk" "PaiSeN-$NAME-mapping.zip")
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          elif [ "$KIND" = beta ]; then
+            gh release create "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag --title "PaiSeN $NAME" --notes-file notes.md --prerelease
+          else
+            gh release create "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag --title "PaiSeN $NAME" --notes-file notes.md
+          fi
+
+      - if: inputs.asset == 'ipa'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: PaiSeN-ios-none-${{ inputs.version-name }}
+      - name: Add the IPA to the release
+        if: inputs.asset == 'ipa'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          NAME: ${{ inputs.version-name }}
+        run: gh release upload "$TAG" "PaiSeN-$NAME.ipa" --clobber --repo "$GITHUB_REPOSITORY"

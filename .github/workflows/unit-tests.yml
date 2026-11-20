@@ -1,0 +1,81 @@
+name: Unit Tests
+
+# The host and iOS tests, side by side with pull-request.yml's checks on every push and pull request.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_call:
+    inputs:
+      skip-ios:
+        description: 'True for an Android-only release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# A new push replaces a pull request's run. On main each commit has its own group, because a
+# shared group still cancels a waiting run when a third one arrives.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  android:
+    name: Unit tests (Android)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The Gradle daemon runs on 21 (gradle/gradle-daemon-jvm.properties); the code still targets 17.
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - run: ./gradlew testAndroidHostTest
+      - name: Keep the test reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-reports-${{ github.job }}-${{ github.run_attempt }}
+          path: '**/build/reports/tests/'
+          retention-days: 7
+          if-no-files-found: ignore
+
+  ios:
+    name: Unit tests (iOS)
+    # On a push or pull request the input is empty, so iOS runs; an Android release skips it.
+    if: inputs.skip-ios != true
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sudo xcode-select -s /Applications/Xcode_26.6.app
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-${{ runner.arch }}-
+      # commonTest runs on the JVM everywhere else. Without this the iOS target can stop
+      # compiling and nothing says so — which is how it stayed broken.
+      - run: ./gradlew iosSimulatorArm64Test
+      - name: Keep the test reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-reports-${{ github.job }}-${{ github.run_attempt }}
+          path: '**/build/reports/tests/'
+          retention-days: 7
+          if-no-files-found: ignore

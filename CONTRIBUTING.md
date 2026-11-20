@@ -112,10 +112,11 @@ contribution is licensed under GPL-3.0 too.
 
 ### Releases
 
-Releases are tags on `main`, and the **Cut release** workflow makes them; nobody numbers a release
-by hand. The tag starts **Beta Release** (an rc tag) or **Production Release**: it runs the same
-checks as a pull request, builds a signed APK and AAB with the version taken from the tag, and creates the GitHub release with
-the APK. There are no release branches until one is needed.
+Releases are tags on `main`, and the **Nightly Beta Release**, **Beta Tag** and **Production Tag**
+workflows make them; nobody numbers a release by hand. The tag starts **Beta Release** (an rc tag)
+or **Production Release**: it runs the same checks as a pull request, builds a signed APK and AAB
+with the version taken from the tag, and creates the GitHub release with the APK. There are no
+release branches until one is needed.
 
 | Tag | Release | Notes come from | versionCode |
 |---|---|---|---|
@@ -149,7 +150,7 @@ After the GitHub release, each target runs only when its repository variable is 
 
 | Target | Tag | Variable | Needs |
 |---|---|---|---|
-| Firebase App Distribution, group `testers` | beta | `FIREBASE_ENABLED` | secret `FIREBASE_DISTRIBUTION_SA_JSON` in `release` |
+| Firebase App Distribution, group `testers` | beta and production | `FIREBASE_ENABLED` | secret `FIREBASE_DISTRIBUTION_SA_JSON` in `release` |
 | Unsigned iPhone IPA on the GitHub release, for SideStore or AltStore | beta and production | `IOS_SIDELOAD_ENABLED` | secret `GOOGLE_SERVICE_INFO_PLIST` in `release` |
 | Firebase App Distribution for iPhone, group `testers` | beta | `IOS_ENABLED` and `FIREBASE_ENABLED` | the paid Apple Developer Program, and in `release` the secrets `IOS_DIST_CERT_P12_BASE64`, `IOS_DIST_CERT_PASSWORD`, `IOS_ADHOC_PROFILE_BASE64` and `GOOGLE_SERVICE_INFO_PLIST` |
 | Play track in `PLAY_BETA_TRACK` (`internal` or `alpha`) | beta | `PLAY_ENABLED` | secret `PLAY_SERVICE_ACCOUNT_JSON` in `release`, from an account that may only release to testing tracks; `PLAY_STATUS` is `draft` until the app is published |
@@ -158,15 +159,18 @@ After the GitHub release, each target runs only when its repository variable is 
 Play gets the notes cut to 500 characters, with a link to the full notes on GitHub.
 `PLAY_BETA_TRACK` must be `internal`, `alpha` or `beta`; the workflow refuses anything else.
 
-1. **Candidates are automatic.** When CI passes on a push to `main` that holds a `feat:` or `fix:`
-   since the last tag, **Cut release** tags the next candidate on that commit and starts
-   **Beta Release**. A push of only docs, tests or build changes waits for the next one.
-2. **Production is a button.** **Actions → Cut release → Run workflow → production** tags the latest
-   candidate as `vX.Y.Z` on its own commit and starts **Production Release**. Play production still waits for
-   your approval in the `production` environment.
-3. **A candidate by hand**, for a build-only change or for `1.0.0`: the same button with
-   `candidate`, and a bump if the commits cannot say it.
-   Without the workflow, the same tags come from a full clone with its tags:
+1. **Candidates are nightly.** At 02:17 Bangkok time, **Nightly Beta Release** tags the next
+   candidate on `main`'s tip when it holds a `feat:` or `fix:` since the last tag, and starts
+   **Beta Release**. Testers get at most one build a day. Only docs, tests or build changes wait
+   for the next night. When a required check on the tip failed or is still running, the run fails
+   and tags nothing.
+2. **Production is a button.** **Actions → Production Tag → Run workflow** tags the latest
+   candidate as `vX.Y.Z` on its own commit and starts **Production Release**. Play production still
+   waits for your approval in the `production` environment.
+3. **A candidate by hand**, for a build-only change, for `1.0.0`, or before the night:
+   **Actions → Beta Tag → Run workflow**, with a bump if the commits cannot say it. It refuses a
+   commit where a required check failed.
+   Without the workflows, the same tags come from a full clone with its tags:
 
    ```bash
    tag=$(scripts/release/next-version.sh)   # a candidate on this commit; --bump major for 1.0.0
@@ -182,11 +186,13 @@ Play gets the notes cut to 500 characters, with a link to the full notes on GitH
    git push origin "$tag"
    ```
 
-   If **Cut release** made the tag but the release did not start, the run's summary says so: start
+   If a tag workflow made the tag but the release did not start, the run's summary says so: start
    it by hand with **Actions → Beta Release** (or **Production Release**) **→ Run workflow → Use
    workflow from** that tag.
 4. The APK is on the GitHub release, and so is the unsigned IPA when `IOS_SIDELOAD_ENABLED` is on.
-   The AAB for Play is in the workflow run's artifacts (7 days).
+   The AAB for Play is in the workflow run's artifacts (7 days). To send a production APK to the
+   Firebase testers again, run **Deploy Production Build to Firebase** on its `vX.Y.Z` tag. It
+   takes the APK from the GitHub release and checks its build provenance first.
 5. With `IOS_ENABLED`, a beta tag also builds an ad hoc IPA: `v0.2.0-rc.1` becomes version 0.2.0,
    build 20001. Only the iPhones in the ad hoc profile can install it. To add a tester's iPhone,
    register it in the Apple Developer portal, make the profile again, and replace
@@ -195,9 +201,9 @@ Play gets the notes cut to 500 characters, with a link to the full notes on GitH
    the release framework (about 7 minutes) and checks it uses no networking API outside sync.
 
 **Hotfix for a version already in the store**, while `main` has work that is not ready: branch
-from the tag, fix, and bring the fix back to `main`. Candidates are automatic on `main` only, so
-on the branch use the button: **Run workflow**, **Use workflow from** `release/0.1`, `candidate`,
-then `production` once testers are happy. The rule reads only that branch's tags, so the next tag
+from the tag, fix, and bring the fix back to `main`. The nightly candidate is cut on `main` only, so
+on the branch use the buttons: **Beta Tag → Run workflow → Use workflow from** `release/0.1`, then
+**Production Tag** from the same branch once testers are happy. The rule reads only that branch's tags, so the next tag
 is `v0.1.1-rc.1`.
 
 ```bash
@@ -219,7 +225,7 @@ import each file.
 | Ruleset | Rules | Who can bypass |
 |---|---|---|
 | `main: no rewrites` | no deletion, no force push, linear history | nobody |
-| `main: checks` | pull request (0 approvals, squash or rebase), both CI jobs green | repository admins, so the maintainer can push small fixes directly |
+| `main: checks` | pull request (0 approvals, squash or rebase), the five Pull Request and Unit Tests checks green | repository admins, so the maintainer can push small fixes directly |
 | `release tags locked` | `v*` tags can't be moved or deleted | repository admins, so no workflow can rewrite or remove a release |
 | `release branches locked` | `release/*` can't be created, pushed to or deleted; changes need a pull request | repository admins, so only the maintainer makes a hotfix branch |
 
@@ -227,5 +233,5 @@ The `release` environment holds the signing and Firebase keys. It has you as req
 accepts only `main` and `v*` tags, so no other branch can sign a build.
 
 No ruleset blocks creating a `v*` tag. A repository owned by a personal account can't let GitHub
-Actions bypass a ruleset, and **Cut release** has to create tags. It refuses to run from any branch
-but `main` or `release/*`.
+Actions bypass a ruleset, and the tag workflows have to create tags. They refuse to run from any
+branch but `main` or `release/*`.

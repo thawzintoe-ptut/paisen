@@ -1,0 +1,77 @@
+name: Firebase App Distribution
+
+# Sends this run's APK (android) or ad hoc IPA (ios) to a Firebase App Distribution group, with
+# the `notes` artifact as release notes. The caller holds the FIREBASE_ENABLED switch.
+on:
+  workflow_call:
+    inputs:
+      platform:
+        description: 'android or ios'
+        type: string
+        required: true
+      version-name:
+        type: string
+        required: true
+      group:
+        type: string
+        default: testers
+
+permissions: {}
+
+jobs:
+  distribute:
+    name: ${{ inputs.platform == 'ios' && 'Firebase App Distribution (iOS)' || 'Firebase App Distribution (Android)' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      # Only for the locked Firebase CLI. Checked out first, because checkout empties the folder.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/tools/firebase
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ inputs.platform == 'ios' && format('PaiSeN-ios-ad-hoc-{0}', inputs.version-name) || format('PaiSeN-{0}', inputs.version-name) }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: notes
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          # A release restores no cache another run could have written.
+          package-manager-cache: false
+      # Exactly the files in package-lock.json, with no install scripts, before any key is on disk.
+      - name: Install the Firebase CLI
+        working-directory: .github/tools/firebase
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      # The app id comes from settings the build already uses, so it is not a second secret to keep in step.
+      - name: Send the build to the ${{ inputs.group }} group
+        env:
+          FIREBASE_DISTRIBUTION_SA_JSON: ${{ secrets.FIREBASE_DISTRIBUTION_SA_JSON }}
+          FIREBASE_PROPERTIES: ${{ secrets.FIREBASE_PROPERTIES }}
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+          PLATFORM: ${{ inputs.platform }}
+          GROUP: ${{ inputs.group }}
+          NAME: ${{ inputs.version-name }}
+        run: |
+          case "$PLATFORM" in
+            android)
+              file="PaiSeN-$NAME.apk"
+              app_id=$(printf '%s\n' "$FIREBASE_PROPERTIES" | sed -n 's/^androidAppId=//p' | tr -d '\r')
+              [ -n "$app_id" ] || { echo "::error::androidAppId is missing from FIREBASE_PROPERTIES"; exit 1; } ;;
+            ios)
+              file="PaiSeN-$NAME.ipa"
+              app_id=$(printf '%s\n' "$GOOGLE_SERVICE_INFO_PLIST" | grep -A1 '<key>GOOGLE_APP_ID</key>' \
+                | sed -n 's/.*<string>\(.*\)<\/string>.*/\1/p')
+              [ -n "$app_id" ] || { echo "::error::GOOGLE_APP_ID is missing from GOOGLE_SERVICE_INFO_PLIST"; exit 1; } ;;
+            *) echo "::error::platform is '$PLATFORM'; it must be android or ios"; exit 1 ;;
+          esac
+          printf '%s' "$FIREBASE_DISTRIBUTION_SA_JSON" > "$RUNNER_TEMP/distribution.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/distribution.json" .github/tools/firebase/node_modules/.bin/firebase \
+            appdistribution:distribute "$file" --app "$app_id" --groups "$GROUP" --release-notes-file notes.md
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/distribution.json"

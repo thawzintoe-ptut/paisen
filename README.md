@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/thawzintoe-ptut/PaiSen/actions/workflows/ci.yml"><img src="https://github.com/thawzintoe-ptut/PaiSen/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/thawzintoe-ptut/PaiSen/actions/workflows/pull-request.yml"><img src="https://github.com/thawzintoe-ptut/PaiSen/actions/workflows/pull-request.yml/badge.svg" alt="Pull Request"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License: GPL-3.0"></a>
   <img src="https://img.shields.io/badge/Kotlin-2.3.21-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin 2.3.21">
   <img src="https://img.shields.io/badge/Compose%20Multiplatform-1.11.1-4285F4?logo=jetpackcompose&logoColor=white" alt="Compose Multiplatform 1.11.1">

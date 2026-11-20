@@ -1,0 +1,25 @@
+name: Beta Tag
+
+# A release candidate by hand, for a build-only change, for 1.0.0, or on a release/* hotfix branch.
+# It tags this branch's tip with the next vX.Y.Z-rc.N and starts Beta Release on it.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Follow the commits, or force a major, minor or patch bump'
+        type: choice
+        options: [commits, major, minor, patch]
+        default: commits
+
+permissions: {}
+
+jobs:
+  tag:
+    permissions:
+      contents: write
+      actions: write
+      checks: read
+    uses: ./.github/workflows/cut-tag.yml
+    with:
+      mode: candidate
+      bump: ${{ inputs.bump }}

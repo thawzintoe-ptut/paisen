@@ -1,0 +1,125 @@
+name: Production Release
+
+# A tag vX.Y.Z becomes a signed production release: the GitHub release and a 20% staged rollout on
+# Play, which waits for approval in the production environment. The checks run first through
+# pull-request.yml and unit-tests.yml, so a release never gets weaker checks than a pull request.
+on:
+  push:
+    tags: ['v*', '!v*-*']
+  # Production Tag starts it this way on the tag it made: a tag pushed with GITHUB_TOKEN starts no
+  # workflow, a dispatch does. Run it on a tag only; meta refuses a branch.
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-tag-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-meta.yml
+    with:
+      expect-kind: production
+
+  checks:
+    needs: meta
+    permissions:
+      contents: read
+    uses: ./.github/workflows/pull-request.yml
+    with:
+      skip-ios: true
+
+  tests:
+    needs: meta
+    permissions:
+      contents: read
+    uses: ./.github/workflows/unit-tests.yml
+    with:
+      skip-ios: true
+
+  ios-checks:
+    needs: meta
+    if: vars.IOS_SIDELOAD_ENABLED == 'true'
+    permissions:
+      checks: read
+    uses: ./.github/workflows/ios-gate.yml
+
+  build:
+    needs: [meta, checks, tests]
+    permissions:
+      contents: read
+      id-token: write # build provenance for the APK and AAB
+      attestations: write
+    uses: ./.github/workflows/build-signed.yml
+    # The release environment's secrets reach a called workflow only through inherit, even with
+    # `environment: release` there. Health run 43612489148 got empty ones without it.
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      version-code: ${{ needs.meta.outputs.code }}
+
+  # The free way onto an iPhone: an unsigned IPA on the GitHub release, which each tester signs with
+  # their own Apple ID in SideStore or AltStore. Off until IOS_SIDELOAD_ENABLED is true.
+  build-ios-sideload:
+    needs: [meta, checks, tests, ios-checks]
+    if: vars.IOS_SIDELOAD_ENABLED == 'true'
+    permissions:
+      contents: read
+      id-token: write # build provenance for the IPA
+      attestations: write
+    uses: ./.github/workflows/build-ios.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      version-code: ${{ needs.meta.outputs.code }}
+      signing: none
+
+  github-release:
+    needs: [meta, build]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/github-release.yml
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      kind: production
+      asset: apk
+
+  # After github-release, so the APK is out even when the iPhone build fails.
+  github-release-ios:
+    needs: [meta, github-release, build-ios-sideload]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/github-release.yml
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      kind: production
+      asset: ipa
+
+  # The switches below are repository variables: a job's `if` is read before it enters its
+  # environment, so environment variables are not visible there.
+  # The same build the GitHub release got; after it, so testers never get a build GitHub lacks.
+  # Deploy Production Build to Firebase sends it again by hand.
+  firebase:
+    needs: [meta, build, github-release]
+    if: vars.FIREBASE_ENABLED == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/distribute-firebase.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      platform: android
+      version-name: ${{ needs.meta.outputs.name }}
+
+  play:
+    needs: [meta, build]
+    if: vars.PLAY_PRODUCTION_ENABLED == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/upload-play.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      track: production

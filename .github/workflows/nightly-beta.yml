@@ -1,0 +1,21 @@
+name: Nightly Beta Release
+
+# Once a night, main's tip becomes the next release candidate when a feat: or fix: landed since the
+# last tag and every required check passed on it, so testers get at most one build a day. A red or
+# unfinished main fails this run and tags nothing; Beta Tag still cuts a candidate by hand.
+on:
+  schedule:
+    - cron: '17 19 * * *' # 02:17 in Bangkok; off the hour, when GitHub starts fewer runs late
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  tag:
+    permissions:
+      contents: write
+      actions: write
+      checks: read
+    uses: ./.github/workflows/cut-tag.yml
+    with:
+      mode: auto

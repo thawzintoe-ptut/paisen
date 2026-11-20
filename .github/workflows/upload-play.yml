@@ -1,0 +1,71 @@
+name: Play upload
+
+# Uploads this run's AAB to Google Play. A testing track (internal, alpha, beta) uses the release
+# environment; production is a 20% staged rollout in the production environment, whose required
+# reviewer makes the job wait for approval. The caller holds the PLAY_* switch.
+on:
+  workflow_call:
+    inputs:
+      version-name:
+        type: string
+        required: true
+      track:
+        description: 'internal, alpha, beta or production'
+        type: string
+        required: true
+      status:
+        description: 'Testing tracks only: draft until the app has been published once'
+        type: string
+        default: draft
+
+permissions: {}
+
+jobs:
+  upload:
+    name: ${{ inputs.track == 'production' && 'Play production (20%)' || 'Play testing track' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A beta tag never enters production, even with track production: the first step refuses it.
+    environment: ${{ inputs.track == 'production' && !contains(github.ref_name, '-') && 'production' || 'release' }}
+    permissions:
+      contents: read
+    steps:
+      # A beta may only reach a testing track, so PLAY_BETA_TRACK=production cannot skip the approval.
+      - name: The track fits the tag
+        env:
+          TRACK: ${{ inputs.track }}
+        run: |
+          case "$TRACK" in
+            internal|alpha|beta) ;;
+            production)
+              [[ "$GITHUB_REF_NAME" != *-* ]] || { echo "::error::$GITHUB_REF_NAME is a beta tag; it may only reach internal, alpha or beta"; exit 1; } ;;
+            *) echo "::error::The track is '$TRACK'; it must be internal, alpha, beta or production"; exit 1 ;;
+          esac
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: PaiSeN-${{ inputs.version-name }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: notes
+      # Play refuses anything but draft for an app that was never published.
+      - if: inputs.track != 'production'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.ptut.expense
+          releaseFiles: PaiSeN-${{ inputs.version-name }}.aab
+          releaseName: ${{ inputs.version-name }}
+          track: ${{ inputs.track }}
+          status: ${{ inputs.status }}
+          whatsNewDirectory: whatsnew
+      - if: inputs.track == 'production'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.ptut.expense
+          releaseFiles: PaiSeN-${{ inputs.version-name }}.aab
+          releaseName: ${{ inputs.version-name }}
+          track: production
+          status: inProgress
+          userFraction: 0.2
+          whatsNewDirectory: whatsnew

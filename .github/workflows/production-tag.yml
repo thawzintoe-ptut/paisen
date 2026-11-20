@@ -1,0 +1,18 @@
+name: Production Tag
+
+# Tags the latest release candidate as vX.Y.Z, on that candidate's own commit, so production ships
+# exactly what testers had, and starts Production Release. Play production still waits for approval.
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  tag:
+    permissions:
+      contents: write
+      actions: write
+      checks: read
+    uses: ./.github/workflows/cut-tag.yml
+    with:
+      mode: production

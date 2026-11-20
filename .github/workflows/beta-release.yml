@@ -1,0 +1,153 @@
+name: Beta Release
+
+# A tag vX.Y.Z-rc.N becomes a signed beta: GitHub prerelease, Firebase testers and a Play testing
+# track. The checks run first through pull-request.yml and unit-tests.yml, so a release never gets
+# weaker checks than a pull request.
+on:
+  push:
+    tags: ['v*-rc.*']
+  # The tag workflows start it this way on the tag they made: a tag pushed with GITHUB_TOKEN starts
+  # no workflow, a dispatch does. Run it on a tag only; meta refuses a branch.
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-tag-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-meta.yml
+    with:
+      expect-kind: beta
+
+  checks:
+    needs: meta
+    permissions:
+      contents: read
+    uses: ./.github/workflows/pull-request.yml
+    with:
+      skip-ios: true
+
+  tests:
+    needs: meta
+    permissions:
+      contents: read
+    uses: ./.github/workflows/unit-tests.yml
+    with:
+      skip-ios: true
+
+  ios-checks:
+    needs: meta
+    if: vars.IOS_SIDELOAD_ENABLED == 'true' || vars.IOS_ENABLED == 'true'
+    permissions:
+      checks: read
+    uses: ./.github/workflows/ios-gate.yml
+
+  build:
+    needs: [meta, checks, tests]
+    permissions:
+      contents: read
+      id-token: write # build provenance for the APK and AAB
+      attestations: write
+    uses: ./.github/workflows/build-signed.yml
+    # The release environment's secrets reach a called workflow only through inherit, even with
+    # `environment: release` there. Health run 43612489148 got empty ones without it.
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      version-code: ${{ needs.meta.outputs.code }}
+
+  # Off until the Apple Developer Program is paid and the signing secrets are in `release`. Only
+  # the iPhones in the ad hoc profile can install it, so it goes to App Distribution, not GitHub.
+  build-ios:
+    needs: [meta, checks, tests, ios-checks]
+    if: vars.IOS_ENABLED == 'true'
+    permissions:
+      contents: read
+      id-token: write # build provenance for the IPA
+      attestations: write
+    uses: ./.github/workflows/build-ios.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      version-code: ${{ needs.meta.outputs.code }}
+      signing: ad-hoc
+
+  # The free way onto an iPhone: an unsigned IPA on the GitHub release, which each tester signs with
+  # their own Apple ID in SideStore or AltStore. Off until IOS_SIDELOAD_ENABLED is true.
+  build-ios-sideload:
+    needs: [meta, checks, tests, ios-checks]
+    if: vars.IOS_SIDELOAD_ENABLED == 'true'
+    permissions:
+      contents: read
+      id-token: write # build provenance for the IPA
+      attestations: write
+    uses: ./.github/workflows/build-ios.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      version-code: ${{ needs.meta.outputs.code }}
+      signing: none
+
+  github-release:
+    needs: [meta, build]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/github-release.yml
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      kind: beta
+      asset: apk
+
+  # After github-release, so the APK is out even when the iPhone build fails.
+  github-release-ios:
+    needs: [meta, github-release, build-ios-sideload]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/github-release.yml
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      kind: beta
+      asset: ipa
+
+  # The switches below are repository variables: a job's `if` is read before it enters its
+  # environment, so environment variables are not visible there.
+  firebase:
+    needs: [meta, build]
+    if: vars.FIREBASE_ENABLED == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/distribute-firebase.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      platform: android
+      version-name: ${{ needs.meta.outputs.name }}
+
+  # Skipped whenever build-ios is, so IOS_ENABLED switches this one too.
+  firebase-ios:
+    needs: [meta, build-ios]
+    if: vars.FIREBASE_ENABLED == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/distribute-firebase.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      platform: ios
+      version-name: ${{ needs.meta.outputs.name }}
+
+  # PLAY_STATUS stays draft until the app has been published once.
+  play:
+    needs: [meta, build]
+    if: vars.PLAY_ENABLED == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/upload-play.yml
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    with:
+      version-name: ${{ needs.meta.outputs.name }}
+      track: ${{ vars.PLAY_BETA_TRACK || 'internal' }}
+      status: ${{ vars.PLAY_STATUS || 'draft' }}
