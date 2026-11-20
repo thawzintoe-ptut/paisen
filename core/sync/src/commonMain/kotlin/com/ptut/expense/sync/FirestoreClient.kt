@@ -97,6 +97,10 @@ internal interface Firestore {
     fun removeWrite(relative: String, field: String, values: List<String>, alsoSet: Fields = emptyMap()): JsonObject
 
     fun stampedUpdateWrite(relative: String, fields: Fields, stamp: String): JsonObject
+
+    fun upsertWrite(relative: String, fields: Fields): JsonObject
+
+    fun deleteWrite(relative: String): JsonObject
 }
 
 /**
@@ -237,6 +241,21 @@ internal class FirestoreClient(
 
     /** Changes [fields] and has the server stamp [stamp] with the commit time. */
     override fun stampedUpdateWrite(relative: String, fields: Fields, stamp: String): JsonObject = stampedWrite(pathOf(relative), fields, stamp, create = false)
+
+    /** Sets [fields] whether or not the document exists, leaving its other fields. */
+    override fun upsertWrite(relative: String, fields: Fields): JsonObject = buildJsonObject {
+        put(
+            "update",
+            buildJsonObject {
+                put("name", pathOf(relative))
+                put("fields", fields.toFirestoreFields())
+            },
+        )
+        put("updateMask", fieldMaskJson(fields))
+    }
+
+    /** Removes a document; one that is not there stays not there. */
+    override fun deleteWrite(relative: String): JsonObject = buildJsonObject { put("delete", pathOf(relative)) }
 
     private fun arrayWrite(relative: String, field: String, values: List<String>, transform: String): JsonObject = buildJsonObject {
         put(

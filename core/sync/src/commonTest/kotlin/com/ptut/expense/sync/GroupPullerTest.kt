@@ -1,8 +1,10 @@
 package com.ptut.expense.sync
 
+import com.ptut.expense.data.repository.KIND_MEMBER
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GroupPullerTest {
@@ -148,6 +150,69 @@ class GroupPullerTest {
 
         assertEquals(PullResult.Removed, puller.pull("g1"))
         assertTrue("g1" !in dao.groups)
+    }
+
+    @Test
+    fun `a PromptPay ID stored by the name's holder is read from the members-only place`() = runTest {
+        holds("g1")
+        firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), heldDoc("bo", "uid-2"))
+        firestore.collections["groups/g1/pay"] = listOf(payDoc("bo", "uid-2"))
+
+        puller.pull("g1")
+
+        assertEquals(PROMPT_PAY, dao.members.getValue("bo").promptPayId)
+    }
+
+    @Test
+    fun `an ID stored for an earlier holder is ignored and the name's own field is the fallback`() = runTest {
+        holds("g1")
+        val older = "08" + "99999999"
+        firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), heldDoc("bo", "uid-3", older), heldDoc("cy", "uid-4"))
+        firestore.collections["groups/g1/pay"] = listOf(payDoc("bo", "uid-2"), payDoc("cy", "uid-2"))
+
+        puller.pull("g1")
+
+        assertEquals(older, dao.members.getValue("bo").promptPayId)
+        assertNull(dao.members.getValue("cy").promptPayId)
+    }
+
+    @Test
+    fun `no members-only place yet reads as no IDs there`() = runTest {
+        holds("g1")
+        firestore.hidden += "groups/g1/pay"
+        firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), heldDoc("bo", "uid-2", PROMPT_PAY))
+
+        puller.pull("g1")
+
+        assertEquals(PROMPT_PAY, dao.members.getValue("bo").promptPayId)
+    }
+
+    @Test
+    fun `this phone's own ID left on its name by an older build is queued to move`() = runTest {
+        holds("g1")
+        firestore.collections["groups/g1/members"] = listOf(heldDoc(ME, UID, PROMPT_PAY), heldDoc("bo", "uid-2", PROMPT_PAY))
+
+        puller.pull("g1")
+
+        assertEquals(listOf("$KIND_MEMBER:$ME"), dao.outboxRows.value.map { it.id })
+        assertEquals(PROMPT_PAY, dao.members.getValue(ME).promptPayId)
+    }
+
+    @Test
+    fun `the invite's names are put right only when the names nobody holds changed`() = runTest {
+        val published = mutableListOf<String>()
+        val puller = GroupPuller(firestore, dao, clock, { published += it }) { UID }
+        holds("g1")
+        firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), memberDoc("bo"))
+        puller.pull("g1")
+
+        clock.nowMillis += TEN_MINUTES
+        puller.pull("g1")
+        firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), heldDoc("bo", "uid-2"))
+        clock.nowMillis += TEN_MINUTES
+        puller.pull("g1")
+
+        assertEquals(listOf("g1", "g1"), published)
     }
 
     private fun holds(vararg ids: String) = holdGroups(dao, firestore, *ids)

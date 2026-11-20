@@ -1,7 +1,7 @@
 // The cases in ../rules-test-plan.md, run on the Firestore emulator by `npm test`.
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
 import {
-  doc, getDoc, getDocs, setDoc, updateDoc, writeBatch, arrayRemove, arrayUnion, serverTimestamp,
+  doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, arrayRemove, arrayUnion, serverTimestamp,
   collection, query, where, Timestamp,
 } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
@@ -13,7 +13,7 @@ const env = await initializeTestEnvironment({
 });
 const as = (uid) => env.authenticatedContext(uid, { auth_time: AUTH_TIME }).firestore();
 
-async function seed({ group = {}, members = {}, invite = {} } = {}) {
+async function seed({ group = {}, members = {}, invite = {}, pay = { mBob: { promptPay: '0812345678', claimedByUid: 'bob' } } } = {}) {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
@@ -29,6 +29,7 @@ async function seed({ group = {}, members = {}, invite = {} } = {}) {
     await setDoc(doc(db, 'groups/g1/joins/mallory'), { code: 'CODE1', at: 1 });
     await setDoc(doc(db, 'groups/g1/entries/e0'), { kind: 'version', authorUid: 'alice', createdAt: 1 });
     await setDoc(doc(db, 'devices/devA'), { uid: 'alice', platform: 'android', language: 'en', updatedAt: 1 });
+    for (const [mid, fields] of Object.entries(pay)) await setDoc(doc(db, `groups/g1/pay/${mid}`), fields);
   });
 }
 
@@ -439,6 +440,118 @@ await check('13.3 join document on an invite past its end date', 'deny', past, (
 await check('13.4 join document on an invite before its end date', 'allow', future, () => setDoc(doc(as('eve'), 'groups/g1/joins/eve'), { code: 'CODE1', at: 1 }));
 await check('13.5 someone who joined before the end date reads the names after it', 'deny', past, () => getDocs(collection(as('mallory'), 'groups/g1/members')));
 await check('13.6 joiner adds themselves on an invite past its end date', 'deny', past, () => updateDoc(doc(as('mallory'), 'groups/g1'), { memberUids: arrayUnion('mallory') }));
+
+// 14. M1: a member cannot store the code a removal rotates to
+const rotate = async () => {
+  const db = as('alice');
+  await updateDoc(doc(db, 'invites/CODE1'), { active: false });
+  await setDoc(doc(db, 'invites/CODE2'), { groupId: 'g1', groupName: 'Trip', active: true, creatorUid: 'alice' });
+  await updateDoc(doc(db, 'groups/g1'), { inviteCode: 'CODE2', inviteActive: true });
+};
+await check('14.1 member stores the new code before the removal commits', 'deny', {}, async () => {
+  await rotate();
+  return setDoc(doc(as('bob'), 'groups/g1/joins/bob'), { code: 'CODE2', at: 2 });
+});
+await check('14.2 the race: the member tries the new code, the removal still goes through', 'allow', {}, async () => {
+  await rotate();
+  await setDoc(doc(as('bob'), 'groups/g1/joins/bob'), { code: 'CODE2', at: 2 }).catch(() => {});
+  return removal('alice', { rotate: false });
+});
+await check('14.3 after it, the removed member cannot come back', 'deny', {}, async () => {
+  await rotate();
+  await setDoc(doc(as('bob'), 'groups/g1/joins/bob'), { code: 'CODE2', at: 2 }).catch(() => {});
+  await removal('alice', { rotate: false });
+  return updateDoc(doc(as('bob'), 'groups/g1'), { memberUids: arrayUnion('bob') });
+});
+await check('14.4 older build: a member opens their link again and rewrites the code they came with', 'allow', {}, () => setDoc(doc(as('bob'), 'groups/g1/joins/bob'), { code: 'CODE1', at: 2 }));
+await check('14.5 creator, with no join document, writes one', 'deny', {}, () => setDoc(doc(as('alice'), 'groups/g1/joins/alice'), { code: 'CODE1', at: 2 }));
+await check('14.6 member with no join document writes one', 'deny', three, () => setDoc(doc(as('carol'), 'groups/g1/joins/carol'), { code: 'CODE1', at: 2 }));
+await check('14.7 someone not in the group moves their join to the new code', 'allow', {}, async () => {
+  await rotate();
+  return setDoc(doc(as('mallory'), 'groups/g1/joins/mallory'), { code: 'CODE2', at: 2 });
+});
+
+// 15. L4: the names on the invite, and the join written in the pick commit
+const names = (n) => Array.from({ length: n }, (_, i) => ({ id: `m${i}`, name: `N${i}` }));
+const pickCommit = (uid, code, claim) => {
+  const db = as(uid);
+  const batch = writeBatch(db);
+  batch.set(doc(db, `groups/g1/joins/${uid}`), { code }, { mergeFields: ['code'] });
+  claim(batch, db);
+  batch.update(doc(db, 'groups/g1'), { memberUids: arrayUnion(uid) });
+  return batch.commit();
+};
+await check('15.1 creator makes an invite with its names', 'allow', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite({ names: names(2) })));
+await check('15.2 invite with 101 names', 'deny', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite({ names: names(101) })));
+await check('15.3 invite whose names are not a list', 'deny', {}, () => setDoc(doc(as('alice'), 'invites/CODE2'), invite({ names: 'x'.repeat(1000) })));
+await check('15.4 a member keeps the live invite\'s names current', 'allow', {}, () => updateDoc(doc(as('bob'), 'invites/CODE1'), { names: names(1) }));
+await check('15.5 a member writes names on an invite switched off', 'deny', { invite: { active: false } }, () => updateDoc(doc(as('bob'), 'invites/CODE1'), { names: names(1) }));
+await check('15.6 a member writes names on a code the group moved on from', 'deny', { group: { inviteCode: 'CODE2' } }, () => updateDoc(doc(as('bob'), 'invites/CODE1'), { names: names(1) }));
+await check('15.7 someone with the live code, not in the group, writes the names', 'deny', {}, () => updateDoc(doc(as('mallory'), 'invites/CODE1'), { names: names(1) }));
+await check('15.8 a member writes 101 names', 'deny', {}, () => updateDoc(doc(as('bob'), 'invites/CODE1'), { names: names(101) }));
+await check('15.9 creator switches the invite off and empties its names', 'allow', {}, () => updateDoc(doc(as('alice'), 'invites/CODE1'), { active: false, names: [] }));
+await check('15.10 pick commit: join, claim and come in together, nothing written before', 'allow', {}, () => pickCommit('eve', 'CODE1', claimName('eve', 'mCara')));
+await check('15.11 pick commit, "I\'m not on the list"', 'allow', {}, () => pickCommit('eve', 'CODE1', addOwnName('eve')));
+await check('15.12 pick commit with a code that is not the group\'s', 'deny', {}, () => pickCommit('eve', 'CODE9', claimName('eve', 'mCara')));
+await check('15.13 pick commit with a code switched off', 'deny', { group: { inviteActive: false } }, () => pickCommit('eve', 'CODE1', claimName('eve', 'mCara')));
+await check('15.14 pick commit sent by someone already in', 'deny', three, () => pickCommit('carol', 'CODE1', claimName('carol', 'mCara')));
+await check('15.15 opening the link reads the invite and nothing else', 'deny', {}, async () => {
+  await getDoc(doc(as('eve'), 'invites/CODE1'));
+  return getDocs(collection(as('eve'), 'groups/g1/members'));
+});
+
+// 16. M5: PromptPay IDs only members read
+const payDoc = (over = {}) => ({ promptPay: '0812345678', claimedByUid: 'bob', ...over });
+await check('16.1 holder stores their PromptPay ID', 'allow', { pay: {} }, () => setDoc(doc(as('bob'), 'groups/g1/pay/mBob'), payDoc()));
+await check('16.2 holder changes it', 'allow', {}, () => setDoc(doc(as('bob'), 'groups/g1/pay/mBob'), payDoc({ promptPay: '1234567890123' })));
+await check('16.3 a member stores one on someone else\'s name', 'deny', { pay: {} }, () => setDoc(doc(as('bob'), 'groups/g1/pay/mAlice'), payDoc()));
+await check('16.4 a member stores one on a name nobody holds', 'deny', { pay: {} }, () => setDoc(doc(as('bob'), 'groups/g1/pay/mCara'), payDoc()));
+await check('16.5 one that names another account as its holder', 'deny', { pay: {} }, () => setDoc(doc(as('bob'), 'groups/g1/pay/mBob'), payDoc({ claimedByUid: 'alice' })));
+await check('16.6 one in the wrong form', 'deny', { pay: {} }, () => setDoc(doc(as('bob'), 'groups/g1/pay/mBob'), payDoc({ promptPay: '12345' })));
+await check('16.7 one with a field the app never sends', 'deny', { pay: {} }, () => setDoc(doc(as('bob'), 'groups/g1/pay/mBob'), payDoc({ blob: 'x' })));
+await check('16.8 someone with the live code stores one', 'deny', { pay: {} }, () => setDoc(doc(as('mallory'), 'groups/g1/pay/mCara'), payDoc({ claimedByUid: 'mallory' })));
+await check('16.9 deleted group: holder stores one', 'deny', { pay: {}, group: { deleted: true } }, () => setDoc(doc(as('bob'), 'groups/g1/pay/mBob'), payDoc()));
+await check('16.10 a member reads every PromptPay ID', 'allow', {}, () => getDocs(collection(as('bob'), 'groups/g1/pay')));
+await check('16.11 someone with the live code reads them', 'deny', {}, () => getDocs(collection(as('mallory'), 'groups/g1/pay')));
+await check('16.12 someone with the live code reads one', 'deny', {}, () => getDoc(doc(as('mallory'), 'groups/g1/pay/mBob')));
+await check('16.13 a stranger reads them', 'deny', {}, () => getDocs(collection(as('eve'), 'groups/g1/pay')));
+await check('16.14 deleted group: a member reads them', 'deny', deleted, () => getDocs(collection(as('bob'), 'groups/g1/pay')));
+await check('16.15 holder takes theirs away', 'allow', {}, () => deleteDoc(doc(as('bob'), 'groups/g1/pay/mBob')));
+await check('16.16 another member takes it away', 'deny', three, () => deleteDoc(doc(as('carol'), 'groups/g1/pay/mBob')));
+await check('16.17 creator takes it away while its holder is still in', 'deny', {}, () => deleteDoc(doc(as('alice'), 'groups/g1/pay/mBob')));
+await check('16.18 new app removal: the commit also takes the PromptPay ID away', 'allow', {}, async () => {
+  await rotate();
+  const db = as('alice');
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'groups/g1/members/mBob'), { archived: true, claimedByUid: null, promptPay: null });
+  batch.delete(doc(db, 'groups/g1/pay/mBob'));
+  batch.update(doc(db, 'groups/g1'), { memberUids: arrayRemove('bob') });
+  return batch.commit();
+});
+const leaveDeleting = (pay) => () => {
+  const db = as('bob');
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'groups/g1/members/mBob'), { claimedByUid: null, promptPay: null });
+  batch.delete(doc(db, 'groups/g1/pay/mBob'));
+  batch.update(doc(db, 'groups/g1'), { memberUids: arrayRemove('bob') });
+  return batch.commit();
+};
+await check('16.19 new app leave commit with a PromptPay ID', 'allow', {}, leaveDeleting());
+await check('16.20 new app leave commit with none stored', 'allow', { pay: {} }, leaveDeleting());
+await check('16.21 new app delete-for-everyone also takes every PromptPay ID away', 'allow', {}, () => {
+  const db = as('alice');
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'invites/CODE1'), { active: false, names: [] });
+  batch.update(doc(db, 'groups/g1'), { deleted: true, inviteActive: false, deletedAt: serverTimestamp() });
+  batch.update(doc(db, 'groups/g1/members/mBob'), { promptPay: null });
+  batch.delete(doc(db, 'groups/g1/pay/mBob'));
+  return batch.commit();
+});
+await check('16.22 older build: holder still sets the ID on their name', 'allow', {}, () => updateDoc(doc(as('bob'), 'groups/g1/members/mBob'), { promptPay: '0899999999' }));
+await check('16.23 new app moves its ID: stored in pay, cleared from the name', 'allow', { pay: {} }, async () => {
+  await setDoc(doc(as('bob'), 'groups/g1/pay/mBob'), payDoc());
+  return updateDoc(doc(as('bob'), 'groups/g1/members/mBob'), { promptPay: null });
+});
 
 await env.cleanup();
 for (const [status, expect, name, why] of results) console.log(`${status}  ${expect.padEnd(5)}  ${name}${why ? `  -> ${why}` : ''}`);

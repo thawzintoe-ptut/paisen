@@ -40,6 +40,8 @@ internal class OutboxPusher(
     private val account: () -> Account.SignedIn,
     /** Makes a fresh invite for a group, so a removed member's old link stops working. */
     private val newInvite: suspend (groupId: String) -> String,
+    /** Puts a group's pickable names on its live invite, after they changed here (L4). */
+    private val publishNames: suspend (groupId: String) -> Unit = {},
 ) {
     private val refusedCounts = MutableStateFlow<Map<String, Int>>(emptyMap())
 
@@ -56,12 +58,15 @@ internal class OutboxPusher(
      */
     suspend fun push(quietFor: String? = null) {
         val held = mutableSetOf<String>()
+        // Groups where a name nobody holds was added, renamed or removed: their invite lists it once, after the loop.
+        val namesChanged = mutableSetOf<String>()
         for (row in dao.outbox()) {
             if (row.groupId in held) continue
             try {
                 val notice = upload(row, notify = row.groupId != quietFor)
                 dao.dequeue(row.id, row.createdAtEpochMillis)
                 failed.update { it - row.groupId }
+                if (row.kind == KIND_MEMBER && dao.membersOf(row.groupId).any { it.id == row.rowId && it.claimedByUid == null }) namesChanged += row.groupId
                 notice?.let { pushes?.tell(row.groupId, it) }
             } catch (refusal: FirestoreException) {
                 if (refusal.isPermanent()) {
@@ -74,6 +79,7 @@ internal class OutboxPusher(
                 }
             }
         }
+        namesChanged.forEach { publishNames(it) }
     }
 
     /** From Room, as [upload] reads them: what was saved just before Share may not be in the snapshot yet. */
@@ -112,10 +118,11 @@ internal class OutboxPusher(
      */
     private suspend fun uploadMember(group: SharedGroup, member: Member, uid: String, notices: PushNotices?): PushNotice? {
         val own = member.id == group.meMemberId
-        // #199: only this phone's own member carries a PromptPay ID; nobody writes another's.
-        val promptPay = if (own) mapOf("promptPay" to member.promptPayId) else emptyMap()
-        val fields = mapOf("name" to member.name, "claimedByUid" to member.claimedByUid, "archived" to member.archived, "createdAt" to now()) + promptPay
-        if (firestore.create("groups/${group.id}/members", member.id, fields)) return notices?.personAdded(member.name)?.takeUnless { own }
+        val fields = mapOf("name" to member.name, "claimedByUid" to member.claimedByUid, "archived" to member.archived, "createdAt" to now())
+        if (firestore.create("groups/${group.id}/members", member.id, fields)) {
+            if (own) storePromptPay(group.id, member, uid, clearName = false)
+            return notices?.personAdded(member.name)?.takeUnless { own }
+        }
         val path = "groups/${group.id}/members/${member.id}"
         val creator = group.creatorUid == uid
         // Read first to word the notice (a PromptPay ID alone tells nobody), and to learn whose
@@ -124,7 +131,7 @@ internal class OutboxPusher(
         firestore.patch(path, mapOf("name" to member.name))
         // Only the creator removes a name (#190), so no other phone sends one back.
         if (creator) archive(group.id, member.id, member.archived, holder = before?.string("claimedByUid")?.takeIf { it != uid })
-        if (own) firestore.patch(path, promptPay)
+        if (own) storePromptPay(group.id, member, uid, clearName = true)
         if (notices == null || before == null) return null
         val wasArchived = before.bool("archived")
         return when {
@@ -133,6 +140,19 @@ internal class OutboxPusher(
             before.string("name") != member.name -> notices.nameChanged()
             else -> null
         }
+    }
+
+    /**
+     * #199: only this phone's own name carries a PromptPay ID; nobody writes another's. M5: it goes
+     * where only members read, and [clearName] empties the field on the name that builds before M5 used.
+     */
+    private suspend fun storePromptPay(groupId: String, member: Member, uid: String, clearName: Boolean) {
+        val path = "groups/$groupId/pay/${member.id}"
+        when (val id = member.promptPayId) {
+            null -> if (clearName) firestore.delete(path)
+            else -> firestore.set(path, mapOf("promptPay" to id, "claimedByUid" to uid))
+        }
+        if (clearName) firestore.patch("groups/$groupId/members/${member.id}", mapOf("promptPay" to null))
     }
 
     /**
@@ -220,6 +240,8 @@ internal fun Firestore.leaveWrites(groupId: String, memberId: String?, uid: Stri
             val removed = if (archive) mapOf("archived" to true) else emptyMap()
             updateWrite("groups/$groupId/members/$it", removed + mapOf("claimedByUid" to null, "promptPay" to null))
         },
+        // M5: the name's PromptPay ID goes with its claim; the rules let a missing one pass.
+        memberId?.let { deleteWrite("groups/$groupId/pay/$it") },
         removeWrite("groups/$groupId", "memberUids", listOf(uid), alsoSet = if (closeInvite) mapOf("inviteActive" to false) else emptyMap()),
     )
 

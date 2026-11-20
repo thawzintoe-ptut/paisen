@@ -39,6 +39,8 @@ service cloud.firestore {
     function money(value) { return value is int && value >= 0 && value <= 10000000000000; }
     function splitModeOk(value) { return value in ['Equally', 'Exact', 'Percent', 'Shares']; }
     function currencyCode(value) { return value is string && value.matches('[A-Z]{3}'); }
+    // A phone number, a national or tax ID, or an e-wallet ID, digits only, as the app saves it.
+    function promptPayId(value) { return value is string && value.matches('^(0[0-9]{9}|[0-9]{13}|[0-9]{15})$'); }
     // No rate, or one above zero with a scale every build can read.
     function rateOk(data) {
       return (data.get('rateUnscaled', null) == null && data.get('rateScale', null) == null)
@@ -109,14 +111,11 @@ service cloud.firestore {
 
       match /members/{mid} {
         // #199: a PromptPay ID only ever belongs to the account that claimed the name. Nobody plants
-        // one on a name someone else will claim, and letting a claim go clears it.
+        // one on a name someone else will claim, and letting a claim go clears it. M5: new builds keep
+        // it in pay/{mid}; this field is only for builds before that, until they are no longer supported.
         function noPromptPay() { return !('promptPay' in request.resource.data) || request.resource.data.promptPay == null; }
         function ownPromptPay() { return noPromptPay() || request.resource.data.claimedByUid == request.auth.uid; }
-        // A phone number, a national or tax ID, or an e-wallet ID, digits only, as the app saves it.
-        function validPromptPay() {
-          return noPromptPay() || (request.resource.data.promptPay is string
-            && request.resource.data.promptPay.matches('^(0[0-9]{9}|[0-9]{13}|[0-9]{15})$'));
-        }
+        function validPromptPay() { return noPromptPay() || promptPayId(request.resource.data.promptPay); }
         // H1: a name is claimed only in the commit that brings its account into the group, so an account
         // already in keeps the one it came with. Leaving lets it go, and the next join may pick another.
         function joiningNow() {
@@ -165,6 +164,24 @@ service cloud.firestore {
           || (isCreator(gid) && onlyChanged(['promptPay']) && noPromptPay()
               && getAfter(groupPath(gid)).data.get('deleted', false) == true);
         allow delete: if false;
+      }
+
+      // M5: a PromptPay ID where only members read, never on the names someone with the code can read.
+      match /pay/{mid} {
+        function payOk() {
+          let pay = request.resource.data;
+          return pay.keys().hasOnly(['promptPay', 'claimedByUid']) && pay.claimedByUid == request.auth.uid
+            && promptPayId(pay.promptPay);
+        }
+        allow read: if isMember(gid) && live(gid);
+        // Only on the name this account holds, so nobody plants an ID on a name someone else will claim.
+        allow create, update: if isMember(gid) && live(gid) && payOk()
+          && getAfter(memberPath(gid, mid)).data.claimedByUid == request.auth.uid;
+        // Its holder takes it away; the creator, in the commit that takes the holder out or deletes the
+        // group. A leave sends this whether or not there is one, so a missing one passes.
+        allow delete: if signedIn() && (resource == null || resource.data.claimedByUid == request.auth.uid
+          || (isCreator(gid) && (getAfter(groupPath(gid)).data.get('deleted', false) == true
+            || !(resource.data.claimedByUid in getAfter(groupPath(gid)).data.memberUids))));
       }
 
       // syncedAt must be the server's own stamp, so no phone can backdate an entry out of another
@@ -259,11 +276,18 @@ service cloud.firestore {
       }
 
       match /joins/{uid} {
+        function joinOk() {
+          return signedIn() && uid == request.auth.uid
+            && request.resource.data.keys().hasOnly(['code', 'at']) && textUpTo(request.resource.data.code, 64)
+            && request.resource.data.get('at', 0) is int && validInvite(gid, request.resource.data.code);
+        }
+        // M1: an account already in stores no new code, or it could store the one a removal rotates to
+        // and block its own removal. Older builds rewrite the code they came with on opening the link again.
+        function memberNow() { return request.auth.uid in groupData(gid).memberUids; }
         allow get: if signedIn() && (uid == request.auth.uid || isMember(gid));
         allow list: if isMember(gid);
-        allow create, update: if signedIn() && uid == request.auth.uid
-          && request.resource.data.keys().hasOnly(['code', 'at']) && textUpTo(request.resource.data.code, 64)
-          && request.resource.data.get('at', 0) is int && validInvite(gid, request.resource.data.code);
+        allow create: if joinOk() && !memberNow();
+        allow update: if joinOk() && (!memberNow() || request.resource.data.code == resource.data.code);
         allow delete: if false;
       }
     }
@@ -297,14 +321,24 @@ service cloud.firestore {
 
     // One document per live code, so a code can be looked up without listing anything.
     match /invites/{code} {
+      // L4: the names nobody holds yet, so someone opening the link picks one without writing anything.
+      function namesOk() {
+        return request.resource.data.get('names', []) is list && request.resource.data.get('names', []).size() <= 100;
+      }
+      // Kept current by any member, on the group's live invite only.
+      function liveInvite() {
+        let gid = resource.data.groupId;
+        return resource.data.active == true && groupData(gid).inviteCode == code && groupData(gid).inviteActive == true;
+      }
       allow get: if signedIn();
       allow list: if false;
       allow create: if isCreator(request.resource.data.groupId) && request.resource.data.creatorUid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['groupId', 'groupName', 'active', 'creatorUid', 'expiresAt']) && code.size() <= 64
+        && request.resource.data.keys().hasOnly(['groupId', 'groupName', 'active', 'creatorUid', 'expiresAt', 'names']) && code.size() <= 64
         && textUpTo(request.resource.data.get('groupName', ''), 100) && request.resource.data.get('active', false) is bool
-        && (request.resource.data.get('expiresAt', null) == null || request.resource.data.expiresAt is timestamp);
-      // Only switching it off: the group it points at never changes.
-      allow update: if isCreator(resource.data.groupId) && onlyChanged(['active']) && request.resource.data.active is bool;
+        && (request.resource.data.get('expiresAt', null) == null || request.resource.data.expiresAt is timestamp) && namesOk();
+      // The creator switches it off and empties its names; the group it points at never changes.
+      allow update: if (isCreator(resource.data.groupId) && onlyChanged(['active', 'names']) && request.resource.data.active is bool && namesOk())
+        || (isMember(resource.data.groupId) && onlyChanged(['names']) && namesOk() && liveInvite());
       allow delete: if false;
     }
   }

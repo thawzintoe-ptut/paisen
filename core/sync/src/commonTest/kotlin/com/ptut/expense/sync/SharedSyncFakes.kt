@@ -42,7 +42,8 @@ import kotlin.time.Instant
 
 /**
  * Firestore as a map of paths. A call whose text contains one of [failing] fails as an HTML answer
- * does; a write to a path in [refusing] fails with that status. [writes] lists the writes that landed.
+ * does; a write to a path in [refusing] fails with that status, and a read of a path in [hidden]
+ * fails as the rules refuse it. [writes] lists the writes that landed.
  */
 internal class FakeFirestore : Firestore {
     val docs = mutableMapOf<String, FirestoreDoc>()
@@ -50,19 +51,23 @@ internal class FakeFirestore : Firestore {
     var memberships: List<FirestoreDoc> = emptyList()
     val failing = mutableSetOf<String>()
     val refusing = mutableMapOf<String, Int>()
+    val hidden = mutableSetOf<String>()
     val calls = mutableListOf<String>()
     val writes = mutableListOf<String>()
 
     /** The fields each create sent, by path. */
     val created = mutableMapOf<String, Fields>()
+
+    /** The fields the last patch or set sent, by path. */
+    val sent = mutableMapOf<String, Fields>()
     var readTime = 1_000L
 
     /** Runs before each write, so a test can change the world mid-push. */
     var beforeWrite: (String) -> Unit = {}
 
-    override suspend fun get(path: String): FirestoreDoc? = answer("get $path") { docs[path] }
+    override suspend fun get(path: String): FirestoreDoc? = answer("get $path", path) { docs[path] }
 
-    override suspend fun list(collection: String): List<FirestoreDoc> = answer("list $collection") { collections[collection].orEmpty() }
+    override suspend fun list(collection: String): List<FirestoreDoc> = answer("list $collection", collection) { collections[collection].orEmpty() }
 
     override suspend fun whereContains(collection: String, field: String, value: String): List<FirestoreDoc> = answer("query $collection") { memberships }
 
@@ -74,9 +79,9 @@ internal class FakeFirestore : Firestore {
         "$collection/$id" !in docs
     }
 
-    override suspend fun patch(path: String, fields: Fields) = write("patch", path) {}
+    override suspend fun patch(path: String, fields: Fields) = write("patch", path) { sent[path] = fields }
 
-    override suspend fun set(path: String, fields: Fields) = write("set", path) {}
+    override suspend fun set(path: String, fields: Fields) = write("set", path) { sent[path] = fields }
 
     override suspend fun delete(path: String) = write("delete", path) {}
 
@@ -102,6 +107,10 @@ internal class FakeFirestore : Firestore {
 
     override fun stampedUpdateWrite(relative: String, fields: Fields, stamp: String): JsonObject = described("update $relative ${fields.keys} stamp $stamp", relative)
 
+    override fun upsertWrite(relative: String, fields: Fields): JsonObject = described("set $relative ${fields.keys}", relative)
+
+    override fun deleteWrite(relative: String): JsonObject = described("delete $relative", relative)
+
     private fun described(write: String, path: String): JsonObject = buildJsonObject {
         put(WRITE, write)
         put(PATH, path)
@@ -114,9 +123,10 @@ internal class FakeFirestore : Firestore {
         return value()
     }
 
-    private inline fun <T> answer(call: String, value: () -> T): T {
+    private inline fun <T> answer(call: String, path: String = "", value: () -> T): T {
         calls += call
         if (failing.any { it in call }) throw FirestoreException(FirestoreStatus.NO_ANSWER, "Not a Firestore answer")
+        if (path in hidden) throw FirestoreException(FirestoreStatus.FORBIDDEN, "Refused")
         return value()
     }
 

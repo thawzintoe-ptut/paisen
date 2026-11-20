@@ -70,6 +70,21 @@ internal fun memberDoc(id: String) = FirestoreDoc(
     fields = mapOf("name" to id, "archived" to false, "createdAt" to 1L, "claimedByUid" to if (id.startsWith("me-")) UID else null),
 )
 
+/** A PromptPay ID in the form the app saves, split so no scanner reads it as a real phone number. */
+internal const val PROMPT_PAY = "08" + "12345678"
+
+/** [memberId]'s PromptPay ID in the members-only place, stored by [holder]. */
+internal fun payDoc(memberId: String, holder: String, promptPay: String = PROMPT_PAY) = FirestoreDoc(
+    id = memberId,
+    name = "groups/g1/pay/$memberId",
+    fields = mapOf("promptPay" to promptPay, "claimedByUid" to holder),
+)
+
+/** A name held by [holder], with [promptPay] on the name itself, as builds before M5 store it. */
+internal fun heldDoc(id: String, holder: String, promptPay: String? = null) = memberDoc(id).let {
+    it.copy(fields = it.fields + ("claimedByUid" to holder) + ("promptPay" to promptPay))
+}
+
 internal fun paymentDoc(id: String, from: String, to: String) = FirestoreDoc(
     id = id,
     name = id,

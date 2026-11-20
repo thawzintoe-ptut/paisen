@@ -3,6 +3,7 @@ package com.ptut.expense.sync
 import com.ptut.expense.data.local.dao.SharedDao
 import com.ptut.expense.data.local.entity.GroupMemberEntity
 import com.ptut.expense.data.local.entity.SharedGroupEntity
+import com.ptut.expense.data.local.entity.SyncOutboxEntity
 import com.ptut.expense.data.repository.KIND_GROUP
 import com.ptut.expense.data.repository.KIND_MEMBER
 import com.ptut.expense.data.repository.KIND_REPEAT
@@ -28,6 +29,8 @@ internal class GroupPuller(
     private val firestore: Firestore,
     private val dao: SharedDao,
     private val clock: Clock,
+    /** Puts a group's pickable names on its live invite, after they changed here (L4). */
+    private val publishNames: suspend (groupId: String) -> Unit = {},
     /** The signed-in account, or null; a group brought back finds "you" by the name it claimed. */
     private val uid: () -> String?,
 ) {
@@ -68,6 +71,7 @@ internal class GroupPuller(
         val since = pullSince(pulledUpTo)
         val log = if (since == null) wholeLog(groupId) else newerLog(groupId, since)
         val members = if (membersDue(groupId, fields, before, meMemberId, log)) firestore.list("groups/$groupId/members") else null
+        val payIds = if (members != null) firestore.promptPayDocs(groupId).associate { it.id to it.fields } else emptyMap()
 
         // Read after the network: a change saved while it answered is not undone below.
         val local = dao.group(groupId)
@@ -97,7 +101,12 @@ internal class GroupPuller(
         )
         // Every write wakes the snapshot and the screens that read it, so an unchanged row is not written.
         if (group != local) dao.upsertGroup(group)
-        members?.let { storeMembers(groupId, it, pending) }
+        if (members != null) {
+            val pickable = pickableNames(dao.membersOf(groupId))
+            storeMembers(groupId, members, payIds, pending)
+            moveOwnPromptPay(groupId, group.meMemberId, members, pending)
+            if (pickableNames(dao.membersOf(groupId)) != pickable) publishNames(groupId)
+        }
         // #48: read with the key the group's money names, so a baht amount an older build wrote into a
         // kyat group is skipped rather than taken as kyat.
         val batch = LogBatch()
@@ -124,9 +133,10 @@ internal class GroupPuller(
         return named.isNotEmpty() && !dao.membersOf(groupId).map { it.id }.toSet().containsAll(named)
     }
 
-    private suspend fun storeMembers(groupId: String, members: List<FirestoreDoc>, pending: Set<String>) {
+    private suspend fun storeMembers(groupId: String, members: List<FirestoreDoc>, payIds: Map<String, Fields>, pending: Set<String>) {
         val known = dao.membersOf(groupId).associateBy { it.id }
         val pulled = members.filterNot { "$KIND_MEMBER:${it.id}" in pending }.map { doc ->
+            val holder = doc.fields.string("claimedByUid")
             GroupMemberEntity(
                 id = doc.id,
                 groupId = groupId,
@@ -134,13 +144,24 @@ internal class GroupPuller(
                 personId = known[doc.id]?.personId,
                 archived = doc.fields.bool("archived"),
                 createdAtEpochMillis = doc.fields.long("createdAt") ?: known[doc.id]?.createdAtEpochMillis ?: now(),
-                claimedByUid = doc.fields.string("claimedByUid"),
-                // #199: an ID counts only on a claimed name; one on an unclaimed name is ignored.
-                promptPayId = doc.fields.string("promptPay")?.let(PromptPay::normalize)?.takeIf { doc.fields.string("claimedByUid") != null },
+                claimedByUid = holder,
+                // #199: an ID counts only on a claimed name. M5: the members-only copy when it was stored by
+                // the name's holder; otherwise the field builds before M5 write on the name.
+                promptPayId = holder?.let {
+                    (payIds[doc.id]?.takeIf { pay -> pay.string("claimedByUid") == holder }?.string("promptPay") ?: doc.fields.string("promptPay"))
+                        ?.let(PromptPay::normalize)
+                },
             )
         }
         val changed = pulled.filter { it != known[it.id] }
         if (changed.isNotEmpty()) dao.upsertMembers(changed)
+    }
+
+    /** M5: an ID this account left on its own name with an older build moves to the members-only place on the next upload. */
+    private suspend fun moveOwnPromptPay(groupId: String, me: String?, members: List<FirestoreDoc>, pending: Set<String>) {
+        val own = members.firstOrNull { it.id == me } ?: return
+        if (own.fields.string("promptPay") == null || own.fields.string("claimedByUid") != uid() || "$KIND_MEMBER:${own.id}" in pending) return
+        dao.queue(listOf(SyncOutboxEntity("$KIND_MEMBER:${own.id}", groupId, KIND_MEMBER, own.id, now())))
     }
 
     private class PulledLog(val entries: List<FirestoreDoc>, val repeats: List<FirestoreDoc>, val readTimeEpochMillis: Long?)
@@ -184,6 +205,14 @@ internal class GroupPuller(
     private suspend fun pendingIn(groupId: String): Set<String> = dao.outbox().filter { it.groupId == groupId }.map { it.id }.toSet()
 
     private fun now(): Long = clock.now().toEpochMilliseconds()
+}
+
+/** M5: every PromptPay ID stored in [groupId] where only members read; none while the rules have no such place. */
+internal suspend fun Firestore.promptPayDocs(groupId: String): List<FirestoreDoc> = try {
+    list("groups/$groupId/pay")
+} catch (refused: FirestoreException) {
+    if (refused.status != FirestoreStatus.FORBIDDEN) throw refused
+    emptyList()
 }
 
 /** 2100-01-01: a time no entry carries, so a query for later ones costs one read and answers with the server's clock. */
