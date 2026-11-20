@@ -4,6 +4,7 @@ import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.slip.ConfirmedSlip
+import com.ptut.expense.domain.slip.RunSlipImportUseCase
 import com.ptut.expense.importer.FakeSlipTextReader
 import com.ptut.expense.importer.InMemoryImportStore
 import com.ptut.expense.importer.SlipImporter
@@ -38,7 +39,7 @@ class DebugSlipViewModelTest : ViewModelTest() {
 
     private val importer = SlipImporter(source, FakeSlipTextReader(), store, clock, work = EmptyCoroutineContext)
 
-    private val viewModel = DebugSlipViewModel(source, importer, clock)
+    private val viewModel = DebugSlipViewModel(source, RunSlipImportUseCase(importer), clock)
 
     @Test
     fun `a readable slip from an unknown shop is queued as a question rather than filed`() = runTest {

@@ -162,10 +162,6 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | English | Burmese | Where |
 |---|---|---|
 | Currency | ငွေကြေး | `CurrencyCopy` currencyTitle |
-| Add starts in | ထည့်ရင် စမယ့်ငွေ | `CurrencyCopy` startsIn |
-| The Add sheet opens on this currency. Totals still count in baht. | ထည့်တဲ့ စာမျက်နှာက ဒီငွေနဲ့ စမယ်။ စုစုပေါင်းကတော့ ဘတ်နဲ့ပဲ တွက်တယ်။ | `CurrencyCopy` startsInIntro |
-| {code} · from this phone | {code} · ဒီဖုန်းအတိုင်း | `CurrencyCopy` fromPhone |
-| Follow this phone ({code}) | ဒီဖုန်းအတိုင်း ({code}) | `CurrencyCopy` followPhone |
 | Rate for {code} | {code} နှုန်း | `CurrencyCopy` rateFor |
 | Set the rate for {code} | {code} နှုန်း ထည့်ပါ | `CurrencyCopy` setRate |
 | {baht} · ฿{rate} per {unit} | {baht} · {unit} ကို ฿{rate} | `CurrencyCopy` converted |

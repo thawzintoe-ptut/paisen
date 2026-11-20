@@ -11,14 +11,13 @@ import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.asEdit
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.format
-import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.keptAfterPicking
+import com.ptut.expense.domain.ledger.EditTransactionUseCase
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.ledger.LedgerSpan
+import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
 import com.ptut.expense.domain.ledger.rowWithId
-import com.ptut.expense.domain.runSuspendCatching
-import com.ptut.expense.domain.shared.SharedRepository
-import com.ptut.expense.domain.shared.SharedSnapshot
-import com.ptut.expense.domain.shared.TitleChange
-import com.ptut.expense.domain.shared.sharedExpenseOf
+import com.ptut.expense.domain.record.ObserveShareOptionsUseCase
 import com.ptut.expense.domain.under
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.AmountEntry
@@ -35,14 +34,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** FR-21's correction, on the fields a person can honestly know better than the slip. */
 class EditTransactionViewModel(
     private val transactionId: String,
-    private val ledger: LedgerRepository,
+    observeTransactions: ObserveTransactionsUseCase,
     /**
      * The categories the reader holds, filtered to the row's own direction. Read here rather than
      * from a compiled-in list, so a category they made is offered like any other.
@@ -51,11 +49,14 @@ class EditTransactionViewModel(
     private val subCategories: List<SubCategory> = emptyList(),
     /** #114: a haptic on every save and delete, played by the shell. */
     private val haptics: Haptics = Haptics(),
-    /** #186: the group a shared purchase lives in follows the save. Null in a screen test's graph. */
-    private val shared: SharedRepository? = null,
+    /** #186: the group a shared purchase lives in follows the save. None in a screen test's graph. */
+    shareOptions: ObserveShareOptionsUseCase = ObserveShareOptionsUseCase(),
     /** #216: "Updated …" once the save lands, as Add says "Saved …". Null in a screen test's graph. */
     private val toasts: ToastMessages? = null,
+    private val editTransaction: EditTransactionUseCase,
 ) : ViewModel() {
+
+    private val allRows = observeTransactions(LedgerSpan.All)
 
     /**
      * What has been typed, or null while nothing has.
@@ -86,10 +87,10 @@ class EditTransactionViewModel(
     val isSaved: StateFlow<Boolean> = stored.asStateFlow()
 
     val uiState: StateFlow<EditTransactionUiState> =
-        combine(ledger.allTransactions, typed, editingMemo, shared?.snapshot ?: flowOf(SharedSnapshot.Empty)) { rows, typed, memo, groups ->
+        combine(allRows, typed, editingMemo, shareOptions(transactionId)) { rows, typed, memo, groups ->
             when (val state = screenFor(rows, typed, memo)) {
                 is EditTransactionUiState.Loaded -> state.copy(
-                    alsoChanges = groups.sharedExpenseOf(transactionId)?.let { groups.group(it.groupId) }?.let { AppText.copy.record.alsoChanges(it.name) },
+                    alsoChanges = groups?.holding?.let { AppText.copy.record.alsoChanges(it.name) },
                 )
 
                 else -> state
@@ -107,7 +108,7 @@ class EditTransactionViewModel(
     fun choose(category: Category) = change { draft ->
         draft.copy(
             categoryId = category.id,
-            subCategoryId = draft.subCategoryId.takeIf { category.id == draft.categoryId },
+            subCategoryId = draft.subCategoryId.keptAfterPicking(category.id, draft.categoryId),
         )
     }
 
@@ -150,23 +151,13 @@ class EditTransactionViewModel(
 
         saving = true
         viewModelScope.launch {
-            ledger.applyEdit(record.id, edit)
-            // O4: the change flows one way, from History to the shared copy. The edit is already
-            // durable, so a group copy that cannot follow now must not keep the screen open.
-            runSuspendCatching { shared?.followTransaction(record.id, before = record.asEdit(), titleChange = titleChange(record.categoryId, edit.categoryId)) }
+            // Table-language names, so a shared copy named after its old category takes the new one's name.
+            editTransaction(record, edit, known.map { it.inTableLanguage() })
             haptics.saved()
             val edited = record.copy(categoryId = edit.categoryId, subCategoryId = edit.subCategoryId, memo = edit.memo)
             toasts?.show(ToastMessage(AppText.copy.record.updated(edited.displayName(known, subCategories))))
             stored.value = true
         }
-    }
-
-    /** The old and new category names, for a shared copy whose title was only the old name. Null when the category stayed. */
-    private fun titleChange(before: String?, after: String?): TitleChange? {
-        if (before == after) return null
-        val from = known.firstOrNull { it.id == before }?.inTableLanguage()?.name ?: return null
-        val to = known.firstOrNull { it.id == after }?.inTableLanguage()?.name ?: return null
-        return TitleChange(from, to)
     }
 
     /**
@@ -214,7 +205,7 @@ class EditTransactionViewModel(
     /** What the screen is showing: whatever has been typed, or the record while nothing has. */
     private fun onScreen(record: Transaction): EditDraft = typed.value ?: record.asDraft()
 
-    private fun record(): Transaction? = ledger.allTransactions.value.rowWithId(transactionId)
+    private fun record(): Transaction? = allRows.value.rowWithId(transactionId)
 
     /**
      * What the slip said, drawn but never editable. The spec's reason is worth keeping: they are

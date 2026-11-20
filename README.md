@@ -88,12 +88,15 @@ graph TD
   androidApp --> composeApp
   iosApp["iosApp (SwiftUI shell)"] --> composeApp
   composeApp --> features["10 feature modules<br/>today · ledger · reports · record · add<br/>review · shared · settings · categories · onboarding"]
-  features --> services["core:importer · core:sync · core:agent"]
+  features --> domain["domain (use cases)"]
+  features --> services
   features --> ui["core:ui"]
+  domain --> services["core:importer · core:sync · core:agent"]
+  domain --> data
   services --> data["data → core:platform · core:util · core:locale"]
   ui --> data
   classDef module fill:#A9DCF7,stroke:#0B0B0C,color:#0B0B0C
-  class androidApp,iosApp,composeApp,features,services,ui,data module
+  class androidApp,iosApp,composeApp,features,domain,services,ui,data module
 ```
 
 <details>

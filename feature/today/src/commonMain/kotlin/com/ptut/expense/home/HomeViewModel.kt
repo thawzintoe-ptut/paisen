@@ -3,18 +3,13 @@ package com.ptut.expense.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
-import com.ptut.expense.domain.DateRange
-import com.ptut.expense.domain.DayPart
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.MetaParts
 import com.ptut.expense.domain.PeriodSummary
-import com.ptut.expense.domain.QueuedSlip
-import com.ptut.expense.domain.ReportPeriod
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
-import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
@@ -23,28 +18,34 @@ import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.colorName
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayLabel
-import com.ptut.expense.domain.dayPartAt
+import com.ptut.expense.domain.folders.ObserveWatchedFoldersUseCase
 import com.ptut.expense.domain.folders.WatchedFolder
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.iconName
-import com.ptut.expense.domain.importFix
-import com.ptut.expense.domain.inside
 import com.ptut.expense.domain.label
-import com.ptut.expense.domain.ledger.LedgerRepository
-import com.ptut.expense.domain.ledger.LedgerSnapshot
-import com.ptut.expense.domain.rangeContaining
+import com.ptut.expense.domain.ledger.LedgerSpan
+import com.ptut.expense.domain.ledger.ObserveImportRunsUseCase
+import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
+import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
 import com.ptut.expense.domain.rules.ShopNames
-import com.ptut.expense.domain.savedOn
-import com.ptut.expense.domain.spentOn
-import com.ptut.expense.domain.summarise
-import com.ptut.expense.domain.usualDay
+import com.ptut.expense.domain.slip.ObserveQueuedSlipsUseCase
+import com.ptut.expense.domain.today.GetHomeSummaryUseCase
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
+import com.ptut.expense.domain.today.GetImportHealthUseCase
+import com.ptut.expense.domain.today.GetMoodRecapUseCase
+import com.ptut.expense.domain.today.GetWeeklyCheckInUseCase
+import com.ptut.expense.domain.today.HideWeeklyNoteUseCase
+import com.ptut.expense.domain.today.HomePeriod
+import com.ptut.expense.domain.today.MoodRecap
+import com.ptut.expense.domain.today.ObserveScanningUseCase
+import com.ptut.expense.domain.today.ReviewCounts
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.currencyCopy
+import com.ptut.expense.ui.SpendWords
 import com.ptut.expense.ui.displayName
 import com.ptut.expense.ui.metaLine
 import com.ptut.expense.ui.metaParts
-import com.ptut.expense.ui.spendByCategory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -52,15 +53,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.DayOfWeek
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
-
-/** Home's three spans (#157, p05). The ranges are Reports' own, on Asia/Bangkok. */
-enum class HomePeriod { Today, Week, Month }
 
 /** One of the period's three biggest categories (p05): its name and glyph, in rank order. */
 data class TopCategoryUiModel(val name: String, val icon: String)
@@ -143,14 +137,19 @@ data class ComparedUiModel(val line: String, val glyph: String)
 data class MoodCardUiModel(val lead: String, val line: String, val glyph: String, val receiptDate: String)
 
 class HomeViewModel(
-    ledger: LedgerRepository,
+    observeTransactions: ObserveTransactionsUseCase,
+    observeLastImport: ObserveLastImportUseCase,
+    observeImportRuns: ObserveImportRunsUseCase,
+    /** #219: slips waiting out their Undo are already gone from Review, so not counted here either. */
+    observeQueuedSlips: ObserveQueuedSlipsUseCase,
     /**
      * The fact, not the importer. A screen that only needs to know whether a scan is running has
-     * no business being able to start one, and taking the flow keeps every test that is not about
+     * no business being able to start one, and taking the fact keeps every test that is not about
      * the chip from having to build an importer.
      */
-    isScanning: Flow<Boolean> = flowOf(false),
+    observeScanning: ObserveScanningUseCase = ObserveScanningUseCase(),
     categories: List<Category> = Category.seed(),
+    /** Read on every change for the part of the day, which the mood card turns on. */
     private val clock: Clock = Clock.System,
     /**
      * #115: the reader's categories as they change. A tab keeps its holder while the reader is
@@ -160,7 +159,7 @@ class HomeViewModel(
     /** The sub-categories as they change, for the same reason (#112). */
     subCategoryUpdates: Flow<List<SubCategory>> = flowOf(emptyList()),
     /** Every folder Photo folders lists, so the empty state names what is watched (#124). */
-    watchedFolders: Flow<List<WatchedFolder>> = flowOf(emptyList()),
+    observeWatchedFolders: ObserveWatchedFoldersUseCase = ObserveWatchedFoldersUseCase(),
     /** Settings' "Mood by time of day" (#121). Off where nothing binds it, so a test sees no mood card. */
     moodByTimeOfDay: Flow<Boolean> = flowOf(false),
     /** Settings' "Weekly check-in" (#20). Off where nothing binds it, so a test sees no weekly card. */
@@ -169,12 +168,12 @@ class HomeViewModel(
     weeklyTarget: Flow<WeeklyTarget?> = flowOf(null),
     /** #22: the weekly note. Off where nothing binds it, so a test sees the #20 card unchanged. */
     weeklyNote: Flow<WeeklyNoteSettings> = flowOf(WeeklyNoteSettings()),
-    /** #22: where "Just hide this week" is kept; handed the Monday it hides. */
-    private val hideNoteFor: (String) -> Unit = {},
-    /** #219: slips waiting out their Undo, already gone from Review, so not counted here either. */
-    pendingDiscards: Flow<Set<String>> = flowOf(emptySet()),
-    /** Asked again each time Today comes back, since the reader changes it in the system's pages. */
-    private val onlyPickedPhotos: () -> Boolean = { false },
+    /** #22: where "Just hide this week" is kept. */
+    private val hideWeeklyNote: HideWeeklyNoteUseCase = HideWeeklyNoteUseCase(homeToday = GetHomeTodayUseCase(clock)),
+    private val getImportHealth: GetImportHealthUseCase = GetImportHealthUseCase(),
+    private val getHomeSummary: GetHomeSummaryUseCase = GetHomeSummaryUseCase(),
+    private val getMoodRecap: GetMoodRecapUseCase = GetMoodRecapUseCase(),
+    private val getWeeklyCheckIn: GetWeeklyCheckInUseCase = GetWeeklyCheckInUseCase(),
 ) : ViewModel() {
 
     private val period = MutableStateFlow(HomePeriod.Today)
@@ -183,7 +182,7 @@ class HomeViewModel(
     private val clockTicks = MutableStateFlow(0)
 
     /** #22: no note for this week; next Monday shows its own. */
-    fun hideNoteWeek() = hideNoteFor(clock.now().toLocalDateTime(HomeTime).date.toString())
+    fun hideNoteWeek() = hideWeeklyNote()
 
     fun refreshClock() {
         clockTicks.value += 1
@@ -191,64 +190,46 @@ class HomeViewModel(
 
     val uiState: StateFlow<HomeUiState> =
         combine(
-            ledger.todaysTransactions,
-            combine(ledger.sinceLastImportMillis, ledger.importRuns) { since, runs -> since to runs.latestStop() },
-            combine(ledger.queuedSlips, pendingDiscards) { slips, pending -> slips.filterNot { it.id in pending } },
-            combine(isScanning, watchedFolders, moodByTimeOfDay, combine(weeklyCheckIn, weeklyTarget, weeklyNote, ::Triple), clockTicks) { scanning, folders, mood, weekly, _ ->
+            observeTransactions(LedgerSpan.Today),
+            combine(observeLastImport(), observeImportRuns(), ::Pair),
+            observeQueuedSlips(),
+            combine(observeScanning(), observeWatchedFolders(), moodByTimeOfDay, combine(weeklyCheckIn, weeklyTarget, weeklyNote, ::Triple), clockTicks) { scanning, folders, mood, weekly, _ ->
                 Extras(scanning, folders, mood, weekly.first, weekly.second, weekly.third)
             },
             // ShopNames too: naming a shop read as noise retitles its rows here without a restart.
-            combine(ledger.allTransactions, combine(categoryUpdates, subCategoryUpdates, ShopNames.names) { c, s, _ -> c to s }, period, ::Triple),
-        ) { snapshot, (sinceLastImportMillis, stopped), queued, extras, (ledgerRows, filing, chosen) ->
+            combine(observeTransactions(LedgerSpan.All), combine(categoryUpdates, subCategoryUpdates, ShopNames.names) { c, s, _ -> c to s }, period, ::Triple),
+        ) { todays, (sinceLastImportMillis, runs), queued, extras, (ledger, filing, chosen) ->
             val (categories, subCategories) = filing
-            val todays = when (snapshot) {
-                LedgerSnapshot.Unanswered -> return@combine HomeUiState.Loading
-                is LedgerSnapshot.Rows -> snapshot.transactions
-            }
             val now = clock.now()
-            val picked = onlyPickedPhotos()
             val today = now.toLocalDateTime(HomeTime).date
-            val history = ledgerRows.rowsOrNone()
-            val saved = history.savedOn(today)
-            // Week and month come off the whole ledger, which can answer after today's query.
-            val range = chosen.rangeContaining(today)
-            val transactions = if (chosen == HomePeriod.Today) {
-                todays
-            } else {
-                history.inside(range).sortedByDescending { it.occurredAtEpochMillis }
-            }
+            val home = getHomeSummary(todays, ledger, chosen, today, queued, categories, extras.target, SpendWords)
+                ?: return@combine HomeUiState.Loading
+            val health = getImportHealth(sinceLastImportMillis, runs, stopSentences())
+            val transactions = home.transactions
             HomeUiState.Success(
-                heroLabel = "${chosen.spent()}${Separators.DOT}${if (chosen == HomePeriod.Today) today.dayLabel() else range.label()}",
-                summary = transactions.summarise(),
+                heroLabel = "${chosen.spent()}${Separators.DOT}${if (chosen == HomePeriod.Today) today.dayLabel() else home.range.label()}",
+                summary = home.summary,
                 transactions = transactions.map { it.asRow(categories, subCategories) },
-                importStatus = when {
-                    stopped != null -> ImportStatusUiModel.Failing(stopped)
-                    picked -> ImportStatusUiModel.OnlyPicked
-                    else -> sinceLastImportMillis.asImportStatus()
-                },
+                importStatus = health.asImportStatus(),
                 watchLine = extras.folders.watchLine(sinceLastImportMillis),
                 isScanning = extras.scanning,
                 // An empty period keeps its empty state, which already shows the scan waiting.
                 placeholderRows = if (extras.scanning && transactions.isNotEmpty()) PLACEHOLDER_ROWS else 0,
-                importFix = when {
-                    stopped != null -> stopped.fix()
-                    picked -> ImportFix.AllowAllPhotos
-                    else -> importFix(sinceLastImportMillis)
-                },
-                review = queued.asReviewCard(),
-                savedToday = saved.take(SAVED_TODAY_SHOWN).map { it.asSavedRow(categories, subCategories) },
-                savedTodayMore = (saved.size - SAVED_TODAY_SHOWN).coerceAtLeast(0),
+                importFix = health.fix,
+                review = home.review?.asReviewCard(),
+                savedToday = home.savedToday.take(SAVED_TODAY_SHOWN).map { it.asSavedRow(categories, subCategories) },
+                savedTodayMore = (home.savedToday.size - SAVED_TODAY_SHOWN).coerceAtLeast(0),
                 period = chosen,
                 amountLabel = chosen.spent(),
-                compared = history.usualDay(today)?.asCompared()?.takeIf { chosen == HomePeriod.Today },
-                moodCard = history.moodCard(dayPartAt(now), today).takeIf { extras.mood && chosen == HomePeriod.Today },
-                weeklyCard = if (extras.weekly && chosen == HomePeriod.Today && today.dayOfWeek == DayOfWeek.MONDAY) {
-                    history.weeklyCard(today, categories, extras.target, extras.note)
+                compared = home.usualDay?.asCompared(),
+                moodCard = if (extras.mood && chosen == HomePeriod.Today) getMoodRecap(home.history, now)?.asMoodCard() else null,
+                weeklyCard = if (extras.weekly && chosen == HomePeriod.Today) {
+                    getWeeklyCheckIn(home.history, today, extras.target, extras.note.on, extras.note.hiddenWeek)?.asCard(categories, extras.note.tone)
                 } else {
                     null
                 },
-                target = extras.target?.takeIf { chosen == HomePeriod.Week }?.let { history.targetLine(it, today, categories) },
-                topCategories = transactions.spendByCategory(categories)
+                target = home.target?.targetLine(categories),
+                topCategories = home.byCategory
                     .take(TOP_CATEGORIES)
                     .map { TopCategoryUiModel(name = it.category.name, icon = it.category.icon) },
             )
@@ -260,15 +241,6 @@ class HomeViewModel(
 
     fun show(period: HomePeriod) {
         this.period.value = period
-    }
-
-    /**
-     * The whole-ledger query can answer after today's does. Home is worth drawing before it does,
-     * and nothing saved is what an unanswered query supports until its first emission.
-     */
-    private fun LedgerSnapshot.rowsOrNone(): List<Transaction> = when (this) {
-        LedgerSnapshot.Unanswered -> emptyList()
-        is LedgerSnapshot.Rows -> transactions
     }
 }
 
@@ -289,28 +261,17 @@ private fun HomePeriod.spent(): String = AppText.copy.home.let { text ->
     }
 }
 
-private fun HomePeriod.rangeContaining(today: LocalDate): DateRange = when (this) {
-    HomePeriod.Today -> DateRange(today, today)
-    HomePeriod.Week -> ReportPeriod.Week.rangeContaining(today)
-    HomePeriod.Month -> ReportPeriod.Month.rangeContaining(today)
-}
-
-private fun List<QueuedSlip>.asReviewCard(): ReviewCardUiModel? {
-    if (isEmpty()) return null
+private fun ReviewCounts.asReviewCard(): ReviewCardUiModel {
     val text = AppText.copy.home
-    val newMerchants = count { it.reason == ReviewReason.NewMerchant }
-    val unclear = count { it.reason == ReviewReason.AmountUnclear }
-    val unread = count { it.reason == ReviewReason.Unreadable }
-    val rates = count { it.reason == ReviewReason.RateNeeded }
     val reasons = listOfNotNull(
-        newMerchants.takeIf { it > 0 }?.let(text.newShops),
-        unclear.takeIf { it > 0 }?.let(text.unreadableAmounts),
-        unread.takeIf { it > 0 }?.let(text.unreadSlips),
-        rates.takeIf { it > 0 }?.let(currencyCopy().slipsNeedRate),
+        of(ReviewReason.NewMerchant).takeIf { it > 0 }?.let(text.newShops),
+        of(ReviewReason.AmountUnclear).takeIf { it > 0 }?.let(text.unreadableAmounts),
+        of(ReviewReason.Unreadable).takeIf { it > 0 }?.let(text.unreadSlips),
+        of(ReviewReason.RateNeeded).takeIf { it > 0 }?.let(currencyCopy().slipsNeedRate),
     )
     // One title for every reason (#157, C3): "need a category" is wrong for an unread amount.
     return ReviewCardUiModel(
-        title = text.slipsToCheck(size),
+        title = text.slipsToCheck(total),
         detail = reasons.joinToString(AppText.copy.phrases.listComma).replaceFirstChar { it.uppercase() },
     )
 }
@@ -343,29 +304,18 @@ private data class Extras(
 
 private fun UsualDay.asCompared() = ComparedUiModel(line = differencePhrase(), glyph = difference.trendGlyph())
 
-/** Morning recaps yesterday, evening wraps today, the day between has no card; none for a day with no spending. */
-private fun List<Transaction>.moodCard(part: DayPart, today: LocalDate): MoodCardUiModel? = when (part) {
-    DayPart.Morning -> {
-        val yesterday = today.minus(1, DateTimeUnit.DAY)
-        val spent = spentOn(yesterday)
-        val versus = usualDay(yesterday)?.let { " — ${it.percentPhrase()}" }.orEmpty()
-        MoodCardUiModel(
-            lead = AppText.copy.home.goodMorning,
-            line = AppText.copy.home.yesterdayCameTo(spent.formatCompact(), versus),
-            glyph = "wb_twilight",
-            receiptDate = yesterday.toString(),
-        ).takeIf { spent > Satang.Zero }
-    }
+private fun MoodRecap.asMoodCard(): MoodCardUiModel = when (this) {
+    is MoodRecap.Morning -> MoodCardUiModel(
+        lead = AppText.copy.home.goodMorning,
+        line = AppText.copy.home.yesterdayCameTo(spent.formatCompact(), usual?.let { " — ${it.percentPhrase()}" }.orEmpty()),
+        glyph = "wb_twilight",
+        receiptDate = day.toString(),
+    )
 
-    DayPart.Evening -> {
-        val count = count { it.direction == Direction.Expense && it.occurredAtEpochMillis.dateIn(HomeTime) == today }
-        MoodCardUiModel(
-            lead = AppText.copy.home.dayWrapped,
-            line = AppText.copy.home.wrapLine(count, spentOn(today).format()),
-            glyph = "receipt_long",
-            receiptDate = today.toString(),
-        ).takeIf { count > 0 }
-    }
-
-    DayPart.Day -> null
+    is MoodRecap.Evening -> MoodCardUiModel(
+        lead = AppText.copy.home.dayWrapped,
+        line = AppText.copy.home.wrapLine(purchases, spent.format()),
+        glyph = "receipt_long",
+        receiptDate = day.toString(),
+    )
 }

@@ -8,6 +8,7 @@ import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.ledger.FakeLedger
+import com.ptut.expense.domain.today.ObserveDaySpendingUseCase
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDateTime
@@ -55,7 +56,7 @@ class DayReceiptViewModelTest : ViewModelTest() {
 
     private suspend fun loaded(date: String, rows: List<Transaction>): DayReceiptUiState.Loaded {
         var receipt: DayReceiptUiState.Loaded? = null
-        DayReceiptViewModel(date, FakeLedger(rows), clock = friday).uiState.test {
+        DayReceiptViewModel(date, ObserveDaySpendingUseCase(FakeLedger(rows)), clock = friday).uiState.test {
             receipt = awaitLoaded()
             cancelAndIgnoreRemainingEvents()
         }

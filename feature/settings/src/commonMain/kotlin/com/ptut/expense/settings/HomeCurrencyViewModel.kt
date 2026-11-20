@@ -3,14 +3,14 @@ package com.ptut.expense.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Home
-import com.ptut.expense.domain.HomeChoice
-import com.ptut.expense.domain.home.HomeBook
-import com.ptut.expense.domain.minorPerWhole
-import com.ptut.expense.domain.runSuspendCatching
+import com.ptut.expense.domain.home.ChangeHomeCurrencyUseCase
+import com.ptut.expense.domain.home.ConvertHomeCurrencyUseCase
+import com.ptut.expense.domain.home.HomeCurrencyChange
+import com.ptut.expense.domain.home.IsLedgerEmptyUseCase
+import com.ptut.expense.domain.home.PreviewConversionUseCase
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.Rate
-import com.ptut.expense.domain.shared.convert
 import com.ptut.expense.domain.shared.formatMinor
 import com.ptut.expense.domain.shared.pickerLabel
 import com.ptut.expense.domain.shared.rateUnitLabel
@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+/** One currency in the list; [code] is what choosing the row passes back. */
+data class CurrencyOptionUiModel(val code: String?, val label: String, val chosen: Boolean)
 
 data class HomeCurrencyUiState(
     val options: List<CurrencyOptionUiModel>,
@@ -47,14 +50,19 @@ data class ConvertUiModel(
  * #41: the ledger's home currency. On an empty ledger a choice applies at once, the shell is rebuilt
  * in it and opens on Settings again. With rows, every amount converts at a typed rate first (#47).
  */
-class HomeCurrencyViewModel(private val book: HomeBook) : ViewModel() {
+class HomeCurrencyViewModel(
+    isLedgerEmpty: IsLedgerEmptyUseCase,
+    private val changeHomeCurrency: ChangeHomeCurrencyUseCase,
+    private val convertHomeCurrency: ConvertHomeCurrencyUseCase,
+    private val previewConversion: PreviewConversionUseCase,
+) : ViewModel() {
 
     private val state = MutableStateFlow(stateFor(Home.money.code))
     val uiState: StateFlow<HomeCurrencyUiState> = state.asStateFlow()
 
     init {
         viewModelScope.launch {
-            runSuspendCatching { book.isEmpty() }
+            isLedgerEmpty()
                 .onSuccess { empty -> if (!empty) state.update { it.copy(note = currencyCopy().homeHasRows) } }
                 .onFailure { saysItFailed() }
         }
@@ -63,17 +71,22 @@ class HomeCurrencyViewModel(private val book: HomeBook) : ViewModel() {
     fun choose(code: String?) {
         if (code == null || code == Home.money.code) return
         viewModelScope.launch {
-            runSuspendCatching {
-                if (book.isEmpty()) {
-                    // A slip filed between the two calls makes the book refuse, and the screen says why.
-                    if (!Home.fromSettings { book.choose(choiceOf(code)) }) state.update { it.copy(note = currencyCopy().homeHasRows) }
-                } else {
-                    val new = Currencies.of(code)
-                    state.update {
-                        it.copy(converting = ConvertUiModel(code, currencyCopy().convertTitle(code), unit = old().rateUnitLabel(), newSymbol = new.symbol))
+            changeHomeCurrency(code) { choose -> Home.fromSettings { choose() } }
+                .onSuccess { change ->
+                    when (change) {
+                        HomeCurrencyChange.Applied -> Unit
+
+                        // A slip filed between the two reads makes the book refuse, and the screen says why.
+                        HomeCurrencyChange.Refused -> state.update { it.copy(note = currencyCopy().homeHasRows) }
+
+                        HomeCurrencyChange.NeedsRate -> {
+                            val new = Currencies.of(code)
+                            state.update {
+                                it.copy(converting = ConvertUiModel(code, currencyCopy().convertTitle(code), unit = old().rateUnitLabel(), newSymbol = new.symbol))
+                            }
+                        }
                     }
-                }
-            }.onFailure { saysItFailed() }
+                }.onFailure { saysItFailed() }
         }
     }
 
@@ -96,7 +109,7 @@ class HomeCurrencyViewModel(private val book: HomeBook) : ViewModel() {
         }
         state.update { it.copy(converting = converting.copy(working = true)) }
         viewModelScope.launch {
-            if (!runSuspendCatching { Home.fromSettings { book.convert(choiceOf(converting.code), rate) } }.getOrDefault(false)) {
+            if (!Home.fromSettings { convertHomeCurrency(converting.code, rate) }) {
                 state.update {
                     if (it.converting?.code == converting.code) it.copy(converting = converting.copy(working = false, problem = currencyCopy().convertFailed)) else it
                 }
@@ -108,19 +121,11 @@ class HomeCurrencyViewModel(private val book: HomeBook) : ViewModel() {
 
     private fun old(): Currency = Currencies.of(Home.money.code)
 
-    private fun choiceOf(code: String) = HomeChoice(Currencies.of(code).toHomeMoney(), Home.choice.value.zoneId)
-
     /** "฿100.00 becomes K12,500", from 100 of the old money's rate unit, or null while the rate is not a number. */
     private fun exampleAt(rateText: String, code: String): String? {
-        val old = old()
-        val rate = Rate.parse(rateText, old.rateUnit) ?: return null
-        val sample = EXAMPLE_UNITS * old.rateUnit * minorPerWhole(Home.money)
-        val new = Currencies.of(code)
-        return currencyCopy().convertExample(formatMinor(sample, old), formatMinor(convert(sample, old, rate, new).toMinorUnits(), new))
-    }
-
-    private companion object {
-        const val EXAMPLE_UNITS = 100L
+        val rate = Rate.parse(rateText, old().rateUnit) ?: return null
+        val preview = previewConversion(code, rate)
+        return currencyCopy().convertExample(formatMinor(preview.from, preview.fromCurrency), formatMinor(preview.to, preview.toCurrency))
     }
 
     private fun stateFor(chosen: String) = HomeCurrencyUiState(

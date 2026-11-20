@@ -17,6 +17,8 @@ import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.reports.GetPeriodReportUseCase
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -271,14 +273,18 @@ class ReportsViewModelTest : ViewModelTest() {
         target: WeeklyTarget? = null,
         now: Instant = at(day = 14, hour = 12),
     ) = ReportsViewModel(
-        ledger = FakeLedger(transactions),
-        clock = object : Clock {
-            override fun now(): Instant = now
-        },
+        getPeriodReport = GetPeriodReportUseCase(
+            FakeLedger(transactions),
+            homeToday = GetHomeTodayUseCase(
+                object : Clock {
+                    override fun now(): Instant = now
+                },
+            ),
+            work = Dispatchers.Main,
+        ),
         categoryUpdates = categories,
         subCategoryUpdates = subCategories,
         weeklyTarget = flowOf(target),
-        work = Dispatchers.Main,
     )
 
     /** Reports only reads recent history; the rest of the seam is not its business. */

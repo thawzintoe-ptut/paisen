@@ -6,31 +6,29 @@ import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.DateRange
 import com.ptut.expense.domain.DayBucket
 import com.ptut.expense.domain.Direction
-import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.LedgerFilter
 import com.ptut.expense.domain.MetaParts
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
-import com.ptut.expense.domain.accepts
-import com.ptut.expense.domain.bucketByDay
 import com.ptut.expense.domain.colorName
 import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.formatNet
 import com.ptut.expense.domain.iconName
-import com.ptut.expense.domain.inside
 import com.ptut.expense.domain.label
-import com.ptut.expense.domain.ledger.LedgerRepository
-import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.longName
-import com.ptut.expense.domain.matches
 import com.ptut.expense.domain.monthShort
 import com.ptut.expense.domain.rules.ShopNames
+import com.ptut.expense.domain.today.FilterLedgerUseCase
+import com.ptut.expense.domain.today.FilteredLedger
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
+import com.ptut.expense.domain.today.LedgerSlice
 import com.ptut.expense.domain.weekdayAndDay
 import com.ptut.expense.domain.yearLabel
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.ui.SpendWords
 import com.ptut.expense.ui.UnknownCategory
 import com.ptut.expense.ui.displayName
 import com.ptut.expense.ui.metaLine
@@ -46,7 +44,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 
 data class LedgerRowUiModel(
@@ -129,14 +126,11 @@ sealed interface LedgerUiState {
 /**
  * FR-21. The flat read of the table every later number gets checked against.
  *
- * It reads [LedgerRepository.allTransactions] rather than the reports window: an audit list that
- * silently stopped at a horizon is how a month stops adding up with nothing on screen to say why.
- *
  * The search text and the chip stay here rather than in the view, so the day grouping is computed
  * once per change instead of on every recomposition of a scrolling list.
  */
 class LedgerViewModel(
-    ledger: LedgerRepository,
+    filterLedger: FilterLedgerUseCase,
     categories: List<Category> = Category.seed(),
     /**
      * #115: the reader's categories as they change. A tab keeps its holder while the reader is
@@ -146,10 +140,11 @@ class LedgerViewModel(
     /** The sub-categories as they change, for the same reason (#112). */
     subCategoryUpdates: Flow<List<SubCategory>> = flowOf(emptyList()),
     /** Only to know which group is today's, "Today · Fri 14" (#128). */
-    private val clock: Clock = Clock.System,
+    clock: Clock = Clock.System,
+    private val homeToday: GetHomeTodayUseCase = GetHomeTodayUseCase(clock),
     /** The slice Reports opened (#220), or null for the whole table. Search and filters work inside it. */
     private val scope: LedgerScope? = null,
-    /** Grouping a whole ledger on every keystroke stays off the main thread. */
+    /** Turning a whole ledger into rows on every keystroke stays off the main thread too. */
     private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
@@ -158,38 +153,11 @@ class LedgerViewModel(
 
     val uiState: StateFlow<LedgerUiState> =
         combine(
-            ledger.allTransactions,
-            query,
-            chosen,
+            filterLedger(query, chosen, categoryUpdates, SpendWords, scope?.let { LedgerSlice(DateRange(it.from, it.to), it.categoryId) }),
             // ShopNames too: naming a shop read as noise retitles its rows here without a restart.
-            combine(categoryUpdates, subCategoryUpdates, ShopNames.names) { c, s, _ -> c to s },
-        ) { snapshot, text, filter, (categories, subCategories) ->
-            val transactions = when (snapshot) {
-                LedgerSnapshot.Unanswered -> return@combine LedgerUiState.Loading
-                is LedgerSnapshot.Rows -> snapshot.transactions
-            }
-            val inScope = scope?.let { slice -> transactions.inside(DateRange(slice.from, slice.to)).filter { slice.holds(it, categories) } } ?: transactions
-            val visible = inScope.filter { filter.accepts(it) && it.matches(text) }
-            val today = clock.now().toLocalDateTime(HomeTime).date
-
-            val buckets = visible.bucketByDay(newestFirst = true)
-            LedgerUiState.Success(
-                query = text,
-                filter = filter,
-                days = buckets.map { bucket ->
-                    LedgerDayUiModel(
-                        key = bucket.date.dayKey(),
-                        date = if (bucket.date == today) "${AppText.copy.common.today}${Separators.DOT}${bucket.date.weekdayAndDay()}" else bucket.date.dayLabel(),
-                        total = bucket.summary.net.formatNet(),
-                        rows = bucket.transactions
-                            .sortedByDescending(Transaction::occurredAtEpochMillis)
-                            .map { it.toRow(categories, subCategories) },
-                    )
-                },
-                hiddenByFilter = inScope.size - visible.size,
-                scope = scope?.heading(categories),
-                months = buckets.monthIndex(),
-            )
+            combine(subCategoryUpdates, ShopNames.names) { subCategories, _ -> subCategories },
+        ) { filtered, subCategories ->
+            filtered?.let { success(it, subCategories) } ?: LedgerUiState.Loading
         }.flowOn(work).stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
@@ -202,6 +170,26 @@ class LedgerViewModel(
 
     fun filter(choice: LedgerFilter) {
         chosen.value = choice
+    }
+
+    private fun success(filtered: FilteredLedger, subCategories: List<SubCategory>): LedgerUiState.Success {
+        val today = homeToday()
+        val categories = filtered.categories
+        return LedgerUiState.Success(
+            query = filtered.query,
+            filter = filtered.filter,
+            days = filtered.days.map { bucket ->
+                LedgerDayUiModel(
+                    key = bucket.date.dayKey(),
+                    date = if (bucket.date == today) "${AppText.copy.common.today}${Separators.DOT}${bucket.date.weekdayAndDay()}" else bucket.date.dayLabel(),
+                    total = bucket.summary.net.formatNet(),
+                    rows = bucket.transactions.map { it.toRow(categories, subCategories) },
+                )
+            },
+            hiddenByFilter = filtered.hiddenByFilter,
+            scope = scope?.heading(categories),
+            months = filtered.days.monthIndex(),
+        )
     }
 
     private fun Transaction.toRow(categories: List<Category>, subCategories: List<SubCategory>) = LedgerRowUiModel(
@@ -239,13 +227,6 @@ private fun List<DayBucket>.monthIndex(): List<LedgerMonthUiModel> {
 }
 
 private fun LocalDate.dayKey(): String = "day-$this"
-
-/** The category half of the slice; the days are cut by [inside] first. */
-private fun LedgerScope.holds(transaction: Transaction, categories: List<Category>): Boolean {
-    val wanted = categoryId ?: return true
-    val filed = categories.firstOrNull { it.id == transaction.categoryId } ?: UnknownCategory
-    return transaction.direction == Direction.Expense && filed.id == wanted
-}
 
 private fun LedgerScope.heading(categories: List<Category>) = LedgerScopeUiModel(
     title = categoryId?.let { id -> (categories.firstOrNull { it.id == id } ?: UnknownCategory).name } ?: AppText.copy.history.title,

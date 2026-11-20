@@ -19,21 +19,23 @@ import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompactParts
 import com.ptut.expense.domain.iconName
 import com.ptut.expense.domain.isAutomatic
-import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.ledger.DeleteTransactionUseCase
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.ledger.LedgerSpan
+import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
+import com.ptut.expense.domain.ledger.UndoDeleteTransactionUseCase
 import com.ptut.expense.domain.ledger.rowWithId
 import com.ptut.expense.domain.monthShort
-import com.ptut.expense.domain.periodsMovedByDeleting
+import com.ptut.expense.domain.record.FilingRules
+import com.ptut.expense.domain.record.GetDeleteImpactUseCase
+import com.ptut.expense.domain.record.ObserveFilingRulesUseCase
+import com.ptut.expense.domain.record.ObserveShareOptionsUseCase
+import com.ptut.expense.domain.record.SetPlannedUseCase
+import com.ptut.expense.domain.record.ShareOptions
 import com.ptut.expense.domain.rules.RememberedMerchant
-import com.ptut.expense.domain.rules.RuleRepository
-import com.ptut.expense.domain.rules.forShop
-import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.Currencies
-import com.ptut.expense.domain.shared.SharedRepository
-import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.formatMinor
 import com.ptut.expense.domain.shared.rateUnitLabel
-import com.ptut.expense.domain.shared.sharedExpenseOf
 import com.ptut.expense.domain.slip.shownShop
 import com.ptut.expense.domain.spoken
 import com.ptut.expense.domain.timeOfDayIn
@@ -54,7 +56,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -67,14 +68,14 @@ private const val NOT_RECORDED = "—"
 /**
  * FR-21's record, on its own screen because the action it leads to is destructive.
  *
- * It observes [LedgerRepository.allTransactions] rather than asking for one row by id. That flow
- * is already hot — the Ledger holds it open — so this costs a `firstOrNull` per emission and no
+ * It observes every row ([LedgerSpan.All]) rather than asking for one row by id. That flow is
+ * already hot — the Ledger holds it open — so this costs a `firstOrNull` per emission and no
  * new query, and it keeps the screen live: #53 corrects a row and this redraws, where a value
  * read once would keep showing the figure the reader has just changed.
  */
 class TransactionDetailViewModel(
     private val transactionId: String,
-    private val ledger: LedgerRepository,
+    observeTransactions: ObserveTransactionsUseCase,
     private val toasts: ToastMessages,
     private val categories: List<Category> = Category.seed(),
     /** Read when the screen is built, like [categories]: the record names its sub-category (#112). */
@@ -84,21 +85,27 @@ class TransactionDetailViewModel(
      * to the one screen that may change it — FR-12's correction had nowhere to live once rev 5
      * took the shops screen away.
      *
-     * Null where nothing binds it, which is a screen test's graph rather than a device. The record
-     * then draws without the row, which is the same thing it does for a row no rule filed.
+     * In a screen test's graph there are none. The record then draws without the row, which is
+     * the same thing it does for a row no rule filed.
      */
-    private val rules: RuleRepository? = null,
+    filingRules: ObserveFilingRulesUseCase = ObserveFilingRulesUseCase(),
     /** #22: debug builds only until the weekly note has been tried. */
     private val offersPlanned: Boolean = false,
     /** FR-19: the transaction's own Bangkok day and time, never the device's. */
     private val zone: TimeZone = HomeTime,
     /** Only to ask what today is. Which totals a delete moves depends on the day it happens. */
-    private val clock: Clock = Clock.System,
+    clock: Clock = Clock.System,
     /** #114: a haptic on every save and delete, played by the shell. */
     private val haptics: Haptics = Haptics(),
-    /** #186: v2's groups. Null in a screen test's graph, and the record then draws as v1 does. */
-    private val shared: SharedRepository? = null,
+    /** #186: v2's groups. None in a screen test's graph, and the record then draws as v1 does. */
+    shareOptions: ObserveShareOptionsUseCase = ObserveShareOptionsUseCase(),
+    private val deleteImpact: GetDeleteImpactUseCase = GetDeleteImpactUseCase(clock, zone),
+    private val setPlannedUseCase: SetPlannedUseCase,
+    private val deleteTransaction: DeleteTransactionUseCase,
+    private val undoDelete: UndoDeleteTransactionUseCase,
 ) : ViewModel() {
+
+    private val allRows = observeTransactions(LedgerSpan.All)
 
     private val deleteAsk = MutableStateFlow(DeleteAsk())
 
@@ -114,10 +121,10 @@ class TransactionDetailViewModel(
     val uiState: StateFlow<TransactionDetailUiState> =
         // Rules are observed too, so a rule changed elsewhere redraws the card (#117).
         combine(
-            ledger.allTransactions,
+            allRows,
             deleteAsk,
-            rules?.rules ?: flowOf(emptyList()),
-            shared?.snapshot ?: flowOf(SharedSnapshot.Empty),
+            filingRules(),
+            shareOptions(transactionId),
         ) { rows, ask, known, groups ->
             when (val state = detailOf(rows, known)) {
                 is TransactionDetailUiState.Loaded -> state.withShared(groups).copy(confirmingDelete = ask.confirming, alsoRemoveFromGroup = ask.alsoRemove)
@@ -136,7 +143,7 @@ class TransactionDetailViewModel(
      * the opposite mistake: delete the only transaction and the record really was gone, but the
      * screen hung on a blank header saying nothing.
      */
-    private fun detailOf(snapshot: LedgerSnapshot, known: List<RememberedMerchant>): TransactionDetailUiState = when (snapshot) {
+    private fun detailOf(snapshot: LedgerSnapshot, known: FilingRules): TransactionDetailUiState = when (snapshot) {
         LedgerSnapshot.Unanswered -> TransactionDetailUiState.Loading
 
         is LedgerSnapshot.Rows ->
@@ -146,7 +153,7 @@ class TransactionDetailViewModel(
                 ?: TransactionDetailUiState.Missing
     }
 
-    private fun Transaction.toLoaded(known: List<RememberedMerchant>): TransactionDetailUiState.Loaded {
+    private fun Transaction.toLoaded(known: FilingRules): TransactionDetailUiState.Loaded {
         val merchant = displayName(categories, subCategories)
         val moved = totalsMovedPhrase()
         val text = AppText.copy.record
@@ -173,10 +180,9 @@ class TransactionDetailViewModel(
      * The Why card (p16), only on a row a rule filed and still in that rule's category (#117). A
      * hand entry, a confirmed slip or an edited row has a different story than the card would tell.
      */
-    private fun Transaction.shopRule(known: List<RememberedMerchant>): ShopRuleRowUiModel? {
+    private fun Transaction.shopRule(known: FilingRules): ShopRuleRowUiModel? {
         val shop = counterparty ?: return null
-        val rule = known.firstOrNull { it.id == ruleId } ?: return null
-        if (rule.categoryId != categoryId) return null
+        val rule = known.filedBy(this) ?: return null
 
         val lands = categories.firstOrNull { it.id == rule.categoryId }?.name ?: return null
         return ShopRuleRowUiModel(shop = shop, filesUnder = lands, why = rule.why(shop, lands))
@@ -220,10 +226,7 @@ class TransactionDetailViewModel(
      * leaves the ledger, and both sentences say so in their own words for that case.
      */
     private fun Transaction.totalsMovedPhrase(): String? {
-        val moved = periodsMovedByDeleting(
-            occurredAt = occurredAtEpochMillis.dateIn(zone),
-            today = clock.now().dateIn(zone),
-        )
+        val moved = deleteImpact(occurredAtEpochMillis)
         return moved.takeIf { it.isNotEmpty() }?.phrase()
     }
 
@@ -232,10 +235,10 @@ class TransactionDetailViewModel(
      * added by hand taught no rule, so it gets the true version of the same promise rather than
      * one about a merchant it never had.
      */
-    private fun Transaction.ruleFooter(known: List<RememberedMerchant>): String {
+    private fun Transaction.ruleFooter(known: FilingRules): String {
         val text = AppText.copy.record
         val merchant = counterparty ?: return text.handFooter
-        val rule = known.forShop(merchant)
+        val rule = known.nextFor(this)
         val sortedInto = rule?.let { held -> categories.firstOrNull { it.id == held.categoryId }?.name }
             ?: return text.onlyThisOne
         return text.staysSorted(shownShop(merchant, AppText.copy.slips.unknownShop), sortedInto)
@@ -286,12 +289,12 @@ class TransactionDetailViewModel(
     }
 
     /** #186: which group holds this purchase, or which groups it could go to. */
-    private fun TransactionDetailUiState.Loaded.withShared(snapshot: SharedSnapshot): TransactionDetailUiState.Loaded {
-        if (shared == null) return this
-        val group = snapshot.sharedExpenseOf(transactionId)?.let { snapshot.group(it.groupId) }
+    private fun TransactionDetailUiState.Loaded.withShared(options: ShareOptions?): TransactionDetailUiState.Loaded {
+        if (options == null) return this
+        val group = options.holding
         return copy(
             canShare = group == null && !isIncome,
-            shareGroups = snapshot.groups.map { ShareGroupUiModel(it.id, it.name, AppText.copy.record.people(it.activeMembers.size)) },
+            shareGroups = options.groups.map { ShareGroupUiModel(it.id, it.name, AppText.copy.record.people(it.activeMembers.size)) },
             sharedGroupId = group?.id,
             sharedGroupName = group?.name,
         )
@@ -299,7 +302,7 @@ class TransactionDetailViewModel(
 
     /** #22: planned on or off, written at once like a switch in Settings. */
     fun setPlanned(on: Boolean) {
-        viewModelScope.launch { ledger.setPlanned(transactionId, on) }
+        viewModelScope.launch { setPlannedUseCase(transactionId, on) }
     }
 
     fun setAlsoRemove(on: Boolean) {
@@ -325,34 +328,24 @@ class TransactionDetailViewModel(
      * is the thing the reader can already see is temporary.
      */
     fun confirmDelete() {
-        val row = ledger.allTransactions.value.rowWithId(transactionId) ?: return
+        val row = allRows.value.rowWithId(transactionId) ?: return
         val name = row.displayName(categories, subCategories)
         val ask = deleteAsk.value
         deleteAsk.value = ask.copy(confirming = false)
-        val repository = shared
-        val expense = repository?.snapshot?.value?.sharedExpenseOf(row.id)
-        val group = expense?.let { repository.snapshot.value.group(it.groupId) }
-        // #186: ticked removes the group's copy too; unticked keeps it and only the link goes.
-        val removing = expense?.takeIf { ask.alsoRemove }
+        val undoDelete = undoDelete
         val text = AppText.copy.record
         viewModelScope.launch {
-            ledger.delete(row.id)
-            // The row is already gone, so a group copy that will not go must not keep the screen open.
-            val removeShared = removing != null && runSuspendCatching { repository.removeExpense(removing.id) }.isSuccess
+            // #186: ticked removes the group's copy too; unticked keeps it and only the link goes.
+            val receipt = deleteTransaction(row, alsoRemoveShared = ask.alsoRemove)
             haptics.deleted()
+            val groupName = receipt.groupName?.takeIf { receipt.removedShared }
             toasts.show(
                 ToastMessage(
-                    text = if (removeShared && group != null) text.deletedFromGroup(name, group.name) else text.deleted(name),
+                    text = if (groupName != null) text.deletedFromGroup(name, groupName) else text.deleted(name),
                     tone = ToastTone.Deleted,
                     // The action outlives this holder: the screen pops as soon as the row goes,
-                    // so the shell runs it and the row travels in the lambda rather than in here.
-                    action = ToastAction(AppText.copy.common.undo) {
-                        ledger.restore(row)
-                        if (expense != null) {
-                            if (removeShared) repository.restoreExpense(expense.id)
-                            repository.relink(expense.id, row.id)
-                        }
-                    },
+                    // so the shell runs it and the receipt travels in the lambda rather than in here.
+                    action = ToastAction(AppText.copy.common.undo) { undoDelete(receipt) },
                 ),
             )
             gone.value = true

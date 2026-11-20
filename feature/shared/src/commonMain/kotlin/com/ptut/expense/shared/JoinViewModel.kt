@@ -2,15 +2,13 @@ package com.ptut.expense.shared
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.runSuspendCatching
+import com.ptut.expense.domain.shared.GetSyncAccessUseCase
+import com.ptut.expense.domain.shared.JoinGroupUseCase
+import com.ptut.expense.domain.shared.OpenInviteUseCase
 import com.ptut.expense.sync.JoinChoice
-import com.ptut.expense.sync.SharedSync
-import com.ptut.expense.sync.auth.Account
-import com.ptut.expense.sync.auth.AuthRepository
 import com.ptut.expense.sync.syncMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -40,26 +38,28 @@ sealed interface JoinUiState {
  */
 class JoinViewModel(
     private val code: String,
-    private val sync: SharedSync?,
-    private val auth: AuthRepository?,
+    getSyncAccess: GetSyncAccessUseCase,
+    private val openInvite: OpenInviteUseCase,
+    private val joinGroup: JoinGroupUseCase,
 ) : ViewModel() {
 
     private val state = MutableStateFlow<JoinUiState>(JoinUiState.Loading)
     val uiState: StateFlow<JoinUiState> = state
 
+    private val access = getSyncAccess()
+
     private var choice: JoinChoice? = null
 
     init {
-        val auth = auth
         when {
-            sync == null || auth == null || !sync.available -> state.value = JoinUiState.Unavailable
+            !access.available -> state.value = JoinUiState.Unavailable
 
-            auth.account.value is Account.SignedIn -> open()
+            access.signedInNow -> open()
 
             else -> {
                 state.value = JoinUiState.NeedsSignIn
                 viewModelScope.launch {
-                    auth.account.filter { it is Account.SignedIn }.first()
+                    access.signedIn.first { it }
                     open()
                 }
             }
@@ -85,24 +85,28 @@ class JoinViewModel(
     }
 
     private fun join(memberId: String?) {
-        val sync = sync ?: return
+        if (!access.available) return
         val choice = choice ?: return
         viewModelScope.launch {
-            state.value = runSuspendCatching<JoinUiState> { JoinUiState.Done(sync.join(choice, memberId)) }
-                .getOrElse { failure -> JoinUiState.Failed(failure.syncMessage()) }
+            state.value = joinGroup(choice, memberId).fold(
+                onSuccess = { groupId -> JoinUiState.Done(groupId) },
+                onFailure = { failure -> JoinUiState.Failed(failure.syncMessage()) },
+            )
         }
     }
 
     private fun open() {
-        val sync = sync ?: return
+        if (!access.available) return
         state.value = JoinUiState.Loading
         viewModelScope.launch {
-            state.value = runSuspendCatching<JoinUiState> {
-                val opened = sync.openJoin(code)
-                choice = opened
-                opened.mine?.let { (_, name) -> JoinUiState.AlreadyIn(opened.groupName, name) }
-                    ?: JoinUiState.Choose(opened.groupName, opened.names.map { (id, name) -> JoinNameUiModel(id, name) })
-            }.getOrElse { failure -> JoinUiState.Failed(failure.syncMessage()) }
+            state.value = openInvite(code).fold(
+                onSuccess = { opened ->
+                    choice = opened
+                    opened.mine?.let { (_, name) -> JoinUiState.AlreadyIn(opened.groupName, name) }
+                        ?: JoinUiState.Choose(opened.groupName, opened.names.map { (id, name) -> JoinNameUiModel(id, name) })
+                },
+                onFailure = { failure -> JoinUiState.Failed(failure.syncMessage()) },
+            )
         }
     }
 }

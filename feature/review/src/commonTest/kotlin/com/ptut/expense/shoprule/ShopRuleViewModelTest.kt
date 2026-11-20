@@ -4,6 +4,10 @@ import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.rules.RememberedMerchant
 import com.ptut.expense.domain.rules.RuleRepository
+import com.ptut.expense.domain.slip.ForgetShopUseCase
+import com.ptut.expense.domain.slip.ObserveShopRuleUseCase
+import com.ptut.expense.domain.slip.RecategoriseShopUseCase
+import com.ptut.expense.domain.slip.RenameShopUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -144,3 +148,12 @@ class ShopRuleViewModelTest {
         }
     }
 }
+
+/** Builds the screen over this file's fakes, as Koin builds it over the app's graph. */
+private fun ShopRuleViewModel(shop: String, rules: RuleRepository): ShopRuleViewModel = ShopRuleViewModel(
+    shop = shop,
+    observeRule = ObserveShopRuleUseCase(rules),
+    recategoriseShop = RecategoriseShopUseCase(rules),
+    renameShop = RenameShopUseCase(rules),
+    forgetShop = ForgetShopUseCase(rules),
+)

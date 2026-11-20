@@ -1,4 +1,4 @@
-package com.ptut.expense.shared
+package com.ptut.expense.domain.shared
 
 import com.ptut.expense.sync.SyncOutcome
 import kotlinx.coroutines.CancellationException
@@ -21,7 +21,7 @@ class SyncPollingTest {
     @Test
     fun `Each tick runs the pull the screen hands in`() = runTest {
         var pulls = 0
-        val polling = syncPolling(MutableStateFlow(true), runner = null, every = 15.seconds) {
+        val polling = syncPolling(MutableStateFlow(true), runDueRepeats = null, every = 15.seconds) {
             pulls++
             PULLED
         }
@@ -36,7 +36,7 @@ class SyncPollingTest {
     @Test
     fun `Each failed pull doubles the wait before the next`() = runTest {
         var pulls = 0
-        val polling = syncPolling(MutableStateFlow(true), runner = null, every = 15.seconds) {
+        val polling = syncPolling(MutableStateFlow(true), runDueRepeats = null, every = 15.seconds) {
             pulls++
             error("offline")
         }
@@ -57,7 +57,7 @@ class SyncPollingTest {
     @Test
     fun `A pull that keeps failing waits no longer than the cap`() = runTest {
         val pulledAt = mutableListOf<Long>()
-        val polling = syncPolling(MutableStateFlow(true), runner = null, every = 15.seconds) {
+        val polling = syncPolling(MutableStateFlow(true), runDueRepeats = null, every = 15.seconds) {
             pulledAt += testScheduler.currentTime
             error("offline")
         }
@@ -74,7 +74,7 @@ class SyncPollingTest {
     @Test
     fun `A pull that works again brings the wait back to the tick`() = runTest {
         var pulls = 0
-        val polling = syncPolling(MutableStateFlow(true), runner = null, every = 15.seconds) {
+        val polling = syncPolling(MutableStateFlow(true), runDueRepeats = null, every = 15.seconds) {
             pulls++
             if (pulls <= 2) error("offline")
             PULLED
@@ -93,7 +93,7 @@ class SyncPollingTest {
     @Test
     fun `A group pull that failed backs off as a thrown one does`() = runTest {
         var pulls = 0
-        val polling = syncPolling(MutableStateFlow(true), runner = null, every = 15.seconds) {
+        val polling = syncPolling(MutableStateFlow(true), runDueRepeats = null, every = 15.seconds) {
             pulls++
             SyncOutcome(groupsChanged = false, failed = true)
         }
@@ -111,15 +111,15 @@ class SyncPollingTest {
 
     @Test
     fun `One sync says whether the pull worked`() = runTest {
-        assertTrue(syncOnce(runner = null) { PULLED })
-        assertFalse(syncOnce(runner = null) { error("offline") })
-        assertFalse(syncOnce(runner = null) { SyncOutcome(groupsChanged = true, failed = true) })
+        assertTrue(syncOnce(runDueRepeats = null) { PULLED })
+        assertFalse(syncOnce(runDueRepeats = null) { error("offline") })
+        assertFalse(syncOnce(runDueRepeats = null) { SyncOutcome(groupsChanged = true, failed = true) })
     }
 
     @Test
     fun `A cancelled pull is not taken for a failure`() = runTest {
         assertFailsWith<CancellationException> {
-            syncOnce(runner = null) { throw CancellationException("screen left") }
+            syncOnce(runDueRepeats = null) { throw CancellationException("screen left") }
         }
     }
 

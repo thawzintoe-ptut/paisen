@@ -4,11 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.format
+import com.ptut.expense.domain.shared.GetSettlementUseCase
+import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
 import com.ptut.expense.domain.shared.PromptPay
-import com.ptut.expense.domain.shared.SharedRepository
-import com.ptut.expense.domain.shared.currenciesOf
+import com.ptut.expense.domain.shared.SavePromptPayUseCase
+import com.ptut.expense.domain.shared.SetSimplifyDebtsUseCase
 import com.ptut.expense.domain.shared.moneyFormat
-import com.ptut.expense.domain.shared.whoPaysWhom
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -55,14 +56,16 @@ sealed interface WhoPaysWhomUiState {
 /** #184: the payments that settle one group, from #135, and the switch back to the original pairings. */
 class WhoPaysWhomViewModel(
     private val groupId: String,
-    private val repository: SharedRepository,
+    observeSnapshot: ObserveSharedSnapshotUseCase,
+    private val getSettlement: GetSettlementUseCase,
+    private val savePromptPay: SavePromptPayUseCase,
+    private val setSimplifyDebts: SetSimplifyDebtsUseCase,
     /** Where the snapshot is mapped; tests hand in their own. */
     private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
-    val uiState: StateFlow<WhoPaysWhomUiState> = repository.snapshot.map { snapshot ->
-        val group = snapshot.group(groupId) ?: return@map WhoPaysWhomUiState.Missing
-        val settlement = snapshot.whoPaysWhom(groupId)
+    val uiState: StateFlow<WhoPaysWhomUiState> = observeSnapshot().map { snapshot ->
+        val (group, settlement, foreign) = getSettlement(snapshot, groupId) ?: return@map WhoPaysWhomUiState.Missing
         val text = AppText.copy.shared.settle
         val you = AppText.copy.common.you
         val money = group.moneyFormat()
@@ -91,7 +94,6 @@ class WhoPaysWhomViewModel(
                 },
             )
         }
-        val foreign = snapshot.currenciesOf(groupId).filter { it != group.currency }
         WhoPaysWhomUiState.Loaded(
             groupName = group.name,
             headline = if (cards.isEmpty()) text.allSettled else text.payments(cards.size),
@@ -107,11 +109,11 @@ class WhoPaysWhomViewModel(
     /** True when [text] is a PromptPay ID and was saved for my name in this group, as on the group's own sheet. */
     fun setPromptPay(text: String): Boolean {
         val id = PromptPay.normalize(text) ?: return false
-        viewModelScope.launch { repository.setPromptPay(groupId, id) }
+        viewModelScope.launch { savePromptPay(groupId, id) }
         return true
     }
 
     fun setSimplify(on: Boolean) {
-        viewModelScope.launch { repository.setSimplifyDebts(groupId, on) }
+        viewModelScope.launch { setSimplifyDebts(groupId, on) }
     }
 }

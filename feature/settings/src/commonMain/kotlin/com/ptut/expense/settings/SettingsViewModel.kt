@@ -5,13 +5,23 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.agent.ModelState
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
+import com.ptut.expense.domain.categories.CategoryCounts
+import com.ptut.expense.domain.categories.ObserveCategoryCountsUseCase
+import com.ptut.expense.domain.folders.ObserveWatchedFoldersUseCase
 import com.ptut.expense.domain.folders.WatchedFolder
 import com.ptut.expense.domain.folders.watched
 import com.ptut.expense.domain.importFix
-import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
 import com.ptut.expense.domain.settings.AppChoices
-import com.ptut.expense.domain.settings.AppSettings
-import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.settings.DisableAppLockUseCase
+import com.ptut.expense.domain.settings.EnableAppLockUseCase
+import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
+import com.ptut.expense.domain.settings.ObserveAssistantModelUseCase
+import com.ptut.expense.domain.settings.SetMoodByTimeOfDayUseCase
+import com.ptut.expense.domain.settings.SetSlipOwnerUseCase
+import com.ptut.expense.domain.settings.SetTransparencyUseCase
+import com.ptut.expense.domain.settings.SetWeeklyCheckInUseCase
+import com.ptut.expense.domain.settings.SwitchNoteToneUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.NoteTone
 import com.ptut.expense.locale.SettingsCopy
@@ -19,16 +29,14 @@ import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.locale.incomeSlipCopy
 import com.ptut.expense.locale.noteCopy
 import com.ptut.expense.ui.elapsedPhrase
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** Which row. It is the row's identity as well as the destination it opens. */
-enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, HomeCurrency, AddCurrency, Assistant, Feedback, Licences }
+enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, HomeCurrency, Assistant, Feedback, Licences }
 
 /** Where Send feedback writes to. The same address PRIVACY.md and SECURITY.md give. */
 const val FEEDBACK_ADDRESS = "developer.ptut@gmail.com"
@@ -66,9 +74,6 @@ data class SettingsUiState(val groups: List<SettingsGroupUiModel>) {
     val rows: List<SettingsRowUiModel> get() = groups.flatMap { it.rows }
 }
 
-/** What the Categories row counts (#168). */
-data class CategoryCounts(val categories: Int = 0, val subCategories: Int = 0)
-
 /**
  * NFR-1, NFR-2, NFR-4, NFR-5. The levers that decide whether the ledger can be trusted.
  *
@@ -81,30 +86,35 @@ data class CategoryCounts(val categories: Int = 0, val subCategories: Int = 0)
  * on Today is derived: a stored copy drifts, and a drifted trust indicator is worse than none.
  */
 class SettingsViewModel(
-    ledger: LedgerRepository,
-    private val settings: AppSettings,
+    observeLastImport: ObserveLastImportUseCase,
+    observeChoices: ObserveAppChoicesUseCase,
     private val cadence: SlipImportCadence,
-    /** The watched folders, named on the Photo folders row (#124, #168). Empty where none is bound. */
-    folders: Flow<List<WatchedFolder>> = flowOf(emptyList()),
+    private val saveMoodByTimeOfDay: SetMoodByTimeOfDayUseCase,
+    private val saveTransparency: SetTransparencyUseCase,
+    private val saveWeeklyCheckIn: SetWeeklyCheckInUseCase,
+    private val saveSlipOwner: SetSlipOwnerUseCase,
+    private val enableAppLock: EnableAppLockUseCase,
+    private val disableAppLock: DisableAppLockUseCase,
+    private val switchNoteToneUseCase: SwitchNoteToneUseCase,
+    /** The watched folders, named on the Photo folders row (#124, #168). None where nothing is bound. */
+    observeFolders: ObserveWatchedFoldersUseCase = ObserveWatchedFoldersUseCase(),
     /** The reader's categories and sub-categories, counted on the Categories row (#168). */
-    categoryCounts: Flow<CategoryCounts> = flowOf(CategoryCounts()),
+    observeCategoryCounts: ObserveCategoryCountsUseCase = ObserveCategoryCountsUseCase(),
     /** #207: the model's state, for its row. */
-    assistant: Flow<ModelState> = flowOf(ModelState.NotOffered),
+    observeAssistant: ObserveAssistantModelUseCase = ObserveAssistantModelUseCase(),
     /** A debug build shows the assistant row before any build can offer the model. */
     private val showAssistant: Boolean = false,
     /** #25: the phone can ask for a fingerprint, face or PIN. Android 8 cannot, so it draws no row. */
     private val canLock: Boolean = false,
     /** #22: the weekly note's tone row, in debug builds until the note has been tried. */
     private val showNoteTone: Boolean = false,
-    /** The Add sheet's starting currency, in builds that offer other currencies there. */
-    private val showAddCurrency: Boolean = false,
-    /** What the phone's country maps to, for the row's value when nothing is pinned. */
-    private val phoneCurrency: () -> String = { Currencies.Thb.code },
+    /** #41: the home currency row, in builds that offer other currencies. */
+    private val showHomeCurrency: Boolean = false,
 ) : ViewModel() {
 
-    fun setMoodByTimeOfDay(on: Boolean) = settings.setMoodByTimeOfDay(on)
+    fun setMoodByTimeOfDay(on: Boolean) = saveMoodByTimeOfDay(on)
 
-    fun setTransparency(on: Boolean) = settings.setTransparency(on)
+    fun setTransparency(on: Boolean) = saveTransparency(on)
 
     /**
      * #25: on only after the phone's own check passes, so a failed check cannot lock anyone out.
@@ -112,37 +122,34 @@ class SettingsViewModel(
      */
     fun setAppLock(on: Boolean, authenticate: suspend () -> Boolean, onTurnedOn: () -> Unit = {}) {
         if (!on) {
-            settings.setAppLock(false)
+            disableAppLock()
             return
         }
         viewModelScope.launch {
-            if (authenticate()) {
-                settings.setAppLock(true)
-                onTurnedOn()
-            }
+            if (enableAppLock(authenticate)) onTurnedOn()
         }
     }
 
-    fun setWeeklyCheckIn(on: Boolean) = settings.setWeeklyCheckIn(on)
+    fun setWeeklyCheckIn(on: Boolean) = saveWeeklyCheckIn(on)
 
     /** #22: Plain and Playful, one tap each way. */
-    fun switchNoteTone() = settings.setNoteTone(if (settings.choices.value.noteTone == NoteTone.Plain) NoteTone.Playful else NoteTone.Plain)
+    fun switchNoteTone() = switchNoteToneUseCase()
 
     /** #26: your name as slips print it; empty starts learning again. */
-    fun setSlipOwner(name: String?) = settings.setSlipOwner(name)
+    fun setSlipOwner(name: String?) = saveSlipOwner(name)
 
     val uiState: StateFlow<SettingsUiState> = combine(
-        ledger.sinceLastImportMillis,
-        settings.choices,
-        folders,
-        categoryCounts,
-        assistant,
+        observeLastImport(),
+        observeChoices(),
+        observeFolders(),
+        observeCategoryCounts(),
+        observeAssistant(),
     ) { since, choices, watched, counts, model -> SettingsUiState(groups(since, choices, watched, counts, model)) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
             initialValue = SettingsUiState(
-                groups(since = null, choices = settings.choices.value, watched = emptyList(), counts = CategoryCounts(), model = ModelState.NotOffered),
+                groups(since = null, choices = observeChoices().value, watched = emptyList(), counts = CategoryCounts(), model = ModelState.NotOffered),
             ),
         )
 
@@ -156,7 +163,7 @@ class SettingsViewModel(
     ) = listOf(
         SettingsGroupUiModel(SettingsGroup.Slips, slipRows(since, choices, watched, text)),
         SettingsGroupUiModel(SettingsGroup.Daily, dailyRows(choices, counts, text)),
-        SettingsGroupUiModel(SettingsGroup.Region, regionRows(choices, text)),
+        SettingsGroupUiModel(SettingsGroup.Region, regionRows(text)),
         SettingsGroupUiModel(SettingsGroup.Help, helpRows(model, text)),
     ).filter { it.rows.isNotEmpty() }
 
@@ -247,7 +254,7 @@ class SettingsViewModel(
         ).takeIf { canLock },
     )
 
-    private fun regionRows(choices: AppChoices, text: SettingsCopy) = listOfNotNull(
+    private fun regionRows(text: SettingsCopy) = listOfNotNull(
         SettingsRowUiModel(
             id = SettingsAction.Language,
             name = AppText.copy.language.title,
@@ -265,13 +272,7 @@ class SettingsViewModel(
             name = currencyCopy().homeTitle,
             value = Home.choice.value.let { currencyCopy().homeRowValue(it.money.code, it.zoneId) },
             icon = "payments",
-        ).takeIf { showAddCurrency },
-        SettingsRowUiModel(
-            id = SettingsAction.AddCurrency,
-            name = currencyCopy().startsIn,
-            value = choices.addCurrency ?: currencyCopy().fromPhone(phoneCurrency()),
-            icon = "payments",
-        ).takeIf { showAddCurrency },
+        ).takeIf { showHomeCurrency },
         // "Backup file", not "CSV or backup file": export is JSON only in v1 (#147, S7).
         SettingsRowUiModel(
             id = SettingsAction.ExportLedger,

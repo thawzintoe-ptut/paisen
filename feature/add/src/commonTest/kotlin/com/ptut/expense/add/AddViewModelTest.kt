@@ -13,6 +13,9 @@ import com.ptut.expense.agent.VoiceDownload
 import com.ptut.expense.agent.VoiceLanguages
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
+import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.Satang
@@ -20,11 +23,15 @@ import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
+import com.ptut.expense.domain.agent.AnswerQuickAddQuestionUseCase
+import com.ptut.expense.domain.agent.InterpretQuickAddUseCase
 import com.ptut.expense.domain.forDirection
+import com.ptut.expense.domain.ledger.GetLastRateUseCase
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.ledger.RateBook
+import com.ptut.expense.domain.ledger.RecordTransactionUseCase
 import com.ptut.expense.domain.shared.Currencies
-import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.ToastMessage
@@ -216,15 +223,12 @@ class AddViewModelTest : ViewModelTest() {
 
     private fun inCurrencies(
         ledger: RecordingLedger = RecordingLedger(),
-        start: Currency = Currencies.Thb,
         rates: MutableMap<String, Rate> = mutableMapOf(),
     ) = AddViewModel(
         ledger = ledger,
         toasts = ToastMessages(),
         offersCurrencies = true,
-        startingCurrency = { start },
-        lastRate = { rates[it] },
-        saveRate = { code, rate -> rates[code] = rate },
+        rates = MapRates(rates),
     )
 
     @Test
@@ -264,15 +268,17 @@ class AddViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun aFreshSheetOpensOnTheStartingCurrencyAndItsLastRate() = runTest {
-        val viewModel = inCurrencies(start = Currencies.of("MMK"), rates = mutableMapOf("MMK" to Rate.parse("8.2", 1_000)!!))
+    fun aFreshSheetOpensOnTheHomeCurrencyEvenAfterAForeignEntry() = runTest {
+        Home.use(HomeChoice(HomeMoney("MMK", "K", 0), "Asia/Yangon"))
+        val viewModel = inCurrencies(rates = mutableMapOf("USD" to Rate.parse("33.4")!!))
+        viewModel.chooseCurrency(Currencies.of("USD"))
+        runCurrent()
 
         viewModel.reset()
         runCurrent()
 
         assertEquals("MMK", viewModel.uiState.value.currency.code)
-        assertEquals("8.2", viewModel.uiState.value.rateText)
-        assertEquals("1,000 K", viewModel.uiState.value.rateUnit)
+        assertEquals("", viewModel.uiState.value.rateText)
     }
 
     @Test
@@ -350,7 +356,7 @@ class AddViewModelTest : ViewModelTest() {
 
     @Test
     fun aBuildWithoutCurrenciesStaysInBaht() = runTest {
-        val viewModel = AddViewModel(ledger = RecordingLedger(), toasts = ToastMessages(), startingCurrency = { Currencies.of("MMK") })
+        val viewModel = AddViewModel(ledger = RecordingLedger(), toasts = ToastMessages())
 
         viewModel.reset()
         viewModel.chooseCurrency(Currencies.of("USD"))
@@ -756,8 +762,11 @@ class AddViewModelTest : ViewModelTest() {
             ledger = ledger,
             toasts = ToastMessages(),
             offersCurrencies = true,
-            startingCurrency = { Currencies.Thb },
-            saveRate = { _, _ -> error("disk") },
+            rates = object : RateBook {
+                override suspend fun lastRate(currency: String): Rate? = null
+
+                override suspend fun saveRate(currency: String, rate: Rate) = error("disk")
+            },
         )
         viewModel.chooseCurrency(Currencies.of("USD"))
         runCurrent()
@@ -811,6 +820,29 @@ class AddViewModelTest : ViewModelTest() {
     private fun TestScope.collect(toasts: ToastMessages): List<ToastMessage> =
         mutableListOf<ToastMessage>().also { seen -> backgroundScope.launch { toasts.messages.toList(seen) } }
 }
+
+/** Builds the sheet over this file's fakes, as Koin builds it over the app's graph. */
+private fun AddViewModel(
+    ledger: LedgerRepository,
+    toasts: ToastMessages,
+    categories: (Direction) -> List<Category> = { Category.seed().forDirection(it) },
+    subCategories: () -> List<SubCategory> = { emptyList() },
+    agent: AgentLoop? = null,
+    reader: AgentReader? = null,
+    speech: SpeechInput? = null,
+    offersCurrencies: Boolean = false,
+    rates: RateBook? = null,
+): AddViewModel = AddViewModel(
+    toasts = toasts,
+    categories = categories,
+    subCategories = subCategories,
+    interpretQuickAdd = agent?.let(::InterpretQuickAddUseCase),
+    answerQuestion = AnswerQuickAddQuestionUseCase(reader),
+    speech = speech,
+    offersCurrencies = offersCurrencies,
+    getLastRate = GetLastRateUseCase(rates),
+    recordTransaction = RecordTransactionUseCase(ledger, rates),
+)
 
 /** A recogniser whose packs the test sets. A finished download moves the language into `heard`. */
 private class FakeSpeech(
@@ -880,5 +912,14 @@ private class RecordingLedger : LedgerRepository {
 
     override suspend fun record(draft: TransactionDraft) {
         recorded += draft
+    }
+}
+
+/** The last rate per currency, in a map the test can read back. */
+private class MapRates(private val rates: MutableMap<String, Rate>) : RateBook {
+    override suspend fun lastRate(currency: String): Rate? = rates[currency]
+
+    override suspend fun saveRate(currency: String, rate: Rate) {
+        rates[currency] = rate
     }
 }

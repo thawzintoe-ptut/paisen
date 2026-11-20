@@ -3,13 +3,17 @@ package com.ptut.expense.folders
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
+import com.ptut.expense.domain.folders.ApplyWatchedFoldersUseCase
 import com.ptut.expense.domain.folders.DeviceFolder
 import com.ptut.expense.domain.folders.FolderAccess
-import com.ptut.expense.domain.folders.FolderCatalog
 import com.ptut.expense.domain.folders.FolderChooser
 import com.ptut.expense.domain.folders.FolderReading
+import com.ptut.expense.domain.folders.GetFolderAccessUseCase
+import com.ptut.expense.domain.folders.ListedFolder
+import com.ptut.expense.domain.folders.ObserveWatchedFoldersUseCase
+import com.ptut.expense.domain.folders.RefreshFolderCatalogUseCase
 import com.ptut.expense.domain.folders.WatchedFolder
-import com.ptut.expense.domain.folders.WatchedFolderRepository
+import com.ptut.expense.domain.folders.mergeFolderList
 import com.ptut.expense.domain.folders.slipsRead
 import com.ptut.expense.domain.folders.watched
 import com.ptut.expense.domain.runSuspendCatching
@@ -32,13 +36,11 @@ import kotlinx.coroutines.launch
  * Photos — because it is still holding a count and still the reason a total looks the way it does.
  */
 class PhotoFoldersViewModel(
-    private val catalog: FolderCatalog,
-    private val folders: WatchedFolderRepository,
-    /**
-     * Read again on every [refresh] (#217): access granted in the system settings has to show when
-     * the reader comes back, not after a restart.
-     */
-    private val access: () -> FolderAccess = { FolderAccess(action = null, explanation = "") },
+    private val refreshCatalog: RefreshFolderCatalogUseCase,
+    observeFolders: ObserveWatchedFoldersUseCase,
+    private val applyWatchedFolders: ApplyWatchedFoldersUseCase,
+    /** Read again on every [refresh] (#217). */
+    private val folderAccess: GetFolderAccessUseCase = GetFolderAccessUseCase(),
     private val chooser: FolderChooser = FolderChooser {},
     /** Where a failed read or save is said. Null in a graph that binds none. */
     private val toasts: ToastMessages? = null,
@@ -46,7 +48,7 @@ class PhotoFoldersViewModel(
 
     private val available = MutableStateFlow<List<DeviceFolder>?>(null)
 
-    private val offer = MutableStateFlow(access())
+    private val offer = MutableStateFlow(folderAccess())
 
     /**
      * The ticks the reader has changed and not saved (#169), or null while there are none. The
@@ -57,7 +59,7 @@ class PhotoFoldersViewModel(
 
     val uiState: StateFlow<PhotoFoldersUiState> = combine(
         available,
-        folders.folders,
+        observeFolders(),
         draft,
         offer,
     ) { offered, watched, ticks, platform -> state(offered, watched, ticks, platform) }
@@ -85,8 +87,8 @@ class PhotoFoldersViewModel(
 
     private suspend fun reread() {
         runSuspendCatching {
-            offer.value = access()
-            available.value = catalog.available()
+            offer.value = folderAccess()
+            available.value = refreshCatalog()
         }.onFailure { say(AppText.copy.folders.notRead) }
     }
 
@@ -103,9 +105,9 @@ class PhotoFoldersViewModel(
     fun save() = viewModelScope.launch {
         val chosen = draft.value ?: return@launch
         val rows = uiState.value.rows
-        val dropped = rows.filter { it.watched && it.id !in chosen }.map { runSuspendCatching { folders.stopWatching(it.id) } }
-        val added = rows.filter { !it.watched && it.id in chosen }.map { runSuspendCatching { folders.watch(it.id, it.name, it.path) } }
-        if ((dropped + added).any { it.isFailure }) say(AppText.copy.folders.notSaved) else draft.value = null
+        val stop = rows.filter { it.watched && it.id !in chosen }.map { it.id }
+        val watch = rows.filter { !it.watched && it.id in chosen }.map { DeviceFolder(it.id, it.name, it.path) }
+        if (applyWatchedFolders(stop, watch)) draft.value = null else say(AppText.copy.folders.notSaved)
     }
 
     private suspend fun say(text: String) {
@@ -120,17 +122,10 @@ class PhotoFoldersViewModel(
         ticks: Set<String>?,
         platform: FolderAccess,
     ): PhotoFoldersUiState {
-        val byId = watched.associateBy { it.id }
-        val listed = offered.orEmpty().map { device ->
-            byId[device.id].row(device.id, device.name, device.path, device.imageCount)
+        val rows = mergeFolderList(offered, watched).map { listed ->
+            val row = listed.row()
+            if (ticks == null) row else row.copy(ticked = row.id in ticks)
         }
-        // A known folder the platform stopped offering keeps its row and its count.
-        val gone = watched.filter { held -> offered.orEmpty().none { it.id == held.id } }
-            .map { it.row(it.id, it.name, it.path, imageCount = null) }
-
-        val rows = (listed + gone)
-            .map { row -> if (ticks == null) row else row.copy(ticked = row.id in ticks) }
-            .sortedWith(compareByDescending<FolderRowUiModel> { it.watched }.thenBy { it.name })
         val watchedIds = watched.watched().map { it.id }.toSet()
         return PhotoFoldersUiState(
             summary = summary(watched),
@@ -145,14 +140,14 @@ class PhotoFoldersViewModel(
         )
     }
 
-    private fun WatchedFolder?.row(id: String, name: String, path: String, imageCount: Int?) = FolderRowUiModel(
+    private fun ListedFolder.row() = FolderRowUiModel(
         id = id,
-        name = this?.name ?: name,
-        path = this?.path ?: path,
-        reading = (this?.readingState ?: FolderReading.NeverChecked).phrase(this?.slipsRead ?: 0),
+        name = name,
+        path = path,
+        reading = (known?.readingState ?: FolderReading.NeverChecked).phrase(known?.slipsRead ?: 0),
         // Green only while watched (#125): the summary counts watched folders, and the two must agree.
-        badged = this?.watched == true && this.foundSlips,
-        watched = this?.watched == true,
+        badged = known?.let { it.watched && it.foundSlips } == true,
+        watched = known?.watched == true,
         images = imageCount?.let { AppText.copy.folders.images(it) },
     )
 

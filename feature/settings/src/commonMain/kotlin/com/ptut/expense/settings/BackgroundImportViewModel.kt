@@ -2,19 +2,17 @@ package com.ptut.expense.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
-import com.ptut.expense.domain.ledger.LedgerRepository
-import com.ptut.expense.domain.settings.AppSettings
-import com.ptut.expense.importer.ImportSummary
-import com.ptut.expense.importer.SlipImporter
+import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
+import com.ptut.expense.domain.settings.ImportNowResult
+import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
+import com.ptut.expense.domain.settings.RunImportNowUseCase
+import com.ptut.expense.domain.settings.SetBackgroundImportUseCase
 import com.ptut.expense.locale.AppText
-import com.ptut.expense.platform.work.BackgroundImport
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
 import com.ptut.expense.ui.elapsedPhrase
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -37,28 +35,22 @@ data class BackgroundImportUiState(
 
 /**
  * FR-2 and FR-3: the schedule that reads slips while the app is closed, and the one switch over it.
- *
- * The switch writes the choice before it touches the platform. A schedule cancelled against a
- * preference that failed to save would come back on the next launch, and the reader would be left
- * turning off something that will not stay off.
- *
- * [background] is null where there is nothing to schedule. That is C-4 rather than a missing
- * binding: iOS reads the album when the app opens and has no job to start or stop.
+ * The switch writes the choice before it touches the platform's schedule; see [SetBackgroundImportUseCase].
  */
 class BackgroundImportViewModel(
-    ledger: LedgerRepository,
-    private val settings: AppSettings,
-    private val importer: SlipImporter,
+    observeLastImport: ObserveLastImportUseCase,
+    observeChoices: ObserveAppChoicesUseCase,
+    private val setBackgroundImport: SetBackgroundImportUseCase,
+    private val runImportNow: RunImportNowUseCase,
     private val toasts: ToastMessages,
     private val cadence: SlipImportCadence,
-    private val background: BackgroundImport? = null,
 ) : ViewModel() {
 
     private val checking = MutableStateFlow(false)
 
     val uiState: StateFlow<BackgroundImportUiState> = combine(
-        ledger.sinceLastImportMillis,
-        settings.choices,
+        observeLastImport(),
+        observeChoices(),
         checking,
     ) { since, choices, scanning ->
         state(since, choices.backgroundImport, scanning)
@@ -67,7 +59,7 @@ class BackgroundImportViewModel(
         started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
         initialValue = state(
             since = null,
-            running = settings.choices.value.backgroundImport,
+            running = observeChoices().value.backgroundImport,
             checking = false,
         ),
     )
@@ -77,10 +69,7 @@ class BackgroundImportViewModel(
      * on the screen promises. Switching on schedules and scans at once — a switch that changes
      * nothing visible for fifteen minutes reads as a switch that did not work.
      */
-    fun setRunning(running: Boolean) {
-        settings.setBackgroundImport(running)
-        if (running) background?.start() else background?.stop()
-    }
+    fun setRunning(running: Boolean) = setBackgroundImport(running)
 
     /** The reader is here because nothing arrived, so the screen offers the run rather than a wait. */
     fun checkNow() {
@@ -88,13 +77,7 @@ class BackgroundImportViewModel(
         checking.value = true
         viewModelScope.launch {
             try {
-                toasts.show(importer.run().toast())
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Exception) {
-                // Past the importer's own journal, so it is the ledger failing. Copy only: the
-                // exception's text is English or "Job was cancelled", never the reader's words.
-                toasts.show(ToastMessage(text = AppText.copy.settings.scanCouldNotRun, tone = ToastTone.Error))
+                toasts.show(runImportNow().toast())
             } finally {
                 checking.value = false
             }
@@ -113,23 +96,17 @@ class BackgroundImportViewModel(
     )
 
     /**
-     * A run that found nothing is not a failure, and saying "0 slips" makes it read as one. What
-     * the reader wants to know is whether anything is there, so the empty case says exactly that.
-     *
-     * A run that could not finish is a failure and takes the error tone. It reached the journal
-     * rather than throwing — a folder it cannot read is the commonest one — so nothing above
-     * would have told the reader otherwise.
+     * A run that found nothing is not a failure, and saying "0 slips" makes it read as one. A run
+     * that could not finish reached the journal rather than throwing, so nothing else would tell
+     * the reader. One that could not run at all is the ledger failing; the copy never carries the
+     * exception's English.
      */
-    private fun ImportSummary.toast(): ToastMessage = AppText.copy.settings.let { text ->
-        when {
-            outcome != ImportOutcome.Success -> ToastMessage(
-                text = text.scanCouldNotFinish,
-                tone = ToastTone.Error,
-            )
-
-            found == 0 -> ToastMessage(text.noNewSlips)
-
-            else -> ToastMessage(text.scanFound(found, filed, queued))
+    private fun ImportNowResult.toast(): ToastMessage = AppText.copy.settings.let { text ->
+        when (this) {
+            ImportNowResult.CouldNotRun -> ToastMessage(text = text.scanCouldNotRun, tone = ToastTone.Error)
+            ImportNowResult.CouldNotFinish -> ToastMessage(text = text.scanCouldNotFinish, tone = ToastTone.Error)
+            ImportNowResult.NothingNew -> ToastMessage(text.noNewSlips)
+            is ImportNowResult.Found -> ToastMessage(text.scanFound(found, filed, queued))
         }
     }
 }

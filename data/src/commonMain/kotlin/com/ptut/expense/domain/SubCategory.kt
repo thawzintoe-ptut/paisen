@@ -13,6 +13,10 @@ data class SubCategory(
     val name: String,
 )
 
+/** p34: a sub-category belongs to one parent, so it stays only while [pickedCategoryId] is still [previousCategoryId]. */
+fun <T> T?.keptAfterPicking(pickedCategoryId: String?, previousCategoryId: String?): T? =
+    takeIf { pickedCategoryId != null && pickedCategoryId == previousCategoryId }
+
 /** [categoryId]'s own sub-categories, in the order they are held. None for no category. */
 fun List<SubCategory>.under(categoryId: String?): List<SubCategory> =
     if (categoryId == null) emptyList() else filter { it.categoryId == categoryId }

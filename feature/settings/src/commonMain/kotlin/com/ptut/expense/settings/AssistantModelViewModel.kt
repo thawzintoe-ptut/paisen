@@ -2,9 +2,11 @@ package com.ptut.expense.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.agent.LanguageModelPort
 import com.ptut.expense.agent.ModelState
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
+import com.ptut.expense.domain.settings.DownloadAssistantModelUseCase
+import com.ptut.expense.domain.settings.ObserveAssistantModelUseCase
+import com.ptut.expense.domain.settings.RemoveAssistantModelUseCase
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,17 +26,21 @@ data class AssistantModelUiState(
  * #207: the model's one screen. It says how big the model is before anything is fetched, and it
  * removes it again. The store does the download; the app never opens a connection for it (ADR 0002).
  */
-class AssistantModelViewModel(private val model: LanguageModelPort) : ViewModel() {
+class AssistantModelViewModel(
+    observeModel: ObserveAssistantModelUseCase,
+    private val download: DownloadAssistantModelUseCase,
+    private val remove: RemoveAssistantModelUseCase,
+) : ViewModel() {
 
-    val uiState: StateFlow<AssistantModelUiState> = model.state
-        .map(::uiStateOf)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), uiStateOf(model.state.value))
+    val uiState: StateFlow<AssistantModelUiState> = observeModel().let { model ->
+        model.map(::uiStateOf).stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), uiStateOf(model.value))
+    }
 
     fun act(action: AssistantAction) {
         viewModelScope.launch {
             when (action) {
-                AssistantAction.Download -> model.download()
-                AssistantAction.Remove -> model.remove()
+                AssistantAction.Download -> download()
+                AssistantAction.Remove -> remove()
             }
         }
     }

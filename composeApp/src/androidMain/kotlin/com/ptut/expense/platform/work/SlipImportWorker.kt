@@ -5,8 +5,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.runSuspendCatching
+import com.ptut.expense.domain.shared.RunDueRepeatsUseCase
 import com.ptut.expense.importer.SlipImporter
-import com.ptut.expense.shared.RepeatRunner
 import com.ptut.expense.sync.SharedSync
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -24,7 +24,7 @@ class SlipImportWorker(context: Context, parameters: WorkerParameters) :
     private val importer: SlipImporter by inject()
 
     /** #182: repeats due today add themselves in the same background run. */
-    private val repeats: RepeatRunner by inject()
+    private val runDueRepeats: RunDueRepeatsUseCase by inject()
 
     /** Null in a graph without sync, as on the app's own start. */
     private val sync: SharedSync? by lazy { getKoin().getOrNull<SharedSync>() }
@@ -40,7 +40,7 @@ class SlipImportWorker(context: Context, parameters: WorkerParameters) :
         // A one-off scan runs each time the app opens, so it keeps the hourly shared sync matched to the sign-in.
         applicationContext.matchSharedSyncTo(sync?.takeIf { it.available }?.isSignedIn == true)
         // Here too, not only after the shared pull: repeats in groups on this phone alone need no sign-in.
-        runSuspendCatching { repeats.run() }
+        runSuspendCatching { runDueRepeats() }
         return if (outcome == ImportOutcome.Success) Result.success() else Result.failure()
     }
 }

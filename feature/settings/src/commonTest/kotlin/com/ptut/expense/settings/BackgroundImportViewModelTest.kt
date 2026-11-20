@@ -4,8 +4,12 @@ import app.cash.turbine.test
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.ledger.FakeLedger
+import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
 import com.ptut.expense.domain.settings.AppChoices
 import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
+import com.ptut.expense.domain.settings.RunImportNowUseCase
+import com.ptut.expense.domain.settings.SetBackgroundImportUseCase
 import com.ptut.expense.domain.settings.appSettings
 import com.ptut.expense.domain.slip.ImportStore
 import com.ptut.expense.importer.FakeSlipSource
@@ -178,12 +182,12 @@ class BackgroundImportViewModelTest : ViewModelTest() {
         cadence: SlipImportCadence = scheduled(),
         background: BackgroundImport? = RecordingSchedule(),
     ) = BackgroundImportViewModel(
-        ledger = FakeLedger(sinceLastImport = sinceLastImport),
-        settings = settings,
-        importer = importer,
+        observeLastImport = ObserveLastImportUseCase(FakeLedger(sinceLastImport = sinceLastImport)),
+        observeChoices = ObserveAppChoicesUseCase(settings),
+        setBackgroundImport = SetBackgroundImportUseCase(settings, background),
+        runImportNow = RunImportNowUseCase(importer),
         toasts = toasts,
         cadence = cadence,
-        background = background,
     )
 }
 

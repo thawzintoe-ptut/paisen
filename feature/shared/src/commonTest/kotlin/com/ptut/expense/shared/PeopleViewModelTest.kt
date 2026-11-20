@@ -1,6 +1,10 @@
 package com.ptut.expense.shared
 
 import com.ptut.expense.ViewModelTest
+import com.ptut.expense.domain.shared.CreatePersonGroupUseCase
+import com.ptut.expense.domain.shared.GetPeopleBalancesUseCase
+import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
+import com.ptut.expense.domain.shared.SetPersonArchivedUseCase
 import com.ptut.expense.domain.shared.SharedSnapshot
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
@@ -21,7 +25,12 @@ class PeopleViewModelTest : ViewModelTest() {
             payments = emptyList(),
             links = emptyMap(),
         )
-        val viewModel = PeopleViewModel(repository)
+        val viewModel = PeopleViewModel(
+            observeSnapshot = ObserveSharedSnapshotUseCase(repository),
+            getPeopleBalances = GetPeopleBalancesUseCase(),
+            setPersonArchived = SetPersonArchivedUseCase(repository),
+            createPersonGroup = CreatePersonGroupUseCase(repository),
+        )
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
 

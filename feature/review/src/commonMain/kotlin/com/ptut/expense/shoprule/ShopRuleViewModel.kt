@@ -7,8 +7,10 @@ import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.rules.RememberedMerchant
-import com.ptut.expense.domain.rules.RuleRepository
-import com.ptut.expense.domain.rules.forShop
+import com.ptut.expense.domain.slip.ForgetShopUseCase
+import com.ptut.expense.domain.slip.ObserveShopRuleUseCase
+import com.ptut.expense.domain.slip.RecategoriseShopUseCase
+import com.ptut.expense.domain.slip.RenameShopUseCase
 import com.ptut.expense.domain.slip.isReaderNoise
 import com.ptut.expense.domain.slip.shownShop
 import com.ptut.expense.locale.AppText
@@ -33,7 +35,10 @@ import kotlinx.coroutines.launch
  */
 class ShopRuleViewModel(
     private val shop: String,
-    private val rules: RuleRepository,
+    observeRule: ObserveShopRuleUseCase,
+    private val recategoriseShop: RecategoriseShopUseCase,
+    private val renameShop: RenameShopUseCase,
+    private val forgetShop: ForgetShopUseCase,
     private val categories: List<Category> = Category.seed(),
 ) : ViewModel() {
 
@@ -42,8 +47,8 @@ class ShopRuleViewModel(
     /** True once the rule is gone, so the screen can leave rather than render a missing one. */
     val isForgotten: StateFlow<Boolean> = forgotten.asStateFlow()
 
-    val uiState: StateFlow<ShopRuleUiState> = rules.rules
-        .map { held -> held.forShop(shop).state() }
+    val uiState: StateFlow<ShopRuleUiState> = observeRule(shop)
+        .map { rule -> rule.state() }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
@@ -52,21 +57,17 @@ class ShopRuleViewModel(
 
     /** The shop keeps its history. Only its next slip lands somewhere new. */
     fun recategorise(categoryId: String) = viewModelScope.launch {
-        val rule = rules.rules.value.forShop(shop) ?: return@launch
-        rules.recategorise(rule.id, categoryId)
+        recategoriseShop(shop, categoryId)
     }
 
     /** A name for a shop read as noise. Its rows show it at once; which slips it files does not change. */
     fun rename(name: String) = viewModelScope.launch {
-        val rule = rules.rules.value.forShop(shop) ?: return@launch
-        rules.rename(rule.id, name)
+        renameShop(shop, name)
     }
 
     /** The past stays filed. The shop is simply asked about again the next time it appears. */
     fun forget() = viewModelScope.launch {
-        val rule = rules.rules.value.forShop(shop) ?: return@launch
-        rules.forget(rule.id)
-        forgotten.value = true
+        if (forgetShop(shop)) forgotten.value = true
     }
 
     /**

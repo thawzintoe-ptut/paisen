@@ -14,6 +14,9 @@ import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.TransactionSource
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
+import com.ptut.expense.domain.slip.DiscardSlipWithUndoUseCase
+import com.ptut.expense.domain.slip.ObserveQueuedSlipsUseCase
 import com.ptut.expense.domain.slip.QueuedSlipEntry
 import com.ptut.expense.importer.FakeSlipSource
 import com.ptut.expense.importer.FakeSlipTextReader
@@ -176,13 +179,18 @@ class ReviewViewModelTest : ViewModelTest() {
         source: FakeSlipSource = FakeSlipSource(),
         store: InMemoryImportStore = InMemoryImportStore(),
         filed: List<Transaction> = emptyList(),
-    ) = ReviewViewModel(
-        ledger = FakeLedger(queued, filed),
-        discards = SlipDiscards(SlipImporter(source, FakeSlipTextReader(), store), ToastMessages(), CoroutineScope(Dispatchers.Main)) { Duration.ZERO },
-        clock = object : Clock {
-            override fun now(): Instant = this@ReviewViewModelTest.now
-        },
-    )
+    ): ReviewViewModel {
+        val ledger = FakeLedger(queued, filed)
+        val discards = SlipDiscards(SlipImporter(source, FakeSlipTextReader(), store), ToastMessages(), CoroutineScope(Dispatchers.Main)) { Duration.ZERO }
+        return ReviewViewModel(
+            observeQueuedSlips = ObserveQueuedSlipsUseCase(ledger, discards.pending),
+            observeTransactions = ObserveTransactionsUseCase(ledger),
+            discardSlip = DiscardSlipWithUndoUseCase(discards),
+            clock = object : Clock {
+                override fun now(): Instant = this@ReviewViewModelTest.now
+            },
+        )
+    }
 
     private fun slip(
         id: String,

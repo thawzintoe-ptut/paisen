@@ -70,6 +70,16 @@ class SavedTodayTest {
         assertEquals(Satang.Zero, emptyList<Transaction>().spentOn(today))
     }
 
+    @Test
+    fun expensesOnListsTheDaysPurchasesEarliestFirstWithoutIncomeOrOtherDays() {
+        val dinner = row("dinner", occurred = at(2026, 10, 4, 19, 0), filed = null)
+        val lunch = row("lunch", occurred = at(2026, 10, 4, 0, 30), filed = null)
+        val late = row("late", occurred = at(2026, 10, 3, 23, 50), filed = null)
+        val salary = row("salary", occurred = at(2026, 10, 4, 9, 0), filed = null).copy(direction = Direction.Income)
+
+        assertEquals(listOf("lunch", "dinner"), listOf(dinner, lunch, late, salary).expensesOn(today).map { it.id })
+    }
+
     private fun at(year: Int, month: Int, day: Int, hour: Int, minute: Int): Long =
         LocalDateTime(year, month, day, hour, minute).toInstant(BangkokTime).toEpochMilliseconds()
 

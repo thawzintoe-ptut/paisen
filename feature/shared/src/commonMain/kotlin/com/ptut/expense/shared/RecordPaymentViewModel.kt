@@ -6,24 +6,25 @@ import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
-import com.ptut.expense.domain.shared.Currencies
-import com.ptut.expense.domain.shared.PaymentDraft
+import com.ptut.expense.domain.shared.GetPaymentBetweenUseCase
+import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
+import com.ptut.expense.domain.shared.PaymentBetween
+import com.ptut.expense.domain.shared.PaymentInput
 import com.ptut.expense.domain.shared.PaymentMethod
 import com.ptut.expense.domain.shared.PromptPay
+import com.ptut.expense.domain.shared.RecordPaymentUseCase
+import com.ptut.expense.domain.shared.RemovePaymentUseCase
 import com.ptut.expense.domain.shared.SharedGroup
-import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.money
 import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.parseMinor
 import com.ptut.expense.domain.shared.typedText
-import com.ptut.expense.domain.shared.whoPaysWhom
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastAction
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -33,7 +34,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.time.Clock
 
 data class PaymentForm(
     val amountText: String = "",
@@ -91,12 +91,16 @@ class RecordPaymentViewModel(
     private val groupId: String,
     private val fromMemberId: String,
     private val toMemberId: String,
-    private val repository: SharedRepository,
-    private val clock: Clock = Clock.System,
+    observeSnapshot: ObserveSharedSnapshotUseCase,
+    private val getPaymentBetween: GetPaymentBetweenUseCase,
+    private val recordPayment: RecordPaymentUseCase,
+    private val removePayment: RemovePaymentUseCase,
     /** #197: a word, a haptic and Undo, as a v1 save gives. Null in a screen test's graph. */
     private val toasts: ToastMessages? = null,
     private val haptics: Haptics? = null,
 ) : ViewModel() {
+
+    private val snapshot = observeSnapshot()
 
     private val form = MutableStateFlow(PaymentForm())
     private val opened = MutableStateFlow<PaymentForm?>(null)
@@ -107,17 +111,15 @@ class RecordPaymentViewModel(
 
     init {
         viewModelScope.launch {
-            val snapshot = repository.snapshot.first { it.group(groupId) != null }
-            val group = snapshot.group(groupId) ?: return@launch
-            val owed = owedBetween(snapshot)
+            val (group, owed) = between(snapshot.first { it.group(groupId) != null }) ?: return@launch
             form.update { it.copy(amountText = if (owed > Satang.Zero) plain(owed, group) else "", loaded = true) }
             opened.value = form.value.content
         }
     }
 
-    val uiState: StateFlow<RecordPaymentUiState> = combine(repository.snapshot, form, opened) { snapshot, form, opened ->
-        val group = snapshot.group(groupId) ?: return@combine RecordPaymentUiState.Missing
-        val owed = owedBetween(snapshot)
+    val uiState: StateFlow<RecordPaymentUiState> = combine(snapshot, form, opened) { snapshot, form, opened ->
+        val between = between(snapshot) ?: return@combine RecordPaymentUiState.Missing
+        val (group, owed) = between
         val paying = amountOf(form, group)
         val fromName = group.displayName(fromMemberId)
         val toName = group.displayName(toMemberId)
@@ -142,9 +144,9 @@ class RecordPaymentViewModel(
             },
             buttonLabel = if (form.failed) AppText.copy.common.tryAgain else text.record((paying ?: Satang.Zero).formatCompact(money)),
             canSave = form.loaded && !form.saving && paying != null && paying > Satang.Zero,
-            promptPayQr = payeePromptPay(group)?.takeIf { paying != null && paying > Satang.Zero }?.let { PromptPay.payload(it, paying ?: Satang.Zero) },
-            promptPayLine = payeePromptPay(group)?.let { text.payBy(toName, PromptPay.masked(it)) },
-            askToPay = askToPay(group, owed, fromName),
+            promptPayQr = between.payeePromptPay?.takeIf { paying != null && paying > Satang.Zero }?.let { PromptPay.payload(it, paying ?: Satang.Zero) },
+            promptPayLine = between.payeePromptPay?.let { text.payBy(toName, PromptPay.masked(it)) },
+            askToPay = askToPay(between, fromName),
             changed = opened != null && form.content != opened,
             failedTitle = if (form.failed) text.didntSave else null,
             failedBody = if (form.failed) text.keptTyped else null,
@@ -161,25 +163,13 @@ class RecordPaymentViewModel(
         val state = uiState.value as? RecordPaymentUiState.Ready ?: return
         // The form, not uiState: uiState catches up a frame later, and the second tap comes sooner.
         if (!state.canSave || form.value.saving) return
-        val group = repository.snapshot.value.group(groupId) ?: return
+        val group = snapshot.value.group(groupId) ?: return
         val amount = amountOf(state.form, group) ?: return
-        val repository = repository
+        val removePayment = removePayment
         form.update { it.copy(saving = true, failed = false) }
         viewModelScope.launch {
-            val id = try {
-                repository.recordPayment(
-                    PaymentDraft(
-                        groupId = groupId,
-                        fromMemberId = fromMemberId,
-                        toMemberId = toMemberId,
-                        amount = amount,
-                        method = state.form.method,
-                        occurredAtEpochMillis = state.form.occurredAtEpochMillis ?: clock.now().toEpochMilliseconds(),
-                    ),
-                )
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
+            val input = PaymentInput(groupId, fromMemberId, toMemberId, amount, state.form.method, state.form.occurredAtEpochMillis)
+            val id = recordPayment(input).getOrElse {
                 form.update { it.copy(saving = false, failed = true) }
                 return@launch
             }
@@ -187,7 +177,7 @@ class RecordPaymentViewModel(
             toasts?.show(
                 ToastMessage(
                     text = AppText.copy.shared.payment.recorded,
-                    action = ToastAction(AppText.copy.common.undo) { repository.removePayment(id) },
+                    action = ToastAction(AppText.copy.common.undo) { removePayment(id) },
                 ),
             )
             saved.value = true
@@ -195,23 +185,16 @@ class RecordPaymentViewModel(
         }
     }
 
-    /** #199: only when you are the one paying; a QR to pay yourself would be no use. PromptPay moves baht only (#48). */
-    private fun payeePromptPay(group: SharedGroup): String? =
-        group.member(toMemberId)?.promptPayId?.takeIf { group.isMe(fromMemberId) && group.currency == Currencies.Thb.code }
-
-    /** Only when the money comes to you and something is still owed. The PromptPay ID goes in full, so they can pay from the chat. */
-    private fun askToPay(group: SharedGroup, owed: Satang, fromName: String): AskToPayUiModel? {
-        if (!group.isMe(toMemberId) || owed <= Satang.Zero) return null
+    /** Only when the money comes to you and something is still owed. */
+    private fun askToPay(between: PaymentBetween, fromName: String): AskToPayUiModel? {
+        if (!between.canAskToPay) return null
+        val group = between.group
         val text = AppText.copy.shared.payment
-        val promptPay = group.member(toMemberId)?.promptPayId?.let { "\n" + text.askPromptPay(it) }.orEmpty()
-        return AskToPayUiModel(label = text.askToPay(fromName), message = text.askMessage(group.name, fromName, owed.format(group.moneyFormat())) + promptPay)
+        val promptPay = between.askPromptPay?.let { "\n" + text.askPromptPay(it) }.orEmpty()
+        return AskToPayUiModel(label = text.askToPay(fromName), message = text.askMessage(group.name, fromName, between.owed.format(group.moneyFormat())) + promptPay)
     }
 
-    /** What [fromMemberId] owes [toMemberId] in the payments the group would settle with (#135). */
-    private fun owedBetween(snapshot: SharedSnapshot): Satang =
-        snapshot.whoPaysWhom(groupId).transfers
-            .filter { it.fromMemberId == fromMemberId && it.toMemberId == toMemberId }
-            .fold(Satang.Zero) { total, transfer -> total + transfer.amount }
+    private fun between(snapshot: SharedSnapshot): PaymentBetween? = getPaymentBetween(snapshot, groupId, fromMemberId, toMemberId)
 
     private fun amountOf(form: PaymentForm, group: SharedGroup): Satang? = parseMinor(form.amountText, group.money)?.let { Satang.ofMinorUnits(it) }
 

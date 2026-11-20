@@ -19,6 +19,9 @@ data class HomeMoney(val code: String, val symbol: String, val digits: Int) {
 data class HomeChoice(val money: HomeMoney, val zoneId: String) {
     val zone: TimeZone = runCatching { TimeZone.of(zoneId) }.getOrElse { TimeZone.of(BANGKOK) }
 
+    /** A new money keeps the zone: the days stay where they are, only how amounts are written changes. */
+    fun withMoney(money: HomeMoney): HomeChoice = copy(money = money)
+
     companion object {
         const val BANGKOK = "Asia/Bangkok"
         val Default = HomeChoice(HomeMoney.Baht, BANGKOK)

@@ -202,7 +202,6 @@ Choices to check in this area:
 
 | English | Thai | Where |
 |---|---|---|
-| Your money | สกุลเงินของคุณ | `CurrencyCopy` yourMoney |
 | Change | เปลี่ยน | `CurrencyCopy` change |
 | Home currency | สกุลเงินหลัก | `CurrencyCopy` homeTitle |
 | Every total counts in this currency. Days start at midnight, {zone} time. | ยอดรวมทั้งหมดนับเป็นสกุลนี้ วันเริ่มตอนเที่ยงคืนตามเวลา {zone} | `CurrencyCopy` homeIntro |
@@ -217,7 +216,6 @@ Choices to check in this area:
 | A {code} slip needs a rate | สลิป {code} ต้องใส่อัตราแลกเปลี่ยน | `CurrencyCopy` rateNeeded |
 | Rate needed | ต้องใส่อัตรา | `CurrencyCopy` reasonRate |
 | one needs a rate / {n} need a rate | ต้องใส่อัตรา {n} ใบ | `CurrencyCopy` slipsNeedRate |
-| The Add sheet opens on this currency. Totals still count in {home}. | หน้าเพิ่มรายการเปิดที่สกุลนี้ ยอดรวมยังนับเป็น {home} | `CurrencyCopy` startsInIntro (was "บาท", now the home code) |
 | Saved as {home} | บันทึกเป็น {home} | `CurrencyCopy` savedAs (was inBaht) |
 | Every total counts in this currency. Days start at midnight, {zone} time. | (unchanged) {zone} is now the place, "ย่างกุ้ง", not "Asia/Yangon" | `CurrencyCopy` homeIntro |
 

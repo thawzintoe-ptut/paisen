@@ -7,15 +7,28 @@ import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.WeeklyTarget
+import com.ptut.expense.domain.categories.CategoryRepository
+import com.ptut.expense.domain.categories.ClearCategoryTargetUseCase
+import com.ptut.expense.domain.categories.DeleteCategoryUseCase
+import com.ptut.expense.domain.categories.GetCategoryStatsUseCase
+import com.ptut.expense.domain.categories.GetDeleteOptionsUseCase
+import com.ptut.expense.domain.categories.ObserveCategoriesUseCase
+import com.ptut.expense.domain.categories.ObserveSubCategoriesUseCase
+import com.ptut.expense.domain.categories.SaveCategoryUseCase
+import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
 import com.ptut.expense.domain.settings.AppChoices
 import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.settings.AppSettingsStore
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -80,7 +93,7 @@ class EditCategoryViewModelTest {
     @Test
     fun `choosing a direction marks the screen dirty and saves it`() = runTest {
         val categories = FakeCategories(listOf(food, groceries))
-        val model = watching(EditCategoryViewModel("food", StaticLedger(emptyList()), categories))
+        val model = watching(editCategory("food", StaticLedger(emptyList()), categories))
         runCurrent()
 
         assertFalse(model.uiState.value.dirty)
@@ -111,7 +124,7 @@ class EditCategoryViewModelTest {
     @Test
     fun `a category that is not there reads as unread rather than as blank`() = runTest {
         val model = watching(
-            EditCategoryViewModel("gone", StaticLedger(emptyList()), FakeCategories(listOf(food))),
+            editCategory("gone", StaticLedger(emptyList()), FakeCategories(listOf(food))),
         )
         runCurrent()
 
@@ -121,7 +134,7 @@ class EditCategoryViewModelTest {
     @Test
     fun `choosing an icon marks the screen dirty and saves it`() = runTest {
         val categories = FakeCategories(listOf(food, groceries))
-        val model = watching(EditCategoryViewModel("food", StaticLedger(emptyList()), categories))
+        val model = watching(editCategory("food", StaticLedger(emptyList()), categories))
         runCurrent()
 
         assertFalse(model.uiState.value.dirty)
@@ -141,7 +154,7 @@ class EditCategoryViewModelTest {
     @Test
     fun `re-iconing keeps the name and the id it was found under`() = runTest {
         val categories = FakeCategories(listOf(food, groceries))
-        val model = watching(EditCategoryViewModel("food", StaticLedger(emptyList()), categories))
+        val model = watching(editCategory("food", StaticLedger(emptyList()), categories))
         runCurrent()
 
         model.chooseIcon("store")
@@ -180,7 +193,7 @@ class EditCategoryViewModelTest {
     fun `flipping a category's direction leaves what is already filed there alone`() = runTest {
         val categories = FakeCategories(listOf(food, groceries))
         val filed = listOf(spend("food", "coffee", 64_000))
-        val model = watching(EditCategoryViewModel("food", StaticLedger(filed), categories))
+        val model = watching(editCategory("food", StaticLedger(filed), categories))
         runCurrent()
 
         model.chooseDirection(Direction.Income)
@@ -196,7 +209,7 @@ class EditCategoryViewModelTest {
     @Test
     fun `a rename writes the category and keeps its id`() = runTest {
         val categories = FakeCategories(listOf(food, groceries))
-        val model = watching(EditCategoryViewModel("food", StaticLedger(emptyList()), categories))
+        val model = watching(editCategory("food", StaticLedger(emptyList()), categories))
         runCurrent()
 
         model.rename("Eating")
@@ -216,7 +229,7 @@ class EditCategoryViewModelTest {
             occurredAtEpochMillis = now.toEpochMilliseconds() - 90L * 86_400_000L,
         )
         val model = watching(
-            EditCategoryViewModel(
+            editCategory(
                 categoryId = "food",
                 ledger = StaticLedger(
                     listOf(spend("food", "coffee", 64_000), spend("food", "eat", 198_000), lastQuarter),
@@ -237,7 +250,7 @@ class EditCategoryViewModelTest {
     @Test
     fun `a sub-category nobody uses shows zero and that is the point`() = runTest {
         val model = watching(
-            EditCategoryViewModel(
+            editCategory(
                 categoryId = "food",
                 ledger = StaticLedger(emptyList()),
                 categories = FakeCategories(listOf(food), listOf(SubCategory("drinks", "food", "Drinks"))),
@@ -252,7 +265,7 @@ class EditCategoryViewModelTest {
     fun `removing a sub-category drops the label and no money`() = runTest {
         val categories = FakeCategories(listOf(food), listOf(SubCategory("coffee", "food", "Coffee")))
         val spending = listOf(spend("food", "coffee", 64_000))
-        val model = watching(EditCategoryViewModel("food", StaticLedger(spending), categories))
+        val model = watching(editCategory("food", StaticLedger(spending), categories))
         runCurrent()
 
         model.removeSubCategory("coffee")
@@ -271,7 +284,7 @@ class EditCategoryViewModelTest {
     @Test
     fun `a new category is stored on Save after the ones already there`() = runTest {
         val categories = FakeCategories(listOf(food, groceries.copy(sortOrder = 3)))
-        val model = watching(EditCategoryViewModel("fresh", StaticLedger(emptyList()), categories, isNew = true))
+        val model = watching(editCategory("fresh", StaticLedger(emptyList()), categories, isNew = true))
         runCurrent()
         assertEquals(2, categories.categories.value.size, "stored before Save")
 
@@ -286,7 +299,7 @@ class EditCategoryViewModelTest {
     @Test
     fun `deleting states how many transactions have to move`() = runTest {
         val model = watching(
-            EditCategoryViewModel(
+            editCategory(
                 categoryId = "food",
                 ledger = StaticLedger(emptyList()),
                 categories = FakeCategories(listOf(food, groceries), counts = mapOf("food" to 47)),
@@ -304,7 +317,7 @@ class EditCategoryViewModelTest {
     fun `picking a colour lights save and is written with the name and the icon`() = runTest {
         val held = FakeCategories(listOf(food, groceries))
         val model = watching(
-            EditCategoryViewModel(
+            editCategory(
                 categoryId = "food",
                 ledger = StaticLedger(emptyList()),
                 categories = held,
@@ -336,7 +349,7 @@ class EditCategoryViewModelTest {
         val coffee = SubCategory(id = "coffee", categoryId = "food", name = "Coffee")
         val held = FakeCategories(listOf(food, groceries), subs = listOf(coffee))
         val model = watching(
-            EditCategoryViewModel(
+            editCategory(
                 categoryId = "food",
                 ledger = StaticLedger(emptyList()),
                 categories = held,
@@ -362,7 +375,7 @@ class EditCategoryViewModelTest {
         val coffee = SubCategory(id = "coffee", categoryId = "food", name = "Coffee")
         val held = FakeCategories(listOf(food, groceries), subs = listOf(coffee))
         val model = watching(
-            EditCategoryViewModel(
+            editCategory(
                 categoryId = "food",
                 ledger = StaticLedger(emptyList()),
                 categories = held,
@@ -383,7 +396,7 @@ class EditCategoryViewModelTest {
     @Test
     fun `the delete line corrects itself when the count lands after the screen`() = runTest {
         val model = watching(
-            EditCategoryViewModel(
+            editCategory(
                 categoryId = "food",
                 ledger = StaticLedger(emptyList()),
                 categories = FakeCategories(
@@ -428,7 +441,7 @@ class EditCategoryViewModelTest {
     @Test
     fun `the last category standing cannot be deleted`() = runTest {
         val model = watching(
-            EditCategoryViewModel("food", StaticLedger(emptyList()), FakeCategories(listOf(food))),
+            editCategory("food", StaticLedger(emptyList()), FakeCategories(listOf(food))),
         )
         runCurrent()
 
@@ -438,7 +451,7 @@ class EditCategoryViewModelTest {
     @Test
     fun `deleting moves the transactions before the category goes`() = runTest {
         val categories = FakeCategories(listOf(food, groceries), counts = mapOf("food" to 47))
-        val model = watching(EditCategoryViewModel("food", StaticLedger(emptyList()), categories))
+        val model = watching(editCategory("food", StaticLedger(emptyList()), categories))
         runCurrent()
 
         model.delete(moveTo = "groceries")
@@ -453,7 +466,7 @@ class EditCategoryViewModelTest {
     fun `a save that fails keeps the edits and says it did not work`() = runTest {
         val toasts = ToastMessages()
         val categories = FakeCategories(listOf(food, groceries), failWrites = true)
-        val model = watching(EditCategoryViewModel("food", StaticLedger(emptyList()), categories, toasts = toasts))
+        val model = watching(editCategory("food", StaticLedger(emptyList()), categories, toasts = toasts))
         runCurrent()
 
         model.rename("Eating")
@@ -469,7 +482,7 @@ class EditCategoryViewModelTest {
     fun `a delete that fails stays on the screen and says it did not work`() = runTest {
         val toasts = ToastMessages()
         val categories = FakeCategories(listOf(food, groceries), failWrites = true)
-        val model = watching(EditCategoryViewModel("food", StaticLedger(emptyList()), categories, toasts = toasts))
+        val model = watching(editCategory("food", StaticLedger(emptyList()), categories, toasts = toasts))
         runCurrent()
 
         model.delete(moveTo = "groceries")
@@ -579,7 +592,7 @@ class EditCategoryViewModelTest {
     )
 
     private fun TestScope.targeting(settings: AppSettings, rows: List<Transaction> = emptyList()) = watching(
-        EditCategoryViewModel(
+        editCategory(
             categoryId = "food",
             ledger = StaticLedger(rows),
             categories = FakeCategories(listOf(food, groceries)),
@@ -600,11 +613,34 @@ class EditCategoryViewModelTest {
     )
 
     private fun TestScope.viewModel() = watching(
-        EditCategoryViewModel(
+        editCategory(
             categoryId = "food",
             ledger = StaticLedger(emptyList()),
             categories = FakeCategories(listOf(food, groceries)),
         ),
+    )
+
+    private fun editCategory(
+        categoryId: String,
+        ledger: LedgerRepository,
+        categories: CategoryRepository,
+        isNew: Boolean = false,
+        settings: AppSettings? = null,
+        toasts: ToastMessages? = null,
+        clock: Clock = Clock.System,
+    ) = EditCategoryViewModel(
+        categoryId = categoryId,
+        observeTransactions = ObserveTransactionsUseCase(ledger),
+        observeCategories = ObserveCategoriesUseCase(categories),
+        observeSubCategories = ObserveSubCategoriesUseCase(categories),
+        getDeleteOptions = GetDeleteOptionsUseCase(categories),
+        getCategoryStats = GetCategoryStatsUseCase(GetHomeTodayUseCase(clock)),
+        saveCategory = SaveCategoryUseCase(categories, settings),
+        deleteCategory = DeleteCategoryUseCase(categories, settings?.let(::ClearCategoryTargetUseCase)),
+        isNew = isNew,
+        weeklyTarget = settings?.choices?.map { it.weeklyTarget } ?: flowOf(null),
+        offersTarget = settings != null,
+        toasts = toasts,
     )
 
     private fun TestScope.watching(model: EditCategoryViewModel): EditCategoryViewModel {

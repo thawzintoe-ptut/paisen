@@ -35,9 +35,18 @@ fun SharedSnapshot.removedPaymentIds(): Set<String> =
         .mapTo(mutableSetOf()) { it.paymentId }
 
 /** What this expense does to [me]'s balance: above zero they lent, below zero they owe; zero for a stranger. */
-fun SharedExpense.effectFor(me: String?): Satang {
-    val mine = shares.filter { it.memberId == me }.map { it.satang }.sum()
-    return (if (payerMemberId == me) satang else Satang.Zero) - mine
+fun SharedExpense.effectFor(me: String?): Satang = partFor(me).effect
+
+/** One expense as [me] sees it: whether they paid or have a share, its [effect] as in [effectFor], and their own [share]. */
+data class MyPart(val involved: Boolean, val effect: Satang, val share: Satang)
+
+fun SharedExpense.partFor(me: String?): MyPart {
+    val share = shares.filter { it.memberId == me }.map { it.satang }.sum()
+    return MyPart(
+        involved = payerMemberId == me || shares.any { it.memberId == me },
+        effect = (if (payerMemberId == me) satang else Satang.Zero) - share,
+        share = share,
+    )
 }
 
 /** Each member's net in a group: above zero they are owed, below zero they owe. */
@@ -98,6 +107,16 @@ fun SharedSnapshot.whoPaysWhom(groupId: String): Settlement {
         simplifiedCount = simplified.size,
     )
 }
+
+/** What [fromMemberId] pays [toMemberId] in these transfers (#135); zero when they owe nothing. */
+fun Settlement.owed(fromMemberId: String, toMemberId: String): Satang =
+    transfers
+        .filter { it.fromMemberId == fromMemberId && it.toMemberId == toMemberId }
+        .fold(Satang.Zero) { total, transfer -> total + transfer.amount }
+
+/** #63: the largest transfer [me] pays or receives, or null when they have nothing to settle. */
+fun Settlement.largestInvolving(me: String?): Transfer? =
+    transfers.filter { it.fromMemberId == me || it.toMemberId == me }.maxByOrNull { it.amount }
 
 fun SharedGroup.splitMembers(): List<SplitMember> = members.map { SplitMember(it.id, it.name, isMe(it.id)) }
 

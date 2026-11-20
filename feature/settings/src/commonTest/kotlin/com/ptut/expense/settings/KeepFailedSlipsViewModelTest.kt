@@ -8,6 +8,9 @@ import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.ledger.FakeLedger
 import com.ptut.expense.domain.settings.AppChoices
 import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
+import com.ptut.expense.domain.settings.ObserveKeptSlipsUseCase
+import com.ptut.expense.domain.settings.SetSlipRetentionUseCase
 import com.ptut.expense.domain.settings.appSettings
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -114,8 +117,9 @@ class KeepFailedSlipsViewModelTest : ViewModelTest() {
         queued: List<QueuedSlip> = emptyList(),
         settings: AppSettings = appSettings(),
     ) = KeepFailedSlipsViewModel(
-        ledger = FakeLedger(queued = queued),
-        settings = settings,
+        observeKeptSlips = ObserveKeptSlipsUseCase(FakeLedger(queued = queued)),
+        observeChoices = ObserveAppChoicesUseCase(settings),
+        setRetention = SetSlipRetentionUseCase(settings),
         clock = FixedClock(now),
     )
 

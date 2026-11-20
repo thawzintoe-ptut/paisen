@@ -3,30 +3,30 @@ package com.ptut.expense.shared
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
-import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Separators
-import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.domain.formatCompact
-import com.ptut.expense.domain.runSuspendCatching
+import com.ptut.expense.domain.shared.LoadRepeatDraftUseCase
+import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
 import com.ptut.expense.domain.shared.RepeatEnd
 import com.ptut.expense.domain.shared.RepeatFrequency
+import com.ptut.expense.domain.shared.RepeatInput
 import com.ptut.expense.domain.shared.RepeatKind
 import com.ptut.expense.domain.shared.RepeatRule
+import com.ptut.expense.domain.shared.SaveRepeatUseCase
 import com.ptut.expense.domain.shared.SharedGroup
-import com.ptut.expense.domain.shared.SharedRepository
-import com.ptut.expense.domain.shared.SharedTextLimits
 import com.ptut.expense.domain.shared.SplitMode
+import com.ptut.expense.domain.shared.StopRepeatUseCase
+import com.ptut.expense.domain.shared.equalPartOf
 import com.ptut.expense.domain.shared.membersToSplit
 import com.ptut.expense.domain.shared.money
 import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.next
 import com.ptut.expense.domain.shared.parseMinor
-import com.ptut.expense.domain.shared.shares
-import com.ptut.expense.domain.shared.split
 import com.ptut.expense.domain.shared.typedText
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
@@ -36,14 +36,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.plus
-import kotlin.time.Clock
 
 /** What is being set up. The split is equal among today's members, as p33's "split 50 / 50" draws it. */
 data class RepeatForm(
@@ -101,12 +97,16 @@ sealed interface RepeatExpenseUiState {
 class RepeatExpenseViewModel(
     private val groupId: String,
     private val ruleId: String?,
-    private val repository: SharedRepository,
     private val categories: List<Category>,
     private val toasts: ToastMessages,
-    private val runner: RepeatRunner? = null,
-    private val clock: Clock = Clock.System,
+    observeSnapshot: ObserveSharedSnapshotUseCase,
+    private val loadDraft: LoadRepeatDraftUseCase,
+    private val homeToday: GetHomeTodayUseCase,
+    private val saveRepeat: SaveRepeatUseCase,
+    private val stopRepeat: StopRepeatUseCase,
 ) : ViewModel() {
+
+    private val snapshot = observeSnapshot()
 
     private val form = MutableStateFlow(RepeatForm())
     private val opened = MutableStateFlow<RepeatForm?>(null)
@@ -115,7 +115,7 @@ class RepeatExpenseViewModel(
     /** True once the repeat is saved or stopped; the shell leaves on this. */
     val isDone: StateFlow<Boolean> = done.asStateFlow()
 
-    val uiState: StateFlow<RepeatExpenseUiState> = combine(repository.snapshot, form, opened) { snapshot, form, opened ->
+    val uiState: StateFlow<RepeatExpenseUiState> = combine(snapshot, form, opened) { snapshot, form, opened ->
         val group = snapshot.group(groupId) ?: return@combine RepeatExpenseUiState.Missing
         ready(group, form, snapshot.repeats.firstOrNull { it.id == ruleId }?.active ?: true)
             .copy(changed = opened != null && form.content != opened)
@@ -129,11 +129,9 @@ class RepeatExpenseViewModel(
     }
 
     private suspend fun load() {
-        val snapshot = repository.snapshot.first { it.group(groupId) != null }
-        val group = snapshot.group(groupId) ?: return
-        val rule = ruleId?.let { id -> snapshot.repeats.firstOrNull { it.id == id } }
+        val (group, rule, firstOfNextMonth) = loadDraft(groupId, ruleId) ?: return
         form.value = if (rule == null) {
-            RepeatForm(start = firstOfNextMonth(), payerMemberId = group.meMemberId, loaded = true)
+            RepeatForm(start = firstOfNextMonth, payerMemberId = group.meMemberId, loaded = true)
         } else {
             RepeatForm(
                 kind = rule.kind,
@@ -171,38 +169,29 @@ class RepeatExpenseViewModel(
         val state = uiState.value as? RepeatExpenseUiState.Ready ?: return
         // The form, not uiState: uiState catches up a frame later, and the second tap comes sooner.
         if (!state.canSave || form.value.saving) return
-        val group = repository.snapshot.value.group(groupId) ?: return
+        val group = snapshot.value.group(groupId) ?: return
         val form = state.form
         val remind = form.remind && allowed
-        val members = group.membersToSplit()
         val start = form.start ?: return
         val amountMinor = parseMinor(form.amountText, group.money) ?: return
         val payer = form.payerMemberId ?: group.meMemberId ?: return
+        val input = RepeatInput(
+            ruleId = ruleId,
+            groupId = groupId,
+            kind = form.kind,
+            frequency = form.frequency,
+            start = start,
+            end = form.end,
+            remind = remind,
+            description = form.description,
+            amountMinor = amountMinor,
+            payerMemberId = payer,
+            categories = categories,
+        )
         this.form.update { it.copy(saving = true) }
         viewModelScope.launch {
-            val saved = runSuspendCatching {
-                repository.saveRepeat(
-                    RepeatRule(
-                        id = ruleId.orEmpty(),
-                        groupId = groupId,
-                        kind = form.kind,
-                        frequency = form.frequency,
-                        start = start,
-                        end = form.end,
-                        remind = remind,
-                        active = true,
-                        lastAdded = null,
-                        description = form.description.trim().take(SharedTextLimits.DESCRIPTION),
-                        categoryId = form.kind.categoryIn(categories),
-                        currency = group.currency,
-                        amountMinor = amountMinor,
-                        rate = null,
-                        payerMemberId = payer,
-                        splitMode = SplitMode.Equally,
-                        weights = members.associate { it.id to 1L },
-                        createdAtEpochMillis = clock.now().toEpochMilliseconds(),
-                    ),
-                )
+            val saved = saveRepeat(input) {
+                if (form.remind && !allowed) toasts.show(ToastMessage(text = AppText.copy.shared.repeat.noReminder))
             }
             if (saved.isFailure) {
                 // The form stays as typed and Save unlocks, so a second tap can try again.
@@ -210,11 +199,6 @@ class RepeatExpenseViewModel(
                 this@RepeatExpenseViewModel.form.update { it.copy(saving = false) }
                 return@launch
             }
-            if (form.remind && !allowed) {
-                toasts.show(ToastMessage(text = AppText.copy.shared.repeat.noReminder))
-            }
-            // The repeat is saved: a reminder that cannot be lined up now must not keep the screen open.
-            runSuspendCatching { runner?.run() }
             done.value = true
         }
     }
@@ -222,9 +206,7 @@ class RepeatExpenseViewModel(
     fun stop() {
         val id = ruleId ?: return
         viewModelScope.launch {
-            repository.stopRepeat(id)
-            // The repeat is saved: a reminder that cannot be lined up now must not keep the screen open.
-            runSuspendCatching { runner?.run() }
+            stopRepeat(id)
             done.value = true
         }
     }
@@ -241,7 +223,7 @@ class RepeatExpenseViewModel(
                 splitMode = SplitMode.Equally, weights = members.associate { it.id to 1L }, createdAtEpochMillis = 0L,
             )
         }
-        val today = clock.now().dateIn(HomeTime)
+        val today = homeToday()
         val text = AppText.copy.shared
         val you = AppText.copy.common.you
         return RepeatExpenseUiState.Ready(
@@ -282,12 +264,8 @@ class RepeatExpenseViewModel(
 
     /** "Mint owes you ฿9,000", or what you owe the payer: the same for every date of a fixed amount. */
     private fun meaningFor(group: SharedGroup, rule: RepeatRule, amount: Long): String {
-        val members = group.membersToSplit()
-        val check = split(amount, SplitMode.Equally, members, emptyMap())
-        val parts = shares(check, Satang.ofMinorUnits(amount), members, emptyMap(), SplitMode.Equally)
-        val me = group.meMemberId
-        val mine = parts.firstOrNull { it.memberId == me }?.satang ?: Satang.Zero
-        val others = members.filterNot { it.isMe }
+        val mine = group.equalPartOf(amount, group.meMemberId)
+        val others = group.membersToSplit().filterNot { it.isMe }
         val text = AppText.copy.shared.repeat
         val money = group.moneyFormat()
         return when {
@@ -295,11 +273,6 @@ class RepeatExpenseViewModel(
             group.isMe(rule.payerMemberId) -> text.youAreOwed((Satang.ofMinorUnits(amount) - mine).formatCompact(money))
             else -> text.youOwe(group.displayName(rule.payerMemberId), mine.formatCompact(money))
         }
-    }
-
-    private fun firstOfNextMonth(): LocalDate {
-        val today = clock.now().dateIn(HomeTime)
-        return LocalDate(today.year, today.month, 1).plus(DatePeriod(months = 1))
     }
 }
 
@@ -319,14 +292,6 @@ fun RepeatKind.icon(): String = when (this) {
     RepeatKind.Utilities -> "bolt"
     RepeatKind.Internet -> "wifi"
     RepeatKind.Subscription -> "sync"
-}
-
-private const val SUBSCRIPTION_CATEGORY = "other"
-private const val BILLS_CATEGORY = "bills"
-
-private fun RepeatKind.categoryIn(categories: List<Category>): String? {
-    val wanted = if (this == RepeatKind.Subscription) SUBSCRIPTION_CATEGORY else BILLS_CATEGORY
-    return categories.firstOrNull { it.id == wanted }?.id ?: categories.firstOrNull()?.id
 }
 
 fun RepeatFrequency.label(): String {

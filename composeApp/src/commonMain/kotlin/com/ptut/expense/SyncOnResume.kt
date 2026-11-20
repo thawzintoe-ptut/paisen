@@ -5,7 +5,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.ptut.expense.domain.runSuspendCatching
-import com.ptut.expense.shared.RepeatRunner
+import com.ptut.expense.domain.shared.RunDueRepeatsUseCase
 import com.ptut.expense.shared.SyncThrottle
 import com.ptut.expense.sync.SharedSync
 import com.ptut.expense.sync.push.PushEvents
@@ -18,12 +18,12 @@ internal fun SyncOnResume(sharedSync: SharedSync?) {
     val koin = getKoin()
     val syncScope = rememberCoroutineScope()
     // #182: repeats due today add themselves after the pull, so another phone's copy arrives first.
-    val repeatRunner = remember(koin) { koin.getOrNull<RepeatRunner>() }
+    val runDueRepeats = remember(koin) { koin.getOrNull<RunDueRepeatsUseCase>() }
     val resumeSyncs = remember { SyncThrottle() }
-    LifecycleResumeEffect(sharedSync, repeatRunner) {
+    LifecycleResumeEffect(sharedSync, runDueRepeats) {
         val running = syncScope.launch {
             sharedSync?.takeIf { resumeSyncs.tryStart() }?.let { sync -> runSuspendCatching { sync.syncAll() } }
-            repeatRunner?.let { runner -> runSuspendCatching { runner.run() } }
+            runDueRepeats?.let { run -> runSuspendCatching { run() } }
         }
         // Only while on screen, so a push that finds nobody listening becomes a notification.
         val pushes = syncScope.launch {

@@ -3,9 +3,9 @@ package com.ptut.expense.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
+import com.ptut.expense.domain.settings.SaveLanguageUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.Language
-import com.ptut.expense.locale.LanguageStore
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -17,7 +17,7 @@ data class LanguageUiState(val options: List<LanguageOptionUiModel>)
 
 /** The app's language. A choice is saved, then the shell is rebuilt in it and opens on Settings again. */
 class LanguageViewModel(
-    private val store: LanguageStore? = null,
+    private val saveLanguage: SaveLanguageUseCase = SaveLanguageUseCase(),
     private val offered: List<Language> = Language.offered(offersUnreleased = false),
 ) : ViewModel() {
 
@@ -26,7 +26,7 @@ class LanguageViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), state(AppText.language.value))
 
     fun choose(language: Language) {
-        store?.write(language)
+        saveLanguage(language)
         AppText.choose(language)
     }
 

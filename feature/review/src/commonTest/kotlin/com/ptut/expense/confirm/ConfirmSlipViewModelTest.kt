@@ -15,14 +15,23 @@ import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
+import com.ptut.expense.domain.ledger.GetLastRateUseCase
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.ledger.RateBook
 import com.ptut.expense.domain.shared.PaymentDraft
 import com.ptut.expense.domain.shared.PaymentMethod
 import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.shared.SlipDebt
+import com.ptut.expense.domain.slip.ConfirmSlipUseCase
 import com.ptut.expense.domain.slip.ConfirmedSlip
+import com.ptut.expense.domain.slip.DiscardSlipUseCase
+import com.ptut.expense.domain.slip.DiscardSlipWithUndoUseCase
+import com.ptut.expense.domain.slip.FindSlipDebtsUseCase
+import com.ptut.expense.domain.slip.GetQueuedSlipUseCase
 import com.ptut.expense.domain.slip.ImportStore
+import com.ptut.expense.domain.slip.ObserveSlipInQueueUseCase
+import com.ptut.expense.domain.slip.PaySlipDebtUseCase
 import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.domain.slip.SlipParser
 import com.ptut.expense.domain.slip.SlipRead
@@ -57,6 +66,42 @@ import kotlin.time.Duration
 import kotlin.time.Instant
 
 private val Owed = Satang(24_000)
+
+/** Builds the screen over this file's fakes, as Koin builds it over the app's graph. */
+private fun ConfirmSlipViewModel(
+    slipId: String,
+    ledger: LedgerRepository,
+    importer: SlipImporter,
+    toasts: ToastMessages,
+    discards: SlipDiscards,
+    subCategories: List<SubCategory> = emptyList(),
+    debtsFor: (Satang, String?) -> List<SlipDebt> = { _, _ -> emptyList() },
+    clock: Clock = Clock.System,
+    offersPlanned: Boolean = false,
+    newId: () -> String,
+    payDebt: PaySlipDebtUseCase = PaySlipDebtUseCase(),
+): ConfirmSlipViewModel = ConfirmSlipViewModel(
+    slipId = slipId,
+    getSlip = GetQueuedSlipUseCase(ledger),
+    observeSlip = ObserveSlipInQueueUseCase(ledger),
+    toasts = toasts,
+    subCategories = subCategories,
+    findDebts = FindSlipDebtsUseCase(enabled = true, owed = debtsFor),
+    clock = clock,
+    offersPlanned = offersPlanned,
+    getLastRate = GetLastRateUseCase(ImporterRates(importer)),
+    confirmSlip = ConfirmSlipUseCase(importer, clock, newId),
+    paySlipDebt = payDebt,
+    discardSlip = DiscardSlipUseCase(importer),
+    discardWithUndo = DiscardSlipWithUndoUseCase(discards),
+)
+
+/** The rates the importer's store holds, read as Check slip reads them. */
+private class ImporterRates(private val importer: SlipImporter) : RateBook {
+    override suspend fun lastRate(currency: String): Rate? = importer.rateFor(currency)
+
+    override suspend fun saveRate(currency: String, rate: Rate) = error("Check slip saves a rate only through its confirm")
+}
 
 class ConfirmSlipViewModelTest : ViewModelTest() {
 
@@ -572,7 +617,7 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         discards = SlipDiscards(SlipImporter(source, FakeSlipTextReader(), store), toasts, CoroutineScope(Dispatchers.Main)) { Duration.ZERO },
         subCategories = subCategories,
         debtsFor = { amount, _ -> debts.filter { it.amount == amount } },
-        recordPayment = recordPayment,
+        payDebt = PaySlipDebtUseCase(recordPayment),
         clock = object : Clock {
             override fun now(): Instant = this@ConfirmSlipViewModelTest.now
         },

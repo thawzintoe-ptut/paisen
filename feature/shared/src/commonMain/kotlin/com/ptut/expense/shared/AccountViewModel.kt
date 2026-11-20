@@ -4,21 +4,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Separators
-import com.ptut.expense.domain.runSuspendCatching
+import com.ptut.expense.domain.shared.AccountExit
+import com.ptut.expense.domain.shared.DeleteAccountUseCase
+import com.ptut.expense.domain.shared.ObserveAccountUseCase
+import com.ptut.expense.domain.shared.SignOutUseCase
+import com.ptut.expense.domain.shared.SyncAllNowUseCase
 import com.ptut.expense.locale.AppText
-import com.ptut.expense.sync.ChangesWaiting
-import com.ptut.expense.sync.SharedSync
-import com.ptut.expense.sync.SyncProblem
 import com.ptut.expense.sync.auth.Account
-import com.ptut.expense.sync.auth.AuthRepository
 import com.ptut.expense.sync.syncMessage
-import com.ptut.expense.sync.syncProblem
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -38,15 +35,20 @@ sealed interface AccountUiState {
 }
 
 /** #187: who this phone shares as, sign out, and Apple 5.1.1(v)'s in-app account deletion. */
-class AccountViewModel(private val auth: AuthRepository?, private val sync: SharedSync?) : ViewModel() {
+class AccountViewModel(
+    observeAccount: ObserveAccountUseCase,
+    private val signOutUseCase: SignOutUseCase,
+    private val deleteAccountUseCase: DeleteAccountUseCase,
+    private val syncAllNow: SyncAllNowUseCase,
+) : ViewModel() {
 
     private data class Work(val working: Boolean = false, val error: String? = null, val needsFreshSignIn: Boolean = false)
 
     private val work = MutableStateFlow(Work())
 
-    val uiState: StateFlow<AccountUiState> = combine(auth?.account ?: flowOf(Account.SignedOut), work) { account, work ->
+    val uiState: StateFlow<AccountUiState> = combine(observeAccount(), work) { account, work ->
         when {
-            auth == null || !auth.available -> AccountUiState.Hidden
+            account == null -> AccountUiState.Hidden
 
             account is Account.SignedIn -> AccountUiState.SignedIn(
                 line = "${account.email ?: account.name}${Separators.DOT}${if (account.provider == APPLE_PROVIDER) "Apple" else "Google"}",
@@ -60,39 +62,27 @@ class AccountViewModel(private val auth: AuthRepository?, private val sync: Shar
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), AccountUiState.Hidden)
 
     /** Shared groups leave this phone with the account and come back with it; your own spending stays. */
-    fun signOut() = runAccountAction {
-        if (sync != null) sync.signOut() else auth?.signOut()
-    }
+    fun signOut() = runAccountAction { signOutUseCase() }
 
-    fun deleteAccount() = runAccountAction {
-        if (sync != null) sync.deleteAccount() else auth?.deleteAccount()
-    }
+    fun deleteAccount() = runAccountAction { deleteAccountUseCase() }
 
     /** Right after signing in here, so the account's shared groups come back now, not at the next app open. */
     fun syncNow() {
-        viewModelScope.launch { runSuspendCatching { sync?.syncAll() } }
+        viewModelScope.launch { syncAllNow() }
     }
 
     fun dismissFreshSignIn() {
         work.value = Work()
     }
 
-    private fun runAccountAction(block: suspend () -> Unit) {
+    private fun runAccountAction(block: suspend () -> AccountExit) {
         viewModelScope.launch {
             work.value = Work(working = true)
-            work.value = try {
-                block()
-                Work()
-            } catch (waiting: ChangesWaiting) {
-                Work(error = AppText.copy.shared.account.notSentYet(waiting.count))
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Exception) {
-                if (failure.syncProblem() == SyncProblem.NeedsFreshSignIn) {
-                    Work(needsFreshSignIn = true)
-                } else {
-                    Work(error = failure.syncMessage())
-                }
+            work.value = when (val exit = block()) {
+                AccountExit.Done -> Work()
+                is AccountExit.Waiting -> Work(error = AppText.copy.shared.account.notSentYet(exit.count))
+                AccountExit.NeedsFreshSignIn -> Work(needsFreshSignIn = true)
+                is AccountExit.Failed -> Work(error = exit.cause.syncMessage())
             }
         }
     }

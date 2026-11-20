@@ -9,10 +9,14 @@ import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.backup.BackupPreview
 import com.ptut.expense.domain.backup.BackupProblem
 import com.ptut.expense.domain.backup.BackupUnreadable
+import com.ptut.expense.domain.backup.BuildLedgerExportUseCase
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.MergeReport
+import com.ptut.expense.domain.backup.ObserveLedgerHoldingUseCase
+import com.ptut.expense.domain.backup.RestoreDriver
 import com.ptut.expense.domain.ledger.FakeLedger
 import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.ui.ToastMessages
@@ -273,13 +277,17 @@ class LedgerBackupViewModelTest : ViewModelTest() {
         ledger: LedgerRepository = FakeLedger(),
         files: LedgerFileStore = RecordingFiles(),
         archive: LedgerArchive = FakeArchive(),
-    ) = LedgerBackupViewModel(
-        ledger = ledger,
-        archive = archive,
-        files = files,
-        toasts = toasts,
-        clock = FixedClock(now),
-    )
+    ): LedgerBackupViewModel {
+        val homeToday = GetHomeTodayUseCase(FixedClock(now))
+        return LedgerBackupViewModel(
+            observeHolding = ObserveLedgerHoldingUseCase(ledger),
+            restoring = RestoreDriver(archive),
+            files = files,
+            toasts = toasts,
+            homeToday = homeToday,
+            buildExport = BuildLedgerExportUseCase(archive, homeToday),
+        )
+    }
 
     private class FixedClock(private val at: Instant) : Clock {
         override fun now(): Instant = at

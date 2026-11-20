@@ -1,5 +1,6 @@
 package com.ptut.expense.domain.shared
 
+import com.ptut.expense.domain.Category
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.YearMonth
@@ -142,3 +143,12 @@ private const val MAX_STEPS = 10_000
 
 /** A year of weekly dates: more than any real gap, few enough to write in one run. */
 private const val MAX_CATCH_UP = 60
+
+/** The category a repeat of this kind files under: Other for a subscription, Bills for the rest, else the first offered. */
+fun RepeatKind.categoryIn(categories: List<Category>): String? {
+    val wanted = if (this == RepeatKind.Subscription) SUBSCRIPTION_CATEGORY else BILLS_CATEGORY
+    return categories.firstOrNull { it.id == wanted }?.id ?: categories.firstOrNull()?.id
+}
+
+private const val SUBSCRIPTION_CATEGORY = "other"
+private const val BILLS_CATEGORY = "bills"

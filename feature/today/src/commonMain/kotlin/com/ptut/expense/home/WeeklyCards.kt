@@ -2,19 +2,14 @@ package com.ptut.expense.home
 
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Satang
-import com.ptut.expense.domain.Transaction
-import com.ptut.expense.domain.WeeklyCheckIn
-import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.formatCompact
-import com.ptut.expense.domain.lastWeek
-import com.ptut.expense.domain.thisWeek
-import com.ptut.expense.domain.weeklyCheckIn
+import com.ptut.expense.domain.today.TargetWeek
+import com.ptut.expense.domain.today.WeeklyLookBack
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.NoteTone
 import com.ptut.expense.locale.noteCopy
 import com.ptut.expense.locale.targetCopy
 import com.ptut.expense.ui.inAppLanguage
-import kotlinx.datetime.LocalDate
 
 /** #20: "Your week", its sentences, its trend glyph, and the slice of History a tap opens: ISO days, Sunday included. */
 data class WeeklyCardUiModel(
@@ -35,17 +30,10 @@ data class TargetUiModel(val line: String, val fraction: Float)
 data class WeeklyNoteSettings(val on: Boolean = false, val tone: NoteTone = NoteTone.Plain, val hiddenWeek: String? = null)
 
 /** #20: last week beside a usual one, then the category that rose most. Never red, never "over". */
-internal fun List<Transaction>.weeklyCard(
-    today: LocalDate,
-    categories: List<Category>,
-    target: WeeklyTarget?,
-    note: WeeklyNoteSettings = WeeklyNoteSettings(),
-): WeeklyCardUiModel? {
-    val check = weeklyCheckIn(today) ?: return null
+internal fun WeeklyLookBack.asCard(categories: List<Category>, tone: NoteTone): WeeklyCardUiModel {
+    if (noted) return noteCard(categories, tone)
     val home = AppText.copy.home
     val difference = check.difference
-    // #22: the note speaks for this Monday until hidden; the card from #20 stays either way.
-    if (note.on && note.hiddenWeek != today.toString()) return noteCard(check, categories, target, today, note.tone)
     val versus = when {
         difference == null -> ""
         difference > Satang.Zero -> home.weekMore(difference.formatCompact())
@@ -57,7 +45,7 @@ internal fun List<Transaction>.weeklyCard(
     val next = if (rise != null && riseName != null) " " + home.weekRise(riseName, rise.difference.formatCompact(), rise.shops) else ""
     return WeeklyCardUiModel(
         lead = home.weekLead,
-        line = home.weekCameTo(check.spent.formatCompact(), versus) + next + targetSentence(target, today, categories),
+        line = home.weekCameTo(check.spent.formatCompact(), versus) + next + targetSentence(target, categories),
         glyph = difference.trendGlyph(),
         from = check.from.toString(),
         to = check.to.toString(),
@@ -66,9 +54,8 @@ internal fun List<Transaction>.weeklyCard(
 }
 
 /** #21: null when the target's category is gone, so a deleted category draws nothing. */
-internal fun List<Transaction>.targetLine(target: WeeklyTarget, today: LocalDate, categories: List<Category>): TargetUiModel? {
-    val name = categories.shownName(target.categoryId) ?: return null
-    val progress = thisWeek(target, today)
+internal fun TargetWeek.targetLine(categories: List<Category>): TargetUiModel? {
+    val name = categories.shownName(categoryId) ?: return null
     return TargetUiModel(
         line = targetCopy().weekLine(name, progress.spent.formatCompact(), progress.target.formatCompact()),
         fraction = progress.fraction,
@@ -76,10 +63,10 @@ internal fun List<Transaction>.targetLine(target: WeeklyTarget, today: LocalDate
 }
 
 /** #21: Monday's word on last week's target, plain either way. */
-private fun List<Transaction>.targetSentence(target: WeeklyTarget?, today: LocalDate, categories: List<Category>): String {
+private fun targetSentence(target: TargetWeek?, categories: List<Category>): String {
     if (target == null) return ""
     val name = categories.shownName(target.categoryId) ?: return ""
-    val progress = lastWeek(target, today)
+    val progress = target.progress
     val words = targetCopy()
     val amount = progress.target.formatCompact()
     return " " + if (progress.over > Satang.Zero) {
@@ -93,13 +80,7 @@ private fun List<Transaction>.targetSentence(target: WeeklyTarget?, today: Local
  * #22: the #20 card in the chosen tone. Planned spending is already out of the rise; a rise with
  * planned money beside it says how much was planned. A week under or on usual says so in the tone.
  */
-private fun List<Transaction>.noteCard(
-    check: WeeklyCheckIn,
-    categories: List<Category>,
-    target: WeeklyTarget?,
-    today: LocalDate,
-    tone: NoteTone,
-): WeeklyCardUiModel {
+private fun WeeklyLookBack.noteCard(categories: List<Category>, tone: NoteTone): WeeklyCardUiModel {
     val home = AppText.copy.home
     val words = noteCopy(tone)
     val difference = check.difference
@@ -124,7 +105,7 @@ private fun List<Transaction>.noteCard(
     }
     return WeeklyCardUiModel(
         lead = home.weekLead,
-        line = line + targetSentence(target, today, categories),
+        line = line + targetSentence(target, categories),
         glyph = difference.trendGlyph(),
         from = check.from.toString(),
         to = check.to.toString(),

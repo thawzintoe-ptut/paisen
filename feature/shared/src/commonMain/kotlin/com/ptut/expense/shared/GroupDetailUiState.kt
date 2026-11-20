@@ -2,6 +2,7 @@ package com.ptut.expense.shared
 
 import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.shared.GroupRemoval
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.Person
 import kotlinx.datetime.LocalDate
@@ -111,12 +112,6 @@ internal const val HEADER_AVATARS = 3
 
 /** One name in the group besides yours. [settled] is false while they owe or are owed here. */
 data class GroupPersonUiModel(val id: String, val name: String, val settled: Boolean)
-
-/**
- * How a group goes. One only on this phone is deleted here; a shared one is deleted for everyone by
- * the account that created it, and left by everyone else, whose copy only goes from their phone.
- */
-enum class GroupRemoval { DeleteHere, DeleteForEveryone, Leave }
 
 /**
  * Edit group and Delete group: working while the server answers, then an error or done. [waiting]

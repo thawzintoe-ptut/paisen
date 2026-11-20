@@ -35,6 +35,7 @@ kotlin {
             api(projects.core.sync)
 
             implementation(projects.data)
+            implementation(projects.domain)
             implementation(projects.core.util)
             implementation(projects.core.locale)
             implementation(projects.core.platform)

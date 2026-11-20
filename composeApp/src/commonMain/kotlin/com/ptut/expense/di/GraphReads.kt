@@ -6,7 +6,6 @@ import com.ptut.expense.domain.categories.CategoryRepository
 import com.ptut.expense.domain.settings.AppChoices
 import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.shared.Currencies
-import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.sync.flags.FeatureFlags
 import com.ptut.expense.sync.flags.Flag
 import com.ptut.expense.ui.inAppLanguage
@@ -56,9 +55,6 @@ internal fun Scope.liveSubCategories(): Flow<List<SubCategory>> =
  */
 internal fun Scope.liveCategories(): Flow<List<Category>> =
     getOrNull<CategoryRepository>()?.categories?.map { it.ifEmpty { Category.seed().map(Category::inAppLanguage) } } ?: flowOf(Category.seed().map(Category::inAppLanguage))
-
-/** The phone's country as a currency, or baht in a graph that binds none. */
-internal fun Scope.phoneCurrency(): Currency = getOrNull<PhoneCurrency>()?.current() ?: Currencies.Thb
 
 /** One of the reader's stored choices as it changes, or [default] in a graph that binds no settings. */
 internal fun <T> Scope.choice(default: T, pick: (AppChoices) -> T): Flow<T> =

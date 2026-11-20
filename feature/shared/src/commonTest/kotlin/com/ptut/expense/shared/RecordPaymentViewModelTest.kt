@@ -6,7 +6,11 @@ import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.GetPaymentBetweenUseCase
+import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
 import com.ptut.expense.domain.shared.PaymentMethod
+import com.ptut.expense.domain.shared.RecordPaymentUseCase
+import com.ptut.expense.domain.shared.RemovePaymentUseCase
 import com.ptut.expense.domain.shared.Share
 import com.ptut.expense.domain.shared.SharedExpense
 import com.ptut.expense.domain.shared.SharedGroup
@@ -33,7 +37,7 @@ class RecordPaymentViewModelTest : ViewModelTest() {
     @Test
     fun `two fast taps on Record add one payment`() = runTest {
         val repository = FakeSharedRepository()
-        val viewModel = RecordPaymentViewModel(groupId = "g1", fromMemberId = "aye", toMemberId = "me", repository = repository)
+        val viewModel = recordPaymentViewModel(groupId = "g1", fromMemberId = "aye", toMemberId = "me", repository = repository)
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         viewModel.setAmount("240")
@@ -138,7 +142,7 @@ class RecordPaymentViewModelTest : ViewModelTest() {
     fun `a failed save keeps the amount and the next tap tries again`() = runTest {
         val repository = FakeSharedRepository()
         repository.failNextPayment = true
-        val viewModel = RecordPaymentViewModel(groupId = "g1", fromMemberId = "aye", toMemberId = "me", repository = repository)
+        val viewModel = recordPaymentViewModel(groupId = "g1", fromMemberId = "aye", toMemberId = "me", repository = repository)
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         viewModel.setAmount("240")
@@ -185,7 +189,7 @@ class RecordPaymentViewModelTest : ViewModelTest() {
             payments = emptyList(),
             links = emptyMap(),
         )
-        val viewModel = RecordPaymentViewModel(groupId = group.id, fromMemberId = from, toMemberId = to, repository = repository)
+        val viewModel = recordPaymentViewModel(groupId = group.id, fromMemberId = from, toMemberId = to, repository = repository)
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         return viewModel
@@ -214,3 +218,14 @@ class RecordPaymentViewModelTest : ViewModelTest() {
         removed = false,
     )
 }
+
+/** Record payment as Koin builds it, its use cases over [repository]. */
+private fun recordPaymentViewModel(groupId: String, fromMemberId: String, toMemberId: String, repository: FakeSharedRepository) = RecordPaymentViewModel(
+    groupId = groupId,
+    fromMemberId = fromMemberId,
+    toMemberId = toMemberId,
+    observeSnapshot = ObserveSharedSnapshotUseCase(repository),
+    getPaymentBetween = GetPaymentBetweenUseCase(),
+    recordPayment = RecordPaymentUseCase(repository),
+    removePayment = RemovePaymentUseCase(repository),
+)

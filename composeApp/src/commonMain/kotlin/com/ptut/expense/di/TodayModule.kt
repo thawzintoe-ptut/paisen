@@ -1,19 +1,13 @@
 package com.ptut.expense.di
 
 import com.ptut.expense.activity.ActivityViewModel
-import com.ptut.expense.domain.folders.WatchedFolderRepository
-import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.home.HomeViewModel
 import com.ptut.expense.home.WeeklyNoteSettings
-import com.ptut.expense.importer.SlipDiscards
-import com.ptut.expense.importer.SlipImporter
 import com.ptut.expense.ledger.LedgerScope
 import com.ptut.expense.ledger.LedgerViewModel
-import com.ptut.expense.platform.photos.PhotoSettings
 import com.ptut.expense.receipt.DayReceiptViewModel
 import com.ptut.expense.reports.ReportsViewModel
 import com.ptut.expense.sync.flags.Flag
-import kotlinx.coroutines.flow.flowOf
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -24,16 +18,17 @@ val todayModule: Module = module {
     // table rather than the compiled-in seed. Read at construction, which is when a screen is
     // built — a rename shows the next time the screen is opened, not while it is on top.
     viewModel {
-        val photos = getOrNull<PhotoSettings>()
         val noteOn = flagOn(Flag.NoteTone)
         HomeViewModel(
-            ledger = get(),
-            // The fact the freshness chip needs, taken off the one object that knows it.
-            isScanning = get<SlipImporter>().isScanning,
+            observeTransactions = get(),
+            observeLastImport = get(),
+            observeImportRuns = get(),
+            observeQueuedSlips = get(),
+            observeScanning = get(),
             categories = storedCategories(),
             categoryUpdates = liveCategories(),
             subCategoryUpdates = liveSubCategories(),
-            watchedFolders = getOrNull<WatchedFolderRepository>()?.folders ?: flowOf(emptyList()),
+            observeWatchedFolders = get(),
             moodByTimeOfDay = choice(false) { it.moodByTimeOfDay },
             weeklyCheckIn = choice(false) { it.weeklyCheckIn },
             weeklyTarget = choice(null) { it.weeklyTarget },
@@ -41,25 +36,36 @@ val todayModule: Module = module {
             weeklyNote = choice(WeeklyNoteSettings()) {
                 WeeklyNoteSettings(on = noteOn, tone = it.noteTone, hiddenWeek = it.hiddenNoteWeek)
             },
-            hideNoteFor = { monday -> getOrNull<AppSettings>()?.hideNoteWeek(monday) },
-            pendingDiscards = get<SlipDiscards>().pending,
-            onlyPickedPhotos = { photos?.onlyPickedPhotos == true },
+            hideWeeklyNote = get(),
+            getImportHealth = get(),
+            getHomeSummary = get(),
+            getMoodRecap = get(),
+            getWeeklyCheckIn = get(),
         )
     }
     // #220: Reports passes the slice it opened; Home's History passes nothing and gets the whole table.
     viewModel { params ->
         LedgerViewModel(
-            ledger = get(),
+            filterLedger = get(),
             categories = storedCategories(),
             categoryUpdates = liveCategories(),
             subCategoryUpdates = liveSubCategories(),
             scope = params.getOrNull<LedgerScope>(),
+            homeToday = get(),
         )
     }
-    viewModel { ActivityViewModel(ledger = get(), pendingDiscards = get<SlipDiscards>().pending) }
+    viewModel {
+        ActivityViewModel(
+            observeImportRuns = get(),
+            observeQueuedSlips = get(),
+            observeTransactions = get(),
+            getWeeklyWraps = get(),
+            findRunOnlyShop = get(),
+        )
+    }
     viewModel {
         ReportsViewModel(
-            ledger = get(),
+            getPeriodReport = get(),
             categories = storedCategories(),
             categoryUpdates = liveCategories(),
             subCategoryUpdates = liveSubCategories(),
@@ -68,6 +74,12 @@ val todayModule: Module = module {
     }
     // One day's receipt (#120), by its ISO date: one screen per day.
     viewModel { (date: String) ->
-        DayReceiptViewModel(date = date, ledger = get(), categories = storedCategories(), subCategories = storedSubCategories())
+        DayReceiptViewModel(
+            date = date,
+            observeDaySpending = get(),
+            categories = storedCategories(),
+            subCategories = storedSubCategories(),
+            homeToday = get(),
+        )
     }
 }

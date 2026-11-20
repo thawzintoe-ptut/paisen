@@ -4,8 +4,12 @@ import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.HomeMoney
+import com.ptut.expense.domain.home.ChangeHomeCurrencyUseCase
+import com.ptut.expense.domain.home.ConvertHomeCurrencyUseCase
 import com.ptut.expense.domain.home.FakeHomeBook
 import com.ptut.expense.domain.home.HomeBook
+import com.ptut.expense.domain.home.IsLedgerEmptyUseCase
+import com.ptut.expense.domain.home.PreviewConversionUseCase
 import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.CompletableDeferred
@@ -21,10 +25,17 @@ class HomeCurrencyViewModelTest : ViewModelTest() {
 
     private val yangon = HomeChoice(HomeMoney.Baht, "Asia/Yangon")
 
+    private fun homeCurrency(book: HomeBook) = HomeCurrencyViewModel(
+        isLedgerEmpty = IsLedgerEmptyUseCase(book),
+        changeHomeCurrency = ChangeHomeCurrencyUseCase(book),
+        convertHomeCurrency = ConvertHomeCurrencyUseCase(book),
+        previewConversion = PreviewConversionUseCase(),
+    )
+
     @Test
     fun `an empty ledger takes the new home and keeps its zone and reopens Settings after the rebuild`() = runTest {
         Home.use(yangon)
-        val viewModel = HomeCurrencyViewModel(FakeHomeBook())
+        val viewModel = homeCurrency(FakeHomeBook())
         runCurrent()
 
         viewModel.choose("MMK")
@@ -38,7 +49,7 @@ class HomeCurrencyViewModelTest : ViewModelTest() {
 
     @Test
     fun `a ledger with rows says so and opens the rate sheet instead of changing the home`() = runTest {
-        val viewModel = HomeCurrencyViewModel(FakeHomeBook(rows = 3))
+        val viewModel = homeCurrency(FakeHomeBook(rows = 3))
         runCurrent()
 
         viewModel.choose("MMK")
@@ -52,7 +63,7 @@ class HomeCurrencyViewModelTest : ViewModelTest() {
 
     @Test
     fun `a slip filed between the check and the choice leaves the home and says why`() = runTest {
-        val viewModel = HomeCurrencyViewModel(RacingHomeBook())
+        val viewModel = homeCurrency(RacingHomeBook())
         runCurrent()
 
         viewModel.choose("MMK")
@@ -69,7 +80,7 @@ class HomeCurrencyViewModelTest : ViewModelTest() {
     fun `a ledger with rows asks for a rate and converts at it in the same zone`() = runTest {
         Home.use(yangon)
         val book = FakeHomeBook(rows = 3)
-        val viewModel = HomeCurrencyViewModel(book)
+        val viewModel = homeCurrency(book)
         runCurrent()
 
         viewModel.choose("MMK")
@@ -93,7 +104,7 @@ class HomeCurrencyViewModelTest : ViewModelTest() {
     @Test
     fun `no rate typed says so and converts nothing`() = runTest {
         val book = FakeHomeBook(rows = 3)
-        val viewModel = HomeCurrencyViewModel(book)
+        val viewModel = homeCurrency(book)
         runCurrent()
         viewModel.choose("MMK")
         runCurrent()
@@ -106,7 +117,7 @@ class HomeCurrencyViewModelTest : ViewModelTest() {
 
     @Test
     fun `a convert the book refuses says so and changes nothing`() = runTest {
-        val viewModel = HomeCurrencyViewModel(FakeHomeBook(rows = 3, convertFails = true))
+        val viewModel = homeCurrency(FakeHomeBook(rows = 3, convertFails = true))
         runCurrent()
         viewModel.choose("MMK")
         runCurrent()
@@ -125,7 +136,7 @@ class HomeCurrencyViewModelTest : ViewModelTest() {
     @Test
     fun `a sheet cancelled before a late failure stays closed`() = runTest {
         val book = GatedHomeBook(FakeHomeBook(rows = 3, convertFails = true))
-        val viewModel = HomeCurrencyViewModel(book)
+        val viewModel = homeCurrency(book)
         runCurrent()
         viewModel.choose("MMK")
         runCurrent()
@@ -144,7 +155,7 @@ class HomeCurrencyViewModelTest : ViewModelTest() {
     @Test
     fun `a double tap on Change converts once`() = runTest {
         val book = FakeHomeBook(rows = 3)
-        val viewModel = HomeCurrencyViewModel(book)
+        val viewModel = homeCurrency(book)
         runCurrent()
         viewModel.choose("MMK")
         runCurrent()
@@ -159,7 +170,7 @@ class HomeCurrencyViewModelTest : ViewModelTest() {
 
     @Test
     fun `a book that cannot be read on open says so`() = runTest {
-        val viewModel = HomeCurrencyViewModel(BrokenHomeBook())
+        val viewModel = homeCurrency(BrokenHomeBook())
         runCurrent()
 
         assertEquals(AppText.copy.settings.didNotWork, viewModel.uiState.value.note)
@@ -167,7 +178,7 @@ class HomeCurrencyViewModelTest : ViewModelTest() {
 
     @Test
     fun `a choice the book throws on says so and keeps the home`() = runTest {
-        val viewModel = HomeCurrencyViewModel(BrokenHomeBook(failsOnOpen = false, failsAfter = 1))
+        val viewModel = homeCurrency(BrokenHomeBook(failsOnOpen = false, failsAfter = 1))
         runCurrent()
 
         viewModel.choose("MMK")
@@ -180,7 +191,7 @@ class HomeCurrencyViewModelTest : ViewModelTest() {
 
     @Test
     fun `a convert that throws frees the sheet and says nothing changed`() = runTest {
-        val viewModel = HomeCurrencyViewModel(ThrowingConvertBook())
+        val viewModel = homeCurrency(ThrowingConvertBook())
         runCurrent()
         viewModel.choose("MMK")
         runCurrent()

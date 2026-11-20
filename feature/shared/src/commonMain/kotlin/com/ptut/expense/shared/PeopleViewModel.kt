@@ -6,11 +6,14 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.format
+import com.ptut.expense.domain.shared.CreatePersonGroupUseCase
 import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.GetPeopleBalancesUseCase
+import com.ptut.expense.domain.shared.GroupType
+import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
 import com.ptut.expense.domain.shared.Person
-import com.ptut.expense.domain.shared.SharedRepository
-import com.ptut.expense.domain.shared.SharedSnapshot
-import com.ptut.expense.domain.shared.peopleBalances
+import com.ptut.expense.domain.shared.PersonSummary
+import com.ptut.expense.domain.shared.SetPersonArchivedUseCase
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -45,12 +48,18 @@ data class PeopleUiState(
  * #141: everyone you split with, behind "People >" on Shared. A person with history is archived,
  * never deleted: they fade, keep their past splits, and join no new one (#56, #133).
  */
-class PeopleViewModel(private val repository: SharedRepository) : ViewModel() {
+class PeopleViewModel(
+    observeSnapshot: ObserveSharedSnapshotUseCase,
+    private val getPeopleBalances: GetPeopleBalancesUseCase,
+    private val setPersonArchived: SetPersonArchivedUseCase,
+    private val createPersonGroup: CreatePersonGroupUseCase,
+) : ViewModel() {
 
     private val query = MutableStateFlow("")
 
-    val uiState: StateFlow<PeopleUiState> = combine(repository.snapshot, query) { snapshot, query ->
-        PeopleUiState(rows = snapshot.rows(query), knownPeople = snapshot.people.filterNot { it.archived }, query = query)
+    val uiState: StateFlow<PeopleUiState> = combine(observeSnapshot(), query) { snapshot, query ->
+        val people = getPeopleBalances(snapshot, query)
+        PeopleUiState(rows = people.rows.map { it.row() }, knownPeople = people.knownPeople, query = query)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), PeopleUiState())
 
     fun search(text: String) {
@@ -58,36 +67,30 @@ class PeopleViewModel(private val repository: SharedRepository) : ViewModel() {
     }
 
     fun setArchived(personId: String, archived: Boolean) {
-        viewModelScope.launch { repository.setPersonArchived(personId, archived) }
+        viewModelScope.launch { setPersonArchived(personId, archived) }
     }
 
     /** The dashed ADD PERSON row: a one-off bill, a group of two named after them, like Shared's. */
     fun addPerson(name: String, personId: String?, onCreated: (String) -> Unit) {
-        viewModelScope.launch { onCreated(repository.createPersonGroup(name, personId)) }
+        viewModelScope.launch { onCreated(createPersonGroup(name, personId, GroupType.Other.defaultIcon())) }
     }
 
-    private fun SharedSnapshot.rows(query: String): List<PeopleRowUiModel> {
+    private fun PersonSummary.row(): PeopleRowUiModel {
         val text = AppText.copy.shared
-        val byId = people.associateBy { it.id }
-        val balances = peopleBalances()
-        val withGroups = balances.map { balance ->
-            val person = byId[balance.key]
-            val archived = person?.archived == true
-            PeopleRowUiModel(
+        return when (this) {
+            is PersonSummary.InGroups -> PeopleRowUiModel(
                 key = "${balance.key}:${balance.currency}",
                 personId = person?.id,
                 name = balance.name,
                 initial = initialOf(balance.name),
-                detail = if (archived) text.person.archived else balance.groupIds.mapNotNull { group(it)?.name }.distinct().joinToString(", "),
+                detail = if (archived) text.person.archived else groupNames.joinToString(", "),
                 word = balance.amount.tone().personWord(),
                 amount = balance.amount.magnitude().format(Currencies.of(balance.currency).toHomeMoney()),
                 tone = balance.amount.tone(),
                 archived = archived,
             )
-        }
-        // A person made in a group that was later forgotten (#187) still belongs in the list.
-        val alone = people.filter { person -> balances.none { it.key == person.id } }.map { person ->
-            PeopleRowUiModel(
+
+            is PersonSummary.InNoGroup -> PeopleRowUiModel(
                 key = person.id,
                 personId = person.id,
                 name = person.name,
@@ -99,9 +102,5 @@ class PeopleViewModel(private val repository: SharedRepository) : ViewModel() {
                 archived = person.archived,
             )
         }
-        val match = query.trim().lowercase()
-        return (withGroups + alone)
-            .filter { match.isEmpty() || it.name.lowercase().contains(match) }
-            .sortedBy { it.archived }
     }
 }

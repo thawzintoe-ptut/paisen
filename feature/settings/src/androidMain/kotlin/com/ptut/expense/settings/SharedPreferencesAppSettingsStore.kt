@@ -23,6 +23,8 @@ private const val OWNER_CANDIDATE = "slip-owner-candidate"
 private const val OWNER_SEEN = "slip-owner-seen"
 private const val NOTE_TONE = "note-tone"
 private const val HIDDEN_NOTE_WEEK = "hidden-note-week"
+
+// "Add starts in" was dropped; the next write clears what older builds saved.
 private const val ADD_CURRENCY = "add-currency"
 private const val HOME_CURRENCY = "home-currency"
 private const val HOME_ZONE = "home-zone"
@@ -59,7 +61,6 @@ class SharedPreferencesAppSettingsStore(context: Context) : AppSettingsStore {
             ),
             noteTone = NoteTone.entries.firstOrNull { it.name == choices.getString(NOTE_TONE, null) } ?: shipped.noteTone,
             hiddenNoteWeek = choices.getString(HIDDEN_NOTE_WEEK, null),
-            addCurrency = choices.getString(ADD_CURRENCY, null),
             homeCurrency = choices.getString(HOME_CURRENCY, null),
             homeZone = choices.getString(HOME_ZONE, null),
         )
@@ -80,7 +81,7 @@ class SharedPreferencesAppSettingsStore(context: Context) : AppSettingsStore {
             .putInt(OWNER_SEEN, choices.slipOwner.seen)
             .putString(NOTE_TONE, choices.noteTone.name)
             .putString(HIDDEN_NOTE_WEEK, choices.hiddenNoteWeek)
-            .putString(ADD_CURRENCY, choices.addCurrency)
+            .remove(ADD_CURRENCY)
             .putString(HOME_CURRENCY, choices.homeCurrency)
             .putString(HOME_ZONE, choices.homeZone)
             .apply()

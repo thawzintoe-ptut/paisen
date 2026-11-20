@@ -30,8 +30,6 @@ import com.ptut.expense.folders.PhotoFoldersViewModel
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.platform.lock.AppLock
 import com.ptut.expense.platform.lock.DeviceAuth
-import com.ptut.expense.settings.AddCurrencyView
-import com.ptut.expense.settings.AddCurrencyViewModel
 import com.ptut.expense.settings.AssistantModelView
 import com.ptut.expense.settings.AssistantModelViewModel
 import com.ptut.expense.settings.BackgroundImportView
@@ -132,7 +130,7 @@ internal fun NavGraphBuilder.settingsRoutes(nav: NavHostController) {
                     SettingsAction.SlipSource, SettingsAction.KeepFailedSlips, SettingsAction.SlipOwner,
                     SettingsAction.Activity, SettingsAction.Categories, SettingsAction.NoteTone,
                     SettingsAction.Language, SettingsAction.ExportLedger, SettingsAction.ImportLedger,
-                    SettingsAction.Timezone, SettingsAction.HomeCurrency, SettingsAction.AddCurrency,
+                    SettingsAction.Timezone, SettingsAction.HomeCurrency,
                     SettingsAction.Assistant, SettingsAction.Feedback, SettingsAction.Licences,
                     -> Unit
                 }
@@ -211,16 +209,6 @@ internal fun NavGraphBuilder.settingsRoutes(nav: NavHostController) {
             uiState = state,
             onBack = { nav.popBackStack() },
             onChoose = language::choose,
-        )
-    }
-
-    composable<PtutRoute.AddCurrency> {
-        val currency = koinViewModel<AddCurrencyViewModel>()
-        val state by currency.uiState.collectAsStateWithLifecycle()
-        AddCurrencyView(
-            uiState = state,
-            onBack = { nav.popBackStack() },
-            onChoose = currency::choose,
         )
     }
 

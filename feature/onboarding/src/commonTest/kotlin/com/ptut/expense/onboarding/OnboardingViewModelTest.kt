@@ -8,6 +8,8 @@ import com.ptut.expense.domain.backup.BackupProblem
 import com.ptut.expense.domain.backup.BackupUnreadable
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.MergeReport
+import com.ptut.expense.domain.backup.RestoreDriver
+import com.ptut.expense.domain.home.ChooseHomeUseCase
 import com.ptut.expense.domain.home.FakeHomeBook
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.locale.AppText
@@ -40,19 +42,18 @@ class OnboardingViewModelTest : ViewModelTest() {
 
     // #41
 
-    private val kyat = HomeChoice(Currencies.of("MMK").toHomeMoney(), "Asia/Yangon")
+    /** What a phone set to Yangon time gets on first run: baht, in its own zone. */
+    private val bahtInYangon = HomeChoice(Currencies.Thb.toHomeMoney(), "Asia/Yangon")
 
     @Test
-    fun `first run offers the phone's home and sets it on the way out`() = runTest {
+    fun `first run sets the home it was given on the way out`() = runTest {
         val book = FakeHomeBook()
-        val viewModel = OnboardingViewModel(onboarding, photoAccess, homeBook = book, suggestedHome = kyat)
-        assertEquals(kyat, viewModel.homeChoice.value)
+        val viewModel = OnboardingViewModel(onboarding, photoAccess, chooseHomeUseCase = ChooseHomeUseCase(book), firstRunHome = bahtInYangon)
 
-        viewModel.chooseHome(Currencies.of("USD"))
         viewModel.skip()
         runCurrent()
 
-        assertEquals(listOf(HomeChoice(Currencies.of("USD").toHomeMoney(), "Asia/Yangon")), book.chosen)
+        assertEquals(listOf(bahtInYangon), book.chosen)
         assertTrue(onboarding.isFinished.value)
     }
 
@@ -62,10 +63,10 @@ class OnboardingViewModelTest : ViewModelTest() {
         val viewModel = OnboardingViewModel(
             onboarding,
             photoAccess,
-            archive = FakeArchive(),
+            restoreSteps = RestoreDriver(FakeArchive()),
             files = FakeFiles(),
-            homeBook = book,
-            suggestedHome = Home.choice.value,
+            chooseHomeUseCase = ChooseHomeUseCase(book),
+            firstRunHome = Home.choice.value,
         )
 
         viewModel.restore()
@@ -81,21 +82,21 @@ class OnboardingViewModelTest : ViewModelTest() {
     fun `a restore with another home writes it before the file merges`() = runTest {
         val book = FakeHomeBook()
         val archive = FakeArchive()
-        val viewModel = OnboardingViewModel(onboarding, photoAccess, archive = archive, files = FakeFiles(), homeBook = book, suggestedHome = kyat)
+        val viewModel = OnboardingViewModel(onboarding, photoAccess, restoreSteps = RestoreDriver(archive), files = FakeFiles(), chooseHomeUseCase = ChooseHomeUseCase(book), firstRunHome = bahtInYangon)
 
         viewModel.restore()
         runCurrent()
         viewModel.confirmRestore()
         runCurrent()
 
-        assertEquals(listOf(kyat), book.chosen)
-        assertEquals(kyat, archive.homeAtRestore)
+        assertEquals(listOf(bahtInYangon), book.chosen)
+        assertEquals(bahtInYangon, archive.homeAtRestore)
     }
 
     /** The platform's own text is English and says nothing the reader can act on. */
     @Test
     fun `a restore that fails shows the copy and not the exception text`() = runTest {
-        val viewModel = OnboardingViewModel(onboarding, photoAccess, archive = FakeArchive(fails = IllegalStateException("database is locked")), files = FakeFiles())
+        val viewModel = OnboardingViewModel(onboarding, photoAccess, restoreSteps = RestoreDriver(FakeArchive(fails = IllegalStateException("database is locked"))), files = FakeFiles())
 
         viewModel.restore()
         runCurrent()
@@ -107,7 +108,7 @@ class OnboardingViewModelTest : ViewModelTest() {
     @Test
     fun `a file the archive refuses keeps the refusal copy`() = runTest {
         val refusal = BackupUnreadable(BackupProblem.NotReadable)
-        val viewModel = OnboardingViewModel(onboarding, photoAccess, archive = FakeArchive(fails = refusal), files = FakeFiles())
+        val viewModel = OnboardingViewModel(onboarding, photoAccess, restoreSteps = RestoreDriver(FakeArchive(fails = refusal)), files = FakeFiles())
 
         viewModel.restore()
         runCurrent()
@@ -162,13 +163,12 @@ class OnboardingViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `a build with no home to offer shows no line and sets nothing`() = runTest {
+    fun `a build with no home to offer sets nothing`() = runTest {
         val book = FakeHomeBook()
-        val viewModel = OnboardingViewModel(onboarding, photoAccess, homeBook = book)
+        val viewModel = OnboardingViewModel(onboarding, photoAccess, chooseHomeUseCase = ChooseHomeUseCase(book))
 
         viewModel.skip()
 
-        assertEquals(null, viewModel.homeChoice.value)
         assertTrue(book.chosen.isEmpty())
     }
 

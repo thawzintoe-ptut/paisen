@@ -47,6 +47,7 @@ import com.ptut.expense.design.glassSource
 import com.ptut.expense.design.ptut
 import com.ptut.expense.design.rememberGlassBackdrop
 import com.ptut.expense.design.tappable
+import com.ptut.expense.domain.shared.GroupRemoval
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.NewMember
 import com.ptut.expense.domain.shared.Person

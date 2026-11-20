@@ -3,8 +3,7 @@ package com.ptut.expense
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.design.PtutMotion
-import com.ptut.expense.domain.folders.FirstRunFolders
-import com.ptut.expense.importer.SlipImporter
+import com.ptut.expense.domain.app.RunStartupTasksUseCase
 import com.ptut.expense.ui.ScreenReader
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
@@ -26,12 +25,8 @@ import kotlin.time.TimeSource
  */
 class AppViewModel(
     toasts: ToastMessages,
-    importer: SlipImporter,
-    /**
-     * Null in a test that is only about toasts. On a device it is always bound — US-1's promise
-     * is that a fresh install imports without being set up, and this is what keeps it.
-     */
-    firstRun: FirstRunFolders? = null,
+    /** NFR-4's sweep and US-1's first-run folders, on every start. */
+    runStartupTasks: RunStartupTasksUseCase,
     private val motion: PtutMotion = PtutMotion.Default,
     /** #8: asked each time an Undo shows, because TalkBack or VoiceOver can be switched on at any time. */
     private val screenReader: ScreenReader = ScreenReader { false },
@@ -45,13 +40,7 @@ class AppViewModel(
     private var shownAt: TimeMark = TimeSource.Monotonic.markNow()
 
     init {
-        // NFR-4 on app start, not only after a run. An app that has not imported for a month must
-        // still let go of the evidence, and the importer is the only thing that can.
-        viewModelScope.launch { importer.sweep() }
-
-        // Before the first scan rather than after it: a run over no folders is a run that found
-        // nothing, and it would journal that as a healthy empty import.
-        viewModelScope.launch { firstRun?.seed() }
+        viewModelScope.launch { runStartupTasks() }
 
         viewModelScope.launch {
             // collectLatest: a second save inside the window replaces the line and restarts the

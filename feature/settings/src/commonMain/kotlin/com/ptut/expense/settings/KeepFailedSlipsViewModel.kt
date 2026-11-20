@@ -4,10 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
-import com.ptut.expense.domain.evidenceDaysRemaining
-import com.ptut.expense.domain.ledger.LedgerRepository
-import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
+import com.ptut.expense.domain.settings.ObserveKeptSlipsUseCase
 import com.ptut.expense.domain.settings.RetentionChoices
+import com.ptut.expense.domain.settings.SetSlipRetentionUseCase
+import com.ptut.expense.domain.slip.GetSoonestEvidenceExpiryUseCase
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -34,24 +35,24 @@ data class KeepFailedSlipsUiState(
  * and a second deleter is how an orphaned image outlives the row that explained it.
  */
 class KeepFailedSlipsViewModel(
-    ledger: LedgerRepository,
-    private val settings: AppSettings,
-    private val clock: Clock = Clock.System,
+    observeKeptSlips: ObserveKeptSlipsUseCase,
+    observeChoices: ObserveAppChoicesUseCase,
+    private val setRetention: SetSlipRetentionUseCase,
+    clock: Clock = Clock.System,
+    private val soonestExpiry: GetSoonestEvidenceExpiryUseCase = GetSoonestEvidenceExpiryUseCase(clock),
 ) : ViewModel() {
 
     val uiState: StateFlow<KeepFailedSlipsUiState> = combine(
-        ledger.queuedSlips,
-        settings.choices,
+        observeKeptSlips(),
+        observeChoices(),
     ) { queued, choices -> state(queued, choices.retention) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
-            initialValue = state(emptyList(), settings.choices.value.retention),
+            initialValue = state(emptyList(), observeChoices().value.retention),
         )
 
-    fun choose(days: Int) {
-        RetentionChoices.firstOrNull { it.inWholeDays.toInt() == days }?.let(settings::setRetention)
-    }
+    fun choose(days: Int) = setRetention(days)
 
     private fun state(queued: List<QueuedSlip>, retention: Duration) = KeepFailedSlipsUiState(
         options = RetentionChoices.map { choice ->
@@ -72,9 +73,7 @@ class KeepFailedSlipsViewModel(
      * quoting the newest slip's would promise time the oldest does not have.
      */
     private fun List<QueuedSlip>.deadline(retention: Duration): String? {
-        val soonest = minOfOrNull {
-            evidenceDaysRemaining(it.capturedAtEpochMillis, clock.now().toEpochMilliseconds(), retention)
-        } ?: return null
+        val soonest = soonestExpiry(this, retention) ?: return null
 
         return if (soonest == 0) {
             AppText.copy.settings.oldestLosesImageToday

@@ -9,6 +9,7 @@ import com.ptut.expense.domain.ImportFailureKind
 import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ImportRun
+import com.ptut.expense.domain.ImportStopReason
 import com.ptut.expense.domain.MetaParts
 import com.ptut.expense.domain.Provenance
 import com.ptut.expense.domain.QueuedSlip
@@ -23,6 +24,13 @@ import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.ledger.ObserveImportRunsUseCase
+import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
+import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
+import com.ptut.expense.domain.slip.ObserveQueuedSlipsUseCase
+import com.ptut.expense.domain.today.GetImportHealthUseCase
+import com.ptut.expense.domain.today.HomePeriod
+import com.ptut.expense.domain.today.ObserveScanningUseCase
 import com.ptut.expense.locale.BurmeseCopy
 import com.ptut.expense.locale.EnglishCopy
 import com.ptut.expense.locale.NoteTone
@@ -854,19 +862,24 @@ class HomeViewModelTest : ViewModelTest() {
         note: WeeklyNoteSettings = WeeklyNoteSettings(),
         scanning: Flow<Boolean> = flowOf(false),
         mood: Boolean = false,
-    ) = HomeViewModel(
-        ledger = FakeLedger(transactions, sinceLastImportMillis, queued, all = transactions + saved, runs = runs),
-        isScanning = scanning,
-        subCategoryUpdates = subCategories,
-        onlyPickedPhotos = onlyPickedPhotos,
-        weeklyCheckIn = flowOf(weeklyCheckIn),
-        moodByTimeOfDay = flowOf(mood),
-        weeklyTarget = flowOf(target),
-        weeklyNote = flowOf(note),
-        clock = object : Clock {
-            override fun now(): Instant = now
-        },
-    )
+    ) = FakeLedger(transactions, sinceLastImportMillis, queued, all = transactions + saved, runs = runs).let { ledger ->
+        HomeViewModel(
+            observeTransactions = ObserveTransactionsUseCase(ledger),
+            observeLastImport = ObserveLastImportUseCase(ledger),
+            observeImportRuns = ObserveImportRunsUseCase(ledger),
+            observeQueuedSlips = ObserveQueuedSlipsUseCase(ledger, flowOf(emptySet())),
+            observeScanning = ObserveScanningUseCase(scanning),
+            subCategoryUpdates = subCategories,
+            getImportHealth = GetImportHealthUseCase(onlyPickedPhotos),
+            weeklyCheckIn = flowOf(weeklyCheckIn),
+            moodByTimeOfDay = flowOf(mood),
+            weeklyTarget = flowOf(target),
+            weeklyNote = flowOf(note),
+            clock = object : Clock {
+                override fun now(): Instant = now
+            },
+        )
+    }
 
     private fun transaction(amount: Satang, direction: Direction) = Transaction(
         id = "t${amount.raw}$direction",

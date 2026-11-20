@@ -10,8 +10,15 @@ import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.TransactionSource
+import com.ptut.expense.domain.ledger.DeleteTransactionUseCase
 import com.ptut.expense.domain.ledger.FakeLedger
+import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
+import com.ptut.expense.domain.ledger.UndoDeleteTransactionUseCase
 import com.ptut.expense.domain.ledger.rows
+import com.ptut.expense.domain.record.ObserveFilingRulesUseCase
+import com.ptut.expense.domain.record.ObserveShareOptionsUseCase
+import com.ptut.expense.domain.record.SetPlannedUseCase
 import com.ptut.expense.domain.rules.RememberedMerchant
 import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.domain.shared.ExpenseDraft
@@ -55,6 +62,30 @@ private val today = LocalDateTime(2026, 8, 19, 9, 0).toInstant(BangkokTime)
 private val fixedClock = object : Clock {
     override fun now(): Instant = today
 }
+
+/** Builds the record over this file's fakes, as Koin builds it over the app's graph. */
+private fun TransactionDetailViewModel(
+    transactionId: String,
+    ledger: LedgerRepository,
+    toasts: ToastMessages,
+    subCategories: List<SubCategory> = emptyList(),
+    rules: RuleRepository? = null,
+    offersPlanned: Boolean = false,
+    clock: Clock = Clock.System,
+    shared: SharedRepository? = null,
+): TransactionDetailViewModel = TransactionDetailViewModel(
+    transactionId = transactionId,
+    observeTransactions = ObserveTransactionsUseCase(ledger),
+    toasts = toasts,
+    subCategories = subCategories,
+    filingRules = ObserveFilingRulesUseCase(rules),
+    offersPlanned = offersPlanned,
+    clock = clock,
+    shareOptions = ObserveShareOptionsUseCase(shared),
+    setPlannedUseCase = SetPlannedUseCase(ledger),
+    deleteTransaction = DeleteTransactionUseCase(ledger, shared),
+    undoDelete = UndoDeleteTransactionUseCase(ledger, shared),
+)
 
 class TransactionDetailViewModelTest : ViewModelTest() {
 

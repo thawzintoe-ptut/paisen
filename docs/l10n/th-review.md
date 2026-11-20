@@ -75,10 +75,6 @@ through these tables yet; their fixes are still welcome, row by row.
 | English | Thai | Where |
 |---|---|---|
 | Currency | สกุลเงิน | `CurrencyCopy` currencyTitle |
-| Add starts in | เพิ่มรายการเริ่มที่ | `CurrencyCopy` startsIn |
-| The Add sheet opens on this currency. Totals still count in baht. | หน้าเพิ่มรายการเปิดที่สกุลนี้ ยอดรวมยังนับเป็นบาท | `CurrencyCopy` startsInIntro |
-| {code} · from this phone | {code} · ตามเครื่องนี้ | `CurrencyCopy` fromPhone |
-| Follow this phone ({code}) | ตามเครื่องนี้ ({code}) | `CurrencyCopy` followPhone |
 | Rate for {code} | อัตรา {code} | `CurrencyCopy` rateFor |
 | Set the rate for {code} | ใส่อัตรา {code} | `CurrencyCopy` setRate |
 | {baht} · ฿{rate} per {unit} | {baht} · ฿{rate} ต่อ {unit} | `CurrencyCopy` converted |

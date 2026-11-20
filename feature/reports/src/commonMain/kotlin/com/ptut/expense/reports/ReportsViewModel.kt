@@ -5,54 +5,39 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.BucketSize
 import com.ptut.expense.domain.BucketSpend
 import com.ptut.expense.domain.Category
-import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.ReportPeriod
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.SubCategory
-import com.ptut.expense.domain.Transaction
+import com.ptut.expense.domain.Trend
 import com.ptut.expense.domain.TrendDirection
 import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.abbreviated
-import com.ptut.expense.domain.averageBy
 import com.ptut.expense.domain.bucketSize
-import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayAndMonth
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.inCalendarDigits
-import com.ptut.expense.domain.inside
 import com.ptut.expense.domain.label
-import com.ptut.expense.domain.ledger.LedgerRepository
-import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.monthShort
-import com.ptut.expense.domain.needsWholeLedger
-import com.ptut.expense.domain.previousRangeBefore
-import com.ptut.expense.domain.rangeContaining
-import com.ptut.expense.domain.spendPerBucket
-import com.ptut.expense.domain.summarise
-import com.ptut.expense.domain.trendBetween
+import com.ptut.expense.domain.reports.CategoryComparison
+import com.ptut.expense.domain.reports.GetPeriodReportUseCase
+import com.ptut.expense.domain.reports.PeriodReport
 import com.ptut.expense.domain.weekdayAndDay
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.targetCopy
+import com.ptut.expense.ui.SpendWords
 import com.ptut.expense.ui.phrase
-import com.ptut.expense.ui.spendByCategory
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.number
-import kotlin.time.Clock
 
 /** A signed movement against the period before. Carries its direction so the UI never has to
  *  infer meaning from the colour alone. */
@@ -144,26 +129,18 @@ sealed interface ReportsUiState {
     ) : ReportsUiState
 }
 
-/**
- * Takes the repository rather than one of its flows: every other holder resolves
- * [LedgerRepository] from the graph, and a bare `StateFlow` would need its own binding.
- */
-@OptIn(ExperimentalCoroutinesApi::class)
 class ReportsViewModel(
-    private val ledger: LedgerRepository,
+    getPeriodReport: GetPeriodReportUseCase,
     categories: List<Category> = Category.seed(),
-    private val clock: Clock = Clock.System,
     /**
      * #115: the reader's categories as they change. A tab keeps its holder while the reader is
      * away, so a list read once would keep an old name, or drop a new category, until a restart.
      */
-    private val categoryUpdates: Flow<List<Category>> = flowOf(categories),
+    categoryUpdates: Flow<List<Category>> = flowOf(categories),
     /** The sub-categories as they change, for the same reason (#112). */
-    private val subCategoryUpdates: Flow<List<SubCategory>> = flowOf(emptyList()),
+    subCategoryUpdates: Flow<List<SubCategory>> = flowOf(emptyList()),
     /** #21: the one weekly target, or null with none set. */
-    private val weeklyTarget: Flow<WeeklyTarget?> = flowOf(null),
-    /** A year of rows is summed on every change, so the work stays off the main thread. */
-    private val work: CoroutineDispatcher = Dispatchers.Default,
+    weeklyTarget: Flow<WeeklyTarget?> = flowOf(null),
 ) : ViewModel() {
 
     private val period = MutableStateFlow(ReportPeriod.Week)
@@ -171,23 +148,16 @@ class ReportsViewModel(
     /** The bar the reader tapped, or null for the one today falls in. */
     private val selected = MutableStateFlow<Int?>(null)
 
-    val uiState: StateFlow<ReportsUiState> = period
-        .flatMapLatest { chosen ->
-            // The long periods compare against a stretch the recent window does not hold.
-            val rows = if (chosen.needsWholeLedger) ledger.allTransactions else ledger.recentTransactions
-            combine(rows, selected, categoryUpdates, subCategoryUpdates, weeklyTarget) { snapshot, picked, categories, subCategories, target ->
-                when (snapshot) {
-                    LedgerSnapshot.Unanswered -> ReportsUiState.Loading
-                    is LedgerSnapshot.Rows -> report(snapshot.transactions, chosen, picked, categories, subCategories, target)
-                }
-            }
+    // The sums run off the main thread in the use case; the words for a few bars and rows stay here.
+    val uiState: StateFlow<ReportsUiState> =
+        combine(getPeriodReport(period, categoryUpdates, subCategoryUpdates, weeklyTarget, SpendWords), selected) { report, picked ->
+            report?.toUiState(picked) ?: ReportsUiState.Loading
         }
-        .flowOn(work)
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
-            initialValue = ReportsUiState.Loading,
-        )
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
+                initialValue = ReportsUiState.Loading,
+            )
 
     fun show(period: ReportPeriod) {
         selected.value = null
@@ -198,51 +168,28 @@ class ReportsViewModel(
     fun select(bar: Int) {
         selected.value = bar
     }
+}
 
-    private fun report(
-        transactions: List<Transaction>,
-        chosen: ReportPeriod,
-        picked: Int?,
-        categories: List<Category>,
-        subCategories: List<SubCategory>,
-        target: WeeklyTarget? = null,
-    ): ReportsUiState.Success {
-        val today = clock.now().dateIn(HomeTime)
-        val range = chosen.rangeContaining(today)
-        val inRange = transactions.inside(range)
-        val previousRows = transactions.inside(chosen.previousRangeBefore(today))
-        val summary = inRange.summarise()
-
-        val buckets = inRange.spendPerBucket(range, chosen.bucketSize)
-        val current = buckets.indexOfFirst { today in it }.coerceAtLeast(0)
-        val chosenBar = picked?.takeIf { it in buckets.indices } ?: current
-        val tallest = buckets.maxOfOrNull { it.spent } ?: Satang.Zero
-        val average = buckets.averageBy(today)
-        val text = AppText.copy.reports
-
-        return ReportsUiState.Success(
-            period = chosen,
-            periodLabel = text.spent(range.label()),
-            from = range.start.toString(),
-            to = range.endInclusive.toString(),
-            caption = listOfNotNull(chosen.title(), buckets.getOrNull(chosenBar)?.name(chosen.bucketSize))
-                .joinToString(Separators.DOT),
-            total = summary.expense,
-            income = summary.income,
-            net = summary.net,
-            delta = delta(
-                chosen = chosen,
-                previous = previousRows.summarise().expense,
-                current = summary.expense,
-            ),
-            hasTransactions = inRange.isNotEmpty(),
-            bars = bars(buckets, chosen, current = current, chosenBar = chosenBar, tallest = tallest),
-            average = average?.takeIf { it > Satang.Zero }?.let {
-                AverageUiModel(text = text.average(it.formatCompact()), fraction = it.ratioTo(tallest))
-            },
-            categories = categoryRows(inRange, previousRows, chosen, categories, subCategories, summary.expense, target),
-        )
-    }
+/** The total stays the period's; the caption and the bar's own figure follow [picked]. */
+private fun PeriodReport.toUiState(picked: Int?): ReportsUiState.Success {
+    val chosenBar = picked?.takeIf { it in buckets.indices } ?: current
+    val text = AppText.copy.reports
+    return ReportsUiState.Success(
+        period = period,
+        periodLabel = text.spent(range.label()),
+        from = range.start.toString(),
+        to = range.endInclusive.toString(),
+        caption = listOfNotNull(period.title(), buckets.getOrNull(chosenBar)?.name(period.bucketSize))
+            .joinToString(Separators.DOT),
+        total = summary.expense,
+        income = summary.income,
+        net = summary.net,
+        delta = delta(chosen = period, trend = trend),
+        hasTransactions = hasTransactions,
+        bars = bars(buckets, period, current = current, chosenBar = chosenBar, tallest = tallest),
+        average = average?.let { AverageUiModel(text = text.average(it.formatCompact()), fraction = it.ratioTo(tallest)) },
+        categories = categoryRows(categories, summary.expense),
+    )
 }
 
 private fun bars(
@@ -265,34 +212,21 @@ private fun bars(
     )
 }
 
-private fun categoryRows(
-    inRange: List<Transaction>,
-    previousRows: List<Transaction>,
-    chosen: ReportPeriod,
-    categories: List<Category>,
-    subCategories: List<SubCategory>,
-    spent: Satang,
-    target: WeeklyTarget?,
-): List<CategoryRowUiModel> {
-    val before = previousRows.spendByCategory(categories).associate { it.category.id to it.total }
+private fun categoryRows(comparisons: List<CategoryComparison>, spent: Satang): List<CategoryRowUiModel> {
     val text = AppText.copy.reports
-    return inRange.spendByCategory(categories, subCategories).map {
+    return comparisons.map { (spend, trend, target) ->
         CategoryRowUiModel(
-            id = it.category.id,
-            name = it.category.name,
-            icon = it.category.icon,
-            color = it.category.color,
-            amount = it.total.format(),
-            share = it.share,
-            fraction = it.total.ratioTo(spent),
-            trend = categoryTrend(
-                previous = before[it.category.id] ?: Satang.Zero,
-                current = it.total,
-            ),
-            purchases = text.purchases(it.count),
-            subCategories = it.subCategories.map { sub -> SubCategorySpendUiModel(sub.name, sub.total.format()) },
-            target = target?.takeIf { t -> chosen == ReportPeriod.Week && t.categoryId == it.category.id }
-                ?.let { t -> targetCopy().ofTarget(t.amount.formatCompact()) },
+            id = spend.category.id,
+            name = spend.category.name,
+            icon = spend.category.icon,
+            color = spend.category.color,
+            amount = spend.total.format(),
+            share = spend.share,
+            fraction = spend.total.ratioTo(spent),
+            trend = categoryTrend(trend),
+            purchases = text.purchases(spend.count),
+            subCategories = spend.subCategories.map { sub -> SubCategorySpendUiModel(sub.name, sub.total.format()) },
+            target = target?.let { targetCopy().ofTarget(it.formatCompact()) },
         )
     }
 }
@@ -327,12 +261,7 @@ private fun BucketSpend.axis(period: ReportPeriod, index: Int, count: Int): Stri
     ReportPeriod.Year -> AppText.copy.reports.yearAxis[start.month.number - 1]
 }
 
-private fun delta(
-    chosen: ReportPeriod,
-    previous: Satang,
-    current: Satang,
-): DeltaUiModel? {
-    val trend = trendBetween(previous, current)
+private fun delta(chosen: ReportPeriod, trend: Trend): DeltaUiModel? {
     val text = AppText.copy.reports
     val baseline = when (chosen) {
         ReportPeriod.Week -> text.lastWeek
@@ -350,8 +279,7 @@ private fun delta(
  * Signed the way the reader reads it, not the way the number is stored: a rise carries a plus
  * and a fall carries a U+2212 minus, so the text says the direction even where the colour cannot.
  */
-private fun categoryTrend(previous: Satang, current: Satang): CategoryTrendUiModel? {
-    val trend = trendBetween(previous, current)
+private fun categoryTrend(trend: Trend): CategoryTrendUiModel? {
     val percent = trend.percent ?: return null
     return CategoryTrendUiModel(
         text = when (trend.direction) {

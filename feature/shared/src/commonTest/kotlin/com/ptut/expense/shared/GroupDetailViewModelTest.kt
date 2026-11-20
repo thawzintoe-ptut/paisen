@@ -3,12 +3,24 @@ package com.ptut.expense.shared
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.shared.AcknowledgeRefusedUseCase
+import com.ptut.expense.domain.shared.GetGroupDetailUseCase
+import com.ptut.expense.domain.shared.GetSyncAccessUseCase
 import com.ptut.expense.domain.shared.Member
+import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
+import com.ptut.expense.domain.shared.ObserveSyncStatusUseCase
+import com.ptut.expense.domain.shared.PollSyncUseCase
+import com.ptut.expense.domain.shared.PutBackPaymentUseCase
+import com.ptut.expense.domain.shared.RemovePaymentUseCase
+import com.ptut.expense.domain.shared.SavePromptPayUseCase
 import com.ptut.expense.domain.shared.Share
 import com.ptut.expense.domain.shared.SharedExpense
 import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.SplitMode
+import com.ptut.expense.domain.shared.SyncGroupNowUseCase
+import com.ptut.expense.domain.shared.TrackGroupSeenUseCase
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -85,7 +97,23 @@ class GroupDetailViewModelTest : ViewModelTest() {
     private fun TestScope.viewModel(vararg expenses: SharedExpense, group: SharedGroup = flatOfThree): GroupDetailViewModel {
         val repository = FakeSharedRepository(group)
         repository.snapshot.value = SharedSnapshot(groups = listOf(group), people = emptyList(), expenseVersions = expenses.toList(), payments = emptyList(), links = emptyMap())
-        val viewModel = GroupDetailViewModel(groupId = group.id, repository = repository, categories = emptyList(), clock = fixedClock, work = Dispatchers.Main)
+        val viewModel = GroupDetailViewModel(
+            groupId = group.id,
+            categories = emptyList(),
+            observeSnapshot = ObserveSharedSnapshotUseCase(repository),
+            observeSyncStatus = ObserveSyncStatusUseCase(),
+            getSyncAccess = GetSyncAccessUseCase(),
+            pollSync = PollSyncUseCase(),
+            trackSeen = TrackGroupSeenUseCase(repository, fixedClock),
+            getGroupDetail = GetGroupDetailUseCase(GetHomeTodayUseCase(fixedClock)),
+            syncGroupNow = SyncGroupNowUseCase(),
+            acknowledgeRefused = AcknowledgeRefusedUseCase(),
+            savePromptPay = SavePromptPayUseCase(repository),
+            removePaymentUseCase = RemovePaymentUseCase(repository),
+            putBackPayment = PutBackPaymentUseCase(repository),
+            clock = fixedClock,
+            work = Dispatchers.Main,
+        )
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         return viewModel

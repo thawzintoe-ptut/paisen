@@ -2,47 +2,41 @@ package com.ptut.expense.activity
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.DateRange
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.QueuedSlip
-import com.ptut.expense.domain.ReportPeriod
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
-import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.Transaction
-import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayAndMonth
 import com.ptut.expense.domain.formatCompact
-import com.ptut.expense.domain.inside
-import com.ptut.expense.domain.isAutomatic
-import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
-import com.ptut.expense.domain.rangeContaining
+import com.ptut.expense.domain.ledger.LedgerSpan
+import com.ptut.expense.domain.ledger.ObserveImportRunsUseCase
+import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.formatMinor
+import com.ptut.expense.domain.slip.ObserveQueuedSlipsUseCase
 import com.ptut.expense.domain.slip.shownShop
-import com.ptut.expense.domain.startOfDayEpochMillis
-import com.ptut.expense.domain.summarise
-import com.ptut.expense.domain.trendBetween
+import com.ptut.expense.domain.today.FindRunOnlyShopUseCase
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
+import com.ptut.expense.domain.today.GetWeeklyWrapsUseCase
+import com.ptut.expense.domain.today.WeekWrap
 import com.ptut.expense.domain.weekdayAndDay
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.SlipsCopy
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.displayName
 import com.ptut.expense.ui.phrase
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.minus
-import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -89,19 +83,23 @@ data class ActivityUiState(
  * names a one-slip run's shop and backs each finished week's wrap (#127).
  */
 class ActivityViewModel(
-    ledger: LedgerRepository,
-    private val clock: Clock = Clock.System,
+    observeImportRuns: ObserveImportRunsUseCase,
     /** #219: slips waiting out their Undo, already gone from Review, so not listed here either. */
-    pendingDiscards: Flow<Set<String>> = flowOf(emptySet()),
+    observeQueuedSlips: ObserveQueuedSlipsUseCase,
+    observeTransactions: ObserveTransactionsUseCase,
+    /** For p23's right-hand times, which count back from now. */
+    private val clock: Clock = Clock.System,
+    private val getWeeklyWraps: GetWeeklyWrapsUseCase = GetWeeklyWrapsUseCase(GetHomeTodayUseCase(clock)),
+    private val findRunOnlyShop: FindRunOnlyShopUseCase = FindRunOnlyShopUseCase(),
 ) : ViewModel() {
 
-    private val queuedSlips = combine(ledger.queuedSlips, pendingDiscards) { slips, pending -> slips.filterNot { it.id in pending } }
+    private val queuedSlips = observeQueuedSlips()
 
     val uiState: StateFlow<ActivityUiState> =
-        combine(ledger.importRuns, queuedSlips, ledger.allTransactions) { runs, queued, snapshot ->
+        combine(observeImportRuns(), queuedSlips, observeTransactions(LedgerSpan.All)) { runs, queued, snapshot ->
             val rows = (snapshot as? LedgerSnapshot.Rows)?.transactions.orEmpty()
             ActivityUiState(
-                entries = (queued.map { it.asEntry() } + runs.map { it.asEntry(rows) } + rows.weeklyWraps())
+                entries = (queued.map { it.asEntry() } + runs.map { it.asEntry(rows) } + getWeeklyWraps(rows).map { it.asEntry() })
                     .sortedByDescending { it.sortKey }
                     .map { it.model },
                 loading = snapshot == LedgerSnapshot.Unanswered,
@@ -177,51 +175,26 @@ class ActivityViewModel(
         )
     }
 
-    /** p23 names the shop when a run filed one slip: the row filed between the run's start and end (#127). */
-    private fun ImportRun.onlyShop(rows: List<Transaction>): String? {
-        if (filed != 1 || queued != 0) return null
-        val end = finishedAtEpochMillis ?: return null
+    /** p23 names the shop when a run filed one slip (#127). */
+    private fun ImportRun.onlyShop(rows: List<Transaction>): String? =
         // No categories: an imported row is named by its shop, its note or "Unknown", never its category.
-        return rows.singleOrNull { row -> row.source.isAutomatic && row.filedAt?.let { it in startedAtEpochMillis..end } == true }
-            ?.displayName(categories = emptyList(), subCategories = emptyList())
-    }
+        findRunOnlyShop(this, rows)?.displayName(categories = emptyList(), subCategories = emptyList())
 
-    /**
-     * One wrap per finished Mon–Sun week on Bangkok days, from the first row's week to last week,
-     * never this week (#127). The figure is Reports' week total, spending only.
-     */
-    private fun List<Transaction>.weeklyWraps(): List<Dated> {
-        val first = minOfOrNull { it.occurredAtEpochMillis } ?: return emptyList()
-        val thisWeek = ReportPeriod.Week.rangeContaining(clock.now().dateIn(HomeTime))
-        var week = ReportPeriod.Week.rangeContaining(first.dateIn(HomeTime))
-        val wraps = mutableListOf<Dated>()
+    /** A finished week's wrap (#127), placed after the week it sums up. */
+    private fun WeekWrap.asEntry(): Dated {
         val text = AppText.copy.slips
-        while (week.start < thisWeek.start) {
-            val spent = spentIn(week)
-            val versus = trendBetween(spentIn(week.shiftedWeeks(-1)), spent).phrase(text.lastWeek)
-            // The last moment of Sunday, so the wrap sits after the week it sums up.
-            val end = week.endInclusive.plus(1, DateTimeUnit.DAY).startOfDayEpochMillis() - 1
-            wraps += Dated(
-                sortKey = end,
-                model = ActivityEntryUiModel(
-                    id = "week-${week.start}",
-                    title = text.weekTitle(week.start.dayAndMonth(), week.endInclusive.dayAndMonth()),
-                    body = text.weekBody(spent.formatCompact(), versus),
-                    time = end.stamp(),
-                    icon = "insights",
-                    tone = ActivityTone.Reported,
-                ),
-            )
-            week = week.shiftedWeeks(1)
-        }
-        return wraps
+        return Dated(
+            sortKey = endsAtEpochMillis,
+            model = ActivityEntryUiModel(
+                id = "week-${week.start}",
+                title = text.weekTitle(week.start.dayAndMonth(), week.endInclusive.dayAndMonth()),
+                body = text.weekBody(spent.formatCompact(), trend.phrase(text.lastWeek)),
+                time = endsAtEpochMillis.stamp(),
+                icon = "insights",
+                tone = ActivityTone.Reported,
+            ),
+        )
     }
-
-    private fun List<Transaction>.spentIn(week: DateRange): Satang =
-        inside(week).summarise().expense
-
-    private fun DateRange.shiftedWeeks(weeks: Int) =
-        DateRange(start.plus(weeks, DateTimeUnit.WEEK), endInclusive.plus(weeks, DateTimeUnit.WEEK))
 
     /** #33: a kyat slip shows its kyat, "K29,500"; it has no baht until it has a rate. */
     private fun QueuedSlip.shownAmount(): String? =

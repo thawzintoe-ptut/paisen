@@ -4,8 +4,14 @@ import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.ExpenseChanged
+import com.ptut.expense.domain.shared.GetLastGroupRateUseCase
+import com.ptut.expense.domain.shared.LoadExpenseDraftUseCase
+import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
 import com.ptut.expense.domain.shared.QuickSplit
 import com.ptut.expense.domain.shared.Rate
+import com.ptut.expense.domain.shared.RemoveSharedExpenseUseCase
+import com.ptut.expense.domain.shared.RestoreSharedExpenseUseCase
+import com.ptut.expense.domain.shared.SaveSharedExpenseUseCase
 import com.ptut.expense.domain.shared.SharedTextLimits
 import com.ptut.expense.domain.shared.SplitMode
 import com.ptut.expense.locale.AppText
@@ -31,7 +37,7 @@ class AddExpenseViewModelTest : ViewModelTest() {
     @Test
     fun `two fast taps on Save add one expense`() = runTest {
         val repository = FakeSharedRepository()
-        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed())
+        val viewModel = addExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed())
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         viewModel.setAmount("240")
@@ -53,7 +59,7 @@ class AddExpenseViewModelTest : ViewModelTest() {
     @Test
     fun `a description and note longer than the group takes are cut to its limits`() = runTest {
         val repository = FakeSharedRepository()
-        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed())
+        val viewModel = addExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed())
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         viewModel.setAmount("240")
@@ -116,7 +122,7 @@ class AddExpenseViewModelTest : ViewModelTest() {
         val dinner = flat12.dinner(paidBy = "me", wholeMinor = 30_000).copy(categoryId = "food")
         val repository = FakeSharedRepository()
         repository.snapshot.value = repository.snapshot.value.copy(expenseVersions = listOf(dinner), links = mapOf(dinner.id to "tx-1"))
-        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = dinner.id, repository = repository, categories = Category.seed())
+        val viewModel = addExpenseViewModel(groupId = "g1", expenseId = dinner.id, repository = repository, categories = Category.seed())
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         return Editing(viewModel, repository)
@@ -197,7 +203,7 @@ class AddExpenseViewModelTest : ViewModelTest() {
     fun `a new expense saved offers Undo and Undo removes it`() = runTest {
         val repository = FakeSharedRepository()
         val toasts = ToastMessages()
-        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed(), toasts = toasts)
+        val viewModel = addExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed(), toasts = toasts)
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         viewModel.setAmount("240")
@@ -218,7 +224,7 @@ class AddExpenseViewModelTest : ViewModelTest() {
     fun `a failed save brings Save back and says so and the next tap saves`() = runTest {
         val repository = FakeSharedRepository()
         val toasts = ToastMessages()
-        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed(), toasts = toasts)
+        val viewModel = addExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed(), toasts = toasts)
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         viewModel.setAmount("240")
@@ -372,7 +378,7 @@ class AddExpenseViewModelTest : ViewModelTest() {
     }
 
     private fun TestScope.viewModel(repository: FakeSharedRepository, toasts: ToastMessages? = null): AddExpenseViewModel {
-        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed(), toasts = toasts)
+        val viewModel = addExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = Category.seed(), toasts = toasts)
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         return viewModel
@@ -384,7 +390,7 @@ class AddExpenseViewModelTest : ViewModelTest() {
     private fun TestScope.titleSavedWithNoDescription(stored: List<Category>): String {
         val repository = FakeSharedRepository()
         val categories = stored.map(Category::inAppLanguage)
-        val viewModel = AddExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = categories)
+        val viewModel = addExpenseViewModel(groupId = "g1", expenseId = null, repository = repository, categories = categories)
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         viewModel.setAmount("240")
@@ -397,3 +403,18 @@ class AddExpenseViewModelTest : ViewModelTest() {
         return repository.expenses.single().description
     }
 }
+
+/** Add expense as Koin builds it, its use cases over [repository]. */
+private fun addExpenseViewModel(groupId: String, expenseId: String?, repository: FakeSharedRepository, categories: List<Category>, toasts: ToastMessages? = null) =
+    AddExpenseViewModel(
+        groupId = groupId,
+        expenseId = expenseId,
+        categories = categories,
+        observeSnapshot = ObserveSharedSnapshotUseCase(repository),
+        loadDraft = LoadExpenseDraftUseCase(repository),
+        getLastRate = GetLastGroupRateUseCase(repository),
+        saveExpense = SaveSharedExpenseUseCase(repository),
+        removeExpense = RemoveSharedExpenseUseCase(repository),
+        restoreExpense = RestoreSharedExpenseUseCase(repository),
+        toasts = toasts,
+    )

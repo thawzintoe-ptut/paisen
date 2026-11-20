@@ -33,6 +33,7 @@ include(":composeApp")
 include(":androidApp")
 
 include(":data")
+include(":domain")
 
 include(":core:util")
 include(":core:locale")

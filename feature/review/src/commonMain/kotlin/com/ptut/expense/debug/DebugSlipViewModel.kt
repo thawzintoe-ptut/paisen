@@ -2,7 +2,7 @@ package com.ptut.expense.debug
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.importer.SlipImporter
+import com.ptut.expense.domain.slip.RunSlipImportUseCase
 import com.ptut.expense.importer.SlipTranscripts
 import com.ptut.expense.platform.photos.InMemorySlipSource
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,7 +20,8 @@ import kotlin.time.Clock
  */
 class DebugSlipViewModel(
     private val source: InMemorySlipSource,
-    private val importer: SlipImporter,
+    /** One pass of the shipped pipeline. */
+    private val runImport: RunSlipImportUseCase,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
 
@@ -38,7 +39,7 @@ class DebugSlipViewModel(
     private fun inject(transcript: String) {
         viewModelScope.launch {
             source.inject(transcript, clock.now().toEpochMilliseconds())
-            val run = importer.run()
+            val run = runImport()
             lastRun.value = "found ${run.found} · filed ${run.filed} · queued ${run.queued} · " +
                 "already seen ${run.alreadySeen} · unreadable ${run.unreadable}"
         }

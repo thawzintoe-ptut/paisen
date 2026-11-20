@@ -4,37 +4,39 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
-import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.WeeklyTarget
-import com.ptut.expense.domain.categories.CategoryRepository
-import com.ptut.expense.domain.dateIn
+import com.ptut.expense.domain.categories.DeleteCategoryUseCase
+import com.ptut.expense.domain.categories.GetCategoryStatsUseCase
+import com.ptut.expense.domain.categories.GetDeleteOptionsUseCase
+import com.ptut.expense.domain.categories.ObserveCategoriesUseCase
+import com.ptut.expense.domain.categories.ObserveSubCategoriesUseCase
+import com.ptut.expense.domain.categories.SaveCategoryUseCase
+import com.ptut.expense.domain.categories.deleteDestinationsFor
+import com.ptut.expense.domain.categories.draftCategory
 import com.ptut.expense.domain.formatCompact
-import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.ledger.LedgerSpan
+import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
 import com.ptut.expense.domain.minorPerWhole
-import com.ptut.expense.domain.runSuspendCatching
-import com.ptut.expense.domain.settings.AppSettings
-import com.ptut.expense.domain.suggestedTarget
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.targetCopy
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.time.Clock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -48,19 +50,28 @@ import kotlin.uuid.Uuid
 @OptIn(ExperimentalUuidApi::class)
 class EditCategoryViewModel(
     private val categoryId: String,
-    ledger: LedgerRepository,
-    private val categories: CategoryRepository,
+    observeTransactions: ObserveTransactionsUseCase,
+    observeCategories: ObserveCategoriesUseCase,
+    observeSubCategories: ObserveSubCategoriesUseCase,
+    private val getDeleteOptions: GetDeleteOptionsUseCase,
+    private val getCategoryStats: GetCategoryStatsUseCase,
+    private val saveCategory: SaveCategoryUseCase,
+    private val deleteCategory: DeleteCategoryUseCase,
     /** NEW CATEGORY: nothing is stored under [categoryId] until Save, so closing leaves no trace (#116). */
     private val isNew: Boolean = false,
     /** #114: a haptic on every save and delete, played by the shell. */
     private val haptics: Haptics = Haptics(),
     private val newId: () -> String = { Uuid.random().toString() },
-    /** #21: where the one weekly target lives. Null in a graph with no settings: the field is not drawn. */
-    private val settings: AppSettings? = null,
+    /** #21: the one weekly target as it changes. */
+    weeklyTarget: Flow<WeeklyTarget?> = flowOf(null),
+    /** #21: false in a graph with no settings, and the target field is not drawn. */
+    private val offersTarget: Boolean = false,
     /** Where a failed save or delete is said. Null in a graph that binds none. */
     private val toasts: ToastMessages? = null,
-    private val clock: Clock = Clock.System,
 ) : ViewModel() {
+
+    private val categories = observeCategories()
+    private val subCategories = observeSubCategories()
 
     /** Null until the reader types. Absent means "as stored", which is not the same as blank. */
     private val typedName = MutableStateFlow<String?>(null)
@@ -85,11 +96,11 @@ class EditCategoryViewModel(
      * promise "nothing moves" over a category holding forty rows and never correct itself.
      */
     val uiState: StateFlow<EditCategoryUiState> = combine(
-        combine(ledger.allTransactions, categories.categories, categories.subCategories, ::Stored),
+        combine(observeTransactions(LedgerSpan.All), categories, subCategories, ::Stored),
         typedName,
         chosenIcon,
         combine(chosenDirection, chosenColor, subEdits, ::Choices),
-        combine(movedCount, rulesMoved, settings?.choices?.map { it.weeklyTarget } ?: flowOf(null), typedTarget) { moved, rules, stored, typed ->
+        combine(movedCount, rulesMoved, weeklyTarget, typedTarget) { moved, rules, stored, typed ->
             Counts(moved, rules, stored, typed)
         },
     ) { stored, typed, icon, choices, counts -> state(stored, typed, icon, choices, counts) }
@@ -101,8 +112,9 @@ class EditCategoryViewModel(
 
     init {
         viewModelScope.launch {
-            movedCount.value = categories.transactionCount(categoryId)
-            rulesMoved.value = categories.shopRuleCount(categoryId)
+            val moves = getDeleteOptions(categoryId)
+            movedCount.value = moves.transactions
+            rulesMoved.value = moves.shopRules
         }
     }
 
@@ -134,43 +146,30 @@ class EditCategoryViewModel(
 
     /** Saves everything the screen holds together: one screen, one Save, one write. */
     fun save() = viewModelScope.launch {
-        val known = categories.categories.value
+        val known = categories.value
         val held = known.firstOrNull { it.id == categoryId } ?: draft(known) ?: return@launch
         val name = typedName.value?.trim().orEmpty().ifEmpty { held.name }
         val edits = subEdits.value
 
         // A failed write keeps every edit on screen, so Save can be tapped again.
-        runSuspendCatching {
-            categories.save(
-                held.copy(
-                    name = name,
-                    icon = chosenIcon.value ?: held.icon,
-                    direction = chosenDirection.value ?: held.direction,
-                    color = chosenColor.value ?: held.color,
-                ),
-                subCategories = edits.toSave(categories.subCategories.value),
-                removedSubCategoryIds = edits.removed.toList(),
-            )
-        }.onFailure { return@launch saysItFailed() }
-        saveTarget()
+        saveCategory(
+            held.copy(
+                name = name,
+                icon = chosenIcon.value ?: held.icon,
+                direction = chosenDirection.value ?: held.direction,
+                color = chosenColor.value ?: held.color,
+            ),
+            subCategories = edits.toSave(subCategories.value),
+            removedSubCategoryIds = edits.removed.toList(),
+            targetText = typedTarget.value,
+        ).onFailure { return@launch saysItFailed() }
+        typedTarget.value = null
         haptics.saved()
         typedName.value = null
         chosenIcon.value = null
         chosenDirection.value = null
         chosenColor.value = null
         subEdits.value = SubCategoryEdits()
-    }
-
-    /** Empty clears the target only when it is this category's; another category's stays. */
-    private fun saveTarget() {
-        val typed = typedTarget.value ?: return
-        val store = settings ?: return
-        val wholeUnits = typed.toLongOrNull()
-        when {
-            wholeUnits != null && wholeUnits > 0 -> store.setWeeklyTarget(WeeklyTarget(categoryId, Satang.ofMinorUnits(wholeUnits * minorPerWhole())))
-            store.choices.value.weeklyTarget?.categoryId == categoryId -> store.setWeeklyTarget(null)
-        }
-        typedTarget.value = null
     }
 
     /** Held until Save, like the name (#116). */
@@ -211,9 +210,8 @@ class EditCategoryViewModel(
 
     /** FR-18: only ever called with an answer to where the transactions go. */
     fun delete(moveTo: String) = viewModelScope.launch {
-        runSuspendCatching { categories.delete(categoryId, moveTo) }.onFailure { return@launch saysItFailed() }
         // #21: the target goes with its category.
-        if (settings?.choices?.value?.weeklyTarget?.categoryId == categoryId) settings.setWeeklyTarget(null)
+        deleteCategory(categoryId, moveTo).onFailure { return@launch saysItFailed() }
         haptics.deleted()
         closed.value = true
     }
@@ -223,12 +221,8 @@ class EditCategoryViewModel(
     }
 
     /** What NEW CATEGORY opens on: last in the reader's order, so no category they know moves. */
-    private fun draft(known: List<Category>): Category? = if (!isNew) {
-        null
-    } else {
-        val last = known.maxOfOrNull { it.sortOrder } ?: -1
-        Category(id = categoryId, name = AppText.copy.categories.newCategory, icon = "label", sortOrder = last + 1)
-    }
+    private fun draft(known: List<Category>): Category? =
+        if (isNew) draftCategory(categoryId, known, AppText.copy.categories.newCategory) else null
 
     private fun state(
         read: Stored,
@@ -245,17 +239,12 @@ class EditCategoryViewModel(
         val edits = choices.edits
         val stored = known.firstOrNull { it.id == categoryId }
         val held = stored ?: draft(known) ?: return EditCategoryUiState()
-        // All time, not this month: a count is what a sub-category holds (p20).
-        val rows = when (snapshot) {
-            LedgerSnapshot.Unanswered -> emptyList()
-            is LedgerSnapshot.Rows -> snapshot.transactions
-        }
+        val stats = getCategoryStats(snapshot, categoryId)
         val mine = subs.filter { it.categoryId == categoryId }
         val myTarget = counts.target?.takeIf { it.categoryId == categoryId }
         val edited = isEdited(held, typed, icon, direction, color, edits.changes(mine)) ||
             counts.typedTarget?.let { it.toLongOrNull() != myTarget?.amount?.wholeUnits() } == true
-        // Never itself, and never the other direction: delete must not turn spending into income.
-        val destinations = known.filter { it.id != categoryId && it.direction == held.direction }
+        val destinations = known.deleteDestinationsFor(held)
 
         return EditCategoryUiState(
             loaded = true,
@@ -267,7 +256,7 @@ class EditCategoryViewModel(
                 SubCategoryRowUiModel(
                     id = it.id,
                     name = it.name,
-                    purchases = rows.count { row -> row.subCategoryId == it.id }.purchases(),
+                    purchases = (stats.purchasesBySubCategory[it.id] ?: 0).purchases(),
                 )
             },
             dirty = stored == null || edited,
@@ -276,9 +265,9 @@ class EditCategoryViewModel(
             deleteDestinations = destinations.map { CategoryChoiceUiModel(it.id, it.name, it.icon, it.color) },
             // A draft has nothing to delete, and the last of its direction has nowhere to send its rows.
             canDelete = stored != null && destinations.isNotEmpty(),
-            showsTarget = settings != null && (direction ?: held.direction) == Direction.Expense,
+            showsTarget = offersTarget && (direction ?: held.direction) == Direction.Expense,
             target = counts.typedTarget ?: myTarget?.amount?.wholeUnits()?.toString().orEmpty(),
-            targetHint = rows.suggestedTarget(categoryId, clock.now().dateIn(HomeTime))?.let { targetCopy().usualWeek(it.formatCompact()) } ?: targetCopy().fieldHint,
+            targetHint = stats.suggestedTarget?.let { targetCopy().usualWeek(it.formatCompact()) } ?: targetCopy().fieldHint,
             targetNote = counts.target?.takeIf { it.categoryId != categoryId && !counts.typedTarget.isNullOrEmpty() }?.let { other ->
                 targetCopy().replaces(other.amount.formatCompact(), known.firstOrNull { it.id == other.categoryId }?.name.orEmpty())
             },

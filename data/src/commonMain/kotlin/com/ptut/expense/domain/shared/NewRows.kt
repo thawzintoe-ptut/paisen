@@ -18,3 +18,7 @@ fun SharedSnapshot.newFromOthers(group: SharedGroup): List<String> {
         payments.filter { it.groupId == group.id }.map { it.authorMemberId to it.createdAtEpochMillis }
     return written.mapNotNull { (author, at) -> author?.takeIf { !group.isMe(it) && at > seen } }
 }
+
+/** Another member's row after [mark]. Never on a first visit, when everything would be new, nor for this phone's own rows. */
+fun SharedGroup.isNewToMe(author: String?, atEpochMillis: Long, mark: Long?): Boolean =
+    mark != null && author != null && !isMe(author) && atEpochMillis > mark

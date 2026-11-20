@@ -7,15 +7,17 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Transaction
-import com.ptut.expense.domain.evidenceDaysRemaining
 import com.ptut.expense.domain.isAutomatic
-import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.ledger.LedgerSpan
+import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
 import com.ptut.expense.domain.metaLine
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.formatMinor
+import com.ptut.expense.domain.slip.DiscardSlipWithUndoUseCase
+import com.ptut.expense.domain.slip.GetSoonestEvidenceExpiryUseCase
+import com.ptut.expense.domain.slip.ObserveQueuedSlipsUseCase
 import com.ptut.expense.domain.slip.shownShop
-import com.ptut.expense.importer.SlipDiscards
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.DisplayAmount
 import com.ptut.expense.ui.Haptics
@@ -36,23 +38,24 @@ import kotlin.time.Duration
  * can hand a composable a null and let it decide what a missing number looks like.
  */
 class ReviewViewModel(
-    ledger: LedgerRepository,
-    private val discards: SlipDiscards,
+    observeQueuedSlips: ObserveQueuedSlipsUseCase,
+    observeTransactions: ObserveTransactionsUseCase,
+    private val discardSlip: DiscardSlipWithUndoUseCase,
     /**
      * NFR-4's window as the reader set it. Read when the screen is built rather than observed: a
      * note that changed the deadline under the reader's thumb would be harder to trust, not easier.
      */
     private val retention: Duration = EvidenceRetention,
-    private val clock: Clock = Clock.System,
+    clock: Clock = Clock.System,
     /** #114: a haptic on every save and delete, played by the shell. */
     private val haptics: Haptics = Haptics(),
+    private val soonestExpiry: GetSoonestEvidenceExpiryUseCase = GetSoonestEvidenceExpiryUseCase(clock),
 ) : ViewModel() {
 
     val uiState: StateFlow<ReviewUiState> = combine(
-        ledger.queuedSlips,
-        ledger.recentTransactions,
-        discards.pending,
-    ) { slips, snapshot, pending -> slips.filterNot { it.id in pending }.toUiState(snapshot.filedRows()) }
+        observeQueuedSlips(),
+        observeTransactions(LedgerSpan.Recent),
+    ) { slips, snapshot -> slips.toUiState(snapshot.filedRows()) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
@@ -61,11 +64,11 @@ class ReviewViewModel(
 
     /**
      * FR-8. The card leaves at once and comes back on Undo. The row and its picture go when the
-     * Undo window closes, and [SlipDiscards] does that, not this class.
+     * Undo window closes, and [discardSlip] does that, not this class.
      */
     fun discard(id: String) {
         viewModelScope.launch {
-            discards.discard(id)
+            discardSlip(id)
             haptics.deleted()
         }
     }
@@ -106,9 +109,7 @@ class ReviewViewModel(
      * and quoting the newest slip's would promise time the oldest does not have.
      */
     private fun List<QueuedSlip>.retentionNote(): String {
-        val soonest = minOfOrNull {
-            evidenceDaysRemaining(it.capturedAtEpochMillis, clock.now().toEpochMilliseconds(), retention)
-        }
+        val soonest = soonestExpiry(this, retention)
         return AppText.copy.slips.retentionNote(retention.inWholeDays, soonest)
     }
 }

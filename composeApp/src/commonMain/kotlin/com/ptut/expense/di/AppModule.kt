@@ -17,7 +17,9 @@ import com.ptut.expense.data.repository.RoomSharedRepository
 import com.ptut.expense.data.repository.RoomWatchedFolderRepository
 import com.ptut.expense.debug.DebugSlipViewModel
 import com.ptut.expense.domain.backup.LedgerArchive
+import com.ptut.expense.domain.backup.RestoreDriver
 import com.ptut.expense.domain.categories.CategoryRepository
+import com.ptut.expense.domain.domainModule
 import com.ptut.expense.domain.folders.FirstRunFolders
 import com.ptut.expense.domain.folders.FolderCatalog
 import com.ptut.expense.domain.folders.FolderReadTally
@@ -27,6 +29,7 @@ import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.settings.AppSettingsStore
+import com.ptut.expense.domain.shared.RunDueRepeatsUseCase
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.slip.ImportStore
 import com.ptut.expense.domain.slip.SlipPictures
@@ -49,7 +52,7 @@ import com.ptut.expense.platform.photos.CompositeSlipSource
 import com.ptut.expense.platform.photos.InMemorySlipSource
 import com.ptut.expense.platform.photos.PhotoAccessRequest
 import com.ptut.expense.platform.photos.SlipSource
-import com.ptut.expense.shared.RepeatRunner
+import com.ptut.expense.shared.RepeatReminderWords
 import com.ptut.expense.sync.syncModule
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastMessages
@@ -77,6 +80,9 @@ val viewModelModule: Module = module {
     // #114: raised where a save or delete lands, played by the shell like a toast.
     single { Haptics() }
 
+    // Each restore screen holds its own chosen file, so a factory.
+    factory { RestoreDriver(archive = get()) }
+
     // #219: a discarded slip waits until its Undo leaves the screen, however long that is (research finding 8).
     single {
         SlipDiscards(
@@ -87,9 +93,7 @@ val viewModelModule: Module = module {
         )
     }
 
-    // getOrNull: a screen test builds a graph with no folder seams in it, and the shell still
-    // has to start. On a device the binding is always there.
-    viewModel { AppViewModel(toasts = get(), importer = get(), firstRun = getOrNull(), screenReader = get()) }
+    viewModel { AppViewModel(toasts = get(), runStartupTasks = get(), screenReader = get()) }
 }
 
 /**
@@ -239,12 +243,12 @@ fun dataModule(databaseContext: PtutDatabaseContext): Module = module {
 
     /** NFR-4 and FR-3's answers, where they survive a process death. */
     single<AppSettingsStore> { appSettingsStore(databaseContext) }
-    single { PhoneCurrency { phoneCountry(databaseContext) } }
     single<LanguageStore> { languageStore(databaseContext) }
     single { repeatReminders(databaseContext) }
     single<SpeechInput> { speechInput(databaseContext) }
     single { screenReader(databaseContext) }
-    single { RepeatRunner(repository = get(), reminders = get()) }
+    // A single: its lock keeps two runs from adding the same repeat twice.
+    single { RunDueRepeatsUseCase(repository = get(), reminders = get(), words = RepeatReminderWords) }
 
     /**
      * First run's two platform halves: where the answer survives, and how the photo dialog is
@@ -281,6 +285,7 @@ fun appModules(databaseContext: PtutDatabaseContext, build: AppBuild): List<Modu
     slipSeamModule(build),
     syncModule(databaseContext),
     agentModule,
+    domainModule,
     viewModelModule,
 )
 
@@ -317,7 +322,7 @@ fun slipSeamModule(build: AppBuild): Module = module {
             RoutingSlipTextReader(image = platform, transcript = transcripts)
         }
 
-        viewModel { DebugSlipViewModel(source = get<InMemorySlipSource>(), importer = get()) }
+        viewModel { DebugSlipViewModel(source = get<InMemorySlipSource>(), runImport = get()) }
     } else {
         single<SlipSource> { getOrNull<SlipSeams>()?.source ?: UnavailableSlipSource() }
         single<SlipTextReader> { getOrNull<SlipSeams>()?.reader ?: UnavailableSlipTextReader() }

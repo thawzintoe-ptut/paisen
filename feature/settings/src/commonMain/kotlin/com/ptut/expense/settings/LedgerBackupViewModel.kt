@@ -3,15 +3,15 @@ package com.ptut.expense.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Home
-import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
-import com.ptut.expense.domain.backup.LedgerArchive
+import com.ptut.expense.domain.backup.BuildLedgerExportUseCase
+import com.ptut.expense.domain.backup.LedgerHolding
+import com.ptut.expense.domain.backup.ObserveLedgerHoldingUseCase
 import com.ptut.expense.domain.backup.RestoreDriver
 import com.ptut.expense.domain.backup.RestoreStep
-import com.ptut.expense.domain.dateIn
+import com.ptut.expense.domain.backup.ledgerFileName
 import com.ptut.expense.domain.dayAndMonth
-import com.ptut.expense.domain.ledger.LedgerRepository
-import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.ui.ToastMessage
@@ -25,7 +25,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlin.time.Clock
 
 data class LedgerBackupUiState(
     /** What the file will hold, counted rather than promised: "412 transactions, back to 3 Jun". */
@@ -60,11 +59,13 @@ data class LedgerBackupUiState(
  * own instance, which is fine — they are separate destinations, so only one is ever on top.
  */
 class LedgerBackupViewModel(
-    ledger: LedgerRepository,
-    private val archive: LedgerArchive,
+    observeHolding: ObserveLedgerHoldingUseCase,
+    /** Read, preview, then import or cancel; one per screen, since it holds the chosen file. */
+    private val restoring: RestoreDriver,
     private val files: LedgerFileStore,
     private val toasts: ToastMessages,
-    private val clock: Clock = Clock.System,
+    private val homeToday: GetHomeTodayUseCase,
+    private val buildExport: BuildLedgerExportUseCase,
 ) : ViewModel() {
 
     /**
@@ -74,22 +75,21 @@ class LedgerBackupViewModel(
      */
     private val busy = MutableStateFlow(false)
 
-    private val restoring = RestoreDriver(archive)
-
     val uiState: StateFlow<LedgerBackupUiState> = combine(
-        ledger.allTransactions,
+        observeHolding(),
         busy,
         restoring.step,
-    ) { snapshot, working, step -> state(snapshot, working, step.preview(), step.refusal()) }
+    ) { holding, working, step -> state(holding, working, step.preview(), step.refusal()) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
-            initialValue = state(LedgerSnapshot.Unanswered, working = false, preview = null, refused = null),
+            initialValue = state(holding = null, working = false, preview = null, refused = null),
         )
 
     /** FR-22 out. Nothing is said when the picker is cancelled — backing out is not a failure. */
     fun export() = whileFree {
-        val landedAt = files.write(fileName(), archive.export())
+        val export = buildExport()
+        val landedAt = files.write(export.fileName, export.contents)
         landedAt?.let { toasts.show(ToastMessage(AppText.copy.settings.savedTo(it))) }
     }
 
@@ -133,17 +133,11 @@ class LedgerBackupViewModel(
         }
     }
 
-    /** The home date, so two exports on the same evening in two zones do not disagree. */
-    private fun fileName(): String {
-        val today = clock.now().dateIn(HomeTime)
-        return "ptut-ledger-$today.json"
-    }
-
-    private fun state(snapshot: LedgerSnapshot, working: Boolean, preview: String?, refused: String?) = LedgerBackupUiState(
-        holding = snapshot.holding(),
-        fileName = fileName(),
+    private fun state(holding: LedgerHolding?, working: Boolean, preview: String?, refused: String?) = LedgerBackupUiState(
+        holding = holding.phrase(),
+        fileName = ledgerFileName(homeToday()),
         busy = working,
-        exportable = snapshot is LedgerSnapshot.Rows && snapshot.transactions.isNotEmpty(),
+        exportable = holding != null && holding.transactions > 0,
         preview = preview,
         refused = refused,
     )
@@ -152,18 +146,12 @@ class LedgerBackupViewModel(
      * "Not counted yet" rather than a zero while the query is out. A reader told the file will hold
      * nothing does not tap export, and the ledger they are looking at is not empty.
      */
-    private fun LedgerSnapshot.holding(): String = when (this) {
-        LedgerSnapshot.Unanswered -> AppText.copy.settings.counting
-
-        is LedgerSnapshot.Rows -> when {
-            transactions.isEmpty() -> AppText.copy.settings.nothingToExport
-
-            else -> {
-                val oldest = transactions.minOf { it.occurredAtEpochMillis }
-                    .dateIn(HomeTime)
-                    .dayAndMonth()
-                AppText.copy.settings.holding(transactions.size, oldest)
-            }
+    private fun LedgerHolding?.phrase(): String {
+        val oldest = this?.oldest
+        return when {
+            this == null -> AppText.copy.settings.counting
+            oldest == null -> AppText.copy.settings.nothingToExport
+            else -> AppText.copy.settings.holding(transactions, oldest.dayAndMonth())
         }
     }
 

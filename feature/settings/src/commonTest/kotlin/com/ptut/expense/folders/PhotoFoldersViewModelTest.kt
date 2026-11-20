@@ -1,8 +1,12 @@
 package com.ptut.expense.folders
 
+import com.ptut.expense.domain.folders.ApplyWatchedFoldersUseCase
 import com.ptut.expense.domain.folders.DeviceFolder
 import com.ptut.expense.domain.folders.FakeFolders
 import com.ptut.expense.domain.folders.FolderCatalog
+import com.ptut.expense.domain.folders.FolderChooser
+import com.ptut.expense.domain.folders.ObserveWatchedFoldersUseCase
+import com.ptut.expense.domain.folders.RefreshFolderCatalogUseCase
 import com.ptut.expense.domain.folders.WatchedFolder
 import com.ptut.expense.domain.folders.WatchedFolderRepository
 import com.ptut.expense.locale.AppText
@@ -133,7 +137,7 @@ class PhotoFoldersViewModelTest {
     @Test
     fun `a tick changes nothing until save and save starts or stops watching`() = runTest {
         val repository = FakeFolders()
-        val model = watching(PhotoFoldersViewModel(FakeCatalog(listOf(device("kplus", "K PLUS", "Pictures/K PLUS"))), repository))
+        val model = watching(photoFolders(FakeCatalog(listOf(device("kplus", "K PLUS", "Pictures/K PLUS"))), repository))
         runCurrent()
 
         model.onToggle("kplus")
@@ -158,7 +162,7 @@ class PhotoFoldersViewModelTest {
             listOf(watched("kplus", "K PLUS", "Pictures/K PLUS", slipsRead = 312, checked = true)),
         )
         val model = watching(
-            PhotoFoldersViewModel(FakeCatalog(listOf(device("kplus", "K PLUS", "Pictures/K PLUS"))), repository),
+            photoFolders(FakeCatalog(listOf(device("kplus", "K PLUS", "Pictures/K PLUS"))), repository),
         )
         runCurrent()
 
@@ -179,7 +183,7 @@ class PhotoFoldersViewModelTest {
         val toasts = ToastMessages()
         val repository = RefusingFolders(refuses = "camera")
         val catalog = FakeCatalog(listOf(device("camera"), device("kplus")))
-        val model = watching(PhotoFoldersViewModel(catalog, repository, toasts = toasts))
+        val model = watching(photoFolders(catalog, repository, toasts = toasts))
         runCurrent()
 
         model.onToggle("camera")
@@ -195,7 +199,7 @@ class PhotoFoldersViewModelTest {
     @Test
     fun `a catalogue that throws says so and leaves the screen usable`() = runTest {
         val toasts = ToastMessages()
-        val model = watching(PhotoFoldersViewModel(BrokenCatalog(), FakeFolders(), toasts = toasts))
+        val model = watching(photoFolders(BrokenCatalog(), FakeFolders(), toasts = toasts))
         runCurrent()
 
         assertEquals(ToastMessage(AppText.copy.folders.notRead, tone = ToastTone.Error), toasts.messages.first())
@@ -206,7 +210,7 @@ class PhotoFoldersViewModelTest {
     fun `a chooser that throws says so and still reads the folders again`() = runTest {
         val toasts = ToastMessages()
         val model = watching(
-            PhotoFoldersViewModel(FakeCatalog(listOf(device("kplus"))), FakeFolders(), chooser = { error("no screen") }, toasts = toasts),
+            photoFolders(FakeCatalog(listOf(device("kplus"))), FakeFolders(), chooser = { error("no screen") }, toasts = toasts),
         )
         runCurrent()
 
@@ -227,7 +231,20 @@ class PhotoFoldersViewModelTest {
 
     /** [PhotoFoldersUiState] is shared while subscribed, so a test with no collector reads the seed. */
     private fun TestScope.viewModel(offers: List<DeviceFolder>, watched: List<WatchedFolder>) =
-        watching(PhotoFoldersViewModel(FakeCatalog(offers), FakeFolders(watched)))
+        watching(photoFolders(FakeCatalog(offers), FakeFolders(watched)))
+
+    private fun photoFolders(
+        catalog: FolderCatalog,
+        folders: WatchedFolderRepository,
+        chooser: FolderChooser = FolderChooser {},
+        toasts: ToastMessages? = null,
+    ) = PhotoFoldersViewModel(
+        refreshCatalog = RefreshFolderCatalogUseCase(catalog),
+        observeFolders = ObserveWatchedFoldersUseCase(folders),
+        applyWatchedFolders = ApplyWatchedFoldersUseCase(folders),
+        chooser = chooser,
+        toasts = toasts,
+    )
 
     private fun TestScope.watching(model: PhotoFoldersViewModel): PhotoFoldersViewModel {
         backgroundScope.launch { model.uiState.collect {} }

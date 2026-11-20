@@ -1,18 +1,8 @@
-package com.ptut.expense.shared
+package com.ptut.expense.domain.shared
 
 import com.ptut.expense.domain.HomeTime
+import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.dateIn
-import com.ptut.expense.domain.formatCompact
-import com.ptut.expense.domain.shared.Currencies
-import com.ptut.expense.domain.shared.RepeatRule
-import com.ptut.expense.domain.shared.SharedGroup
-import com.ptut.expense.domain.shared.SharedRepository
-import com.ptut.expense.domain.shared.convert
-import com.ptut.expense.domain.shared.dayBefore
-import com.ptut.expense.domain.shared.money
-import com.ptut.expense.domain.shared.moneyFormat
-import com.ptut.expense.domain.shared.next
-import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.notify.ReminderPlan
 import com.ptut.expense.platform.notify.RepeatReminders
 import kotlinx.coroutines.sync.Mutex
@@ -21,18 +11,27 @@ import kotlinx.datetime.atTime
 import kotlinx.datetime.toInstant
 import kotlin.time.Clock
 
+/** A repeat reminder's words. The screens' copy writes them, so the domain holds no sentence. */
+interface ReminderWords {
+    fun title(description: String): String
+
+    /** [amount] is already in [group]'s money. */
+    fun body(amount: Satang, group: SharedGroup): String
+}
+
 /**
- * #182: adds every repeat due today (Bangkok), then lines up each one's next reminder. Runs when
- * the app starts or comes back, after sync pulls, and in Android's background run.
+ * #182: adds every repeat due today (Bangkok), then lines up each next reminder. One instance per app, since two runs
+ * at once would add the same repeat twice: start, resume, sync and Android's background run share its lock.
  */
-class RepeatRunner(
+class RunDueRepeatsUseCase(
     private val repository: SharedRepository,
     private val reminders: RepeatReminders,
+    private val words: ReminderWords,
     private val clock: Clock = Clock.System,
 ) {
     private val running = Mutex()
 
-    suspend fun run() = running.withLock {
+    suspend operator fun invoke() = running.withLock {
         val today = clock.now().dateIn(HomeTime)
         repository.addDueRepeats(today)
         if (reminders.allowed()) reminders.replaceAll(plans())
@@ -43,22 +42,18 @@ class RepeatRunner(
         val now = clock.now()
         val today = now.dateIn(HomeTime)
         val snapshot = repository.snapshot.value
-        val text = AppText.copy.shared.repeat
         return snapshot.repeats.filter { it.active && it.remind }.mapNotNull { rule ->
             val group = snapshot.group(rule.groupId) ?: return@mapNotNull null
             val at = rule.next(today).map { it.dayBefore().atTime(REMIND_HOUR, 0).toInstant(HomeTime) }.firstOrNull { it > now }
                 ?: return@mapNotNull null
             ReminderPlan(
                 id = rule.id,
-                title = text.reminderTitle(rule.description),
-                body = text.reminderBody(rule.amountIn(group), group.name),
+                title = words.title(rule.description),
+                body = words.body(convert(rule.amountMinor, Currencies.of(rule.currency), rule.rate, group.money), group),
                 atEpochMillis = at.toEpochMilliseconds(),
             )
         }
     }
-
-    private fun RepeatRule.amountIn(group: SharedGroup): String =
-        convert(amountMinor, Currencies.of(currency), rate, group.money).formatCompact(group.moneyFormat())
 
     private companion object {
         /** The PDF names no hour; decided 13 Oct in #182: 09:00 Bangkok. */

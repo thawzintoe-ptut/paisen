@@ -25,6 +25,7 @@ import com.ptut.expense.di.AppBuild
 import com.ptut.expense.di.viewModelModule
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.MergeReport
+import com.ptut.expense.domain.domainModule
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.SampleLedgerRepository
 import com.ptut.expense.domain.settings.AppChoices
@@ -86,6 +87,8 @@ class PtutAppTest {
         configuration = koinConfiguration {
             modules(
                 viewModelModule,
+                // The ViewModels ask their use cases from here; the data underneath is this graph's own.
+                domainModule,
                 module {
                     single<LedgerRepository> { SampleLedgerRepository(sinceLastImport = sinceLastImport) }
                     // Settings resolves all three to draw its rows, and the release build is

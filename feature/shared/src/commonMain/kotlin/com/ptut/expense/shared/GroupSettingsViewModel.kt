@@ -2,14 +2,17 @@ package com.ptut.expense.shared
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.domain.runSuspendCatching
+import com.ptut.expense.domain.shared.AddMembersUseCase
+import com.ptut.expense.domain.shared.EditGroupUseCase
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.NewMember
-import com.ptut.expense.domain.shared.SharedRepository
-import com.ptut.expense.sync.ChangesWaiting
-import com.ptut.expense.sync.SharedSync
+import com.ptut.expense.domain.shared.RemoveGroupResult
+import com.ptut.expense.domain.shared.RemoveGroupUseCase
+import com.ptut.expense.domain.shared.RemoveMemberUseCase
+import com.ptut.expense.domain.shared.RenewInviteUseCase
+import com.ptut.expense.domain.shared.ShareGroupUseCase
+import com.ptut.expense.domain.shared.SwitchOffInviteUseCase
 import com.ptut.expense.sync.syncMessage
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -20,10 +23,13 @@ import kotlinx.coroutines.launch
  */
 class GroupSettingsViewModel(
     private val groupId: String,
-    private val repository: SharedRepository,
-    private val sync: SharedSync? = null,
-    /** #203: rebuilds repeat reminders once a group has gone from this phone. */
-    private val runner: RepeatRunner? = null,
+    private val editGroupUseCase: EditGroupUseCase,
+    private val removeGroupUseCase: RemoveGroupUseCase,
+    private val addMembers: AddMembersUseCase,
+    private val removeMemberUseCase: RemoveMemberUseCase,
+    private val shareGroup: ShareGroupUseCase,
+    private val renewInvite: RenewInviteUseCase,
+    private val switchOffInvite: SwitchOffInviteUseCase,
 ) : ViewModel() {
 
     private val action = MutableStateFlow(InviteActionState())
@@ -38,8 +44,7 @@ class GroupSettingsViewModel(
     val isRemoved: StateFlow<Boolean> = removed
 
     fun editGroup(name: String, type: GroupType, icon: String) {
-        if (name.isBlank()) return
-        viewModelScope.launch { repository.editGroup(groupId, name, type, icon) }
+        viewModelScope.launch { editGroupUseCase(groupId, name, type, icon) }
     }
 
     /**
@@ -47,37 +52,31 @@ class GroupSettingsViewModel(
      * first and asks again before [anyway] drops what still could not go (#218).
      */
     fun removeGroup(anyway: Boolean = false) {
-        val group = repository.snapshot.value.group(groupId) ?: return
         viewModelScope.launch {
             groupAction.value = GroupActionState(working = true)
-            groupAction.value = try {
-                when (group.removal()) {
-                    GroupRemoval.DeleteHere -> repository.deleteGroup(groupId)
-                    GroupRemoval.DeleteForEveryone -> requireNotNull(sync).deleteForEveryone(groupId)
-                    GroupRemoval.Leave -> requireNotNull(sync).leaveGroup(groupId, dropUnsent = anyway)
+            groupAction.value = when (val result = removeGroupUseCase(groupId, dropUnsent = anyway)) {
+                RemoveGroupResult.Removed -> {
+                    removed.value = true
+                    GroupActionState()
                 }
-                runSuspendCatching { runner?.run() }
-                removed.value = true
-                GroupActionState()
-            } catch (waiting: ChangesWaiting) {
-                GroupActionState(waiting = waiting.count)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Exception) {
-                GroupActionState(error = failure.syncMessage())
+
+                RemoveGroupResult.Gone -> GroupActionState()
+
+                is RemoveGroupResult.Waiting -> GroupActionState(waiting = result.count)
+
+                is RemoveGroupResult.Failed -> GroupActionState(error = result.cause.syncMessage())
             }
         }
     }
 
     /** #218: names added after Create. In a shared group they sync, and each joins from the link. */
     fun addPeople(members: List<NewMember>) {
-        if (members.none { it.name.isNotBlank() }) return
-        viewModelScope.launch { repository.addMembers(groupId, members) }
+        viewModelScope.launch { addMembers(groupId, members) }
     }
 
-    /** #218: archives one name here; past splits keep it. The repository holds the creator-only rule. */
+    /** #218: archives one name here; past splits keep it. */
     fun removeMember(memberId: String) {
-        viewModelScope.launch { repository.removeMember(groupId, memberId) }
+        viewModelScope.launch { removeMemberUseCase(groupId, memberId) }
     }
 
     fun dismissGroupError() {
@@ -85,16 +84,16 @@ class GroupSettingsViewModel(
     }
 
     /** Shares the group the first time, then shows its link (#190). The caller has signed in. */
-    fun invite() = runInvite { sync?.share(groupId) }
+    fun invite() = runInvite { shareGroup(groupId) }
 
-    fun newLink() = runInvite { sync?.newInvite(groupId) }
+    fun newLink() = runInvite { renewInvite(groupId) }
 
-    fun switchOff() = runInvite { sync?.switchOffInvite(groupId) }
+    fun switchOff() = runInvite { switchOffInvite(groupId) }
 
-    private fun runInvite(work: suspend () -> Unit) {
+    private fun runInvite(work: suspend () -> Result<Unit>) {
         viewModelScope.launch {
             action.value = InviteActionState(working = true)
-            action.value = runSuspendCatching { work() }.fold(
+            action.value = work().fold(
                 onSuccess = { InviteActionState() },
                 onFailure = { failure -> InviteActionState(error = failure.syncMessage()) },
             )

@@ -10,8 +10,12 @@ import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
+import com.ptut.expense.domain.categories.CategoryRepository
+import com.ptut.expense.domain.categories.MoveCategoryUseCase
+import com.ptut.expense.domain.categories.ObserveMonthlySpendByCategoryUseCase
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
@@ -121,7 +125,7 @@ class CategoriesViewModelTest {
             at("food", 700_00, bangkok(2026, 8, 31, 23, 59)),
         )
         val model = watching(
-            CategoriesViewModel(ledger(rows), FakeCategories(listOf(food)), FixedClock(first)),
+            categoriesScreen(ledger(rows), FakeCategories(listOf(food)), FixedClock(first)),
         )
         runCurrent()
 
@@ -132,7 +136,7 @@ class CategoriesViewModelTest {
     fun `a move that fails keeps the order and says it did not work`() = runTest {
         val toasts = ToastMessages()
         val model = watching(
-            CategoriesViewModel(ledger(emptyList()), FakeCategories(listOf(food, groceries), failWrites = true), FixedClock(now), toasts = toasts),
+            categoriesScreen(ledger(emptyList()), FakeCategories(listOf(food, groceries), failWrites = true), FixedClock(now), toasts = toasts),
         )
         runCurrent()
 
@@ -157,7 +161,7 @@ class CategoriesViewModelTest {
     @Test
     fun `a renamed category reaches the screen without touching a transaction`() = runTest {
         val categories = FakeCategories(listOf(Category("food", "Food & drink", "restaurant")))
-        val model = watching(CategoriesViewModel(ledger(listOf(spend("food", 100_00, daysAgo = 1))), categories, FixedClock(now)))
+        val model = watching(categoriesScreen(ledger(listOf(spend("food", 100_00, daysAgo = 1))), categories, FixedClock(now)))
         runCurrent()
 
         categories.save(Category("food", "Eating", "restaurant"))
@@ -172,7 +176,7 @@ class CategoriesViewModelTest {
     @Test
     fun `an unanswered ledger is not drawn as a month of zeros`() = runTest {
         val model = watching(
-            CategoriesViewModel(
+            categoriesScreen(
                 UnansweredLedger(),
                 FakeCategories(listOf(Category("food", "Food & drink", "restaurant"))),
                 FixedClock(now),
@@ -253,7 +257,18 @@ class CategoriesViewModelTest {
         categories: List<Category>,
         subs: List<SubCategory> = emptyList(),
         transactions: List<Transaction> = emptyList(),
-    ) = watching(CategoriesViewModel(ledger(transactions), FakeCategories(categories, subs), FixedClock(now)))
+    ) = watching(categoriesScreen(ledger(transactions), FakeCategories(categories, subs), FixedClock(now)))
+
+    private fun categoriesScreen(
+        ledger: LedgerRepository,
+        categories: CategoryRepository,
+        clock: Clock,
+        toasts: ToastMessages? = null,
+    ) = CategoriesViewModel(
+        observeMonthlySpend = ObserveMonthlySpendByCategoryUseCase(ledger, categories, GetHomeTodayUseCase(clock)),
+        moveCategory = MoveCategoryUseCase(categories),
+        toasts = toasts,
+    )
 
     private fun TestScope.watching(model: CategoriesViewModel): CategoriesViewModel {
         backgroundScope.launch { model.uiState.collect {} }

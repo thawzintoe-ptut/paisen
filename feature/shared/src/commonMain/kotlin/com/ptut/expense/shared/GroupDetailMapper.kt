@@ -10,51 +10,33 @@ import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.ExpenseTitle
+import com.ptut.expense.domain.shared.GroupDetail
+import com.ptut.expense.domain.shared.GroupFeedItem
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.PaymentMethod
 import com.ptut.expense.domain.shared.PromptPay
-import com.ptut.expense.domain.shared.SharedExpense
 import com.ptut.expense.domain.shared.SharedGroup
-import com.ptut.expense.domain.shared.SharedSnapshot
-import com.ptut.expense.domain.shared.convert
-import com.ptut.expense.domain.shared.currentExpenses
-import com.ptut.expense.domain.shared.effectFor
 import com.ptut.expense.domain.shared.formatMinor
-import com.ptut.expense.domain.shared.money
 import com.ptut.expense.domain.shared.moneyFormat
-import com.ptut.expense.domain.shared.myNet
-import com.ptut.expense.domain.shared.nets
-import com.ptut.expense.domain.shared.paymentsIn
-import com.ptut.expense.domain.shared.running
-import com.ptut.expense.domain.shared.totalSpend
-import com.ptut.expense.domain.shared.whoPaysWhom
-import com.ptut.expense.domain.sum
 import com.ptut.expense.domain.timeOfDayIn
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.sync.GroupSyncStatus
 import com.ptut.expense.sync.InviteLinks
 import com.ptut.expense.sync.SyncHealth
-import kotlinx.datetime.LocalDate
 
 /**
- * #137's group screen from one snapshot: the members, your balance and the spend in the group's
- * money (#48), and the feed by day (p27). [today] and [seen] come in, so nothing here reads a clock.
+ * #137's group screen from [GroupDetail]: the members, your balance and the spend in the group's
+ * money (#48), and the feed by day (p27). Words only; every figure comes worked out.
  */
 internal class GroupDetailMapper(private val categories: List<Category>) {
 
-    fun loaded(
-        snapshot: SharedSnapshot,
-        group: SharedGroup,
-        seen: Long?,
-        today: LocalDate,
-        status: GroupSyncStatus,
-        syncAvailable: Boolean,
-    ): GroupDetailUiState.Loaded = snapshot.loaded(group, seen, today).withSync(group, status, syncAvailable)
+    fun loaded(detail: GroupDetail, status: GroupSyncStatus, syncAvailable: Boolean): GroupDetailUiState.Loaded =
+        detail.loaded().withSync(detail, status, syncAvailable)
 
-    private fun GroupDetailUiState.Loaded.withSync(group: SharedGroup, status: GroupSyncStatus, syncAvailable: Boolean): GroupDetailUiState.Loaded {
-        val chips = members.map { chip -> chip.copy(joined = !group.remote || chip.isMe || group.member(chip.id)?.claimedByUid != null) }
+    private fun GroupDetailUiState.Loaded.withSync(detail: GroupDetail, status: GroupSyncStatus, syncAvailable: Boolean): GroupDetailUiState.Loaded {
+        val chips = members.map { chip -> chip.copy(joined = chip.id in detail.joined) }
         // withStatus reads each chip's joined flag, so the chips go in first.
-        return withChips(chips).withStatus(group, status, syncAvailable)
+        return withChips(chips).withStatus(detail, status, syncAvailable)
     }
 
     private fun GroupDetailUiState.Loaded.withChips(chips: List<MemberChipUiModel>): GroupDetailUiState.Loaded {
@@ -67,31 +49,28 @@ internal class GroupDetailMapper(private val categories: List<Category>) {
         )
     }
 
-    private fun GroupDetailUiState.Loaded.withStatus(group: SharedGroup, status: GroupSyncStatus, syncAvailable: Boolean): GroupDetailUiState.Loaded {
+    private fun GroupDetailUiState.Loaded.withStatus(detail: GroupDetail, status: GroupSyncStatus, syncAvailable: Boolean): GroupDetailUiState.Loaded {
+        val group = detail.group
         val syncs = group.remote && syncAvailable
-        val createdHere = group.createdHere()
         return copy(
             notJoinedLine = members.filterNot { it.joined }.map { it.name }.joinedLine(),
             syncLine = status.syncLine(),
             canInvite = syncAvailable,
             canRefresh = syncs,
             canRetrySync = syncs && status.offersRetry(),
-            isCreator = !group.remote || group.creatorUid == null || createdHere,
-            removal = group.removal(),
+            isCreator = detail.isCreator,
+            removal = detail.removal,
             invite = group.inviteCode?.let { InviteUiModel(it, InviteLinks.link(it), group.inviteActive) },
             signedOut = status.health == SyncHealth.SignedOut,
-            canRemovePeople = !group.remote || createdHere,
+            canRemovePeople = detail.canRemovePeople,
         )
     }
 
-    private fun SharedSnapshot.loaded(group: SharedGroup, seen: Long?, today: LocalDate): GroupDetailUiState.Loaded {
+    private fun GroupDetail.loaded(): GroupDetailUiState.Loaded {
         val text = AppText.copy.shared
-        val net = myNet(group.id)
         val money = group.moneyFormat()
-        val balances = nets(group.id)
-        val allSquare = balances.values.all { it == Satang.Zero }
-        val days = feed(group, seen, today)
-        val settleUp = settleUp(group)
+        val feed = days.map { day -> GroupDay(day.date, dayHeading(day.date, today), day.items.map { it.row(group) }) }
+        val settleUp = settleUpRow()
         return GroupDetailUiState.Loaded(
             groupId = group.id,
             name = group.name,
@@ -104,31 +83,33 @@ internal class GroupDetailMapper(private val categories: List<Category>) {
             },
             balance = net.magnitude(),
             tone = net.tone(),
-            spendLine = if (days.isEmpty()) {
+            spendLine = if (feed.isEmpty()) {
                 text.detail.nothingSpent(group.currency)
             } else {
-                text.detail.spendLine(group.type == GroupType.Trip, totalSpend(group.id).formatCompact(money), group.currency)
+                text.detail.spendLine(group.type == GroupType.Trip, totalSpend.formatCompact(money), group.currency)
             },
             money = money,
-            settled = allSquare,
+            settled = everyoneSquare,
             settleUp = settleUp,
             balanceChip = when {
-                days.isEmpty() -> text.detail.nothingToSettle
+                feed.isEmpty() -> text.detail.nothingToSettle
                 settleUp != null -> null
-                allSquare -> text.detail.allSettledUp
+                everyoneSquare -> text.detail.allSettledUp
                 else -> text.detail.settledHere
             },
-            hasActivity = days.isNotEmpty(),
+            hasActivity = feed.isNotEmpty(),
             memberLine = if (group.activeMembers.size <= 1) text.detail.justYou else text.home.peopleCount(group.activeMembers.size),
-            days = days,
+            days = feed,
             type = group.type,
             icon = group.icon,
             myPromptPay = group.member(group.meMemberId.orEmpty())?.promptPayId?.let(PromptPay::masked),
-            repeats = repeatRows(group, today),
+            repeats = repeats.map { (rule, amount) ->
+                RepeatRowUiModel(id = rule.id, name = rule.description, line = "${rule.anchorLine()}${Separators.DOT}${amount.formatCompact(money)}")
+            },
             others = group.activeMembers.filterNot { group.isMe(it.id) }.map { member ->
                 GroupPersonUiModel(member.id, member.name, settled = (balances[member.id] ?: Satang.Zero) == Satang.Zero)
             },
-            addable = people.filter { person -> !person.archived && group.activeMembers.none { it.personId == person.id } },
+            addable = addable,
         )
     }
 
@@ -140,60 +121,42 @@ internal class GroupDetailMapper(private val categories: List<Category>) {
             .map { MemberChipUiModel(it.id, if (isMe(it.id)) you else it.initial(), isMe(it.id), name = if (isMe(it.id)) you else it.name) }
     }
 
-    /** Expenses and payments together, newest first, by day. */
-    private fun SharedSnapshot.feed(group: SharedGroup, seen: Long?, today: LocalDate): List<GroupDay> {
+    /** #63: settle with the other side of the largest debt that involves you. */
+    private fun GroupDetail.settleUpRow(): SettleUpUiModel? = settleUp?.let { transfer ->
+        val other = if (transfer.fromMemberId == group.meMemberId) transfer.toMemberId else transfer.fromMemberId
+        val line = AppText.copy.shared.detail.settleWith(group.displayName(other), transfer.amount.formatCompact(group.moneyFormat()))
+        SettleUpUiModel(transfer.fromMemberId, transfer.toMemberId, line)
+    }
+
+    private fun GroupFeedItem.row(group: SharedGroup): GroupFeedRow = when (this) {
+        is GroupFeedItem.Expense -> expenseRow(group)
+        is GroupFeedItem.Payment -> paymentRow(group)
+    }
+
+    private fun GroupFeedItem.Payment.paymentRow(group: SharedGroup): GroupFeedRow.Payment {
         val text = AppText.copy.shared
-        val money = group.moneyFormat()
-        val expenseRows = currentExpenses(group.id).map { it.occurredAtEpochMillis to it.row(group, seen) }
-        val paymentRows = paymentsIn(group.id).map { payment ->
-            val author = payment.authorMemberId?.let { group.displayName(it) } ?: text.someone
-            payment.occurredAtEpochMillis to GroupFeedRow.Payment(
-                id = payment.id,
-                title = text.detail.paid(group.displayName(payment.fromMemberId), group.displayName(payment.toMemberId)),
-                detail = text.detail.settlement(payment.method.label()),
-                amount = payment.amount.format(money),
-                occurred = payment.occurredAtEpochMillis.dayAndTime(),
-                recorded = text.log.recordedBy(author, payment.createdAtEpochMillis.dayAndTime()),
-                isNew = group.isNewToMe(payment.authorMemberId, payment.createdAtEpochMillis, seen),
-            )
-        }
-        return (expenseRows + paymentRows)
-            .sortedByDescending { it.first }
-            .groupBy { (at, _) -> at.dateIn(HomeTime) }
-            .map { (date, rows) -> GroupDay(date, dayHeading(date, today), rows.map { it.second }) }
+        val author = payment.authorMemberId?.let { group.displayName(it) } ?: text.someone
+        return GroupFeedRow.Payment(
+            id = payment.id,
+            title = text.detail.paid(group.displayName(payment.fromMemberId), group.displayName(payment.toMemberId)),
+            detail = text.detail.settlement(payment.method.label()),
+            amount = payment.amount.format(group.moneyFormat()),
+            occurred = payment.occurredAtEpochMillis.dayAndTime(),
+            recorded = text.log.recordedBy(author, payment.createdAtEpochMillis.dayAndTime()),
+            isNew = isNew,
+        )
     }
-
-    /** #63: the largest debt that involves you, or null when you have nothing to settle. */
-    private fun SharedSnapshot.settleUp(group: SharedGroup): SettleUpUiModel? {
-        val me = group.meMemberId
-        return whoPaysWhom(group.id).transfers
-            .filter { it.fromMemberId == me || it.toMemberId == me }
-            .maxByOrNull { it.amount }
-            ?.let { transfer ->
-                val other = if (transfer.fromMemberId == me) transfer.toMemberId else transfer.fromMemberId
-                val line = AppText.copy.shared.detail.settleWith(group.displayName(other), transfer.amount.formatCompact(group.moneyFormat()))
-                SettleUpUiModel(transfer.fromMemberId, transfer.toMemberId, line)
-            }
-    }
-
-    private fun SharedSnapshot.repeatRows(group: SharedGroup, today: LocalDate): List<RepeatRowUiModel> =
-        repeats.filter { it.groupId == group.id && it.running(today) }.map { rule ->
-            val amount = convert(rule.amountMinor, Currencies.of(rule.currency), rule.rate, group.money).formatCompact(group.moneyFormat())
-            RepeatRowUiModel(id = rule.id, name = rule.description, line = "${rule.anchorLine()}${Separators.DOT}$amount")
-        }
 
     /** "Tom paid ₫1,850,000", then what it means for you in the group's money: you owe, you lent, or not involved. */
-    private fun SharedExpense.row(group: SharedGroup, seen: Long?): GroupFeedRow.Expense {
+    private fun GroupFeedItem.Expense.expenseRow(group: SharedGroup): GroupFeedRow.Expense {
         val text = AppText.copy.shared
-        val me = group.meMemberId
-        val mine = shares.filter { it.memberId == me }.map { it.satang }.sum()
-        val effect = effectFor(me)
-        val involved = payerMemberId == me || shares.any { it.memberId == me }
+        val (involved, effect, mine) = part
+        val category = categories.firstOrNull { it.id == expense.categoryId }
         return GroupFeedRow.Expense(
-            id = id,
-            icon = categories.firstOrNull { it.id == categoryId }?.icon ?: DEFAULT_ICON,
-            title = ExpenseTitle.shown(note, description, categories.firstOrNull { it.id == categoryId }?.name),
-            detail = text.detail.payerPaid(group.displayName(payerMemberId), formatMinor(amountMinor, Currencies.of(currency))),
+            id = expense.id,
+            icon = category?.icon ?: DEFAULT_ICON,
+            title = ExpenseTitle.shown(expense.note, expense.description, category?.name),
+            detail = text.detail.payerPaid(group.displayName(expense.payerMemberId), formatMinor(expense.amountMinor, Currencies.of(expense.currency))),
             word = when {
                 !involved -> text.detail.notInvolved
                 effect > Satang.Zero -> text.detail.youLent
@@ -202,26 +165,13 @@ internal class GroupDetailMapper(private val categories: List<Category>) {
             },
             amount = (if (effect == Satang.Zero) mine else effect.magnitude()).format(group.moneyFormat()),
             tone = if (involved) effect.tone() else BalanceTone.Settled,
-            isNew = group.isNewToMe(authorMemberId, createdAtEpochMillis, seen),
+            isNew = isNew,
         )
     }
 
     private companion object {
         const val DEFAULT_ICON = "receipt_long"
     }
-}
-
-/** The same rule the repository and Firestore's rules hold: only the creator removes a name. */
-internal fun SharedGroup.createdHere(): Boolean {
-    val myUid = member(meMemberId.orEmpty())?.claimedByUid
-    return creatorUid != null && creatorUid == myUid
-}
-
-/** What the menu's last item does to this group, see [GroupRemoval]. */
-internal fun SharedGroup.removal(): GroupRemoval = when {
-    !remote -> GroupRemoval.DeleteHere
-    createdHere() -> GroupRemoval.DeleteForEveryone
-    else -> GroupRemoval.Leave
 }
 
 /** #74: a failed sync, or changes still waiting, offer Try again; signed out asks to sign in instead. */

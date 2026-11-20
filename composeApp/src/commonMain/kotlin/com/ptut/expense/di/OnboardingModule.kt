@@ -1,6 +1,11 @@
 package com.ptut.expense.di
 
 import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.domain.backup.LedgerArchive
+import com.ptut.expense.domain.backup.RestoreDriver
+import com.ptut.expense.domain.home.ChooseHomeUseCase
+import com.ptut.expense.domain.home.HomeBook
+import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.onboarding.Onboarding
 import com.ptut.expense.onboarding.OnboardingViewModel
 import org.koin.core.module.Module
@@ -20,16 +25,13 @@ val onboardingModule: Module = module {
         OnboardingViewModel(
             onboarding = get(),
             photoAccess = get(),
-            archive = getOrNull(),
+            // getOrNull on both: a screen test may bind no archive or home book; RESTORE or the home then does nothing.
+            restoreSteps = getOrNull<LedgerArchive>()?.let { get<RestoreDriver>() },
             files = getOrNull(),
             toasts = get(),
-            homeBook = getOrNull(),
-            // #41: first run suggests the phone's money and zone.
-            suggestedHome = if (currenciesOn()) {
-                HomeChoice(phoneCurrency().toHomeMoney(), phoneZone())
-            } else {
-                null
-            },
+            chooseHomeUseCase = getOrNull<HomeBook>()?.let { get<ChooseHomeUseCase>() },
+            // #41: first run starts every ledger in baht, in this phone's zone; Settings changes the money.
+            firstRunHome = if (currenciesOn()) HomeChoice(Currencies.Thb.toHomeMoney(), phoneZone()) else null,
         )
     }
 }

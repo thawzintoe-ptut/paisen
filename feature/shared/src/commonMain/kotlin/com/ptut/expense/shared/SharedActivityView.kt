@@ -34,6 +34,7 @@ import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
 import com.ptut.expense.design.tappable
+import com.ptut.expense.domain.shared.ActivityFilter
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.SharedLogCopy
 import com.ptut.expense.ui.sky.SkyChip

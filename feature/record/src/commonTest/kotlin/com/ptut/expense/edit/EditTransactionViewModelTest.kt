@@ -10,8 +10,12 @@ import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.TransactionSource
+import com.ptut.expense.domain.ledger.EditTransactionUseCase
 import com.ptut.expense.domain.ledger.FakeLedger
+import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
 import com.ptut.expense.domain.ledger.rows
+import com.ptut.expense.domain.record.ObserveShareOptionsUseCase
 import com.ptut.expense.domain.rules.RememberedMerchant
 import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.domain.shared.ExpenseDraft
@@ -83,6 +87,22 @@ private val bts = SubCategory("bts", "transport", "BTS")
 
 private val transport = Category.seed().first { it.id == "transport" }
 private val groceries = Category.seed().first { it.id == "groceries" }
+
+/** Builds the screen over this file's fakes, as Koin builds it over the app's graph. */
+private fun EditTransactionViewModel(
+    transactionId: String,
+    ledger: LedgerRepository,
+    known: List<Category> = Category.seed(),
+    subCategories: List<SubCategory> = emptyList(),
+    shared: SharedRepository? = null,
+): EditTransactionViewModel = EditTransactionViewModel(
+    transactionId = transactionId,
+    observeTransactions = ObserveTransactionsUseCase(ledger),
+    known = known,
+    subCategories = subCategories,
+    shareOptions = ObserveShareOptionsUseCase(shared),
+    editTransaction = EditTransactionUseCase(ledger, shared),
+)
 
 class EditTransactionViewModelTest : ViewModelTest() {
 

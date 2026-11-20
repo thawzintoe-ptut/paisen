@@ -4,11 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
-import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.RestoreDriver
 import com.ptut.expense.domain.backup.RestoreStep
-import com.ptut.expense.domain.home.HomeBook
-import com.ptut.expense.domain.shared.Currency
+import com.ptut.expense.domain.home.ChooseHomeUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.platform.photos.PhotoAccessRequest
@@ -23,7 +21,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -41,34 +38,24 @@ class OnboardingViewModel(
     private val onboarding: Onboarding,
     private val photoAccess: PhotoAccessRequest,
     /** RESTORE's two seams (#171). Null where a screen test binds no archive; RESTORE then does nothing. */
-    private val archive: LedgerArchive? = null,
+    private val restoreSteps: RestoreDriver? = null,
     private val files: LedgerFileStore? = null,
     private val toasts: ToastMessages? = null,
-    /** #41: where home is kept. Null where a test binds none; first run then sets nothing. */
-    private val homeBook: HomeBook? = null,
-    /** #41: what this phone suggests (its country's currency, its zone), or null where the build does not offer a home. */
-    suggestedHome: HomeChoice? = null,
+    /** #41: commits the home. Null where no home book is bound; first run then sets nothing. */
+    private val chooseHomeUseCase: ChooseHomeUseCase? = null,
+    /** #41: what first run sets, or null where the build does not offer a home. Settings changes it later. */
+    private val firstRunHome: HomeChoice? = null,
 ) : ViewModel() {
-
-    private val home = MutableStateFlow(suggestedHome)
-
-    /** #41: the home first run will set, shown as one line; null hides the line. */
-    val homeChoice: StateFlow<HomeChoice?> = home.asStateFlow()
-
-    /** The zone stays the phone's own; only the money changes. */
-    fun chooseHome(currency: Currency) = home.update { it?.copy(money = currency.toHomeMoney()) }
 
     /** Written before first run ends, while the ledger is still empty. */
     private suspend fun commitHome() {
-        home.value?.let { homeBook?.choose(it) }
+        chooseHomeUseCase?.invoke(firstRunHome)
     }
 
     private val restoring = MutableStateFlow(false)
 
     /** True while a restore is reading or merging, so RESTORE cannot be pressed twice. */
     val isRestoring: StateFlow<Boolean> = restoring.asStateFlow()
-
-    private val restoreSteps = archive?.let(::RestoreDriver)
 
     private val step: StateFlow<RestoreStep> = restoreSteps?.step ?: MutableStateFlow(RestoreStep.Idle)
 
@@ -111,7 +98,7 @@ class OnboardingViewModel(
 
     /** NFR-2's path for a reader who would rather type. The folder simply stays unread. */
     fun skip() {
-        if (home.value == null || homeBook == null) {
+        if (firstRunHome == null || chooseHomeUseCase == null) {
             onboarding.finish()
             return
         }
@@ -149,7 +136,7 @@ class OnboardingViewModel(
             val merged = restoreSteps.import { merge ->
                 // Before the restore, so a file with no home of its own lands in the chosen one; a file
                 // that carries one takes it over this. The launch home as chosen needs no rebuild.
-                if (home.value != Home.choice.value) commitHome()
+                if (firstRunHome != Home.choice.value) commitHome()
                 merge()
             } ?: return@whileRestoring
             toasts?.show(ToastMessage(merged.phrase()))

@@ -19,7 +19,6 @@ import com.ptut.expense.design.Sizes
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
-import com.ptut.expense.domain.Home
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
@@ -30,18 +29,6 @@ import com.ptut.expense.ui.sky.SkyIntro
 import com.ptut.expense.ui.sky.SkyListScreen
 import com.ptut.expense.ui.sky.SkyNoticeCard
 import com.ptut.expense.ui.sky.SkyRateRow
-
-/** The currency the Add sheet opens on, laid out like the language list. */
-@Composable
-fun AddCurrencyView(
-    uiState: AddCurrencyUiState,
-    onBack: () -> Unit,
-    onChoose: (String?) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val text = currencyCopy()
-    CurrencyListScreen(title = text.startsIn, intro = text.startsInIntro(Home.money.code), options = uiState.options, onBack = onBack, onChoose = onChoose, modifier = modifier)
-}
 
 /** #41: the ledger's home currency. [note] says why a choice did not apply straight away. */
 @Composable
@@ -92,7 +79,7 @@ private fun ConvertSheet(converting: ConvertUiModel, onRate: (String) -> Unit, o
     }
 }
 
-/** A currency list with one row ticked, shared by Add starts in and Home currency. */
+/** A currency list with one row ticked, laid out like the language list. */
 @Composable
 private fun CurrencyListScreen(
     title: String,

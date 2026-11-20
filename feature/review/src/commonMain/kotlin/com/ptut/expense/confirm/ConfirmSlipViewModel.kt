@@ -9,7 +9,6 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.ReviewReason
-import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.dateIn
@@ -18,22 +17,23 @@ import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
-import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.ledger.GetLastRateUseCase
+import com.ptut.expense.domain.record.priceForeignAmount
 import com.ptut.expense.domain.rules.ShopNames
-import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.Currencies
-import com.ptut.expense.domain.shared.PaymentDraft
-import com.ptut.expense.domain.shared.PaymentMethod
-import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.shared.SlipDebt
-import com.ptut.expense.domain.shared.parseMinor
 import com.ptut.expense.domain.shared.rateUnitLabel
-import com.ptut.expense.domain.slip.ConfirmedSlip
+import com.ptut.expense.domain.slip.ConfirmSlipUseCase
+import com.ptut.expense.domain.slip.DiscardSlipUseCase
+import com.ptut.expense.domain.slip.DiscardSlipWithUndoUseCase
+import com.ptut.expense.domain.slip.FindSlipDebtsUseCase
+import com.ptut.expense.domain.slip.GetQueuedSlipUseCase
+import com.ptut.expense.domain.slip.ObserveSlipInQueueUseCase
+import com.ptut.expense.domain.slip.PaySlipDebtUseCase
+import com.ptut.expense.domain.slip.SlipConfirmation
 import com.ptut.expense.domain.slip.isReaderNoise
 import com.ptut.expense.domain.slip.shownShop
 import com.ptut.expense.domain.under
-import com.ptut.expense.importer.SlipDiscards
-import com.ptut.expense.importer.SlipImporter
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.AmountEntry
@@ -46,16 +46,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 /**
  * The confirm screen's state holder: type the amount against the slip, pick a category once, and
@@ -64,31 +60,34 @@ import kotlin.uuid.Uuid
  * It watches the slip in the queue the ledger already exposes rather than querying for one, so
  * a slip discarded from another screen says it has gone instead of staying stale (#217).
  */
-@OptIn(ExperimentalUuidApi::class)
 class ConfirmSlipViewModel(
     slipId: String,
-    ledger: LedgerRepository,
-    private val importer: SlipImporter,
+    getSlip: GetQueuedSlipUseCase,
+    observeSlip: ObserveSlipInQueueUseCase,
     private val toasts: ToastMessages,
-    private val discards: SlipDiscards,
     // #26: every category; the slip's own direction picks which are offered, so money in offers income.
     private val categories: List<Category> = Category.seed(),
     private val subCategories: List<SubCategory> = emptyList(),
-    /** The shared-group debts a slip for this amount could have paid, the slip's payee as a hint. */
-    private val debtsFor: (Satang, String?) -> List<SlipDebt> = { _, _ -> emptyList() },
-    private val recordPayment: suspend (PaymentDraft) -> Unit = {},
+    /** The shared-group debts a slip could have paid. None in a build with no shared groups. */
+    private val findDebts: FindSlipDebtsUseCase = FindSlipDebtsUseCase(),
     private val clock: Clock = Clock.System,
     /** #22: debug builds only until the weekly note has been tried. */
     private val offersPlanned: Boolean = false,
     /** #114: a haptic on every save and delete, played by the shell. */
     private val haptics: Haptics = Haptics(),
-    /** Injected so a test can name the rows it wrote. Random everywhere else. */
-    private val newId: () -> String = { Uuid.random().toString() },
+    /** The rate a foreign slip's currency was last saved at, so only the first slip in it asks. */
+    private val getLastRate: GetLastRateUseCase = GetLastRateUseCase(),
+    private val confirmSlip: ConfirmSlipUseCase,
+    /** Records a group debt the slip paid. Does nothing in a build with no shared groups. */
+    private val paySlipDebt: PaySlipDebtUseCase = PaySlipDebtUseCase(),
+    private val discardSlip: DiscardSlipUseCase,
+    /** Not mine: the slip goes once its Undo has left the screen (#219). */
+    private val discardWithUndo: DiscardSlipWithUndoUseCase,
 ) : ViewModel() {
 
-    private var slip: QueuedSlip? = ledger.queuedSlips.value.firstOrNull { it.id == slipId }
+    private var slip: QueuedSlip? = getSlip(slipId)
 
-    private var debts: List<SlipDebt> = slip?.let(::debtsOf).orEmpty()
+    private var debts: List<SlipDebt> = slip?.let(findDebts::invoke).orEmpty()
     private var chosenDebt = 0
 
     private val state = MutableStateFlow(
@@ -99,10 +98,7 @@ class ConfirmSlipViewModel(
     init {
         slip?.takeIf { it.isForeign }?.let { found -> viewModelScope.launch { loadRate(found.currency) } }
         viewModelScope.launch {
-            ledger.queuedSlips
-                .map { queue -> queue.firstOrNull { it.id == slipId } }
-                .distinctUntilChanged()
-                .collectLatest { found -> if (found != null) arrive(found) else leave() }
+            observeSlip(slipId).collectLatest { found -> if (found != null) arrive(found) else leave() }
         }
     }
 
@@ -111,7 +107,7 @@ class ConfirmSlipViewModel(
         val first = slip == null
         slip = found
         if (first) {
-            debts = debtsOf(found)
+            debts = findDebts(found)
             state.value = found.toUiState().copy(debtMatch = debtMatch())
             if (found.isForeign) viewModelScope.launch { loadRate(found.currency) }
         } else {
@@ -134,7 +130,7 @@ class ConfirmSlipViewModel(
 
     /** The last rate saved opens the field, so only the first slip in that money has to ask. */
     private suspend fun loadRate(currency: String) {
-        val last = importer.rateFor(currency) ?: return
+        val last = getLastRate(currency) ?: return
         state.update { if (it.rateText.isEmpty()) it.copy(rateText = last.typedFor(Currencies.of(currency).rateUnit)).withHome() else it }
     }
 
@@ -142,11 +138,8 @@ class ConfirmSlipViewModel(
     private fun ConfirmSlipUiState.withHome(): ConfirmSlipUiState = copy(homeLine = foreignOf(this)?.let { currencyCopy().savedAs(it.inHome.format()) })
 
     private fun foreignOf(current: ConfirmSlipUiState): ForeignAmount? {
-        val slip = slip?.takeIf { it.isForeign } ?: return null
-        val currency = Currencies.of(slip.currency)
-        val rate = Rate.parse(current.rateText, currency.rateUnit) ?: return null
-        val typed = parseMinor(current.entry.typed, currency)?.takeIf { it > 0 } ?: return null
-        return ForeignAmount(slip.currency, typed, rate)
+        val slip = slip ?: return null
+        return priceForeignAmount(Currencies.of(slip.currency), current.entry.typed, current.rateText)
     }
 
     /** #22: held until Save, like the category. */
@@ -202,35 +195,19 @@ class ConfirmSlipViewModel(
         }
         val amount = foreign?.inHome ?: current.entry.toSatang()
         val typed = current.shopName.trim()
-        // A read shop stays the rule's key, so its next slip still matches; a name typed over it is
-        // what rows show. A slip that read no shop takes the typed name as its shop.
-        val shop = if (current.shopRead) slip.merchant else typed.ifEmpty { null }
+        val confirmation = SlipConfirmation(
+            slip = slip,
+            categoryId = category.id,
+            subCategoryId = current.subCategory?.id,
+            amount = amount,
+            foreign = foreign,
+            typedShop = typed,
+            shopRead = current.shopRead,
+            planned = current.planned,
+        )
         state.update { it.copy(phase = ConfirmSlipPhase.Saving) }
         viewModelScope.launch {
-            val filed = runSuspendCatching {
-                importer.confirm(
-                    ConfirmedSlip(
-                        transactionId = newId(),
-                        ruleId = newId(),
-                        queuedSlipId = slip.id,
-                        counterparty = shop,
-                        categoryId = category.id,
-                        subCategoryId = current.subCategory?.id,
-                        amount = amount,
-                        occurredAtEpochMillis = slip.occurredAtEpochMillis,
-                        reference = slip.note.takeIf { it.isNotBlank() },
-                        confirmedAtEpochMillis = clock.now().toEpochMilliseconds(),
-                        // What the parser read, not what the reader typed over it. FR-7 kept this
-                        // null when the figure did not read, and null is what screen 11c wants too.
-                        readAmount = if (foreign == null) slip.amount else slip.amount?.let { ForeignAmount(slip.currency, it.toMinorUnits(), foreign.rate).inHome },
-                        folder = slip.sourceFolder,
-                        displayName = typed.takeIf { current.shopRead && it.isNotEmpty() && it != slip.merchant },
-                        direction = slip.direction,
-                        planned = current.planned && slip.direction == Direction.Expense,
-                        foreign = foreign,
-                    ),
-                )
-            }
+            val filed = confirmSlip(confirmation)
             if (filed.isFailure) {
                 // #76's shape: Confirm unlocks and the typed form stays, so a second tap can try again.
                 toasts.show(ToastMessage(AppText.copy.slips.slipNotSaved, tone = ToastTone.Error))
@@ -238,7 +215,7 @@ class ConfirmSlipViewModel(
                 return@launch
             }
             haptics.saved()
-            val shown = typed.ifEmpty { null } ?: shop?.let { shownShop(it, AppText.copy.slips.unknownShop) }
+            val shown = typed.ifEmpty { null } ?: filed.getOrNull()?.counterparty?.let { shownShop(it, AppText.copy.slips.unknownShop) }
             val saved = AppText.copy.slips.saved(amount.formatCompact(), slip.occurredAtEpochMillis.filedDay(), category.name, shown)
             toasts.show(ToastMessage(saved))
             state.update { it.copy(phase = ConfirmSlipPhase.Saved) }
@@ -255,7 +232,7 @@ class ConfirmSlipViewModel(
         if (state.value.saving) return
         state.update { it.copy(phase = ConfirmSlipPhase.Saving) }
         viewModelScope.launch {
-            discards.discard(slip.id)
+            discardWithUndo(slip.id)
             haptics.deleted()
             state.update { it.copy(phase = ConfirmSlipPhase.Dismissed) }
         }
@@ -283,12 +260,7 @@ class ConfirmSlipViewModel(
         if (state.value.saving) return
         state.update { it.copy(phase = ConfirmSlipPhase.Saving) }
         viewModelScope.launch {
-            val recorded = runSuspendCatching {
-                recordPayment(
-                    PaymentDraft(debt.groupId, debt.fromMemberId, debt.toMemberId, debt.amount, PaymentMethod.BankTransfer, slip.occurredAtEpochMillis),
-                )
-            }
-            if (recorded.isFailure) {
+            if (paySlipDebt(slip, debt).isFailure) {
                 // As save: the debt card stays and unlocks, so a second tap can try again.
                 toasts.show(ToastMessage(AppText.copy.shared.payment.didntSave, tone = ToastTone.Error))
                 state.update { it.copy(phase = ConfirmSlipPhase.Ready) }
@@ -303,15 +275,10 @@ class ConfirmSlipViewModel(
             } else {
                 // Dismissed first, so the queue emptying reads as this screen's own doing.
                 state.update { it.copy(phase = ConfirmSlipPhase.Dismissed, debtMatch = null) }
-                importer.discard(slip.id)
+                discardSlip(slip.id)
             }
         }
     }
-
-    // A debt is paid by money going out; money in never closes one here.
-    // A kyat figure is not a baht debt, so a kyat slip is never offered one.
-    private fun debtsOf(slip: QueuedSlip): List<SlipDebt> =
-        slip.amount?.takeIf { slip.direction == Direction.Expense && !slip.isForeign }?.let { debtsFor(it, slip.merchant) }.orEmpty()
 
     private fun debtMatch(): DebtMatchUiModel? {
         val chosen = debts.getOrNull(chosenDebt) ?: return null

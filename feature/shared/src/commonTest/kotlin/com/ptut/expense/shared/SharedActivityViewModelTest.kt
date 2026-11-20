@@ -1,8 +1,11 @@
 package com.ptut.expense.shared
 
 import com.ptut.expense.ViewModelTest
+import com.ptut.expense.domain.shared.GetActivityUseCase
+import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
 import com.ptut.expense.domain.shared.SharedExpense
 import com.ptut.expense.domain.shared.SharedSnapshot
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -82,7 +85,12 @@ class SharedActivityViewModelTest : ViewModelTest() {
             payments = emptyList(),
             links = emptyMap(),
         )
-        val viewModel = SharedActivityViewModel(groupId = flat12.id, repository = repository, work = Dispatchers.Main)
+        val viewModel = SharedActivityViewModel(
+            groupId = flat12.id,
+            observeSnapshot = ObserveSharedSnapshotUseCase(repository),
+            getActivity = GetActivityUseCase(GetHomeTodayUseCase()),
+            work = Dispatchers.Main,
+        )
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         return viewModel

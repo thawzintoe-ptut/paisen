@@ -52,4 +52,42 @@ class BalancesTest {
     fun aPayerWithNoPartLentTheWholeAmount() {
         assertEquals(Satang(90_000), dinner.copy(payerMemberId = "dan").effectFor("dan"))
     }
+
+    @Test
+    fun thePayersPartHoldsTheirShareAndWhatTheyLent() {
+        assertEquals(MyPart(involved = true, effect = Satang(60_000), share = Satang(30_000)), dinner.partFor("me"))
+    }
+
+    @Test
+    fun aSharersPartIsTheirShareOwed() {
+        assertEquals(MyPart(involved = true, effect = Satang(-30_000), share = Satang(30_000)), dinner.partFor("aye"))
+    }
+
+    @Test
+    fun aStrangerIsNotInvolved() {
+        assertEquals(MyPart(involved = false, effect = Satang.Zero, share = Satang.Zero), dinner.partFor("dan"))
+    }
+
+    private val settlement = Settlement(
+        transfers = listOf(
+            Transfer("aye", "me", Satang(30_000)),
+            Transfer("bo", "me", Satang(45_000)),
+            Transfer("bo", "aye", Satang(10_000)),
+        ),
+        pairwiseCount = 3,
+        simplifiedCount = 3,
+    )
+
+    @Test
+    fun owedIsWhatOnePersonPaysTheOtherInThatDirection() {
+        assertEquals(Satang(30_000), settlement.owed("aye", "me"))
+        assertEquals(Satang.Zero, settlement.owed("me", "aye"))
+    }
+
+    @Test
+    fun theLargestTransferInvolvingMeIsTheOneToSettle() {
+        assertEquals(Transfer("bo", "me", Satang(45_000)), settlement.largestInvolving("me"))
+        assertEquals(Transfer("aye", "me", Satang(30_000)), settlement.largestInvolving("aye"))
+        assertEquals(null, settlement.largestInvolving("dan"))
+    }
 }

@@ -3,23 +3,19 @@ package com.ptut.expense.receipt
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
-import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.SubCategory
-import com.ptut.expense.domain.Transaction
-import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatDigits
-import com.ptut.expense.domain.ledger.LedgerRepository
-import com.ptut.expense.domain.ledger.LedgerSnapshot
-import com.ptut.expense.domain.spentOn
 import com.ptut.expense.domain.spoken
 import com.ptut.expense.domain.timeOfDayIn
-import com.ptut.expense.domain.usualDay
+import com.ptut.expense.domain.today.DaySpending
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
+import com.ptut.expense.domain.today.ObserveDaySpendingUseCase
 import com.ptut.expense.domain.yearLabel
 import com.ptut.expense.home.differencePhrase
 import com.ptut.expense.locale.AppText
@@ -63,34 +59,26 @@ sealed interface DayReceiptUiState {
  */
 class DayReceiptViewModel(
     date: String,
-    ledger: LedgerRepository,
+    observeDaySpending: ObserveDaySpendingUseCase,
     private val categories: List<Category> = Category.seed(),
     /** So a row typed under a sub-category is named the way Detail names it (#210). */
     private val subCategories: List<SubCategory> = emptyList(),
-    private val clock: Clock = Clock.System,
+    clock: Clock = Clock.System,
+    private val homeToday: GetHomeTodayUseCase = GetHomeTodayUseCase(clock),
 ) : ViewModel() {
 
     private val day = LocalDate.parse(date)
 
-    val uiState: StateFlow<DayReceiptUiState> = ledger.allTransactions
-        .map { snapshot ->
-            when (snapshot) {
-                LedgerSnapshot.Unanswered -> DayReceiptUiState.Loading
-                is LedgerSnapshot.Rows -> receiptOf(snapshot.transactions)
-            }
-        }
+    val uiState: StateFlow<DayReceiptUiState> = observeDaySpending(day)
+        .map { spending -> spending?.let(::receiptOf) ?: DayReceiptUiState.Loading }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), DayReceiptUiState.Loading)
 
-    private fun receiptOf(rows: List<Transaction>): DayReceiptUiState.Loaded {
+    private fun receiptOf(spending: DaySpending): DayReceiptUiState.Loaded {
         val text = AppText.copy.receipt
-        val spending = rows
-            .filter { it.direction == Direction.Expense && it.occurredAtEpochMillis.dateIn(HomeTime) == day }
-            .sortedBy { it.occurredAtEpochMillis }
-        val total = rows.spentOn(day)
         return DayReceiptUiState.Loaded(
             title = title(),
             heading = "${day.dayLabel()} ${day.yearLabel()}".uppercase() + "${Separators.DOT}${text.city}",
-            lines = spending.map { row ->
+            lines = spending.purchases.map { row ->
                 val time = row.occurredAtEpochMillis.timeOfDayIn(HomeTime)
                 val name = row.displayName(categories, subCategories)
                 ReceiptLineUiModel(
@@ -100,19 +88,17 @@ class DayReceiptViewModel(
                     spoken = "$time, $name, ${row.amount.spoken()}",
                 )
             },
-            subtotals = spending
-                .groupBy { it.categoryId }
-                .map { (id, filed) -> (categories.firstOrNull { it.id == id }?.name ?: text.other) to filed.fold(Satang.Zero) { sum, row -> sum + row.amount } }
-                .sortedByDescending { it.second }
-                .map { (name, sum) -> ReceiptSubtotalUiModel(category = name, amount = sum.digits()) },
-            total = total.format(),
-            closing = rows.usualDay(day)?.differencePhrase(whose = "your")?.takeIf { spending.isNotEmpty() },
-            empty = text.nothingSpent.takeIf { spending.isEmpty() },
+            subtotals = spending.byCategory.map { (id, sum) ->
+                ReceiptSubtotalUiModel(category = categories.firstOrNull { it.id == id }?.name ?: text.other, amount = sum.digits())
+            },
+            total = spending.total.format(),
+            closing = spending.usual?.differencePhrase(whose = "your"),
+            empty = text.nothingSpent.takeIf { spending.purchases.isEmpty() },
         )
     }
 
     private fun title(): String {
-        val today = clock.now().dateIn(HomeTime)
+        val today = homeToday()
         val common = AppText.copy.common
         return when (day) {
             today -> common.today

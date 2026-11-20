@@ -61,6 +61,9 @@ data class SharedGroup(
     fun member(id: String): Member? = members.firstOrNull { it.id == id }
 
     fun isMe(memberId: String): Boolean = memberId == meMemberId
+
+    /** #190: a name in a shared group has joined once an account claimed it. Me, and everyone in a group only on this phone, always have. */
+    fun hasJoined(memberId: String): Boolean = !remote || isMe(memberId) || member(memberId)?.claimedByUid != null
 }
 
 /**
@@ -208,6 +211,9 @@ fun SharedSnapshot.sharedExpenseOf(transactionId: String): SharedExpense? {
     val expenseId = links.entries.firstOrNull { it.value == transactionId }?.key ?: return null
     return expenseVersions.lastOrNull { it.id == expenseId }?.takeUnless { it.removed }
 }
+
+/** #186: the group whose expense this transaction is shared as, or null when it is not shared. */
+fun SharedSnapshot.groupHolding(transactionId: String): SharedGroup? = sharedExpenseOf(transactionId)?.let { group(it.groupId) }
 
 /** #48: the group's money, as the money format needs it. */
 val SharedGroup.money: Currency get() = Currencies.of(currency)

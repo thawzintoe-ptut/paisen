@@ -99,10 +99,6 @@ internal fun BalanceTone.personWord(): String {
     }
 }
 
-/** Another member's row after [mark]. Never on a first visit, when everything would be new, nor for this phone's own rows. */
-internal fun SharedGroup.isNewToMe(author: String?, atEpochMillis: Long, mark: Long?): Boolean =
-    mark != null && author != null && !isMe(author) && atEpochMillis > mark
-
 /** A member as p26–p31 draw them: an initial on pale sky, or "You" on ink. */
 @Composable
 fun MemberAvatar(label: String, isMe: Boolean, modifier: Modifier = Modifier, size: Dp = SkySizes.rowCircle) {

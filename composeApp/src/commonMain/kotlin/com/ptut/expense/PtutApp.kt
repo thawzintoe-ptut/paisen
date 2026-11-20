@@ -99,7 +99,6 @@ private fun FirstRun() {
     val restoring by viewModel.isRestoring.collectAsStateWithLifecycle()
     val problem by viewModel.restoreProblem.collectAsStateWithLifecycle()
     val preview by viewModel.restorePreview.collectAsStateWithLifecycle()
-    val home by viewModel.homeChoice.collectAsStateWithLifecycle()
     OnboardingView(
         onAllowPhotoAccess = viewModel::requestPhotoAccess,
         onSkip = viewModel::skip,
@@ -109,8 +108,6 @@ private fun FirstRun() {
         restorePreview = preview,
         onConfirmRestore = viewModel::confirmRestore,
         onCancelRestore = viewModel::cancelRestore,
-        home = home,
-        onChooseHome = viewModel::chooseHome,
     )
 }
 

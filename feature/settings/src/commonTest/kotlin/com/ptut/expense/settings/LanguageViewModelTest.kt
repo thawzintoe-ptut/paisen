@@ -1,6 +1,7 @@
 package com.ptut.expense.settings
 
 import com.ptut.expense.ViewModelTest
+import com.ptut.expense.domain.settings.SaveLanguageUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.Language
 import com.ptut.expense.locale.LanguageStore
@@ -29,7 +30,7 @@ class LanguageViewModelTest : ViewModelTest() {
     @Test
     fun `choosing Thai saves it and shows the app in Thai`() = runTest {
         val store = MemoryLanguageStore()
-        val viewModel = LanguageViewModel(store = store, offered = Language.offered(offersUnreleased = true))
+        val viewModel = LanguageViewModel(saveLanguage = SaveLanguageUseCase(store), offered = Language.offered(offersUnreleased = true))
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
 

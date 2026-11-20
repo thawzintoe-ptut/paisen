@@ -3,8 +3,17 @@ package com.ptut.expense.settings
 import app.cash.turbine.test
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.ledger.FakeLedger
+import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
 import com.ptut.expense.domain.settings.AppChoices
 import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.settings.DisableAppLockUseCase
+import com.ptut.expense.domain.settings.EnableAppLockUseCase
+import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
+import com.ptut.expense.domain.settings.SetMoodByTimeOfDayUseCase
+import com.ptut.expense.domain.settings.SetSlipOwnerUseCase
+import com.ptut.expense.domain.settings.SetTransparencyUseCase
+import com.ptut.expense.domain.settings.SetWeeklyCheckInUseCase
+import com.ptut.expense.domain.settings.SwitchNoteToneUseCase
 import com.ptut.expense.domain.settings.appSettings
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -151,7 +160,7 @@ class SettingsViewModelTest : ViewModelTest() {
     @Test
     fun `a phone that can ask for a fingerprint or PIN shows the app lock switch as stored`() = runTest {
         val settings = appSettings(AppChoices(appLock = true))
-        val uiState = SettingsViewModel(FakeLedger(sinceLastImport = null), settings, scheduled(), canLock = true).uiState
+        val uiState = viewModel(settings = settings, canLock = true).uiState
         backgroundScope.launch { uiState.collect { } }
         runCurrent()
 
@@ -238,9 +247,18 @@ class SettingsViewModelTest : ViewModelTest() {
         sinceLastImport: Long? = null,
         cadence: SlipImportCadence = scheduled(),
         settings: AppSettings = appSettings(),
+        canLock: Boolean = false,
     ) = SettingsViewModel(
-        ledger = FakeLedger(sinceLastImport = sinceLastImport),
-        settings = settings,
+        observeLastImport = ObserveLastImportUseCase(FakeLedger(sinceLastImport = sinceLastImport)),
+        observeChoices = ObserveAppChoicesUseCase(settings),
         cadence = cadence,
+        saveMoodByTimeOfDay = SetMoodByTimeOfDayUseCase(settings),
+        saveTransparency = SetTransparencyUseCase(settings),
+        saveWeeklyCheckIn = SetWeeklyCheckInUseCase(settings),
+        saveSlipOwner = SetSlipOwnerUseCase(settings),
+        enableAppLock = EnableAppLockUseCase(settings),
+        disableAppLock = DisableAppLockUseCase(settings),
+        switchNoteToneUseCase = SwitchNoteToneUseCase(settings),
+        canLock = canLock,
     )
 }

@@ -17,6 +17,7 @@ import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.TransactionSource
 import com.ptut.expense.domain.ledger.FakeLedger
+import com.ptut.expense.domain.today.FilterLedgerUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.Language
 import kotlinx.coroutines.Dispatchers
@@ -198,7 +199,7 @@ class LedgerViewModelTest : ViewModelTest() {
     fun `a row filed under a sub-category names the pair`() = runTest {
         val row = autoGroceries.copy(subCategoryId = "supermarket")
         val viewModel = LedgerViewModel(
-            FakeLedger(listOf(row)),
+            FilterLedgerUseCase(FakeLedger(listOf(row)), Dispatchers.Main),
             subCategoryUpdates = flowOf(listOf(SubCategory("supermarket", "groceries", "Supermarket"))),
             work = Dispatchers.Main,
         )
@@ -305,7 +306,7 @@ class LedgerViewModelTest : ViewModelTest() {
     @Test
     fun `a slice from Reports keeps its days and only spending in its category`() = runTest {
         val slice = LedgerScope(from = LocalDate(2026, 8, 13), to = LocalDate(2026, 8, 13), categoryId = "groceries")
-        val viewModel = LedgerViewModel(FakeLedger(threeMonths), scope = slice, work = Dispatchers.Main)
+        val viewModel = LedgerViewModel(FilterLedgerUseCase(FakeLedger(threeMonths), Dispatchers.Main), scope = slice, work = Dispatchers.Main)
 
         viewModel.uiState.test {
             assertEquals(listOf("Grab"), awaitSuccess().merchants())
@@ -313,7 +314,7 @@ class LedgerViewModelTest : ViewModelTest() {
         }
     }
 
-    private fun viewModel(rows: List<Transaction>) = LedgerViewModel(FakeLedger(rows), work = Dispatchers.Main)
+    private fun viewModel(rows: List<Transaction>) = LedgerViewModel(FilterLedgerUseCase(FakeLedger(rows), Dispatchers.Main), work = Dispatchers.Main)
 
     /**
      * Every assertion runs inside one subscription. Re-entering `test { }` per filter would read

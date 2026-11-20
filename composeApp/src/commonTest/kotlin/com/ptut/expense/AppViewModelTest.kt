@@ -1,5 +1,6 @@
 package com.ptut.expense
 
+import com.ptut.expense.domain.app.RunStartupTasksUseCase
 import com.ptut.expense.importer.FakeSlipSource
 import com.ptut.expense.importer.FakeSlipTextReader
 import com.ptut.expense.importer.InMemoryImportStore
@@ -30,7 +31,7 @@ class AppViewModelTest : ViewModelTest() {
     @Test
     fun aMessageShowsAndClearsItselfWithoutAnyoneAskingItTo() = runTest {
         val toasts = ToastMessages()
-        val viewModel = AppViewModel(toasts, importer())
+        val viewModel = AppViewModel(toasts, RunStartupTasksUseCase(importer()))
         runCurrent()
 
         assertEquals(null, viewModel.toast.value, "the shell starts saying nothing")
@@ -48,7 +49,7 @@ class AppViewModelTest : ViewModelTest() {
     @Test
     fun aSecondMessageReplacesTheFirstAndStartsTheClockAgain() = runTest {
         val toasts = ToastMessages()
-        val viewModel = AppViewModel(toasts, importer())
+        val viewModel = AppViewModel(toasts, RunStartupTasksUseCase(importer()))
         runCurrent()
 
         toasts.show(Saved)
@@ -72,7 +73,7 @@ class AppViewModelTest : ViewModelTest() {
     @Test
     fun anUndoOutlastsASaveToastThenLeavesAndSaysSo() = runTest {
         val toasts = ToastMessages()
-        val viewModel = AppViewModel(toasts, importer())
+        val viewModel = AppViewModel(toasts, RunStartupTasksUseCase(importer()))
         runCurrent()
 
         var gone = false
@@ -93,7 +94,7 @@ class AppViewModelTest : ViewModelTest() {
     @Test
     fun anUndoStaysTwentySecondsWhileAScreenReaderIsOn() = runTest {
         val toasts = ToastMessages()
-        val viewModel = AppViewModel(toasts, importer(), screenReader = ScreenReader { true })
+        val viewModel = AppViewModel(toasts, RunStartupTasksUseCase(importer()), screenReader = ScreenReader { true })
         runCurrent()
 
         toasts.show(ToastMessage("Deleted Foodland Rama IV", action = ToastAction("Undo") {}))
@@ -111,7 +112,7 @@ class AppViewModelTest : ViewModelTest() {
     @Test
     fun tappingTheUndoRunsItAndTakesTheLineAway() = runTest {
         val toasts = ToastMessages()
-        val viewModel = AppViewModel(toasts, importer())
+        val viewModel = AppViewModel(toasts, RunStartupTasksUseCase(importer()))
         runCurrent()
 
         var restored = false
@@ -129,7 +130,7 @@ class AppViewModelTest : ViewModelTest() {
     @Test
     fun anUndoTappedAfterItWasReplacedDoesNothing() = runTest {
         val toasts = ToastMessages()
-        val viewModel = AppViewModel(toasts, importer())
+        val viewModel = AppViewModel(toasts, RunStartupTasksUseCase(importer()))
         runCurrent()
 
         var restored = false

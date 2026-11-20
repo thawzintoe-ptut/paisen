@@ -1,13 +1,11 @@
 package com.ptut.expense.home
 
-import com.ptut.expense.domain.ImportFailureKind
-import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.ImportFreshness
-import com.ptut.expense.domain.ImportOutcome
-import com.ptut.expense.domain.ImportRun
+import com.ptut.expense.domain.ImportStopReason
+import com.ptut.expense.domain.StopSentences
 import com.ptut.expense.domain.folders.WatchedFolder
 import com.ptut.expense.domain.folders.watched
-import com.ptut.expense.domain.importFreshness
+import com.ptut.expense.domain.today.ImportHealth
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.HomeCopy
 import com.ptut.expense.locale.Language
@@ -37,17 +35,6 @@ sealed interface ImportStatusUiModel {
     data object OnlyPicked : ImportStatusUiModel
 }
 
-/** #69: why the newest scan stopped, so Today names it and offers the fix that matches. */
-sealed interface ImportStopReason {
-    data object PhotoAccessOff : ImportStopReason
-
-    /** The library gave no answer; the next scan asks again, so nothing waits on the reader. */
-    data object LibraryNoAnswer : ImportStopReason
-
-    /** Any other stop, in the journal's own words, as Activity shows them. */
-    data class Other(val said: String) : ImportStopReason
-}
-
 /** "Watching K PLUS · checked 4 min ago", or a count once more than one folder is watched. */
 internal fun List<WatchedFolder>.watchLine(sinceLastImportMillis: Long?): String {
     val text = AppText.copy.home
@@ -60,51 +47,36 @@ internal fun List<WatchedFolder>.watchLine(sinceLastImportMillis: Long?): String
     }
 }
 
-/** Null means no import has ever succeeded, which is the one state carrying no span. */
-internal fun Long?.asImportStatus(): ImportStatusUiModel {
-    val millis = this ?: return ImportStatusUiModel.NeverRun
-    val since = elapsedPhrase(millis)
-    return when (importFreshness(millis)) {
-        ImportFreshness.Fresh -> ImportStatusUiModel.Fresh(since)
-        ImportFreshness.Stale -> ImportStatusUiModel.Stale(since)
-        ImportFreshness.Broken -> ImportStatusUiModel.Broken(since)
+/** Never having run is the one state carrying no span. */
+internal fun ImportHealth.asImportStatus(): ImportStatusUiModel = when (this) {
+    is ImportHealth.Stopped -> ImportStatusUiModel.Failing(reason)
+
+    ImportHealth.OnlyPicked -> ImportStatusUiModel.OnlyPicked
+
+    ImportHealth.NeverRun -> ImportStatusUiModel.NeverRun
+
+    is ImportHealth.Ran -> {
+        val since = elapsedPhrase(sinceLastImportMillis)
+        when (freshness) {
+            ImportFreshness.Fresh -> ImportStatusUiModel.Fresh(since)
+            ImportFreshness.Stale -> ImportStatusUiModel.Stale(since)
+            ImportFreshness.Broken -> ImportStatusUiModel.Broken(since)
+        }
     }
 }
 
-/** Newest first, as the journal lists them. A run still going has not answered yet. Null unless the newest failed. */
-internal fun List<ImportRun>.latestStop(): ImportStopReason? {
-    val latest = firstOrNull { it.outcome != ImportOutcome.Running } ?: return null
-    if (latest.outcome != ImportOutcome.Failure) return null
-    when (latest.failureKind) {
-        ImportFailureKind.PhotoAccessDenied -> return ImportStopReason.PhotoAccessOff
-        ImportFailureKind.LibraryNoAnswer -> return ImportStopReason.LibraryNoAnswer
-        ImportFailureKind.Other, null -> Unit
-    }
-    val said = latest.failureReason?.takeIf { it.isNotBlank() } ?: return ImportStopReason.Other(AppText.copy.slips.importerStopped)
-    return if (latest.failureKind == null) stopReasonBefore23(said) else ImportStopReason.Other(said)
-}
-
-/**
- * A row journalled before schema 23 keeps only the importer's sentence, in the language the scan ran
- * in, so its stop is told apart by the FoldersCopy sentences the photo sources throw, in every language.
- */
-private fun stopReasonBefore23(said: String): ImportStopReason {
+/** The sentences [latestStop] tells a stop apart by, in every language, from the copy. */
+internal fun stopSentences(): StopSentences {
     val folders = Language.entries.map { it.copy.folders }
-    return when (said) {
-        in folders.flatMap { listOf(it.androidAccessDenied, it.iosAccessDenied) } -> ImportStopReason.PhotoAccessOff
-        in folders.map { it.libraryNoAnswer } -> ImportStopReason.LibraryNoAnswer
-        else -> ImportStopReason.Other(said)
-    }
+    return StopSentences(
+        accessDenied = folders.flatMap { listOf(it.androidAccessDenied, it.iosAccessDenied) }.toSet(),
+        noAnswer = folders.map { it.libraryNoAnswer }.toSet(),
+        unnamed = AppText.copy.slips.importerStopped,
+    )
 }
 
 private fun ImportStopReason.line(text: HomeCopy): String = when (this) {
     ImportStopReason.PhotoAccessOff -> text.stopAccessOff
     ImportStopReason.LibraryNoAnswer -> text.stopNoAnswer
     is ImportStopReason.Other -> said.replaceFirstChar { it.uppercase() }
-}
-
-/** Access goes back on in the system's page; a library that did not answer is asked again by the next scan. */
-internal fun ImportStopReason.fix(): ImportFix? = when (this) {
-    ImportStopReason.PhotoAccessOff, is ImportStopReason.Other -> ImportFix.AllowAllPhotos
-    ImportStopReason.LibraryNoAnswer -> null
 }

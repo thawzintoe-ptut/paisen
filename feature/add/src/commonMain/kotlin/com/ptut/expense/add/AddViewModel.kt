@@ -3,12 +3,8 @@ package com.ptut.expense.add
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.agent.AgentInbox
-import com.ptut.expense.agent.AgentLoop
-import com.ptut.expense.agent.AgentOutcome
-import com.ptut.expense.agent.AgentReader
 import com.ptut.expense.agent.Heard
 import com.ptut.expense.agent.ProposedAction
-import com.ptut.expense.agent.ReadCall
 import com.ptut.expense.agent.SpeechInput
 import com.ptut.expense.agent.SpeechLanguage
 import com.ptut.expense.agent.SpendWindow
@@ -21,15 +17,23 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.TransactionDraft
+import com.ptut.expense.domain.agent.AnswerQuickAddQuestionUseCase
+import com.ptut.expense.domain.agent.InterpretQuickAddUseCase
+import com.ptut.expense.domain.agent.QuickAddReading
+import com.ptut.expense.domain.agent.QuickAnswer
+import com.ptut.expense.domain.agent.TransactionPicks
+import com.ptut.expense.domain.agent.mergeProposedTransaction
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
-import com.ptut.expense.domain.ledger.LedgerRepository
-import com.ptut.expense.domain.runSuspendCatching
+import com.ptut.expense.domain.ledger.GetLastRateUseCase
+import com.ptut.expense.domain.ledger.RecordTransactionUseCase
+import com.ptut.expense.domain.record.DraftGap
+import com.ptut.expense.domain.record.priceForeignAmount
+import com.ptut.expense.domain.record.validateTransactionDraft
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.Rate
-import com.ptut.expense.domain.shared.parseMinor
 import com.ptut.expense.domain.shared.rateUnitLabel
 import com.ptut.expense.domain.under
 import com.ptut.expense.locale.AppText
@@ -125,17 +129,13 @@ data class AddUiState(
     /** What the row will hold in the home money: the typed amount, or the foreign amount at its rate. */
     private val inHome: Satang get() = foreign?.inHome ?: entry.toSatang()
 
-    /**
-     * What still stops a save, amount first, or null once the row can be written. FR-14: both kinds
-     * need an amount and a category, so income cannot skip the rule (plan §G item 6).
-     */
+    /** What still stops a save, amount first, or null once the row can be written (FR-14). */
     val missing: String?
-        get() = when {
-            entry.isEmpty -> AppText.copy.add.typeAmountHint
-            !currency.isHome && parseMinor(entry.typed, currency) == null -> AppText.copy.add.typeAmountHint
-            category == null -> AppText.copy.add.pickCategoryHint
-            !currency.isHome && foreign == null -> currencyCopy().askRate
-            else -> null
+        get() = when (validateTransactionDraft(entry.toSatang(), entry.typed, currency, category?.id, foreign)) {
+            DraftGap.Amount -> AppText.copy.add.typeAmountHint
+            DraftGap.Category -> AppText.copy.add.pickCategoryHint
+            DraftGap.Rate -> currencyCopy().askRate
+            null -> null
         }
 
     /** "Save ฿60" once the row can be written, so the key says what it will write. */
@@ -213,25 +213,22 @@ data class AskNote(val text: String, val problem: Boolean = false)
  * amount cleared, the category cleared and the kind back to expense every time.
  */
 class AddViewModel(
-    private val ledger: LedgerRepository,
     private val toasts: ToastMessages,
     private val categories: (Direction) -> List<Category> = { Category.seed().forDirection(it) },
     private val subCategories: () -> List<SubCategory> = { emptyList() },
     /** #114: a haptic on every save and delete, played by the shell. */
     private val haptics: Haptics = Haptics(),
     /** #207: reads a typed sentence. Null in a graph that binds no agent. */
-    private val agent: AgentLoop? = null,
+    private val interpretQuickAdd: InterpretQuickAddUseCase? = null,
     /** Answers a question typed into Quick add. */
-    private val reader: AgentReader? = null,
+    private val answerQuestion: AnswerQuickAddQuestionUseCase = AnswerQuickAddQuestionUseCase(),
     /** #212: on-device speech for Quick add. Null in a graph that binds none. */
     private val speech: SpeechInput? = null,
     /** Debug builds first: the amount can be typed in any of [Currencies.all]. */
     private val offersCurrencies: Boolean = false,
-    /** The currency a fresh sheet opens on: the Settings choice, or the phone's country. */
-    private val startingCurrency: () -> Currency = { Currencies.of(Home.money.code) },
     /** The last rate saved for a currency, shared with slips and groups. */
-    private val lastRate: suspend (String) -> Rate? = { null },
-    private val saveRate: suspend (String, Rate) -> Unit = { _, _ -> },
+    private val getLastRate: GetLastRateUseCase = GetLastRateUseCase(),
+    private val recordTransaction: RecordTransactionUseCase,
 ) : ViewModel() {
 
     private val state = MutableStateFlow(fresh(voice = null))
@@ -278,7 +275,7 @@ class AddViewModel(
     private fun loadRate(currency: Currency, askIfNone: Boolean = false) {
         if (currency.isHome) return
         viewModelScope.launch {
-            val last = lastRate(currency.code)
+            val last = getLastRate(currency.code)
             if (last == null) {
                 if (askIfNone && state.value.currency == currency) openRate()
                 return@launch
@@ -288,10 +285,7 @@ class AddViewModel(
     }
 
     private fun AddUiState.priced(): AddUiState {
-        if (currency.isHome) return copy(foreign = null, homeLine = null)
-        val rate = Rate.parse(rateText, currency.rateUnit)
-        val minor = parseMinor(entry.typed, currency)?.takeIf { it > 0 }
-        val priced = if (rate != null && minor != null) ForeignAmount(currency.code, minor, rate) else null
+        val priced = priceForeignAmount(currency, entry.typed, rateText)
         return copy(foreign = priced, homeLine = priced?.let { currencyCopy().savedAs(it.inHome.format()) })
     }
 
@@ -312,16 +306,14 @@ class AddViewModel(
     /** The mic carries over: which languages this phone hears does not change between opens. */
     private fun fresh(voice: QuickAddVoice? = state.value.voice) = AddUiState(
         categories = categories(Direction.Expense),
-        quickAdd = agent != null,
+        quickAdd = interpretQuickAdd != null,
         voice = voice?.copy(listening = false),
-        currency = start(),
-        entry = AmountEntry(digits = start().digits),
+        currency = home(),
+        entry = AmountEntry(digits = home().digits),
         offersCurrencies = offersCurrencies,
     )
 
-    /** The Settings choice or the phone's, in builds that offer currencies; the home's everywhere else. */
-    private fun start(): Currency = if (offersCurrencies) startingCurrency() else home()
-
+    /** Every fresh sheet opens on the home currency; another one is picked per entry. */
     private fun home(): Currency = Currencies.of(Home.money.code)
 
     /**
@@ -334,29 +326,21 @@ class AddViewModel(
         fill(action)
     }
 
-    /**
-     * #220: what a sentence read goes into the sheet, and what it did not mention stays. The
-     * grammar says expense when no word says otherwise, so only income or a named category moves
-     * the kind, and a kind that moves takes the category with it, as [setKind] does.
-     */
+    /** #220: what a sentence read goes into the sheet, and what it did not mention stays. */
     private fun fill(action: ProposedAction.AddTransaction) = state.update { current ->
-        val kind = if (action.direction == Direction.Income || action.categoryId != null) action.direction else current.kind
-        val offered = categories(kind)
-        val named = offered.firstOrNull { it.id == action.categoryId }
-        val category = named ?: current.category.takeIf { kind == current.kind }
-        val underCategory = subCategories().under(category?.id)
+        val picks = TransactionPicks(current.kind, current.category, current.subCategory, current.occurredAtEpochMillis, current.memo)
+        val merged = mergeProposedTransaction(action, picks, categories, subCategories())
         current.copy(
             entry = action.amount?.let(AmountEntry::of) ?: current.entry,
             // A sentence's amount is read as home money (#45), so a heard figure puts the sheet back in home.
             currency = if (action.amount != null) home() else current.currency,
-            kind = kind,
-            categories = offered,
-            category = category,
-            subCategories = underCategory,
-            subCategory = underCategory.firstOrNull { it.id == action.subCategoryId }
-                ?: current.subCategory.takeIf { category == current.category },
-            occurredAtEpochMillis = action.occurredAtEpochMillis ?: current.occurredAtEpochMillis,
-            memo = action.memo ?: current.memo,
+            kind = merged.picks.kind,
+            categories = merged.categories,
+            category = merged.picks.category,
+            subCategories = merged.subCategories,
+            subCategory = merged.picks.subCategory,
+            occurredAtEpochMillis = merged.picks.occurredAtEpochMillis,
+            memo = merged.picks.memo,
         ).priced()
     }
 
@@ -366,39 +350,29 @@ class AddViewModel(
      * question is answered in a line under the field (#216). Nothing is saved here: SAVE still does that.
      */
     fun quickAdd(text: String) {
-        val loop = agent ?: return
+        val interpret = interpretQuickAdd ?: return
         if (text.isBlank() || state.value.reading) return
         state.update { it.copy(reading = true, askText = text, askNote = null) }
         viewModelScope.launch {
-            val outcome = runSuspendCatching { loop.run(text) }.getOrElse {
-                // A reader that throws must not leave the field locked: it counts as a sentence not read.
-                state.update { it.copy(reading = false, askText = text) }
-                note(AskNote(AppText.copy.add.couldNotRead, problem = true))
-                return@launch
-            }
-            val (call, missing) = when (outcome) {
-                is AgentOutcome.Understood -> outcome.call to emptySet<String>()
-                is AgentOutcome.Partly -> outcome.call to outcome.missing
-                AgentOutcome.NotUnderstood -> null to emptySet<String>()
-            }
+            val reading = interpret(text)
             // A sentence not read stays in the field, so it can be fixed rather than typed again.
-            state.update { it.copy(reading = false, askText = if (call == null) text else "") }
-            when (call) {
-                is ProposedAction.AddTransaction -> {
-                    fill(call)
+            state.update { it.copy(reading = false, askText = if (reading == QuickAddReading.NotRead) text else "") }
+            when (reading) {
+                is QuickAddReading.Fill -> {
+                    fill(reading.action)
+                    val missing = reading.missing
                     if (missing.isNotEmpty()) {
                         note(AskNote(AppText.copy.add.notRead("amount" in missing, "category" in missing), problem = true))
                     }
                 }
 
-                is ProposedAction -> AgentInbox.offer(call)
+                QuickAddReading.Handed -> Unit
 
-                is ReadCall -> reader?.let { asked ->
-                    val answered = runSuspendCatching { answer(asked, call) }
-                    note(answered.fold(onSuccess = { AskNote(it) }, onFailure = { AskNote(AppText.copy.add.couldNotRead, problem = true) }))
+                is QuickAddReading.Question -> answerQuestion(reading.call)?.let { answered ->
+                    note(answered.fold(onSuccess = { AskNote(it.words()) }, onFailure = { AskNote(AppText.copy.add.couldNotRead, problem = true) }))
                 }
 
-                null -> note(AskNote(AppText.copy.add.couldNotRead, problem = true))
+                QuickAddReading.NotRead -> note(AskNote(AppText.copy.add.couldNotRead, problem = true))
             }
         }
     }
@@ -513,9 +487,9 @@ class AddViewModel(
         }
     }
 
-    private suspend fun answer(reader: AgentReader, call: ReadCall): String = when (call) {
-        is ReadCall.SpendSummary -> call.window.spentLine(reader.spent(call.window).formatCompact())
-        is ReadCall.FindTransactions -> AppText.copy.add.rowsMatch(reader.find(call).size)
+    private fun QuickAnswer.words(): String = when (this) {
+        is QuickAnswer.Spent -> window.spentLine(amount.formatCompact())
+        is QuickAnswer.Found -> AppText.copy.add.rowsMatch(count)
     }
 
     private fun SpendWindow.spentLine(amount: String): String = when (this) {
@@ -577,7 +551,7 @@ class AddViewModel(
         val amount = foreign?.inHome ?: current.entry.toSatang()
         state.update { it.copy(saving = true) }
         viewModelScope.launch {
-            ledger.record(
+            recordTransaction(
                 TransactionDraft(
                     amount = amount,
                     direction = current.kind,
@@ -588,8 +562,6 @@ class AddViewModel(
                     foreign = foreign,
                 ),
             )
-            // The row is already written, so a rate that fails to save costs only the next sheet's guess.
-            foreign?.let { runSuspendCatching { saveRate(it.currency, it.rate) } }
             // formatCompact, not format: the design's line is `Saved ฿485 · Food & drink`, and
             // `฿485.00` in a sentence reads as a machine reporting rather than a receipt.
             haptics.saved()

@@ -29,7 +29,7 @@ abstract class VerifyForbiddenImports : DefaultTask() {
     @get:Internal
     abstract val sourceRoot: DirectoryProperty
 
-    /** Package prefixes, such as `com.ptut.expense.data.local`. */
+    /** Packages, such as `com.ptut.expense.data.local`, or single types by their full name. */
     @get:Input
     abstract val forbiddenPrefixes: ListProperty<String>
 
@@ -48,7 +48,7 @@ abstract class VerifyForbiddenImports : DefaultTask() {
             file.readLines().withIndex().mapNotNull { (index, line) ->
                 val imported = importLine.find(line)?.groupValues?.get(1) ?: return@mapNotNull null
                 prefixes.firstOrNull { imported == it || imported.startsWith("$it.") }
-                    ?.let { "$shortPath:${index + 1}  $imported\n      a feature reads data through a repository, never $it" }
+                    ?.let { "$shortPath:${index + 1}  $imported\n      a feature calls :domain's use cases, never $it" }
             }
         }
 

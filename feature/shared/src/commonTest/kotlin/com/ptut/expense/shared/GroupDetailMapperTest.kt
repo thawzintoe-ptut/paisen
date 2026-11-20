@@ -6,6 +6,7 @@ import com.ptut.expense.domain.shared.Member
 import com.ptut.expense.domain.shared.SharedExpense
 import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedSnapshot
+import com.ptut.expense.domain.shared.groupDetail
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.BurmeseSharedDetail
 import com.ptut.expense.sync.GroupSyncStatus
@@ -119,6 +120,7 @@ class GroupDetailMapperTest {
 
     private fun loaded(vararg expenses: SharedExpense, group: SharedGroup = flatOfThree): GroupDetailUiState.Loaded {
         val snapshot = SharedSnapshot(groups = listOf(group), people = emptyList(), expenseVersions = expenses.toList(), payments = emptyList(), links = emptyMap())
-        return mapper.loaded(snapshot, group, seen = SEEN, today = NOW.dateIn(HomeTime), status = GroupSyncStatus(SyncHealth.Local, 0), syncAvailable = false)
+        val detail = requireNotNull(snapshot.groupDetail(group.id, seen = SEEN, today = NOW.dateIn(HomeTime)))
+        return mapper.loaded(detail, status = GroupSyncStatus(SyncHealth.Local, 0), syncAvailable = false)
     }
 }

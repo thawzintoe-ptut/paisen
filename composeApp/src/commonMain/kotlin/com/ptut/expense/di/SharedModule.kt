@@ -20,34 +20,78 @@ import org.koin.dsl.module
 
 /** v2's shared groups: the list, one group's screens, and signing in to share them. */
 val sharedModule: Module = module {
-    viewModel { SharedViewModel(repository = get(), sync = getOrNull(), runner = getOrNull()) }
-    viewModel { PeopleViewModel(repository = get()) }
+    viewModel {
+        SharedViewModel(
+            observeSnapshot = get(),
+            observeSyncStatus = get(),
+            pollSync = get(),
+            getSharedHome = get(),
+            createGroupUseCase = get(),
+            createPersonGroup = get(),
+        )
+    }
+    viewModel { PeopleViewModel(observeSnapshot = get(), getPeopleBalances = get(), setPersonArchived = get(), createPersonGroup = get()) }
     // Koin's parameters do not carry a null, so a new repeat travels as "".
     viewModel { (groupId: String, ruleId: String) ->
         RepeatExpenseViewModel(
             groupId = groupId,
             ruleId = ruleId.ifEmpty { null },
-            repository = get(),
             categories = storedCategories().forDirection(Direction.Expense),
             toasts = get(),
-            runner = getOrNull(),
+            observeSnapshot = get(),
+            loadDraft = get(),
+            homeToday = get(),
+            saveRepeat = get(),
+            stopRepeat = get(),
         )
     }
-    viewModel { SignInViewModel(auth = getOrNull()) }
-    viewModel { AccountViewModel(auth = getOrNull(), sync = getOrNull()) }
-    viewModel { (code: String) -> JoinViewModel(code = code, sync = getOrNull(), auth = getOrNull()) }
+    viewModel { SignInViewModel(signInUseCase = get()) }
+    viewModel { AccountViewModel(observeAccount = get(), signOutUseCase = get(), deleteAccountUseCase = get(), syncAllNow = get()) }
+    viewModel { (code: String) -> JoinViewModel(code = code, getSyncAccess = get(), openInvite = get(), joinGroup = get()) }
     // One screen per group, like the record screens: a holder that outlived the wrong group would
     // show one group's balance under another's name.
     viewModel { (groupId: String) ->
-        GroupDetailViewModel(groupId = groupId, repository = get(), categories = storedCategories(), sync = getOrNull(), runner = getOrNull(), toasts = get(), haptics = get())
+        GroupDetailViewModel(
+            groupId = groupId,
+            categories = storedCategories(),
+            observeSnapshot = get(),
+            observeSyncStatus = get(),
+            getSyncAccess = get(),
+            pollSync = get(),
+            trackSeen = get(),
+            getGroupDetail = get(),
+            syncGroupNow = get(),
+            acknowledgeRefused = get(),
+            savePromptPay = get(),
+            removePaymentUseCase = get(),
+            putBackPayment = get(),
+            toasts = get(),
+            haptics = get(),
+        )
     }
-    viewModel { (groupId: String) -> GroupSettingsViewModel(groupId = groupId, repository = get(), sync = getOrNull(), runner = getOrNull()) }
+    viewModel { (groupId: String) ->
+        GroupSettingsViewModel(
+            groupId = groupId,
+            editGroupUseCase = get(),
+            removeGroupUseCase = get(),
+            addMembers = get(),
+            removeMemberUseCase = get(),
+            shareGroup = get(),
+            renewInvite = get(),
+            switchOffInvite = get(),
+        )
+    }
     viewModel { (groupId: String, expenseId: String, transactionId: String, amount: String, description: String) ->
         AddExpenseViewModel(
             groupId = groupId,
             expenseId = expenseId.ifEmpty { null },
-            repository = get(),
             categories = storedCategories().forDirection(Direction.Expense),
+            observeSnapshot = get(),
+            loadDraft = get(),
+            getLastRate = get(),
+            saveExpense = get(),
+            removeExpense = get(),
+            restoreExpense = get(),
             transactionId = transactionId.ifEmpty { null },
             toasts = get(),
             haptics = get(),
@@ -55,11 +99,23 @@ val sharedModule: Module = module {
             prefillDescription = description.ifEmpty { null },
         )
     }
-    viewModel { (groupId: String) -> WhoPaysWhomViewModel(groupId = groupId, repository = get()) }
+    viewModel { (groupId: String) ->
+        WhoPaysWhomViewModel(groupId = groupId, observeSnapshot = get(), getSettlement = get(), savePromptPay = get(), setSimplifyDebts = get())
+    }
     viewModel { (groupId: String, fromMemberId: String, toMemberId: String) ->
-        RecordPaymentViewModel(groupId = groupId, fromMemberId = fromMemberId, toMemberId = toMemberId, repository = get(), toasts = get(), haptics = get())
+        RecordPaymentViewModel(
+            groupId = groupId,
+            fromMemberId = fromMemberId,
+            toMemberId = toMemberId,
+            observeSnapshot = get(),
+            getPaymentBetween = get(),
+            recordPayment = get(),
+            removePayment = get(),
+            toasts = get(),
+            haptics = get(),
+        )
     }
     viewModel { (groupId: String) ->
-        SharedActivityViewModel(groupId = groupId.ifEmpty { null }, repository = get())
+        SharedActivityViewModel(groupId = groupId.ifEmpty { null }, observeSnapshot = get(), getActivity = get())
     }
 }

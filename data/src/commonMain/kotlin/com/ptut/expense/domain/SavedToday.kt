@@ -16,5 +16,8 @@ fun List<Transaction>.savedOn(day: LocalDate, zone: TimeZone = HomeTime): List<T
     }.sortedByDescending { it.filedAt }
 
 /** What went out on [day], on [zone] days. Income never counts. */
-fun List<Transaction>.spentOn(day: LocalDate, zone: TimeZone = HomeTime): Satang =
-    filter { it.direction == Direction.Expense && it.occurredAtEpochMillis.dateIn(zone) == day }.map { it.amount }.sum()
+fun List<Transaction>.spentOn(day: LocalDate, zone: TimeZone = HomeTime): Satang = expensesOn(day, zone).map { it.amount }.sum()
+
+/** The purchases on [day], on [zone] days, earliest first: the rows [spentOn] adds up. */
+fun List<Transaction>.expensesOn(day: LocalDate, zone: TimeZone = HomeTime): List<Transaction> =
+    filter { it.direction == Direction.Expense && it.occurredAtEpochMillis.dateIn(zone) == day }.sortedBy { it.occurredAtEpochMillis }

@@ -39,6 +39,7 @@ import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.MergeReport
+import com.ptut.expense.domain.domainModule
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.SampleLedgerRepository
@@ -379,6 +380,8 @@ class TouchTargetFloorTest {
         configuration = koinConfiguration {
             modules(
                 viewModelModule,
+                // The ViewModels ask their use cases from here; the data underneath is this graph's own.
+                domainModule,
                 module {
                     single<LedgerRepository> { SampleLedgerRepository() }
                     // Settings resolves this to decide whether the debug slip panel is drawn.

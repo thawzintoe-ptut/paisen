@@ -2,6 +2,11 @@ package com.ptut.expense.shared
 
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.Category
+import com.ptut.expense.domain.shared.LoadRepeatDraftUseCase
+import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
+import com.ptut.expense.domain.shared.SaveRepeatUseCase
+import com.ptut.expense.domain.shared.StopRepeatUseCase
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
@@ -21,7 +26,7 @@ class RepeatExpenseViewModelTest : ViewModelTest() {
     @Test
     fun `two fast taps on Save set up one repeat`() = runTest {
         val repository = FakeSharedRepository()
-        val viewModel = RepeatExpenseViewModel(
+        val viewModel = repeatExpenseViewModel(
             groupId = "g1",
             ruleId = null,
             repository = repository,
@@ -45,7 +50,7 @@ class RepeatExpenseViewModelTest : ViewModelTest() {
     /** #6: a new repeat opens on next month's first day; only what is typed or picked after that asks. */
     @Test
     fun `leaving asks first only once the repeat differs from how it opened`() = runTest {
-        val viewModel = RepeatExpenseViewModel(
+        val viewModel = repeatExpenseViewModel(
             groupId = "g1",
             ruleId = null,
             repository = FakeSharedRepository(),
@@ -73,7 +78,7 @@ class RepeatExpenseViewModelTest : ViewModelTest() {
     fun `a failed save keeps the repeat open says so and the next tap saves`() = runTest {
         val repository = FakeSharedRepository()
         val toasts = ToastMessages()
-        val viewModel = RepeatExpenseViewModel(groupId = "g1", ruleId = null, repository = repository, categories = Category.seed(), toasts = toasts)
+        val viewModel = repeatExpenseViewModel(groupId = "g1", ruleId = null, repository = repository, categories = Category.seed(), toasts = toasts)
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         viewModel.setAmount("18000")
@@ -102,7 +107,7 @@ class RepeatExpenseViewModelTest : ViewModelTest() {
     fun `a new rent files under bills and a subscription under other`() = runTest {
         val repository = FakeSharedRepository()
         repository.gate.complete(Unit)
-        val viewModel = RepeatExpenseViewModel(groupId = "g1", ruleId = null, repository = repository, categories = Category.seed(), toasts = ToastMessages())
+        val viewModel = repeatExpenseViewModel(groupId = "g1", ruleId = null, repository = repository, categories = Category.seed(), toasts = ToastMessages())
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
         viewModel.setAmount("18000")
@@ -115,3 +120,16 @@ class RepeatExpenseViewModelTest : ViewModelTest() {
 
     private fun RepeatExpenseViewModel.ready() = assertIs<RepeatExpenseUiState.Ready>(uiState.value)
 }
+
+/** The repeat sheet as Koin builds it, its use cases over [repository]. */
+private fun repeatExpenseViewModel(groupId: String, ruleId: String?, repository: FakeSharedRepository, categories: List<Category>, toasts: ToastMessages) = RepeatExpenseViewModel(
+    groupId = groupId,
+    ruleId = ruleId,
+    categories = categories,
+    toasts = toasts,
+    observeSnapshot = ObserveSharedSnapshotUseCase(repository),
+    loadDraft = LoadRepeatDraftUseCase(repository, GetHomeTodayUseCase()),
+    homeToday = GetHomeTodayUseCase(),
+    saveRepeat = SaveRepeatUseCase(repository),
+    stopRepeat = StopRepeatUseCase(repository),
+)

@@ -9,7 +9,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.ptut.expense.domain.runSuspendCatching
-import com.ptut.expense.shared.RepeatRunner
+import com.ptut.expense.domain.shared.RunDueRepeatsUseCase
 import com.ptut.expense.sync.SharedSync
 import com.ptut.expense.sync.SyncHealth
 import kotlinx.coroutines.flow.first
@@ -30,7 +30,7 @@ private const val SHARED_SYNC_INTERVAL_HOURS = 1L
 class SharedSyncWorker(context: Context, parameters: WorkerParameters) :
     CoroutineWorker(context, parameters), KoinComponent {
 
-    private val repeats: RepeatRunner by inject()
+    private val runDueRepeats: RunDueRepeatsUseCase by inject()
 
     /** Null in a graph without sync, as on the app's own start. */
     private val sync: SharedSync? by lazy { getKoin().getOrNull<SharedSync>() }
@@ -44,7 +44,7 @@ class SharedSyncWorker(context: Context, parameters: WorkerParameters) :
         }
         val pulled = runSuspendCatching { sync.syncAll() }.isSuccess && sync.overallStatus().first().health != SyncHealth.Offline
         // After the pull: a repeat entry another phone already added arrives before this phone makes its own.
-        runSuspendCatching { repeats.run() }
+        runSuspendCatching { runDueRepeats() }
         return if (pulled) Result.success() else Result.failure()
     }
 }

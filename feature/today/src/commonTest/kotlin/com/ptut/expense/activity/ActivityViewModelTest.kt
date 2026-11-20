@@ -14,8 +14,12 @@ import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.ledger.ObserveImportRunsUseCase
+import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
+import com.ptut.expense.domain.slip.ObserveQueuedSlipsUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.toInstant
@@ -159,7 +163,14 @@ class ActivityViewModelTest : ViewModelTest() {
         rows: List<Transaction> = emptyList(),
         clock: Clock = frozen,
         assert: (List<ActivityEntryUiModel>) -> Unit,
-    ) = ActivityViewModel(JournalLedger(runs, queued, rows), clock = clock).uiState.test {
+    ) = JournalLedger(runs, queued, rows).let { ledger ->
+        ActivityViewModel(
+            observeImportRuns = ObserveImportRunsUseCase(ledger),
+            observeQueuedSlips = ObserveQueuedSlipsUseCase(ledger, flowOf(emptySet())),
+            observeTransactions = ObserveTransactionsUseCase(ledger),
+            clock = clock,
+        )
+    }.uiState.test {
         var state = awaitItem()
         while (state.entries.isEmpty()) state = awaitItem()
         assert(state.entries)
