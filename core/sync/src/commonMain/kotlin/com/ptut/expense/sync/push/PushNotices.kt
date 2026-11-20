@@ -73,9 +73,9 @@ class PushNotices(
 
     fun deleted(): PushNotice = PushNotice(PushKind.Deleted)
 
-    /** [notice] worded on this phone, for the iOS refresh's local notices about rows others added. */
+    /** [notice] worded on this phone from [snapshot], for the iOS refresh's local notices about rows others added. */
     fun sentence(notice: PushNotice, snapshot: SharedSnapshot, copy: SharedCopy): String =
-        pushSentence(notice, members, snapshot, actor, groupName, copy, money)
+        pushSentence(notice, members, snapshot, actor, groupName, copy, money) ?: copy.home.newSince(1)
 
     // The callers pass a name; the other phones look the member up by id. Same name, same words.
     private fun memberNamed(name: String): String? = members.firstOrNull { it.name == name }?.id

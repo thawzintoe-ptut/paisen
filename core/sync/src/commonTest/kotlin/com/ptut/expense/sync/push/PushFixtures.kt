@@ -51,8 +51,8 @@ internal fun version(versionId: String, description: String = "Rice", version: I
 
 internal val payment = SharedPayment("p1", "g1", mali.id, cara.id, Satang(5_000), PaymentMethod.Cash, 2, mali.id, 3)
 
-internal fun snapshot(group: SharedGroup, versions: List<SharedExpense> = emptyList()) =
-    SharedSnapshot(listOf(group), emptyList(), versions, emptyList(), emptyMap())
+internal fun snapshot(group: SharedGroup, versions: List<SharedExpense> = emptyList(), payments: List<SharedPayment> = emptyList()) =
+    SharedSnapshot(listOf(group), emptyList(), versions, payments, emptyMap())
 
 /** Kept in memory; [canRetire] says whether the platform could retire an installation. */
 internal class MemoryPushLeftovers(private val canRetire: Boolean = false) : PushLeftovers {

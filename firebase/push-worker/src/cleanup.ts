@@ -11,6 +11,7 @@ const PAGE = 300;
 // Firestore calls per run, under the free plan's 50 subrequests with the token fetch.
 const CALLS_PER_RUN = 40;
 const PURGE_PER_RUN = 20;
+const DUE_PAGE = 50;
 const STAMP_PER_RUN = 200;
 
 export interface DeletedGroup {
@@ -26,6 +27,8 @@ export interface Counts {
   documents: number;
   /** A purge the call budget cut short; the next run carries on. */
   unfinished: number;
+  /** Past 30 days by deletedAt but not deleted; the rules no longer let this happen. */
+  skipped: number;
 }
 
 /** 'stamp' starts the 30 days for a group an old build deleted, from the first run that sees it. */
@@ -46,6 +49,32 @@ export function toDeletedGroup(document: FirestoreDocument): DeletedGroup {
   };
 }
 
+/**
+ * Groups whose deletedAt is 30 days old, oldest first, after [after]. A range on deletedAt alone
+ * needs no composite index; adding `deleted == true` would, so the purge checks that itself.
+ */
+export function dueQuery(now: number, after?: FirestoreDocument): Record<string, unknown> {
+  const query: Record<string, unknown> = {
+    from: [{ collectionId: 'groups' }],
+    where: {
+      fieldFilter: {
+        field: { fieldPath: 'deletedAt' },
+        op: 'LESS_THAN_OR_EQUAL',
+        value: { timestampValue: new Date(now - PURGE_AFTER_MS).toISOString() },
+      },
+    },
+    orderBy: [
+      { field: { fieldPath: 'deletedAt' }, direction: 'ASCENDING' },
+      { field: { fieldPath: '__name__' }, direction: 'ASCENDING' },
+    ],
+    select: { fields: [{ fieldPath: 'deleted' }, { fieldPath: 'deletedAt' }] },
+    limit: DUE_PAGE,
+  };
+  const stamp = after?.fields?.deletedAt;
+  if (after && stamp) query.startAt = { values: [stamp, { referenceValue: after.name }], before: false };
+  return query;
+}
+
 /** Counts Firestore calls, so one run stays inside the Worker's subrequest limit. */
 export class Budget {
   private left: number;
@@ -63,7 +92,7 @@ export class Budget {
 
 /** One daily run: stamps first, then purges oldest first. Safe to stop anywhere and run again. */
 export async function cleanUp(projectId: string, accessToken: string, now: number): Promise<Counts> {
-  const counts: Counts = { stamped: 0, purged: 0, documents: 0, unfinished: 0 };
+  const counts: Counts = { stamped: 0, purged: 0, documents: 0, unfinished: 0, skipped: 0 };
   const budget = new Budget(CALLS_PER_RUN);
 
   budget.spend(2);
@@ -88,33 +117,26 @@ export async function cleanUp(projectId: string, accessToken: string, now: numbe
   );
   counts.stamped = unstamped.length;
 
-  // A range on deletedAt alone needs no composite index and comes oldest first.
-  budget.spend();
-  const due = (
-    await runQuery(projectId, accessToken, '', {
-      from: [{ collectionId: 'groups' }],
-      where: {
-        fieldFilter: {
-          field: { fieldPath: 'deletedAt' },
-          op: 'LESS_THAN_OR_EQUAL',
-          value: { timestampValue: new Date(now - PURGE_AFTER_MS).toISOString() },
-        },
-      },
-      select: { fields: [{ fieldPath: 'deleted' }, { fieldPath: 'deletedAt' }] },
-      limit: PURGE_PER_RUN,
-    })
-  )
-    .map(toDeletedGroup)
-    .filter((group) => stepFor(group, now) === 'purge');
-
-  for (const group of due) {
-    const result = await purge(projectId, accessToken, group.id, budget);
-    counts.documents += result.documents;
-    if (!result.finished) {
-      counts.unfinished += 1;
-      break;
+  // Paged past any group the purge skips, so a stray deletedAt can never hold up a real deletion.
+  let after: FirestoreDocument | undefined;
+  while (counts.purged < PURGE_PER_RUN && budget.spend()) {
+    const page = await runQuery(projectId, accessToken, '', dueQuery(now, after));
+    for (const document of page) {
+      if (stepFor(toDeletedGroup(document), now) !== 'purge') {
+        counts.skipped += 1;
+        continue;
+      }
+      const result = await purge(projectId, accessToken, lastSegment(document.name), budget);
+      counts.documents += result.documents;
+      if (!result.finished) {
+        counts.unfinished += 1;
+        return counts;
+      }
+      counts.purged += 1;
+      if (counts.purged >= PURGE_PER_RUN) return counts;
     }
-    counts.purged += 1;
+    if (page.length < DUE_PAGE) break;
+    after = page[page.length - 1];
   }
   return counts;
 }

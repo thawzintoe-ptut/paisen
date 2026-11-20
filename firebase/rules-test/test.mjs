@@ -2,7 +2,7 @@
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
 import {
   doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, arrayRemove, arrayUnion, serverTimestamp,
-  collection, query, where, Timestamp,
+  collection, query, where, Timestamp, deleteField,
 } from 'firebase/firestore';
 import { readFileSync } from 'node:fs';
 
@@ -408,6 +408,12 @@ await check('11.2 delete stamped with a time the phone chose', 'deny', {}, () =>
 await check('11.3 a member who is not the creator sends the delete', 'deny', {}, () => deleteCommit('bob'));
 await check('11.4 creator clears someone\'s PromptPay ID in a live group', 'deny', {}, () => updateDoc(doc(as('alice'), 'groups/g1/members/mBob'), { promptPay: null }));
 await check('11.5 creator stamps a time without deleting', 'deny', {}, () => updateDoc(doc(as('alice'), 'groups/g1'), { deletedAt: serverTimestamp() }));
+await check('11.5b creator un-deletes a deleted group', 'deny', deleted, () => updateDoc(doc(as('alice'), 'groups/g1'), { deleted: false }));
+await check('11.5c creator removes the deleted flag', 'deny', deleted, () => updateDoc(doc(as('alice'), 'groups/g1'), { deleted: deleteField() }));
+await check('11.5d creator un-deletes and keeps the stamp', 'deny', { group: { deleted: true, inviteActive: false, deletedAt: Timestamp.fromMillis(1) } }, () => updateDoc(doc(as('alice'), 'groups/g1'), { deleted: false }));
+await check('11.5e a live group keeps a stray deletedAt through a rename', 'deny', { group: { deletedAt: Timestamp.fromMillis(1) } }, () => updateDoc(doc(as('bob'), 'groups/g1'), { name: 'New' }));
+await check('11.5f new group made with a deletedAt', 'deny', {}, () => setDoc(doc(as('carol'), 'groups/g2'), { name: 'Home', type: 'Flat', icon: 'group', simplifyDebts: true, createdAt: 1, creatorUid: 'carol', memberUids: ['carol'], inviteCode: null, inviteActive: false, deletedAt: Timestamp.fromMillis(1) }));
+await check('11.5g deleted group: the creator switches the invite off again', 'allow', deleted, () => updateDoc(doc(as('alice'), 'groups/g1'), { inviteActive: false }));
 await check('11.6 deleted group: a member still reads its document', 'allow', deleted, () => getDoc(doc(as('bob'), 'groups/g1')));
 await check('11.7 deleted group: a member lists the names', 'deny', deleted, () => getDocs(collection(as('bob'), 'groups/g1/members')));
 await check('11.8 deleted group: a member lists the entries', 'deny', deleted, () => getDocs(collection(as('bob'), 'groups/g1/entries')));

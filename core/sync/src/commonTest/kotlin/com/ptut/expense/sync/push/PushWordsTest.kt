@@ -25,14 +25,14 @@ class PushWordsTest {
     }
 
     @Test
-    fun `a notice missing what its words need is read as an old build sentence`() {
-        assertNull(push("expenseAdded", "about" to "v1").notice)
-        assertNull(push("paid", "from" to "m-mali", "amount" to "5000").notice)
+    fun `a notice missing the record it names is read as an old build sentence`() {
+        assertNull(push("expenseAdded", "amount" to "32000").notice)
+        assertNull(push("paid", "from" to "m-mali", "to" to "m-cara", "amount" to "5000").notice)
         assertNull(ReceivedPush.from(mapOf("kind" to "joined")))
     }
 
     @Test
-    fun `a notice this phone already holds is worded without a sync`() = runTest {
+    fun `a record this phone already holds is worded without a sync`() = runTest {
         val held = MutableStateFlow(snapshot(group(mali, cara), listOf(version("v1"))))
         val reader = PushReader(held, sync = { error("nothing to fetch") })
 
@@ -52,12 +52,48 @@ class PushWordsTest {
     }
 
     @Test
-    fun `what a failed sync leaves out reads as someone and an expense`() = runTest {
-        val reader = PushReader(MutableStateFlow(snapshot(group(cara))), sync = { error("offline") })
+    fun `the amount comes from the stored version never the payload`() = runTest {
+        val reader = PushReader(MutableStateFlow(snapshot(group(mali, cara), listOf(version("v1")))), sync = {})
 
-        val words = reader.words(push("expenseAdded", "about" to "v9", "amount" to "32000", "currency" to "THB"), english)
+        val words = reader.words(push("expenseAdded", "about" to "v1", "amount" to "99999900", "currency" to "USD"), english)
 
-        assertEquals(english.push.added(english.someone, english.push.anExpense, "฿320"), words.body)
+        assertEquals(english.push.added("Mali", "Rice", "฿320"), words.body)
+    }
+
+    @Test
+    fun `a payment is worded from its stored record never the payload`() = runTest {
+        val reader = PushReader(MutableStateFlow(snapshot(group(mali, cara), payments = listOf(payment))), sync = {})
+
+        val forged = push("paid", "about" to "p1", "from" to "m-cara", "to" to "m-mali", "amount" to "99999900", "currency" to "THB")
+
+        assertEquals(english.push.paid("Mali", "Cara", "฿50"), reader.words(forged, english).body)
+    }
+
+    @Test
+    fun `a payment another member wrote gets the generic line`() = runTest {
+        val theirs = payment.copy(authorMemberId = cara.id)
+        val reader = PushReader(MutableStateFlow(snapshot(group(mali, cara), payments = listOf(theirs))), sync = {})
+
+        val words = reader.words(push("paid", "about" to "p1", "from" to "m-cara", "to" to "m-mali", "amount" to "99999900"), english)
+
+        assertEquals(english.home.newSince(1), words.body)
+    }
+
+    @Test
+    fun `an expense another member wrote gets the generic line`() = runTest {
+        val theirs = version("v1").copy(authorMemberId = cara.id)
+        val reader = PushReader(MutableStateFlow(snapshot(group(mali, cara), listOf(theirs))), sync = {})
+
+        assertEquals(english.home.newSince(1), reader.words(push("expenseRemoved", "about" to "v1"), english).body)
+    }
+
+    @Test
+    fun `a record the sync never brings gets the generic line`() = runTest {
+        val reader = PushReader(MutableStateFlow(snapshot(group(mali, cara))), sync = { error("offline") })
+
+        val words = reader.words(push("paid", "about" to "p9", "from" to "m-mali", "to" to "m-cara", "amount" to "5000"), english)
+
+        assertEquals(PushWords("Trip", english.home.newSince(1)), words)
     }
 
     @Test
@@ -68,22 +104,14 @@ class PushWordsTest {
     }
 
     @Test
-    fun `a group the sync lets go still names its sender and title`() = runTest {
+    fun `a joiner this phone does not know yet is fetched first`() = runTest {
+        val dan = mali.copy(id = "m-dan", name = "Dan", claimedByUid = "uid-dan")
         val held = MutableStateFlow(snapshot(group(mali, cara)))
-        val reader = PushReader(held, sync = { held.value = SharedSnapshot(emptyList(), emptyList(), emptyList(), emptyList(), emptyMap()) })
+        val reader = PushReader(held, sync = { held.value = snapshot(group(mali, cara, dan)) })
 
-        val words = reader.words(push("expenseRemoved", "about" to "v9"), english)
+        val words = reader.words(push("joined").copy(by = "uid-dan"), english)
 
-        assertEquals(PushWords("Trip", english.push.removed("Mali", english.push.anExpense)), words)
-    }
-
-    @Test
-    fun `a payment names both members and its amount in the group money`() = runTest {
-        val reader = PushReader(MutableStateFlow(snapshot(group(mali, cara))), sync = {})
-
-        val words = reader.words(push("paid", "about" to "p1", "from" to "m-mali", "to" to "m-cara", "amount" to "5000", "currency" to "THB"), english)
-
-        assertEquals(english.push.paid("Mali", "Cara", "฿50"), words.body)
+        assertEquals(english.push.joined("Dan"), words.body)
     }
 
     @Test

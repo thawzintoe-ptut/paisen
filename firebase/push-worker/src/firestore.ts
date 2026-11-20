@@ -17,6 +17,7 @@ export interface FirestoreValue {
   booleanValue?: boolean;
   integerValue?: string;
   timestampValue?: string;
+  referenceValue?: string;
   arrayValue?: { values?: FirestoreValue[] };
 }
 

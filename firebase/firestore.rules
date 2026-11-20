@@ -83,12 +83,19 @@ service cloud.firestore {
         return !changed().hasAny(['deletedAt'])
           || (request.resource.data.deletedAt == request.time && request.resource.data.deleted == true);
       }
+      // H3: deleting is one-way, and only a deleted group carries deletedAt, so every group the clean-up's
+      // deletedAt query returns is a real deletion.
+      function deleteOneWay() {
+        let after = request.resource.data;
+        return (resource.data.get('deleted', false) != true || after.get('deleted', false) == true)
+          && (after.get('deletedAt', null) == null || after.get('deleted', false) == true);
+      }
       function leavesAlone() { return uidsBefore().hasAll(uidsAfter()) && uidsBefore().removeAll(uidsAfter()) == [request.auth.uid]; }
-      allow create: if signedIn() && groupFieldsOk()
+      allow create: if signedIn() && groupFieldsOk() && !('deletedAt' in request.resource.data)
         && request.resource.data.creatorUid == request.auth.uid
         && request.resource.data.memberUids == [request.auth.uid]
         && groupName(request.resource.data.name) && groupTypeOk() && groupCurrencyOk();
-      allow update: if
+      allow update: if deleteOneWay() && (
         // Any member edits the name, icon or the Simplify debts switch, while the group is live.
         (isMember(gid) && live(gid) && onlyChanged(['name', 'icon', 'type', 'simplifyDebts']) && groupFieldsOk()
             && (!changed().hasAny(['name']) || groupName(request.resource.data.name))
@@ -106,7 +113,7 @@ service cloud.firestore {
         // The creator takes one other account out, with the name it claimed: it can no longer read or write here.
         || (isCreator(gid) && onlyChanged(['memberUids'])
             && uidsBefore().hasAll(uidsAfter()) && uidsBefore().removeAll(uidsAfter()).size() == 1
-            && request.auth.uid in uidsAfter() && cannotRejoin(uidsBefore().removeAll(uidsAfter())[0]));
+            && request.auth.uid in uidsAfter() && cannotRejoin(uidsBefore().removeAll(uidsAfter())[0])));
       allow delete: if false;
 
       match /members/{mid} {

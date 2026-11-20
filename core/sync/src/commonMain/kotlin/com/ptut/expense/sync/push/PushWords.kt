@@ -1,12 +1,10 @@
 package com.ptut.expense.sync.push
 
-import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeMoney
-import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.runSuspendCatching
-import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Member
+import com.ptut.expense.domain.shared.SharedExpense
 import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.moneyFormat
@@ -31,7 +29,7 @@ data class ReceivedPush(
     val by: String?,
 ) {
     companion object {
-        /** Null without a group id. A notice missing a field its words need is read as an old build's. */
+        /** Null without a group id. A notice missing the id of the record it names is read as an old build's. */
         fun from(data: Map<String, String?>): ReceivedPush? {
             val groupId = data["groupId"]?.takeIf { it.isNotBlank() } ?: return null
             val notice = PushKind.ofWire(data["kind"])?.let { kind ->
@@ -46,9 +44,10 @@ data class ReceivedPush(
 data class PushWords(val title: String, val body: String)
 
 /**
- * M6: words a push on the phone that got it, in [copy]'s language. When this phone does not hold
- * what the notice names yet, it syncs first, for at most [wait] in all; past that it words what it
- * has, and a name it lacks reads "Someone".
+ * M6: words a push on the phone that got it, in [copy]'s language, from records this phone holds:
+ * never an amount, a name or a party the push itself carries. When the record the notice names is
+ * not here yet, it syncs first, for at most [wait] in all. A record still missing, or one another
+ * member wrote, gets the generic "1 new".
  */
 class PushReader(
     private val snapshot: StateFlow<SharedSnapshot>,
@@ -70,9 +69,11 @@ class PushReader(
         val after = snapshot.value
         val group = after.group(push.groupId) ?: before?.group(push.groupId)
         // Leaving and deleting let the sender's claim go right after the push, so before the sync first.
-        val actor = before?.group(push.groupId)?.holderName(push.by) ?: group?.holderName(push.by)
+        val sender = before?.group(push.groupId)?.claimedBy(push.by) ?: group?.claimedBy(push.by)
         val title = push.title?.takeIf { it.isNotBlank() } ?: group?.name.orEmpty()
-        return PushWords(title, pushSentence(notice, group?.members.orEmpty(), after, actor, push.title, copy, group?.moneyFormat()))
+        val sentence = group?.takeIf { after.wroteIt(notice, it, sender?.id) }
+            ?.let { pushSentence(notice, it.members, after, sender?.name, push.title, copy, it.moneyFormat()) }
+        return PushWords(title, sentence ?: copy.home.newSince(1))
     }
 
     private companion object {
@@ -82,8 +83,9 @@ class PushReader(
 }
 
 /**
- * The sentence for [notice] from what this phone holds: names from [members], the description
- * from the stored expense version or repeat, [actor] null for "Someone".
+ * The sentence for [notice] from the record it names in [snapshot]: the stored version, payment,
+ * repeat or member, its amount in [money]. Names come from [members]; [actor] null reads
+ * "Someone". Null when this phone does not hold that record.
  */
 fun pushSentence(
     notice: PushNotice,
@@ -92,65 +94,96 @@ fun pushSentence(
     actor: String?,
     groupName: String?,
     copy: SharedCopy,
-    money: HomeMoney?,
-): String {
+    money: HomeMoney,
+): String? {
     val push = copy.push
     val who = actor ?: copy.someone
-    fun name(memberId: String?) = members.firstOrNull { it.id == memberId }?.name ?: copy.someone
-    fun expense() = snapshot.expenseVersions.firstOrNull { it.versionId == notice.about }?.description.orIf(push.anExpense)
-    fun repeat() = snapshot.repeats.firstOrNull { it.id == notice.about }?.description.orIf(push.anExpense)
-    val format = notice.currency?.let { Currencies.of(it).toHomeMoney() } ?: money ?: Home.money
-    val amount = notice.amount?.let { Satang.ofMinorUnits(it).formatCompact(format) }.orEmpty()
+    fun name(memberId: String) = members.firstOrNull { it.id == memberId }?.name ?: copy.someone
+    fun version() = snapshot.expenseVersions.firstOrNull { it.versionId == notice.about }
+    fun what(version: SharedExpense) = version.description.orIf(push.anExpense)
+    fun repeat() = snapshot.repeats.firstOrNull { it.id == notice.about }?.description?.orIf(push.anExpense)
+    fun person() = members.firstOrNull { it.id == notice.about }?.name
     return when (notice.kind) {
-        PushKind.ExpenseAdded -> push.added(who, expense(), amount)
-        PushKind.ExpenseEdited -> push.edited(who, expense())
-        PushKind.ExpenseRemoved -> push.removed(who, expense())
-        PushKind.ExpensePutBack -> push.putBack(who, expense())
-        PushKind.RepeatAdded -> push.repeatAdded(expense(), amount)
-        PushKind.Paid -> push.paid(name(notice.from), name(notice.to), amount)
+        PushKind.ExpenseAdded -> version()?.let { push.added(who, what(it), it.satang.formatCompact(money)) }
+
+        PushKind.ExpenseEdited -> version()?.let { push.edited(who, what(it)) }
+
+        PushKind.ExpenseRemoved -> version()?.let { push.removed(who, what(it)) }
+
+        PushKind.ExpensePutBack -> version()?.let { push.putBack(who, what(it)) }
+
+        PushKind.RepeatAdded -> version()?.let { push.repeatAdded(what(it), it.satang.formatCompact(money)) }
+
+        PushKind.Paid -> snapshot.payments.firstOrNull { it.id == notice.about }
+            ?.let { push.paid(name(it.fromMemberId), name(it.toMemberId), it.amount.formatCompact(money)) }
+
         PushKind.PaymentRemoved -> push.paymentRemoved(who)
+
         PushKind.PaymentPutBack -> push.paymentPutBack(who)
-        PushKind.RepeatSetUp -> push.repeatSetUp(who, repeat())
-        PushKind.RepeatChanged -> push.repeatChanged(who, repeat())
-        PushKind.RepeatStopped -> push.repeatStopped(who, repeat())
-        PushKind.PersonAdded -> push.addedPerson(who, name(notice.about))
-        PushKind.PersonRemoved -> push.removedPerson(who, name(notice.about))
+
+        PushKind.RepeatSetUp -> repeat()?.let { push.repeatSetUp(who, it) }
+
+        PushKind.RepeatChanged -> repeat()?.let { push.repeatChanged(who, it) }
+
+        PushKind.RepeatStopped -> repeat()?.let { push.repeatStopped(who, it) }
+
+        PushKind.PersonAdded -> person()?.let { push.addedPerson(who, it) }
+
+        PushKind.PersonRemoved -> person()?.let { push.removedPerson(who, it) }
+
         PushKind.NameChanged -> push.changedName(who)
+
         PushKind.Renamed -> push.renamed(who, groupName?.takeIf { it.isNotBlank() } ?: copy.group)
+
         PushKind.Joined -> push.joined(who)
+
         PushKind.Left -> push.left(who)
+
         PushKind.Deleted -> push.deleted(who)
     }
 }
 
-/** Whether this phone already holds everything [push]'s words name. */
+/** Whether this phone already holds the record [push] names, written by its sender, and the sender. */
 internal fun SharedSnapshot.holds(push: ReceivedPush): Boolean {
     val notice = push.notice ?: return true
     val group = group(push.groupId) ?: return false
-    val subject = when (notice.kind) {
-        in EXPENSE_KINDS -> expenseVersions.any { it.versionId == notice.about }
-        in REPEAT_KINDS -> repeats.any { it.id == notice.about }
-        PushKind.Paid -> group.member(notice.from.orEmpty()) != null && group.member(notice.to.orEmpty()) != null
-        PushKind.PersonAdded, PushKind.PersonRemoved -> group.member(notice.about.orEmpty()) != null
+    val sender = group.claimedBy(push.by)
+    return (notice.kind in NO_ACTOR || sender != null) && wroteIt(notice, group, sender?.id)
+}
+
+/**
+ * Whether this phone holds the record [notice] names in [group] and, where that record names its
+ * writer, [senderId] wrote it: the member the sending account claimed, never one the push names.
+ */
+internal fun SharedSnapshot.wroteIt(notice: PushNotice, group: SharedGroup, senderId: String?): Boolean {
+    fun byTheSender(author: String?) = author == null || author == senderId
+    val about = notice.about
+    return when (notice.kind) {
+        in EXPENSE_KINDS -> expenseVersions.any { it.versionId == about && it.groupId == group.id && byTheSender(it.authorMemberId) }
+
+        PushKind.Paid -> payments.any { it.id == about && it.groupId == group.id && byTheSender(it.authorMemberId) }
+
+        PushKind.PaymentRemoved, PushKind.PaymentPutBack -> paymentRemovals.any {
+            it.paymentId == about && it.groupId == group.id && it.removed == (notice.kind == PushKind.PaymentRemoved) && byTheSender(it.authorMemberId)
+        }
+
+        in REPEAT_KINDS -> repeats.any { it.id == about && it.groupId == group.id }
+
+        PushKind.PersonAdded, PushKind.PersonRemoved -> group.member(about.orEmpty()) != null
+
         else -> true
     }
-    val actor = notice.kind in NO_ACTOR || group.holderName(push.by) != null
-    return subject && actor
 }
 
-/** A notice the words need more of, such as an addition with no amount, is not worded at all. */
-internal fun PushNotice.complete(): Boolean = when (kind) {
-    PushKind.ExpenseAdded, PushKind.RepeatAdded -> about != null && amount != null
-    PushKind.Paid -> from != null && to != null && amount != null
-    in EXPENSE_KINDS, in REPEAT_KINDS, PushKind.PersonAdded, PushKind.PersonRemoved -> about != null
-    else -> true
-}
+/** Every kind that names a record needs its id; nothing else in a push is read. */
+internal fun PushNotice.complete(): Boolean = kind in ACTOR_ONLY || about != null
 
-/** The name of the member [uid] claimed in this group. */
-private fun SharedGroup.holderName(uid: String?): String? = uid?.let { holder -> members.firstOrNull { it.claimedByUid == holder }?.name }
+/** The member [uid] claimed in this group. */
+private fun SharedGroup.claimedBy(uid: String?): Member? = uid?.let { holder -> members.firstOrNull { it.claimedByUid == holder } }
 
-private fun String?.orIf(fallback: String): String = this?.trim()?.takeIf { it.isNotEmpty() } ?: fallback
+private fun String.orIf(fallback: String): String = trim().takeIf { it.isNotEmpty() } ?: fallback
 
 private val EXPENSE_KINDS = setOf(PushKind.ExpenseAdded, PushKind.ExpenseEdited, PushKind.ExpenseRemoved, PushKind.ExpensePutBack, PushKind.RepeatAdded)
 private val REPEAT_KINDS = setOf(PushKind.RepeatSetUp, PushKind.RepeatChanged, PushKind.RepeatStopped)
 private val NO_ACTOR = setOf(PushKind.RepeatAdded, PushKind.Paid)
+private val ACTOR_ONLY = setOf(PushKind.NameChanged, PushKind.Renamed, PushKind.Joined, PushKind.Left, PushKind.Deleted)
