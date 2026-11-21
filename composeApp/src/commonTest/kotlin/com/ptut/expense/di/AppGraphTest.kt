@@ -19,6 +19,7 @@ import com.ptut.expense.domain.ledger.FakeLedger
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.play.FakePlayBook
 import com.ptut.expense.domain.play.PlayBook
+import com.ptut.expense.domain.play.PlayTip
 import com.ptut.expense.domain.rules.RememberedMerchant
 import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.domain.settings.AppSettingsStore
@@ -167,6 +168,8 @@ private val PARAMETER_SHAPES: List<Array<Any>> = listOf(
     arrayOf(ANY_ID, ANY_ID),
     arrayOf(ANY_ID, ANY_ID, ANY_ID),
     arrayOf(ANY_ID, ANY_ID, ANY_ID, ANY_ID, ANY_ID),
+    // A tip screen takes which tip it shows.
+    arrayOf(PlayTip.entries.first()),
 )
 
 /**
