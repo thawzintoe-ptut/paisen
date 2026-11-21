@@ -40,9 +40,9 @@ data class LedgerBackup(
     val homeCode: String get() = homeCurrency ?: HomeMoney.Baht.code
 
     companion object {
-        const val FORMAT: Int = 5
+        const val FORMAT: Int = 6
 
-        /** Formats 1 to 4 are format 5 with fewer fields, so all five still import. */
+        /** Formats 1 to 5 are format 6 with fewer fields, so all six still import. */
         val READABLE: IntRange = 1..FORMAT
 
         /**

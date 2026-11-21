@@ -32,9 +32,11 @@ import com.ptut.expense.domain.ledger.LedgerSpan
 import com.ptut.expense.domain.ledger.ObserveImportRunsUseCase
 import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
 import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
+import com.ptut.expense.domain.play.AnswerGoalDayUseCase
 import com.ptut.expense.domain.play.ObserveTodayPlayUseCase
 import com.ptut.expense.domain.play.TodayPlay
 import com.ptut.expense.domain.rules.ShopNames
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.slip.ObserveQueuedSlipsUseCase
 import com.ptut.expense.domain.today.GetHomeSummaryUseCase
 import com.ptut.expense.domain.today.GetHomeTodayUseCase
@@ -149,6 +151,8 @@ sealed interface HomeUiState {
         val challenge: ChallengeRowUiModel? = null,
         /** The ways into the extras whose parts are on. */
         val shelf: List<ShelfItemUiModel> = emptyList(),
+        /** #104: the goal jar and today's Count it card, on the Today tab only. */
+        val jar: JarCardUiModel? = null,
         /** #102: "Games and stamps join on day 8" through Today's first week, or null. */
         val firstWeekLine: String? = null,
         /** #103: a slip was just caught, so the total's change is its roll. */
@@ -210,6 +214,8 @@ class HomeViewModel(
     private val getWeeklyCheckIn: GetWeeklyCheckInUseCase = GetWeeklyCheckInUseCase(),
     /** #82: what Today shows of play. None where nothing binds it, so a test sees Today as before. */
     observeTodayPlay: ObserveTodayPlayUseCase? = null,
+    /** #104: Count it and Not today. None where nothing binds it, so the card's buttons do nothing. */
+    private val answerGoalDay: AnswerGoalDayUseCase? = null,
     /** #103: Play's switch for the caught slip's press and roll. Off where nothing binds it. */
     playMotion: Flow<Boolean> = flowOf(false),
     /** #103: the app's one toast, where "Caught a K PLUS slip" goes. None where nothing binds it. */
@@ -225,6 +231,11 @@ class HomeViewModel(
     private val caughtId = MutableStateFlow<String?>(null)
 
     private val edits = MutableStateFlow<String?>(null)
+
+    /** #104: Count it landed on this screen, so the jar's stamp presses once. */
+    private val countedNow = MutableStateFlow(false)
+
+    private var answering = false
 
     /** #103: the row the toast's Change asked to edit; the screen opens Edit and calls [editOpened]. */
     val editRequests: StateFlow<String?> = edits
@@ -259,6 +270,17 @@ class HomeViewModel(
         )
     }
 
+    /** #104: Count it, or Not today when [count] is false. A second tap while the first writes does nothing. */
+    fun answerDay(goalId: String, count: Boolean) {
+        val answer = answerGoalDay ?: return
+        if (answering) return
+        answering = true
+        viewModelScope.launch {
+            runSuspendCatching { answer(goalId, count) }.onSuccess { counted -> if (counted) countedNow.value = true }
+            answering = false
+        }
+    }
+
     fun editOpened() {
         edits.value = null
     }
@@ -280,9 +302,9 @@ class HomeViewModel(
                 observeWatchedFolders(),
                 moodByTimeOfDay,
                 combine(weeklyCheckIn, weeklyTarget, weeklyNote, observeTodayPlay?.invoke() ?: flowOf(TodayPlay.Off), ::Weekly),
-                combine(clockTicks, caughtId, playMotion) { _, caught, motion -> caught to motion },
-            ) { scanning, folders, mood, weekly, (caught, motion) ->
-                Extras(scanning, folders, mood, weekly.on, weekly.target, weekly.note, weekly.play, caught, motion)
+                combine(clockTicks, caughtId, playMotion, countedNow) { _, caught, motion, counted -> Triple(caught, motion, counted) },
+            ) { scanning, folders, mood, weekly, (caught, motion, counted) ->
+                Extras(scanning, folders, mood, weekly.on, weekly.target, weekly.note, weekly.play, caught, motion, counted)
             },
             // ShopNames too: naming a shop read as noise retitles its rows here without a restart.
             combine(observeTransactions(LedgerSpan.All), combine(categoryUpdates, subCategoryUpdates, ShopNames.names) { c, s, _ -> c to s }, period, ::Triple),
@@ -330,6 +352,7 @@ class HomeViewModel(
                 coach = coach,
                 challenge = if (onToday) extras.play.challengeRow(categories) else null,
                 shelf = if (onToday) extras.play.shelfItems() else emptyList(),
+                jar = if (onToday) extras.play.jarCard(pressed = extras.countedNow && extras.playMotion) else null,
                 firstWeekLine = AppText.copy.play.extras.firstWeek.takeIf { onToday && extras.play.firstWeek },
                 caught = extras.caughtId != null && transactions.any { it.id == extras.caughtId },
                 playMotion = extras.playMotion,
@@ -410,6 +433,7 @@ private data class Extras(
     val play: TodayPlay,
     val caughtId: String?,
     val playMotion: Boolean,
+    val countedNow: Boolean,
 )
 
 private fun UsualDay.asCompared() = ComparedUiModel(line = differencePhrase(), glyph = difference.trendGlyph())

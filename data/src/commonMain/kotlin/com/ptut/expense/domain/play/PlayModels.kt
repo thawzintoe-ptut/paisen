@@ -79,14 +79,22 @@ data class Stamp(
 
 fun stampId(kind: StampKind, ref: String): String = "${kind.name}:$ref"
 
-/** #92: a goal jar. No money moves; the ledger's own rows fill it. */
+/** #92: a goal jar. No money moves; days counted under the usual fill it (#104). */
 data class Goal(
     val id: String,
     val name: String,
     val target: Satang,
     val currency: String,
-    /** Income less spending from this day fills the jar. */
+    /** The day the jar was made. */
     val start: LocalDate,
     val createdAtEpochMillis: Long,
     val archivedAtEpochMillis: Long? = null,
 )
+
+/**
+ * #104: a day answered on Today's card. [usual] is a usual day for its weekday when it was counted, or
+ * null for Not today. The jar takes [usual] less what the day's spending comes to now, never below zero.
+ */
+data class GoalDay(val goalId: String, val day: LocalDate, val usual: Satang?, val atEpochMillis: Long) {
+    val counted: Boolean get() = usual != null
+}

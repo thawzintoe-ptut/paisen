@@ -33,6 +33,7 @@ import com.ptut.expense.data.local.entity.PaymentReactionEntity
 import com.ptut.expense.data.local.entity.PaymentRemovalEntity
 import com.ptut.expense.data.local.entity.PersonEntity
 import com.ptut.expense.data.local.entity.PlayDayEntity
+import com.ptut.expense.data.local.entity.PlayGoalDayEntity
 import com.ptut.expense.data.local.entity.PlayGoalEntity
 import com.ptut.expense.data.local.entity.PlayMonthEntity
 import com.ptut.expense.data.local.entity.PlayStampEntity
@@ -82,6 +83,7 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         PlayMonthEntity::class,
         PlayStampEntity::class,
         PlayGoalEntity::class,
+        PlayGoalDayEntity::class,
         PaymentReactionEntity::class,
     ],
     version = PTUT_SCHEMA_VERSION,
@@ -128,6 +130,8 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         // and group_member.playOff with a default that is right for every member already there.
         AutoMigration(from = 23, to = 24),
         AutoMigration(from = 24, to = 25, spec = ReactionKeepsItsTime::class),
+        // #104 adds play_goal_day whole.
+        AutoMigration(from = 25, to = 26),
     ],
     exportSchema = true,
 )
@@ -169,4 +173,4 @@ expect object PtutDatabaseConstructor : RoomDatabaseConstructor<PtutDatabase> {
 }
 
 /** Read by `verifySchemaFrozen` and written into each crash report. Bump it with a new N.json, never edit an old one. */
-const val PTUT_SCHEMA_VERSION = 25
+const val PTUT_SCHEMA_VERSION = 26

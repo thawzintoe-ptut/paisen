@@ -13,6 +13,7 @@ class FakePlayBook(
     months: List<PlayMonth> = emptyList(),
     stamps: List<Stamp> = emptyList(),
     goals: List<Goal> = emptyList(),
+    goalDays: List<GoalDay> = emptyList(),
 ) : PlayBook {
 
     private val dayRows = MutableStateFlow(days)
@@ -20,12 +21,14 @@ class FakePlayBook(
     private val monthRows = MutableStateFlow(months)
     private val stampRows = MutableStateFlow(stamps)
     private val goalRows = MutableStateFlow(goals)
+    private val goalDayRows = MutableStateFlow(goalDays)
 
     override val days: StateFlow<List<PlayDay>> = dayRows
     override val weeks: StateFlow<List<PlayWeek>> = weekRows
     override val months: StateFlow<List<PlayMonth>> = monthRows
     override val stamps: StateFlow<List<Stamp>> = stampRows
     override val goals: StateFlow<List<Goal>> = goalRows
+    override val goalDays: StateFlow<List<GoalDay>> = goalDayRows
 
     override suspend fun markCleared(day: LocalDate, atEpochMillis: Long, stamp: StampKind): Boolean {
         val row = dayRows.value.firstOrNull { it.date == day }
@@ -96,4 +99,8 @@ class FakePlayBook(
     private fun writeWeek(week: PlayWeek) = weekRows.update { rows -> (rows.filterNot { it.monday == week.monday } + week).sortedBy { it.monday } }
 
     private fun writeMonth(month: PlayMonth) = monthRows.update { rows -> (rows.filterNot { it.month == month.month } + month).sortedBy { it.month } }
+
+    override suspend fun answerDay(day: GoalDay) {
+        goalDayRows.update { rows -> if (rows.any { it.goalId == day.goalId && it.day == day.day }) rows else rows + day }
+    }
 }

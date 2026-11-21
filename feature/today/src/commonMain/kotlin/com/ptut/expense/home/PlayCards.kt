@@ -1,10 +1,13 @@
 package com.ptut.expense.home
 
 import com.ptut.expense.domain.Category
+import com.ptut.expense.domain.MoneyParts
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.formatCompact
+import com.ptut.expense.domain.formatCompactParts
 import com.ptut.expense.domain.longName
 import com.ptut.expense.domain.play.DayMark
+import com.ptut.expense.domain.play.PERCENT
 import com.ptut.expense.domain.play.TodayPlay
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.inAppLanguage
@@ -55,10 +58,49 @@ internal fun TodayPlay.shelfItems(): List<ShelfItemUiModel> {
     val text = AppText.copy.play.extras
     return listOfNotNull(
         ShelfItemUiModel(ShelfEntry.Challenge, text.shelfChallenge, "emoji_events").takeIf { shelf.challenge && challenge == null },
-        ShelfItemUiModel(ShelfEntry.Jar, text.shelfJar, "account_balance_wallet", shelf.goalId).takeIf { shelf.jar },
+        // #104: with a goal, the jar has its own card; the shelf keeps the way in to make one.
+        ShelfItemUiModel(ShelfEntry.Jar, text.shelfJar, "account_balance_wallet", shelf.goalId).takeIf { shelf.jar && jar == null },
         shelf.storyMonth?.let { ShelfItemUiModel(ShelfEntry.Story, text.shelfStory, "auto_awesome", it) },
         shelf.closeMonth?.let { ShelfItemUiModel(ShelfEntry.Close, text.shelfClose, "task_alt", it) },
         ShelfItemUiModel(ShelfEntry.Score, text.shelfScore, "insights").takeIf { shelf.score },
+    )
+}
+
+/**
+ * #104: the jar on Today, its meter, and the card to count today while it sits under its usual.
+ * [pressed] is true right after Count it, for the stamp's press.
+ */
+data class JarCardUiModel(
+    val open: ShelfItemUiModel,
+    val name: String,
+    val saved: MoneyParts,
+    val ofTarget: String,
+    val fraction: Float,
+    val label: String,
+    val under: UnderUsualUiModel?,
+    val pressed: Boolean,
+    val counted: String,
+)
+
+data class UnderUsualUiModel(val goalId: String, val title: String, val line: String, val count: String, val notToday: String)
+
+internal fun TodayPlay.jarCard(pressed: Boolean): JarCardUiModel? {
+    val jar = jar ?: return null
+    val text = AppText.copy.play.extras
+    val fraction = jar.saved.ratioTo(jar.goal.target).coerceIn(0f, 1f)
+    val percent = (fraction * PERCENT).toInt()
+    return JarCardUiModel(
+        open = ShelfItemUiModel(ShelfEntry.Jar, text.shelfJar, "account_balance_wallet", jar.goal.id),
+        name = jar.goal.name,
+        saved = jar.saved.formatCompactParts(),
+        ofTarget = text.jarOf(jar.goal.target.formatCompact(), percent),
+        fraction = fraction,
+        label = text.jarLabel(percent),
+        under = jar.under?.let { under ->
+            UnderUsualUiModel(jar.goal.id, text.underUsual(under.formatCompact(), jar.weekday.longName()), text.underUsualLine, text.countIt, text.notToday)
+        },
+        pressed = pressed,
+        counted = text.counted,
     )
 }
 

@@ -19,11 +19,14 @@ import com.ptut.expense.domain.backup.BackupUnreadable
 import com.ptut.expense.domain.backup.LedgerBackup
 import com.ptut.expense.domain.home.FakeHomeBook
 import com.ptut.expense.domain.play.Goal
+import com.ptut.expense.domain.play.GoalDay
 import com.ptut.expense.domain.play.StampKind
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.plus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -197,6 +200,8 @@ class RoomLedgerArchiveTest {
         book.fixPaisenGuess(monday, Satang(120_000))
         book.seal("2026-10", atEpochMillis = 12, on = monday)
         book.saveGoal(Goal("g1", "Trip", Satang(500_000), "THB", monday, createdAtEpochMillis = 13))
+        book.answerDay(GoalDay("g1", monday, Satang(30_000), atEpochMillis = 14))
+        book.answerDay(GoalDay("g1", monday.plus(1, DateTimeUnit.DAY), usual = null, atEpochMillis = 15))
         val file = archive(holding = listOf(satangExact), play = held).export()
 
         val empty = PlayTables()
@@ -207,6 +212,8 @@ class RoomLedgerArchiveTest {
         assertEquals(held.monthRows.value, empty.monthRows.value)
         assertEquals(held.stampRows.value, empty.stampRows.value)
         assertEquals(held.goalRows.value, empty.goalRows.value)
+        assertEquals(2, empty.goalDayRows.value.size)
+        assertEquals(held.goalDayRows.value, empty.goalDayRows.value)
     }
 
     @Test

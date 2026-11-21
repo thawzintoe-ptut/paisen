@@ -14,6 +14,7 @@ import com.ptut.expense.data.local.entity.ExpenseVersionEntity
 import com.ptut.expense.data.local.entity.GroupMemberEntity
 import com.ptut.expense.data.local.entity.PersonEntity
 import com.ptut.expense.data.local.entity.PlayDayEntity
+import com.ptut.expense.data.local.entity.PlayGoalDayEntity
 import com.ptut.expense.data.local.entity.PlayGoalEntity
 import com.ptut.expense.data.local.entity.PlayMonthEntity
 import com.ptut.expense.data.local.entity.PlayStampEntity
@@ -31,6 +32,7 @@ import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.backup.BackupCategory
 import com.ptut.expense.domain.backup.BackupExpenseVersion
 import com.ptut.expense.domain.backup.BackupGoal
+import com.ptut.expense.domain.backup.BackupGoalDay
 import com.ptut.expense.domain.backup.BackupGroup
 import com.ptut.expense.domain.backup.BackupLink
 import com.ptut.expense.domain.backup.BackupMember
@@ -156,6 +158,7 @@ class RoomLedgerArchive(
         months = dao.allMonths().map { BackupPlayMonth(it.month, it.storySeenAtEpochMillis, it.sealedAtEpochMillis) },
         stamps = dao.allStamps().map { BackupStamp(it.id, it.kind, it.ref, it.earnedOn, it.revealedAtEpochMillis) },
         goals = dao.allGoals().map { BackupGoal(it.id, it.name, it.targetMinor, it.currency, it.startDate, it.createdAtEpochMillis, it.archivedAtEpochMillis) },
+        goalDays = dao.allGoalDays().map { BackupGoalDay(it.goalId, it.date, it.usualMinor, it.atEpochMillis) },
     )
 
     private suspend fun restorePlay(dao: PlayDao, play: BackupPlay) = dao.restore(
@@ -166,6 +169,7 @@ class RoomLedgerArchive(
         months = play.months.map { PlayMonthEntity(it.month, it.storySeenAtEpochMillis, it.sealedAtEpochMillis) },
         stamps = play.stamps.map { PlayStampEntity(it.id, it.kind, it.ref, it.earnedOn, it.revealedAtEpochMillis) },
         goals = play.goals.map { PlayGoalEntity(it.id, it.name, it.targetMinor, it.currency, it.startDate, it.createdAtEpochMillis, it.archivedAtEpochMillis) },
+        goalDays = play.goalDays.map { PlayGoalDayEntity(it.goalId, it.date, it.usualMinor, it.atEpochMillis) },
     )
 
     /** #46: amounts in other money cannot join a ledger with rows; only an empty one can change home. */

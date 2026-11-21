@@ -45,6 +45,7 @@ val todayModule: Module = module {
             getMoodRecap = get(),
             getWeeklyCheckIn = get(),
             observeTodayPlay = get(),
+            answerGoalDay = get(),
             // #103: the press and roll are play's motion, so they follow the switch that turns play off.
             playMotion = get<ObservePlayOnUseCase>()(PlayPart.Stamps),
             toasts = get(),

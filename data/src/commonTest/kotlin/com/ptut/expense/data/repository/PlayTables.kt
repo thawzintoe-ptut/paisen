@@ -2,6 +2,7 @@ package com.ptut.expense.data.repository
 
 import com.ptut.expense.data.local.dao.PlayDao
 import com.ptut.expense.data.local.entity.PlayDayEntity
+import com.ptut.expense.data.local.entity.PlayGoalDayEntity
 import com.ptut.expense.data.local.entity.PlayGoalEntity
 import com.ptut.expense.data.local.entity.PlayMonthEntity
 import com.ptut.expense.data.local.entity.PlayStampEntity
@@ -22,6 +23,7 @@ internal class PlayTables : PlayDao() {
     val monthRows = MutableStateFlow(mapOf<String, PlayMonthEntity>())
     val stampRows = MutableStateFlow(mapOf<String, PlayStampEntity>())
     val goalRows = MutableStateFlow(mapOf<String, PlayGoalEntity>())
+    val goalDayRows = MutableStateFlow(mapOf<Pair<String, String>, PlayGoalDayEntity>())
 
     override fun observeDays(): Flow<List<PlayDayEntity>> = dayRows.map { it.values.sortedBy(PlayDayEntity::date) }
 
@@ -32,6 +34,8 @@ internal class PlayTables : PlayDao() {
     override fun observeStamps(): Flow<List<PlayStampEntity>> = stampRows.map { rows -> rows.values.sortedWith(compareBy({ it.earnedOn }, { it.id })) }
 
     override fun observeGoals(): Flow<List<PlayGoalEntity>> = goalRows.map { it.values.sortedBy(PlayGoalEntity::createdAtEpochMillis) }
+
+    override fun observeGoalDays(): Flow<List<PlayGoalDayEntity>> = goalDayRows.map { it.values.sortedBy(PlayGoalDayEntity::date) }
 
     override suspend fun day(date: String): PlayDayEntity? = dayRows.value[date]
 
@@ -72,6 +76,17 @@ internal class PlayTables : PlayDao() {
     override suspend fun allStamps(): List<PlayStampEntity> = stampRows.value.values.toList()
 
     override suspend fun allGoals(): List<PlayGoalEntity> = goalRows.value.values.toList()
+
+    override suspend fun allGoalDays(): List<PlayGoalDayEntity> = goalDayRows.value.values.toList()
+
+    override suspend fun countDay(day: PlayGoalDayEntity) = goalDayRows.update { held ->
+        val key = day.goalId to day.date
+        if (key in held) held else held + (key to day)
+    }
+
+    override suspend fun restoreGoalDays(rows: List<PlayGoalDayEntity>) = goalDayRows.update { held ->
+        held + rows.map { (it.goalId to it.date) to it }.filterNot { it.first in held }
+    }
 
     // Days, weeks and months upsert, as Room's @Upsert does; the DAO has already merged each row.
     override suspend fun restoreDays(rows: List<PlayDayEntity>) = dayRows.update { held -> held + rows.associateBy { it.date } }

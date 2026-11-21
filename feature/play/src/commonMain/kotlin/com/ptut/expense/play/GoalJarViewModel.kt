@@ -169,7 +169,7 @@ class GoalJarViewModel(
         val day = reachOn
         return when {
             fills(target) -> text.jarFull
-            !hasIncome -> text.jarNeedsIncome
+            !hasDays -> text.jarNoDays
             day == null -> text.jarNoPace
             else -> text.jarPace(day.dayLabel())
         }

@@ -9,6 +9,7 @@ import com.ptut.expense.domain.ledger.FakeLedger
 import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
 import com.ptut.expense.domain.play.ArchiveGoalUseCase
 import com.ptut.expense.domain.play.FakePlayBook
+import com.ptut.expense.domain.play.GoalDay
 import com.ptut.expense.domain.play.ObserveGoalJarUseCase
 import com.ptut.expense.domain.play.SaveGoalUseCase
 import com.ptut.expense.domain.today.GetHomeTodayUseCase
@@ -51,12 +52,12 @@ class GoalJarViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `with no income the jar says it needs income to fill`() = runTest {
+    fun `with no counted day the jar says how it fills`() = runTest {
         val jar = jar(name = "Trip", target = "500", rows = listOf(spendOn("a", today, 1_000)))
         jar.save()
         runCurrent()
 
-        assertEquals("The jar fills from income less spending. Add your income to see it fill.", assertIs<GoalJarUiState.Jar>(jar.uiState.value).pace)
+        assertEquals("The jar fills from days you count on Today. Spend under a usual day, then tap Count it.", assertIs<GoalJarUiState.Jar>(jar.uiState.value).pace)
     }
 
     @Test
@@ -92,9 +93,10 @@ class GoalJarViewModelTest : ViewModelTest() {
 
     @Test
     fun `a jar already holding its amount says it is full`() = runTest {
-        val rows = listOf(spendOn("in", today, 200_000, category = "income", direction = Direction.Income))
-        val jar = jar(name = "Trip", target = "500", rows = rows)
+        val jar = jar(name = "Trip", target = "500")
         jar.save()
+        runCurrent()
+        book.answerDay(GoalDay(book.goals.value.single().id, today, Satang(60_000), atEpochMillis = 0))
         runCurrent()
 
         assertEquals("The jar is full.", assertIs<GoalJarUiState.Jar>(jar.uiState.value).pace)

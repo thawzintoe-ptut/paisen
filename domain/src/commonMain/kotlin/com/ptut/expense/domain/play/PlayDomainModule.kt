@@ -28,6 +28,7 @@ val playUseCases: Module = module {
     factory { ObserveGoalJarUseCase(get(), get(), get()) }
     factory { SaveGoalUseCase(get(), get()) }
     factory { ArchiveGoalUseCase(get()) }
+    factory { AnswerGoalDayUseCase(get(), get(), get()) }
     factory { GetMonthStoryUseCase(get(), get(), get()) }
     factory { MarkStorySeenUseCase(get()) }
     factory { GetMonthCloseUseCase(get(), get(), get()) }

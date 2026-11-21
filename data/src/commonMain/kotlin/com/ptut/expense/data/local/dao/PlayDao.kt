@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
 import com.ptut.expense.data.local.entity.PlayDayEntity
+import com.ptut.expense.data.local.entity.PlayGoalDayEntity
 import com.ptut.expense.data.local.entity.PlayGoalEntity
 import com.ptut.expense.data.local.entity.PlayMonthEntity
 import com.ptut.expense.data.local.entity.PlayStampEntity
@@ -34,6 +35,9 @@ abstract class PlayDao {
 
     @Query("SELECT * FROM play_goal ORDER BY createdAtEpochMillis")
     abstract fun observeGoals(): Flow<List<PlayGoalEntity>>
+
+    @Query("SELECT * FROM play_goal_day ORDER BY date")
+    abstract fun observeGoalDays(): Flow<List<PlayGoalDayEntity>>
 
     @Query("SELECT * FROM play_day WHERE date = :date")
     protected abstract suspend fun day(date: String): PlayDayEntity?
@@ -125,6 +129,10 @@ abstract class PlayDao {
     @Query("UPDATE play_goal SET archivedAtEpochMillis = :atEpochMillis WHERE id = :id AND archivedAtEpochMillis IS NULL")
     abstract suspend fun archiveGoal(id: String, atEpochMillis: Long)
 
+    /** #104: the first answer for a day stands; a second tap does nothing. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    abstract suspend fun countDay(day: PlayGoalDayEntity)
+
     // Backup: every row out, and back in merged column by column, the phone's own value first.
 
     @Query("SELECT * FROM play_day")
@@ -142,6 +150,9 @@ abstract class PlayDao {
     @Query("SELECT * FROM play_goal")
     abstract suspend fun allGoals(): List<PlayGoalEntity>
 
+    @Query("SELECT * FROM play_goal_day")
+    abstract suspend fun allGoalDays(): List<PlayGoalDayEntity>
+
     @Upsert
     protected abstract suspend fun restoreDays(rows: List<PlayDayEntity>)
 
@@ -157,6 +168,9 @@ abstract class PlayDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     protected abstract suspend fun restoreGoals(rows: List<PlayGoalEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    protected abstract suspend fun restoreGoalDays(rows: List<PlayGoalDayEntity>)
+
     /**
      * A backup's play in one transaction, so a file read halfway leaves nothing half restored. A day,
      * week or month the phone already holds keeps every fact it has and takes the backup's for the rest:
@@ -169,6 +183,7 @@ abstract class PlayDao {
         months: List<PlayMonthEntity>,
         stamps: List<PlayStampEntity>,
         goals: List<PlayGoalEntity>,
+        goalDays: List<PlayGoalDayEntity> = emptyList(),
     ) {
         val haveDays = allDays().associateBy { it.date }
         restoreDays(days.map { row -> haveDays[row.date]?.filledFrom(row) ?: row })
@@ -178,6 +193,7 @@ abstract class PlayDao {
         restoreMonths(months.map { row -> haveMonths[row.month]?.filledFrom(row) ?: row })
         restoreStamps(stamps)
         restoreGoals(goals)
+        restoreGoalDays(goalDays)
     }
 }
 

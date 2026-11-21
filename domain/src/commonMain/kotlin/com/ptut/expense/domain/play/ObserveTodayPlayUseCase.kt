@@ -1,12 +1,15 @@
 package com.ptut.expense.domain.play
 
 import com.ptut.expense.domain.HomeTime
+import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.isoMonth
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.ledger.LedgerSpan
 import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
 import com.ptut.expense.domain.mondayOfWeekOf
 import com.ptut.expense.domain.today.GetHomeTodayUseCase
+import com.ptut.expense.domain.usualDay
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
@@ -43,11 +47,19 @@ data class TodayPlay(
     val shelf: PlayShelf = PlayShelf(),
     /** #102: the first seven days after first run. Games and stamps wait for day 8; a goal's jar does not. */
     val firstWeek: Boolean = false,
+    /** #104: the open jar and how full it is, or null with no goal or the jar switched off. */
+    val jar: TodayJar? = null,
 ) {
     companion object {
         val Off = TodayPlay()
     }
 }
+
+/**
+ * #104: Today's jar card. [under] is how far today sits under a usual day of its weekday while it can
+ * still be counted: null once answered, or when today is not under its usual.
+ */
+data class TodayJar(val goal: Goal, val saved: Satang, val under: Satang?, val weekday: DayOfWeek)
 
 /**
  * Today's ways into the extras. [storyMonth] is last month during the first week of a month, until its
@@ -79,18 +91,20 @@ class ObserveTodayPlayUseCase(
     operator fun invoke(): Flow<TodayPlay> = combine(
         combine(playOn(PlayPart.Run), playOn(PlayPart.Stamps), playOn(PlayPart.Question), playOn(PlayPart.Coach), playOn(PlayPart.Guess), ::Parts),
         combine(playOn(PlayPart.Challenge), playOn(PlayPart.GoalJar), playOn(PlayPart.Story), playOn(PlayPart.CloseMonth), playOn(PlayPart.Score), ::Extras),
-        combine(book.days, book.stamps, book.weeks, book.months, book.goals, ::Facts),
+        combine(book.days, book.stamps, book.weeks, book.months, combine(book.goals, book.goalDays, ::Pair), ::Facts),
         transactions?.invoke(LedgerSpan.All) ?: flowOf(LedgerSnapshot.Rows(emptyList())),
         combine(homeDays(clock), playOn.welcomedOn(), ::Pair),
     ) { parts, extras, facts, ledger, (_, welcomedOn) ->
-        val (days, stamps, weeks, months, goals) = facts
+        val (days, stamps, weeks, months, jarFacts) = facts
+        val (goals, goalDays) = jarFacts
         val today = homeToday()
+        val rows = (ledger as? LedgerSnapshot.Rows)?.transactions.orEmpty()
+        val jar = goals.lastOrNull { it.archivedAtEpochMillis == null }?.takeIf { extras.jar }?.let { rows.todayJar(it, goalDays, today) }
         val firstWeek = welcomedOn != null && today < welcomedOn.plus(FIRST_WEEK_DAYS, DateTimeUnit.DAY) && (parts.any || extras.anyButJar)
         if (firstWeek) {
             val goalId = goals.lastOrNull { it.archivedAtEpochMillis == null }?.id.takeIf { extras.jar }
-            return@combine TodayPlay(shelf = PlayShelf(jar = goalId != null, goalId = goalId), firstWeek = true)
+            return@combine TodayPlay(shelf = PlayShelf(jar = goalId != null, goalId = goalId), firstWeek = true, jar = jar)
         }
-        val rows = (ledger as? LedgerSnapshot.Rows)?.transactions.orEmpty()
         val thisMonday = mondayOfWeekOf(today)
         val lastMonday = thisMonday.minus(1, DateTimeUnit.WEEK)
         val challenge = weeks.firstOrNull { it.monday == thisMonday }?.challenge.takeIf { extras.challenge }
@@ -114,6 +128,7 @@ class ObserveTodayPlayUseCase(
                 closeMonth = closeMonth(today, months).takeIf { extras.close },
                 score = extras.score,
             ),
+            jar = jar,
         )
     }.distinctUntilChanged().flowOn(work)
 
@@ -125,7 +140,21 @@ class ObserveTodayPlayUseCase(
         val anyButJar: Boolean get() = challenge || story || close || score
     }
 
-    private data class Facts(val days: List<PlayDay>, val stamps: List<Stamp>, val weeks: List<PlayWeek>, val months: List<PlayMonth>, val goals: List<Goal>)
+    private data class Facts(
+        val days: List<PlayDay>,
+        val stamps: List<Stamp>,
+        val weeks: List<PlayWeek>,
+        val months: List<PlayMonth>,
+        val jar: Pair<List<Goal>, List<GoalDay>>,
+    )
+}
+
+/** #104: the jar's fill, and today's card while today sits under its usual and has no answer yet. */
+internal fun List<Transaction>.todayJar(goal: Goal, days: List<GoalDay>, today: LocalDate): TodayJar {
+    val answered = days.any { it.goalId == goal.id && it.day == today }
+    val usual = if (answered) null else usualDay(today)
+    val under = usual?.let { if (it.spent < it.usual) it.usual - it.spent else null }
+    return TodayJar(goal, goalPace(goal, days, today).saved, under, today.dayOfWeek)
 }
 
 /** Today in the home zone, and again at each midnight, for folds that otherwise only follow the data. */

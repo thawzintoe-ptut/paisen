@@ -14,6 +14,8 @@ data class BackupPlay(
     val months: List<BackupPlayMonth> = emptyList(),
     val stamps: List<BackupStamp> = emptyList(),
     val goals: List<BackupGoal> = emptyList(),
+    /** Format 6 (#104): days counted into a jar, and days turned down. Absent in format 5. */
+    val goalDays: List<BackupGoalDay> = emptyList(),
 )
 
 @Serializable
@@ -53,3 +55,6 @@ data class BackupGoal(
     val createdAtEpochMillis: Long,
     val archivedAtEpochMillis: Long? = null,
 )
+
+@Serializable
+data class BackupGoalDay(val goalId: String, val date: String, val usualMinor: Long? = null, val atEpochMillis: Long)

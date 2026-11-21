@@ -15,6 +15,7 @@ interface PlayBook {
     val months: Flow<List<PlayMonth>>
     val stamps: Flow<List<Stamp>>
     val goals: Flow<List<Goal>>
+    val goalDays: Flow<List<GoalDay>>
 
     /** #85, #88: the first sighting of an empty tray on [day], and that day's stamp. False when already cleared. */
     suspend fun markCleared(day: LocalDate, atEpochMillis: Long, stamp: StampKind): Boolean
@@ -47,4 +48,7 @@ interface PlayBook {
     suspend fun saveGoal(goal: Goal)
 
     suspend fun archiveGoal(goalId: String, atEpochMillis: Long)
+
+    /** #104: Count it or Not today for [GoalDay.day]. The first answer for a day stands. */
+    suspend fun answerDay(day: GoalDay)
 }

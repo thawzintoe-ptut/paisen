@@ -139,6 +139,21 @@ class PtutDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun aSchema25JarKeepsItsGoalAndStartsWithNoCountedDays() {
+        helper.createDatabase(25).use { connection ->
+            connection.execSQL(
+                "INSERT INTO play_goal (id, name, targetMinor, currency, startDate, createdAtEpochMillis) " +
+                    "VALUES ('j1', 'Trip', 500000, 'THB', '2026-11-01', $SEEDED_AT)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(26).use { connection ->
+            assertEquals(listOf("j1|500000"), connection.rows("SELECT id, targetMinor FROM play_goal"))
+            assertEquals(listOf("0"), connection.rows("SELECT COUNT(*) FROM play_goal_day"))
+        }
+    }
+
     private fun SQLiteConnection.seedReactionAndAnswer(timeColumn: String = "createdAtEpochMillis") {
         execSQL(
             "INSERT INTO shared_group (id, name, type, icon, simplifyDebts, createdAtEpochMillis, meMemberId) " +
@@ -171,7 +186,7 @@ class PtutDatabaseMigrationTest {
     }
 
     private companion object {
-        const val LATEST_SCHEMA = 25
+        const val LATEST_SCHEMA = 26
         const val SEEDED_AT = 1_700_000_000_000L
     }
 }

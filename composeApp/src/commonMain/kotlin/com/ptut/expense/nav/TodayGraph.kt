@@ -88,6 +88,7 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
                     },
                 )
             },
+            onAnswerDay = viewModel::answerDay,
         )
         if (askingAllowAll) {
             // Asked for only under "Select photos", the one case that offers Android's picker.

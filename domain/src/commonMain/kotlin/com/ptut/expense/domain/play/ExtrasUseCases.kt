@@ -9,6 +9,7 @@ import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
 import com.ptut.expense.domain.mondayOfWeekOf
 import com.ptut.expense.domain.slip.ObserveQueuedSlipsUseCase
 import com.ptut.expense.domain.today.GetHomeTodayUseCase
+import com.ptut.expense.domain.usualDay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -95,18 +96,46 @@ class ObserveGoalJarUseCase(
     private val transactions: ObserveTransactionsUseCase,
     private val homeToday: GetHomeTodayUseCase,
 ) {
-    operator fun invoke(goalId: String?): Flow<GoalJarState?> = combine(book.goals, transactions(LedgerSpan.All)) { goals, ledger ->
+    operator fun invoke(goalId: String?): Flow<GoalJarState?> = combine(book.goals, book.goalDays, transactions(LedgerSpan.All)) { goals, days, ledger ->
         val goal = goals.firstOrNull { it.id == goalId && it.archivedAtEpochMillis == null } ?: return@combine null
         val today = homeToday()
         val rows = ledger.rows()
-        GoalJarState(goal, rows.goalPace(goal, today), rows.challengeCategories(mondayOfWeekOf(today)).map { it to rows.goalPaceWithout(goal, it, today) })
+        GoalJarState(
+            goal,
+            rows.goalPace(goal, days, today),
+            rows.challengeCategories(mondayOfWeekOf(today)).map { it to rows.goalPaceWithout(goal, days, it, today) },
+        )
     }
 
     /** The one jar Today offers: the newest that is not put away. */
     fun current(): Flow<Goal?> = book.goals.map { goals -> goals.lastOrNull { it.archivedAtEpochMillis == null } }
 }
 
-/** #92: a new jar starts filling today, in the home money; saving an existing one keeps its start. */
+/**
+ * #104: Count it or Not today on Today's card. Count it keeps today's usual as it stands; the jar reads
+ * the day's spending again later. False when today is not under its usual, so nothing was counted.
+ */
+class AnswerGoalDayUseCase(
+    private val book: PlayBook,
+    private val transactions: ObserveTransactionsUseCase,
+    private val homeToday: GetHomeTodayUseCase,
+    private val clock: Clock = Clock.System,
+) {
+    suspend operator fun invoke(goalId: String, count: Boolean): Boolean {
+        val today = homeToday()
+        val usual = if (count) {
+            val day = transactions.rowsNow().usualDay(today) ?: return false
+            if (day.spent >= day.usual) return false
+            day.usual
+        } else {
+            null
+        }
+        book.answerDay(GoalDay(goalId, today, usual, clock.now().toEpochMilliseconds()))
+        return count
+    }
+}
+
+/** #92: a new jar starts today, in the home money; saving an existing one keeps its start. */
 @OptIn(ExperimentalUuidApi::class)
 class SaveGoalUseCase(
     private val book: PlayBook,

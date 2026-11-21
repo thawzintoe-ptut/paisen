@@ -114,6 +114,8 @@ fun HomeView(
     /** #91 and the shelf's ways into the extras. */
     onOpenChallenge: () -> Unit = {},
     onOpenShelf: (ShelfItemUiModel) -> Unit = {},
+    /** #104: Count it, or Not today when the flag is false, for the goal named. */
+    onAnswerDay: (goalId: String, count: Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     /** Just-in-time tips above the run card and the day's question; null when none is due. */
     runTip: (@Composable () -> Unit)? = null,
@@ -141,6 +143,7 @@ fun HomeView(
                 onOpenGuess = onOpenGuess,
                 onOpenChallenge = onOpenChallenge,
                 onOpenShelf = onOpenShelf,
+                onAnswerDay = onAnswerDay,
                 runTip = runTip,
                 questionTip = questionTip,
             )
@@ -167,6 +170,7 @@ private fun LoadedHome(
     onOpenGuess: (String) -> Unit,
     onOpenChallenge: () -> Unit,
     onOpenShelf: (ShelfItemUiModel) -> Unit,
+    onAnswerDay: (goalId: String, count: Boolean) -> Unit,
     runTip: (@Composable () -> Unit)?,
     questionTip: (@Composable () -> Unit)?,
 ) {
@@ -323,6 +327,9 @@ private fun LoadedHome(
         }
         state.challenge?.let { row ->
             item { ChallengeRow(row, onOpen = onOpenChallenge, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
+        }
+        state.jar?.let { jar ->
+            item { JarCard(jar, onOpen = onOpenShelf, onAnswer = onAnswerDay, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
         }
         if (state.shelf.isNotEmpty()) {
             item { PlayShelf(state.shelf, onOpen = onOpenShelf, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
