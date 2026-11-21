@@ -208,7 +208,7 @@ class SettingsViewModel(
             id = SettingsAction.GoalJar,
             name = AppText.copy.play.extras.jarTitle,
             value = goal?.name ?: text.goalJarNone,
-            icon = "savings",
+            icon = "cash",
         ).takeIf { showPlay && choices.play.on },
         // #83: a screen of its own (p22), so its master switch sits there and not on this row.
         AppText.copy.play.settings.let { play ->

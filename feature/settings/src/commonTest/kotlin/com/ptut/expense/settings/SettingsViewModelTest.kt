@@ -107,6 +107,17 @@ class SettingsViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun `every row on both screens names an icon the app can draw`() = runTest {
+        val goal = Goal(id = "g1", name = "Chiang Mai", target = Satang(500_000L), currency = "THB", start = LocalDate(2026, 11, 1), createdAtEpochMillis = 0L)
+        val uiState = viewModel(showPlay = true, goals = flowOf(listOf(goal))).uiState
+        backgroundScope.launch { uiState.collect { } }
+        runCurrent()
+
+        val unknown = uiState.value.rows.filter { com.ptut.expense.design.PtutIcon.find(it.icon) == null }
+        assertEquals(emptyList(), unknown.map { "${it.id}: ${it.icon}" })
+    }
+
+    @Test
     fun `the play row says off when the master switch is off`() = runTest {
         val settings = appSettings(AppChoices(play = PlayChoices(on = false)))
 
