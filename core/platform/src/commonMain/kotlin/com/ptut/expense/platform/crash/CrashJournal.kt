@@ -65,20 +65,23 @@ class CrashJournal(
         private const val SEEN = ".seen.txt"
 
         /** Keeps exception class names and frames; drops every message after the class name. */
-        fun redact(trace: String): String = trace.lineSequence().joinToString("\n") { line ->
+
+        /**
+         * Frames and exception class names only. Any other line, such as the second line of a
+         * message that held a shop name or an amount, is dropped rather than trimmed.
+         */
+        fun redact(trace: String): String = trace.lineSequence().mapNotNull { line ->
             val trimmed = line.trimStart()
             val indent = line.take(line.length - trimmed.length)
             when {
-                trimmed.isEmpty() || trimmed.startsWith("at ") || trimmed.startsWith("...") -> line
-                trimmed.startsWith(CAUSED) -> indent + CAUSED + className(trimmed.removePrefix(CAUSED))
-                trimmed.startsWith(SUPPRESSED) -> indent + SUPPRESSED + className(trimmed.removePrefix(SUPPRESSED))
-                else -> indent + className(trimmed)
+                trimmed.startsWith("at ") || FRAMES_MORE.matches(trimmed) -> line
+                else -> HEADER.matchEntire(trimmed)?.let { header -> indent + header.groupValues[1] + header.groupValues[2] }
             }
-        }
+        }.joinToString("\n")
 
-        private fun className(text: String): String = text.substringBefore(':').trim()
-        private const val CAUSED = "Caused by: "
-        private const val SUPPRESSED = "Suppressed: "
+        /** A fully qualified class ("com.x.Failure") keeps its prefix; a one-word line such as "note: rent" is message text. */
+        private val HEADER = Regex("""^((?:Caused by: |Suppressed: )?)([\w$]+(?:\.[\w$]+)+)(?::.*)?$""")
+        private val FRAMES_MORE = Regex("""^\.\.\. \d+ more$""")
     }
 }
 

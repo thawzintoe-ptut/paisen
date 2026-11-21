@@ -141,7 +141,7 @@ class PtutAppTest {
     fun firstRunDrawsNeitherThePillNorTheAddAction() = runComposeUiTest {
         setContent { TestApp(firstRunAnswered = false) }
 
-        onNodeWithText("Continue").assertIsDisplayed()
+        onNodeWithContentDescription("Continue").assertIsDisplayed()
         onNode(pillSlot("Reports")).assertDoesNotExist()
         onNodeWithContentDescription("Add an expense by hand").assertDoesNotExist()
     }
@@ -151,9 +151,9 @@ class PtutAppTest {
     fun decliningPhotoAccessStillOpensTheLedger() = runComposeUiTest {
         setContent { TestApp(firstRunAnswered = false) }
 
-        onNodeWithText("Continue").performClick()
+        onNodeWithContentDescription("Continue").performClick()
         onNodeWithText("I'll add expenses by hand").performClick()
-        onNodeWithText("Open Today").performClick()
+        onNodeWithContentDescription("Open Today").performClick()
 
         onNode(pillSlot("Reports")).assertIsDisplayed()
         onNodeWithContentDescription("Add an expense by hand").assertIsDisplayed()

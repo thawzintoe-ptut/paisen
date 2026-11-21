@@ -69,4 +69,11 @@ class CrashJournalTest {
             CrashJournal.redact(trace),
         )
     }
+
+    @Test
+    fun aMessageThatRunsOverSeveralLinesLeavesNoneOfThemBehind() {
+        val trace = "java.lang.IllegalStateException: Tops Market\n500 THB to Mya Mya\nnote: rent\n\tat a.B.c(B.kt:1)"
+
+        assertEquals("java.lang.IllegalStateException\n\tat a.B.c(B.kt:1)", CrashJournal.redact(trace))
+    }
 }

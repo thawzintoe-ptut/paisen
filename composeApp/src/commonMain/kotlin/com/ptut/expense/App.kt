@@ -37,7 +37,8 @@ fun App() {
                 PtutApp()
                 PtutTheme { CrashReportPrompt(koinInject<CrashJournal>()) }
             } else {
-                PtutTheme { LedgerRecoveryScreen(gate) }
+                // The ledger file can be exported from here, so it sits behind the same lock as the ledger.
+                PtutTheme { AppLockGate { LedgerRecoveryScreen(gate) } }
             }
         }
     }

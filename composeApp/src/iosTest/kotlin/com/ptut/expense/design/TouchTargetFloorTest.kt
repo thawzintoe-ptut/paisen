@@ -103,8 +103,8 @@ import kotlin.test.fail
 /** The pill's four destinations and its add slot, which every screen in this test draws. */
 private const val ALWAYS_ON_SCREEN = 5
 
-/** First run draws no chrome. "Allow photo access" and the button that declines are all of it. */
-private const val FIRST_RUN_EXITS = 2
+/** First run draws no chrome. Its first step, the promise, has one way on: Continue. */
+private const val FIRST_RUN_EXITS = 1
 
 /**
  * Every control in `SkyKit` (#151), every tappable surface (#152), the empty state's button (#153)
