@@ -3,6 +3,7 @@ package com.ptut.expense.di
 import com.ptut.expense.agent.ModelState
 import com.ptut.expense.categories.CategoriesViewModel
 import com.ptut.expense.categories.EditCategoryViewModel
+import com.ptut.expense.domain.play.PlayBook
 import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.settings.ObserveAssistantModelUseCase
 import com.ptut.expense.folders.PhotoFoldersViewModel
@@ -53,6 +54,7 @@ val settingsModule: Module = module {
             showNoteTone = flagOn(Flag.NoteTone),
             showHomeCurrency = currenciesOn(),
             showPlay = flagOn(Flag.Play),
+            observeGoals = get<PlayBook>().goals,
         )
     }
 

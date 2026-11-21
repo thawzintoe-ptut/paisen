@@ -7,8 +7,12 @@ import com.ptut.expense.nav.PtutRoute
 fun ImportFix.settingsRoute(): PtutRoute.Settings = PtutRoute.Settings(owningRow().name)
 
 /** The row [PtutRoute.Settings] was opened at, or null when the bar opened it. */
-fun PtutRoute.Settings.focusedRow(): SettingsAction? =
-    focusRow?.let { name -> SettingsAction.entries.firstOrNull { it.name == name } }
+fun PtutRoute.Settings.focusedRow(): SettingsAction? = focusRow.toSettingsAction()
+
+/** The row Advanced was opened for, carried on from Settings (#101). */
+fun PtutRoute.SettingsAdvanced.focusedRow(): SettingsAction? = focusRow.toSettingsAction()
+
+private fun String?.toSettingsAction(): SettingsAction? = this?.let { name -> SettingsAction.entries.firstOrNull { it.name == name } }
 
 /**
  * Where each row goes.
@@ -17,6 +21,11 @@ fun PtutRoute.Settings.focusedRow(): SettingsAction? =
  * here rather than a tap that does nothing on a screen where every other row opens something.
  */
 fun SettingsAction.destination(): PtutRoute? = when (this) {
+    // The graph adds the open goal's id, which the row's state holds.
+    SettingsAction.GoalJar -> PtutRoute.GoalJar()
+
+    SettingsAction.Advanced -> PtutRoute.SettingsAdvanced()
+
     SettingsAction.SlipSource -> PtutRoute.PhotoFolders
 
     SettingsAction.BackgroundImport -> PtutRoute.BackgroundImport

@@ -32,5 +32,7 @@ fun SettingsAction.opensScreen(): Boolean = when (this) {
     SettingsAction.Feedback,
     SettingsAction.Licences,
     SettingsAction.Play,
+    SettingsAction.GoalJar,
+    SettingsAction.Advanced,
     -> true
 }

@@ -12,9 +12,12 @@ class SettingsDestinationTest {
      * without a destination, because the enum has to name one.
      */
     @Test
-    fun `every row names a destination except the four switches and feedback`() {
+    fun `every row names a destination except the switches and feedback`() {
         assertEquals(
             listOf(
+                // #101: the graph adds the open goal's id.
+                PtutRoute.GoalJar(),
+                PtutRoute.SettingsAdvanced(),
                 PtutRoute.PhotoFolders,
                 PtutRoute.BackgroundImport,
                 PtutRoute.KeepFailedSlips,

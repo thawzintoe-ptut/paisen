@@ -30,4 +30,9 @@ class SettingsFocusTest {
     fun `a row name this build no longer has focuses nothing rather than failing`() {
         assertNull(PtutRoute.Settings(focusRow = "SomeRowRemovedLater").focusedRow())
     }
+
+    @Test
+    fun `advanced keeps the fix it was opened for`() {
+        assertEquals(SettingsAction.SlipSource, PtutRoute.SettingsAdvanced(SettingsAction.SlipSource.name).focusedRow())
+    }
 }

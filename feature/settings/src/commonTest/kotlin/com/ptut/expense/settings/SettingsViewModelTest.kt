@@ -2,8 +2,10 @@ package com.ptut.expense.settings
 
 import app.cash.turbine.test
 import com.ptut.expense.ViewModelTest
+import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.ledger.FakeLedger
 import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
+import com.ptut.expense.domain.play.Goal
 import com.ptut.expense.domain.settings.AppChoices
 import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.settings.DisableAppLockUseCase
@@ -16,10 +18,13 @@ import com.ptut.expense.domain.settings.SetTransparencyUseCase
 import com.ptut.expense.domain.settings.SetWeeklyCheckInUseCase
 import com.ptut.expense.domain.settings.SwitchNoteToneUseCase
 import com.ptut.expense.domain.settings.appSettings
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -32,24 +37,25 @@ private const val FOUR_DAYS = 4 * DAY
 class SettingsViewModelTest : ViewModelTest() {
 
     @Test
-    fun `the rows read in p21's order`() = runTest {
+    fun `the rows read in screen order with Settings before Advanced`() = runTest {
         val rows = viewModel().uiState.value.rows
 
         assertEquals(
             listOf(
+                "Language",
+                "Mood by time of day",
+                "Export",
+                "Advanced",
                 "Photo folders",
                 "Background import",
                 "Keep unread slips",
                 "Your name on slips",
                 "Activity",
                 "Categories",
-                "Mood by time of day",
+                "Timezone",
+                "Import",
                 "Weekly check-in",
                 "Transparency",
-                "Language",
-                "Timezone",
-                "Export",
-                "Import",
                 "Send feedback",
                 "Licences",
             ),
@@ -58,26 +64,46 @@ class SettingsViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `the rows sit in four cards in screen order`() = runTest {
-        val groups = viewModel().uiState.value.groups
+    fun `settings keeps the everyday cards and puts the rest one tap behind Advanced`() = runTest {
+        val state = viewModel(showPlay = true).uiState.value
 
         assertEquals(
             listOf(
+                SettingsGroup.Saving to listOf("Goal jar", "Play"),
+                SettingsGroup.You to listOf("Language", "Mood by time of day"),
+                SettingsGroup.Safe to listOf("Export"),
+                SettingsGroup.More to listOf("Advanced"),
+            ),
+            state.groups.map { group -> group.group to group.rows.map { it.name } },
+        )
+        assertEquals(
+            listOf(
                 SettingsGroup.Slips to listOf("Photo folders", "Background import", "Keep unread slips", "Your name on slips", "Activity"),
-                SettingsGroup.Daily to listOf("Categories", "Mood by time of day", "Weekly check-in", "Transparency"),
-                SettingsGroup.Region to listOf("Language", "Timezone", "Export", "Import"),
+                SettingsGroup.Ledger to listOf("Categories", "Timezone", "Import", "Weekly check-in", "Transparency"),
                 SettingsGroup.Help to listOf("Send feedback", "Licences"),
             ),
-            groups.map { group -> group.group to group.rows.map { it.name } },
+            state.advanced.map { group -> group.group to group.rows.map { it.name } },
         )
     }
 
     @Test
-    fun `the play row sits last in the daily card while the play flag is on`() = runTest {
-        val daily = viewModel(showPlay = true).uiState.value.groups.single { it.group == SettingsGroup.Daily }.rows
+    fun `the goal jar row is gone while play is off`() = runTest {
+        val settings = appSettings(AppChoices(play = PlayChoices(on = false)))
 
-        assertEquals(SettingsAction.Play, daily.last().id)
-        assertEquals("Stamps, guesses and challenges are on", daily.last().value)
+        val saving = viewModel(settings = settings, showPlay = true).uiState.value.groups.single { it.group == SettingsGroup.Saving }.rows
+
+        assertEquals(listOf(SettingsAction.Play), saving.map { it.id })
+    }
+
+    @Test
+    fun `the goal jar row names the open goal and opens it`() = runTest {
+        val goal = Goal(id = "g1", name = "Chiang Mai", target = Satang(500_000L), currency = "THB", start = LocalDate(2026, 11, 1), createdAtEpochMillis = 0L)
+        val uiState = viewModel(showPlay = true, goals = flowOf(listOf(goal))).uiState
+        backgroundScope.launch { uiState.collect { } }
+        runCurrent()
+
+        assertEquals("Chiang Mai", uiState.value.rows.row(SettingsAction.GoalJar).value)
+        assertEquals("g1", uiState.value.goalId)
     }
 
     @Test
@@ -99,7 +125,7 @@ class SettingsViewModelTest : ViewModelTest() {
 
     @Test
     fun `a ledger with no import yet says so rather than reading as switched off`() = runTest {
-        assertEquals("On · no run yet", viewModel(sinceLastImport = null).uiState.value.rows[1].value)
+        assertEquals("On · no run yet", viewModel(sinceLastImport = null).uiState.value.rows.row(SettingsAction.BackgroundImport).value)
     }
 
     @Test
@@ -109,7 +135,7 @@ class SettingsViewModelTest : ViewModelTest() {
             settings = appSettings(AppChoices(backgroundImport = false)),
         )
 
-        assertEquals("Off · scans when you open the app", rows[1].value)
+        assertEquals("Off · scans when you open the app", rows.row(SettingsAction.BackgroundImport).value)
     }
 
     /** C-4: a platform with no schedule cannot be off, so the choice must not reach its line. */
@@ -121,24 +147,24 @@ class SettingsViewModelTest : ViewModelTest() {
             settings = appSettings(AppChoices(backgroundImport = false)),
         )
 
-        assertEquals("On each app open · no run yet", rows[1].value)
+        assertEquals("On each app open · no run yet", rows.row(SettingsAction.BackgroundImport).value)
     }
 
     @Test
     fun `the retention row says the number the reader chose`() = runTest {
         val rows = rowsFor(settings = appSettings(AppChoices(retention = 30.days)))
 
-        assertEquals("30 days, then removed from PaiSeN", rows[2].value)
+        assertEquals("30 days, then removed from PaiSeN", rows.row(SettingsAction.KeepFailedSlips).value)
     }
 
     @Test
     fun `a ledger with no import yet marks the source rather than the schedule`() = runTest {
-        assertEquals(listOf("Photo folders"), marked(sinceLastImport = null))
+        assertEquals(listOf("Advanced", "Photo folders"), marked(sinceLastImport = null))
     }
 
     @Test
     fun `an importer that ran and then stopped marks the schedule instead`() = runTest {
-        assertEquals(listOf("Background import"), marked(sinceLastImport = FOUR_DAYS))
+        assertEquals(listOf("Advanced", "Background import"), marked(sinceLastImport = FOUR_DAYS))
     }
 
     @Test
@@ -149,8 +175,8 @@ class SettingsViewModelTest : ViewModelTest() {
     @Test
     fun `the last run is reported whatever the platform's rhythm is called`() = runTest {
         viewModel(sinceLastImport = 120_000L, cadence = foregroundOnly()).uiState.test {
-            assertEquals("On each app open · no run yet", awaitItem().rows[1].value)
-            assertEquals("On each app open · last run 2 min ago", awaitItem().rows[1].value)
+            assertEquals("On each app open · no run yet", awaitItem().rows.row(SettingsAction.BackgroundImport).value)
+            assertEquals("On each app open · last run 2 min ago", awaitItem().rows.row(SettingsAction.BackgroundImport).value)
         }
     }
 
@@ -158,7 +184,7 @@ class SettingsViewModelTest : ViewModelTest() {
     fun `a platform that only catches up on open still names where slips come from`() = runTest {
         val rows = viewModel(cadence = foregroundOnly()).uiState.value.rows
 
-        assertEquals("K PLUS album · no background scan on iOS", rows[0].value)
+        assertEquals("K PLUS album · no background scan on iOS", rows.row(SettingsAction.SlipSource).value)
     }
 
     /**
@@ -267,6 +293,7 @@ class SettingsViewModelTest : ViewModelTest() {
         settings: AppSettings = appSettings(),
         canLock: Boolean = false,
         showPlay: Boolean = false,
+        goals: Flow<List<Goal>> = flowOf(emptyList()),
     ) = SettingsViewModel(
         observeLastImport = ObserveLastImportUseCase(FakeLedger(sinceLastImport = sinceLastImport)),
         observeChoices = ObserveAppChoicesUseCase(settings),
@@ -280,5 +307,8 @@ class SettingsViewModelTest : ViewModelTest() {
         switchNoteToneUseCase = SwitchNoteToneUseCase(settings),
         canLock = canLock,
         showPlay = showPlay,
+        observeGoals = goals,
     )
+
+    private fun List<SettingsRowUiModel>.row(id: SettingsAction) = single { it.id == id }
 }

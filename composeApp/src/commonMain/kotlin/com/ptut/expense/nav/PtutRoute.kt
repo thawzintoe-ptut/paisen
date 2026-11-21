@@ -40,6 +40,10 @@ sealed interface PtutRoute {
     @Serializable
     data class Settings(val focusRow: String? = null) : PtutRoute
 
+    /** #101: Settings › Advanced. [focusRow] as [Settings] carries it, passed on when a fix sits here. */
+    @Serializable
+    data class SettingsAdvanced(val focusRow: String? = null) : PtutRoute
+
     /**
      * Pushed, not tabbed. The review queue is a job the app hands back to the reader, so it is
      * offered from Home where the totals it would change are visible — matching the handoff's

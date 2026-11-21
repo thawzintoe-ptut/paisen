@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,8 +34,10 @@ import com.ptut.expense.design.ptutIcon
 import com.ptut.expense.design.tappable
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.ui.sky.SkyGroupTitle
 import com.ptut.expense.ui.sky.SkyGroupedCard
 import com.ptut.expense.ui.sky.SkyLargeTitle
+import com.ptut.expense.ui.sky.SkyListScreen
 import com.ptut.expense.ui.sky.SkyNoticeCard
 import com.ptut.expense.ui.sky.SkySwitch
 
@@ -78,26 +81,55 @@ fun SettingsView(
             )
         }
         account?.let { item { it() } }
-        uiState.groups.forEach { group ->
-            item(key = group.group.name) {
-                SkyGroupedCard(
-                    rows = group.rows.map<SettingsRowUiModel, @Composable () -> Unit> { row ->
-                        {
-                            SettingsRow(
-                                row = row,
-                                // Marked only while the reason still stands and the reader was sent here for it.
-                                marked = row.needsAttention && row.id == focusRow,
-                                onClick = { onAction(row.id) },
-                                onSwitch = { on -> onSwitch(row.id, on) },
-                            )
-                        }
-                    },
-                    modifier = Modifier.padding(horizontal = Spacing.sm),
-                )
-            }
-        }
+        // #101: a fix that sits behind Advanced marks the Advanced row, the first of its two taps.
+        val focusBehindAdvanced = focusRow != null && uiState.advanced.any { group -> group.rows.any { it.id == focusRow } }
+        settingsCards(uiState.groups, onAction, onSwitch) { row -> row.id == focusRow || (row.id == SettingsAction.Advanced && focusBehindAdvanced) }
         footer?.let { item { it() } }
         item { Box(Modifier.height(SkySizes.pillClearance)) }
+    }
+}
+
+/** #101: Settings › Advanced, the rows most people never touch, in the same cards as Settings. */
+@Composable
+fun SettingsAdvancedView(
+    uiState: SettingsUiState,
+    onAction: (SettingsAction) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    focusRow: SettingsAction? = null,
+    onSwitch: (SettingsAction, Boolean) -> Unit = { _, _ -> },
+) {
+    SkyListScreen(title = LocalCopy.current.settings.advanced, onBack = onBack, modifier = modifier) {
+        settingsCards(uiState.advanced, onAction, onSwitch) { row -> row.id == focusRow }
+        item { Box(Modifier.height(SkySizes.pillClearance)) }
+    }
+}
+
+/** Each group's title, then its white card. [sentFor] says the reader was sent here for that row. */
+private fun LazyListScope.settingsCards(
+    groups: List<SettingsGroupUiModel>,
+    onAction: (SettingsAction) -> Unit,
+    onSwitch: (SettingsAction, Boolean) -> Unit,
+    sentFor: (SettingsRowUiModel) -> Boolean,
+) {
+    groups.forEach { group ->
+        group.title?.let { title -> item(key = "${group.group.name}-title") { SkyGroupTitle(title, Modifier.padding(top = Spacing.xs)) } }
+        item(key = group.group.name) {
+            SkyGroupedCard(
+                rows = group.rows.map<SettingsRowUiModel, @Composable () -> Unit> { row ->
+                    {
+                        SettingsRow(
+                            row = row,
+                            // Marked only while the reason still stands and the reader was sent here for it.
+                            marked = row.needsAttention && sentFor(row),
+                            onClick = { onAction(row.id) },
+                            onSwitch = { on -> onSwitch(row.id, on) },
+                        )
+                    }
+                },
+                modifier = Modifier.padding(horizontal = Spacing.sm),
+            )
+        }
     }
 }
 

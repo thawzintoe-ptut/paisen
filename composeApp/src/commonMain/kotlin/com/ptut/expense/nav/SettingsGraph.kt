@@ -2,6 +2,7 @@ package com.ptut.expense.nav
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +48,7 @@ import com.ptut.expense.settings.LedgerBackupViewModel
 import com.ptut.expense.settings.LicencesView
 import com.ptut.expense.settings.LicencesViewModel
 import com.ptut.expense.settings.SettingsAction
+import com.ptut.expense.settings.SettingsAdvancedView
 import com.ptut.expense.settings.SettingsView
 import com.ptut.expense.settings.SettingsViewModel
 import com.ptut.expense.settings.SlipOwnerDialog
@@ -67,95 +69,11 @@ import org.koin.core.parameter.parametersOf
 /** Settings and every screen a Settings row opens. */
 internal fun NavGraphBuilder.settingsRoutes(nav: NavHostController) {
     composable<PtutRoute.Settings> { entry ->
-        val settings = koinViewModel<SettingsViewModel>()
-        val state by settings.uiState.collectAsStateWithLifecycle()
-        // The switch in the background import row is that screen's own lever (#168).
-        val background = koinViewModel<BackgroundImportViewModel>()
-        val uriHandler = LocalUriHandler.current
-        val build = koinInject<AppBuild>()
-        val toasts = koinInject<ToastMessages>()
-        val scope = rememberCoroutineScope()
-        val noEmailApp = LocalCopy.current.settings.noEmailApp(FEEDBACK_ADDRESS)
-        val deviceAuth = koinInject<DeviceAuth>()
-        val appLock = koinInject<AppLock>()
-        val unlockReason = LocalCopy.current.settings.unlockReason
-        // #26: the one row that opens a dialog, not a screen.
-        var editingOwner by rememberSaveable { mutableStateOf(false) }
-        if (editingOwner) {
-            SlipOwnerDialog(
-                current = koinInject<AppSettings>().choices.value.slipOwner.name,
-                onSave = {
-                    settings.setSlipOwner(it)
-                    editingOwner = false
-                },
-                onDismiss = { editingOwner = false },
-            )
-        }
-        SettingsView(
-            uiState = state,
-            // Every row but one is a destination, so the screen navigates and the state
-            // holder holds no action — an operation started here would report its result
-            // over whichever screen the reader had moved on to.
-            onAction = { action ->
-                if (action == SettingsAction.Feedback) {
-                    // The phone's own mail app writes and sends it. Android throws when it has none.
-                    runCatching { uriHandler.openUri(feedbackMail(build)) }
-                        .onFailure { scope.launch { toasts.show(ToastMessage(noEmailApp, ToastTone.Error)) } }
-                } else if (action == SettingsAction.SlipOwner) {
-                    editingOwner = true
-                } else if (action == SettingsAction.NoteTone) {
-                    settings.switchNoteTone()
-                } else {
-                    action.destination()?.let { nav.navigate(it) }
-                }
-            },
-            focusRow = entry.toRoute<PtutRoute.Settings>().focusedRow(),
-            onSwitch = { action, on ->
-                when (action) {
-                    SettingsAction.MoodByTimeOfDay -> settings.setMoodByTimeOfDay(on)
+        SettingsHost(nav, focus = entry.toRoute<PtutRoute.Settings>().focusedRow(), advanced = false)
+    }
 
-                    SettingsAction.WeeklyCheckIn -> settings.setWeeklyCheckIn(on)
-
-                    SettingsAction.Transparency -> settings.setTransparency(on)
-
-                    SettingsAction.AppLock -> settings.setAppLock(
-                        on = on,
-                        authenticate = { deviceAuth.authenticate(unlockReason) },
-                        onTurnedOn = appLock::unlock,
-                    )
-
-                    SettingsAction.BackgroundImport -> background.setRunning(on)
-
-                    // Rows with no switch.
-                    SettingsAction.SlipSource, SettingsAction.KeepFailedSlips, SettingsAction.SlipOwner,
-                    SettingsAction.Activity, SettingsAction.Categories, SettingsAction.NoteTone,
-                    SettingsAction.Language, SettingsAction.ExportLedger, SettingsAction.ImportLedger,
-                    SettingsAction.Timezone, SettingsAction.HomeCurrency,
-                    SettingsAction.Assistant, SettingsAction.Feedback, SettingsAction.Licences,
-                    SettingsAction.Play,
-                    -> Unit
-                }
-            },
-            account = { AccountCard(Modifier.padding(horizontal = Spacing.sm)) },
-            footer = {
-                Column {
-                    // Absent from a release build rather than hidden in one: the
-                    // graph binds nothing this needs unless the entry point said
-                    // debug.
-                    if (koinInject<AppBuild>().debug) {
-                        val debug = koinViewModel<DebugSlipViewModel>()
-                        val summary by debug.summary.collectAsStateWithLifecycle()
-                        DebugSlipPanel(
-                            summary = summary,
-                            onInjectReadable = debug::injectReadable,
-                            onInjectSameMerchant = debug::injectSameMerchant,
-                            onInjectUnreadable = debug::injectUnreadable,
-                            modifier = Modifier.padding(Spacing.sm),
-                        )
-                    }
-                }
-            },
-        )
+    composable<PtutRoute.SettingsAdvanced> { entry ->
+        SettingsHost(nav, focus = entry.toRoute<PtutRoute.SettingsAdvanced>().focusedRow(), advanced = true)
     }
 
     composable<PtutRoute.BackgroundImport> {
@@ -320,4 +238,108 @@ internal fun NavGraphBuilder.settingsRoutes(nav: NavHostController) {
             onPauseOrDispose { }
         }
     }
+}
+
+/** Settings, or its Advanced screen (#101): one set of row taps and switches for both. */
+@Composable
+private fun SettingsHost(nav: NavHostController, focus: SettingsAction?, advanced: Boolean) {
+    val settings = koinViewModel<SettingsViewModel>()
+    val state by settings.uiState.collectAsStateWithLifecycle()
+    // The switch in the background import row is that screen's own lever (#168).
+    val background = koinViewModel<BackgroundImportViewModel>()
+    val uriHandler = LocalUriHandler.current
+    val build = koinInject<AppBuild>()
+    val toasts = koinInject<ToastMessages>()
+    val scope = rememberCoroutineScope()
+    val noEmailApp = LocalCopy.current.settings.noEmailApp(FEEDBACK_ADDRESS)
+    val deviceAuth = koinInject<DeviceAuth>()
+    val appLock = koinInject<AppLock>()
+    val unlockReason = LocalCopy.current.settings.unlockReason
+    // #26: the one row that opens a dialog, not a screen.
+    var editingOwner by rememberSaveable { mutableStateOf(false) }
+    if (editingOwner) {
+        SlipOwnerDialog(
+            current = koinInject<AppSettings>().choices.value.slipOwner.name,
+            onSave = {
+                settings.setSlipOwner(it)
+                editingOwner = false
+            },
+            onDismiss = { editingOwner = false },
+        )
+    }
+    // Every row but a few is a destination, so the screen navigates and the state holder holds no
+    // action — an operation started here would report its result over whichever screen the reader
+    // had moved on to.
+    val onAction: (SettingsAction) -> Unit = { action ->
+        when (action) {
+            // The phone's own mail app writes and sends it. Android throws when it has none.
+            SettingsAction.Feedback -> runCatching { uriHandler.openUri(feedbackMail(build)) }
+                .onFailure { scope.launch { toasts.show(ToastMessage(noEmailApp, ToastTone.Error)) } }
+
+            SettingsAction.SlipOwner -> editingOwner = true
+
+            SettingsAction.NoteTone -> settings.switchNoteTone()
+
+            // #101: the fix the reader was sent for travels on, so its row is marked there too.
+            SettingsAction.Advanced -> nav.navigate(PtutRoute.SettingsAdvanced(focus?.name)) { launchSingleTop = true }
+
+            SettingsAction.GoalJar -> nav.navigate(PtutRoute.GoalJar(goalId = state.goalId)) { launchSingleTop = true }
+
+            else -> action.destination()?.let { nav.navigate(it) }
+        }
+    }
+    val onSwitch: (SettingsAction, Boolean) -> Unit = { action, on ->
+        when (action) {
+            SettingsAction.MoodByTimeOfDay -> settings.setMoodByTimeOfDay(on)
+
+            SettingsAction.WeeklyCheckIn -> settings.setWeeklyCheckIn(on)
+
+            SettingsAction.Transparency -> settings.setTransparency(on)
+
+            SettingsAction.AppLock -> settings.setAppLock(
+                on = on,
+                authenticate = { deviceAuth.authenticate(unlockReason) },
+                onTurnedOn = appLock::unlock,
+            )
+
+            SettingsAction.BackgroundImport -> background.setRunning(on)
+
+            // Rows with no switch.
+            SettingsAction.SlipSource, SettingsAction.KeepFailedSlips, SettingsAction.SlipOwner,
+            SettingsAction.Activity, SettingsAction.Categories, SettingsAction.NoteTone,
+            SettingsAction.Language, SettingsAction.ExportLedger, SettingsAction.ImportLedger,
+            SettingsAction.Timezone, SettingsAction.HomeCurrency,
+            SettingsAction.Assistant, SettingsAction.Feedback, SettingsAction.Licences,
+            SettingsAction.Play, SettingsAction.GoalJar, SettingsAction.Advanced,
+            -> Unit
+        }
+    }
+    if (advanced) {
+        SettingsAdvancedView(uiState = state, onAction = onAction, onBack = { nav.popBackStack() }, focusRow = focus, onSwitch = onSwitch)
+        return
+    }
+    SettingsView(
+        uiState = state,
+        onAction = onAction,
+        focusRow = focus,
+        onSwitch = onSwitch,
+        account = { AccountCard(Modifier.padding(horizontal = Spacing.sm)) },
+        footer = {
+            Column {
+                // Absent from a release build rather than hidden in one: the graph binds nothing
+                // this needs unless the entry point said debug.
+                if (koinInject<AppBuild>().debug) {
+                    val debug = koinViewModel<DebugSlipViewModel>()
+                    val summary by debug.summary.collectAsStateWithLifecycle()
+                    DebugSlipPanel(
+                        summary = summary,
+                        onInjectReadable = debug::injectReadable,
+                        onInjectSameMerchant = debug::injectSameMerchant,
+                        onInjectUnreadable = debug::injectUnreadable,
+                        modifier = Modifier.padding(Spacing.sm),
+                    )
+                }
+            }
+        },
+    )
 }
