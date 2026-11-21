@@ -54,6 +54,8 @@ fun GuessView(
     onReveal: () -> Unit,
     onSeeWeek: (from: String, to: String) -> Unit,
     onBack: () -> Unit,
+    /** A just-in-time tip shown above the feature, or null when none is due. */
+    tip: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val title = when (uiState) {
@@ -79,6 +81,7 @@ fun GuessView(
             }
 
             is GuessUiState.Guessing -> {
+                tip?.let { slot -> item { slot() } }
                 item { Guessing(uiState, onNudge, onSet) }
                 item {
                     SkyButton(label = uiState.guess, onClick = onReveal, modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md).padding(top = Spacing.md))

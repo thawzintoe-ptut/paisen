@@ -78,7 +78,7 @@ class PlaySettingsViewModelTest : ViewModelTest() {
 
         assertTrue(state.master.on)
         assertEquals("Stamps, guesses and challenges are on", state.master.line)
-        assertEquals(listOf("On Today", "In shared groups", "Sharing and reminders"), state.groups.map { it.title })
+        assertEquals(listOf("On Today", "In shared groups", "Sharing and reminders", "Help and tips"), state.groups.map { it.title })
         assertEquals("Your own play is worked out on this phone and never leaves it.", state.footer)
     }
 
@@ -104,6 +104,7 @@ class PlaySettingsViewModelTest : ViewModelTest() {
                 PlaySetting.GroupStamps to true,
                 PlaySetting.ShareAmounts to false,
                 PlaySetting.WeeklyReminder to false,
+                PlaySetting.Tips to true,
             ),
             rows,
         )
@@ -150,5 +151,17 @@ class PlaySettingsViewModelTest : ViewModelTest() {
         runCurrent()
 
         assertEquals(0, reminders.writes)
+    }
+
+    @Test
+    fun `see all tips again clears the seen tips and turns tips back on`() = runTest {
+        val settings = appSettings(AppChoices(play = PlayChoices(tips = false, seenTips = setOf("Run", "Stamp"))))
+        val viewModel = viewModel(settings)
+
+        viewModel.showTipsAgain()
+
+        assertTrue(settings.choices.value.play.tips)
+        assertTrue(settings.choices.value.play.seenTips.isEmpty())
+        assertEquals("See all tips again", latest(viewModel.uiState).tipsAgain?.name)
     }
 }

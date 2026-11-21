@@ -7,6 +7,7 @@ import com.ptut.expense.domain.play.ObservePlayChoicesUseCase
 import com.ptut.expense.domain.play.ObservePlayOnUseCase
 import com.ptut.expense.domain.play.PlanPlayReminderUseCase
 import com.ptut.expense.domain.play.PlayPart
+import com.ptut.expense.domain.play.PlayTip
 import com.ptut.expense.domain.play.SetPlayChoicesUseCase
 import com.ptut.expense.domain.play.SetStampsOffUseCase
 import com.ptut.expense.domain.runSuspendCatching
@@ -20,7 +21,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** p22's switches. The row's identity, as `SettingsAction` is for Settings. */
-enum class PlaySetting { Master, Run, Guess, Challenges, GroupStamps, ShareAmounts, WeeklyReminder }
+enum class PlaySetting { Master, Run, Guess, Challenges, GroupStamps, ShareAmounts, WeeklyReminder, Tips }
 
 data class PlaySettingRowUiModel(val id: PlaySetting, val name: String, val line: String, val on: Boolean)
 
@@ -32,7 +33,11 @@ data class PlaySettingsUiState(
     val master: PlaySettingRowUiModel,
     val groups: List<PlaySettingsGroupUiModel>,
     val footer: String?,
+    /** "See all tips again" under the Help and tips group; null while tips are not offered or play is off. */
+    val tipsAgain: TipsAgainUiModel? = null,
 )
+
+data class TipsAgainUiModel(val name: String, val line: String)
 
 /**
  * #83, Settings › Play (p22). A row shows only when this build offers its part (D17), and every
@@ -63,12 +68,16 @@ class PlaySettingsViewModel(
                 PlaySetting.GroupStamps -> choices.copy(groupStamps = on)
                 PlaySetting.ShareAmounts -> choices.copy(shareAmounts = on)
                 PlaySetting.WeeklyReminder -> choices.copy(weeklyReminder = on)
+                PlaySetting.Tips -> choices.copy(tips = on)
             }
         }
         // The master switch sits above both: off, the groups hear the opt-out and the reminder is dropped.
         if (setting in STAMP_SETTINGS) setStampsOff?.let { apply -> viewModelScope.launch { runSuspendCatching { apply() } } }
         if (setting in REMINDER_SETTINGS) planReminder?.let { plan -> viewModelScope.launch { runSuspendCatching { plan() } } }
     }
+
+    /** Every tip shows again, and tips come back on if they were skipped. */
+    fun showTipsAgain() = setChoices { it.copy(tips = true, seenTips = emptySet()) }
 
     private fun offered(part: PlayPart): Boolean = playOn.offered(part)
 
@@ -107,7 +116,16 @@ class PlaySettingsViewModel(
                 ),
             ),
         ).filter { it.rows.isNotEmpty() }
-        return PlaySettingsUiState(text.title, master, groups, footer = text.footer)
+        val tipsText = AppText.copy.play.tips
+        val tips = PlaySettingsGroupUiModel(tipsText.group, listOf(PlaySettingRowUiModel(PlaySetting.Tips, tipsText.show, tipsText.showLine, choices.tips)))
+            .takeIf { playOn.tipsOffered() && PlayTip.entries.any { offered(it.part) } }
+        return PlaySettingsUiState(
+            title = text.title,
+            master = master,
+            groups = groups + listOfNotNull(tips),
+            footer = text.footer,
+            tipsAgain = tips?.let { TipsAgainUiModel(tipsText.again, tipsText.againLine) },
+        )
     }
 }
 

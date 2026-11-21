@@ -70,4 +70,9 @@ object PlaySizes {
     /** A challenge option's radio ring, and its ring once picked (`.pl-radio`). */
     val radio = 22.dp
     val radioPicked = 7.dp
+
+    /** A just-in-time tip: its arrow, how far the arrow sits in from the card's edge, and its slide. */
+    val tipArrow = 14.dp
+    val tipArrowInset = 32.dp
+    val tipSlide = 8.dp
 }

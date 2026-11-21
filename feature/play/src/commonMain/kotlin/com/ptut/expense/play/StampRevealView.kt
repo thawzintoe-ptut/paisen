@@ -38,6 +38,8 @@ fun StampRevealView(
     onTurn: () -> Unit,
     onDone: () -> Unit,
     onBack: () -> Unit,
+    /** A just-in-time tip shown above the feature, or null when none is due. */
+    tip: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val title = (uiState as? RevealUiState.Loaded)?.title.orEmpty()
@@ -48,6 +50,7 @@ fun StampRevealView(
             is RevealUiState.Missing -> item { PlayLine(uiState.line, Modifier.padding(horizontal = Spacing.md)) }
 
             is RevealUiState.Loaded -> {
+                tip?.let { slot -> item { slot() } }
                 item {
                     Text(
                         text = uiState.hint,

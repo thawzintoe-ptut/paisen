@@ -92,6 +92,8 @@ fun GoalJarView(
     onWhatIf: (String) -> Unit,
     onArchive: () -> Unit,
     onBack: () -> Unit,
+    /** A just-in-time tip shown above the feature, or null when none is due. */
+    tip: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val title = when (uiState) {
@@ -115,6 +117,7 @@ fun GoalJarView(
             }
 
             is GoalJarUiState.Jar -> {
+                tip?.let { slot -> item { slot() } }
                 item {
                     Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.md), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(uiState.name.uppercase(), style = MaterialTheme.ptutType.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)

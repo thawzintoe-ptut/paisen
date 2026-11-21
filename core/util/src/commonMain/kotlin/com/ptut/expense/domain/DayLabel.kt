@@ -37,6 +37,9 @@ private const val BUDDHIST_ERA_OFFSET = 543
 /** "Oct": the month alone, for a year's bars. */
 fun LocalDate.monthShort(): String = month.short()
 
+/** History's month rail: [monthShort], or a narrower form where the language has one. */
+fun LocalDate.monthRail(): String = AppText.copy.calendar.let { it.monthsRail ?: it.monthsShort }[month.number - 1]
+
 fun Long.timeOfDayIn(zone: TimeZone): String {
     val local = Instant.fromEpochMilliseconds(this).toLocalDateTime(zone)
     return "${local.hour.pad()}:${local.minute.pad()}"

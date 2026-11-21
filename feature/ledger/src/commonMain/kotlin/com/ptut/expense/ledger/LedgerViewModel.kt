@@ -19,7 +19,7 @@ import com.ptut.expense.domain.formatNet
 import com.ptut.expense.domain.iconName
 import com.ptut.expense.domain.label
 import com.ptut.expense.domain.longName
-import com.ptut.expense.domain.monthShort
+import com.ptut.expense.domain.monthRail
 import com.ptut.expense.domain.rules.ShopNames
 import com.ptut.expense.domain.today.FilterLedgerUseCase
 import com.ptut.expense.domain.today.FilteredLedger
@@ -219,7 +219,7 @@ private fun List<DayBucket>.monthIndex(): List<LedgerMonthUiModel> {
     return months.mapIndexed { index, days ->
         val date = days.first().date
         val month = LedgerMonthUiModel(
-            label = date.monthShort(),
+            label = date.monthRail(),
             year = date.yearLabel().takeIf { index == 0 || months[index - 1].first().date.year != date.year },
             spoken = text.goToMonth("${date.month.longName()} ${date.yearLabel()}"),
             dayKey = date.dayKey(),

@@ -10,6 +10,7 @@ import androidx.navigation.toRoute
 import com.ptut.expense.di.AppBuild
 import com.ptut.expense.domain.play.ObservePlayOnUseCase
 import com.ptut.expense.domain.play.PlayPart
+import com.ptut.expense.domain.play.PlayTip
 import com.ptut.expense.shared.AddExpenseActions
 import com.ptut.expense.shared.AddExpenseView
 import com.ptut.expense.shared.AddExpenseViewModel
@@ -44,6 +45,7 @@ import com.ptut.expense.shared.WhoPaysWheelViewModel
 import com.ptut.expense.shared.WhoPaysWhomUiState
 import com.ptut.expense.shared.WhoPaysWhomView
 import com.ptut.expense.shared.WhoPaysWhomViewModel
+import com.ptut.expense.ui.play.TipPointer
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -275,6 +277,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
             onFair = wheel::setFair,
             onAdd = { payer -> nav.navigate(PtutRoute.AddSharedExpense(groupId, payerMemberId = payer)) { launchSingleTop = true } },
             onBack = { nav.popBackStack() },
+            tip = playTip(PlayTip.Wheel, TipPointer.Up),
         )
     }
 

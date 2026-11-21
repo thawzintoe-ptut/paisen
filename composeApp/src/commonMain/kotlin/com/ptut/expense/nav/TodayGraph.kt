@@ -15,6 +15,7 @@ import com.ptut.expense.activity.ActivityView
 import com.ptut.expense.activity.ActivityViewModel
 import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.folders.FolderChooser
+import com.ptut.expense.domain.play.PlayTip
 import com.ptut.expense.home.AllowAllPhotosSheet
 import com.ptut.expense.home.HomeView
 import com.ptut.expense.home.HomeViewModel
@@ -42,6 +43,8 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
         val pickScope = rememberCoroutineScope()
         var askingAllowAll by remember { mutableStateOf(false) }
         HomeView(
+            runTip = playTip(PlayTip.Run),
+            questionTip = playTip(PlayTip.Question),
             uiState = state,
             onChoosePeriod = viewModel::show,
             onOpenReview = { nav.navigate(PtutRoute.Review) },

@@ -38,6 +38,8 @@ private const val PLAY_CHALLENGES = "play-challenges"
 private const val PLAY_GROUP_STAMPS = "play-group-stamps"
 private const val PLAY_SHARE_AMOUNTS = "play-share-amounts"
 private const val PLAY_WEEKLY_REMINDER = "play-weekly-reminder"
+private const val PLAY_TIPS = "play-tips"
+private const val PLAY_SEEN_TIPS = "play-seen-tips"
 
 /**
  * Every import choice in its own file, so clearing it by hand puts the shipped defaults back.
@@ -85,6 +87,8 @@ class SharedPreferencesAppSettingsStore(
                     groupStamps = choices.getBoolean(PLAY_GROUP_STAMPS, play.groupStamps),
                     shareAmounts = choices.getBoolean(PLAY_SHARE_AMOUNTS, play.shareAmounts),
                     weeklyReminder = choices.getBoolean(PLAY_WEEKLY_REMINDER, play.weeklyReminder),
+                    tips = choices.getBoolean(PLAY_TIPS, play.tips),
+                    seenTips = choices.getString(PLAY_SEEN_TIPS, null).toTipSet(),
                 )
             },
         )
@@ -122,6 +126,8 @@ class SharedPreferencesAppSettingsStore(
             .putBoolean(PLAY_GROUP_STAMPS, choices.play.groupStamps)
             .putBoolean(PLAY_SHARE_AMOUNTS, choices.play.shareAmounts)
             .putBoolean(PLAY_WEEKLY_REMINDER, choices.play.weeklyReminder)
+            .putBoolean(PLAY_TIPS, choices.play.tips)
+            .putString(PLAY_SEEN_TIPS, choices.play.seenTips.joinToString(TIP_SEPARATOR))
             .apply()
     }
 }

@@ -6,6 +6,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
+import com.ptut.expense.domain.play.PlayTip
 import com.ptut.expense.play.ChallengeView
 import com.ptut.expense.play.ChallengeViewModel
 import com.ptut.expense.play.CloseMonthView
@@ -34,14 +35,14 @@ internal fun NavGraphBuilder.playRoutes(nav: NavHostController) {
     composable<PtutRoute.PlaySettings> {
         val play = koinViewModel<PlaySettingsViewModel>()
         val state by play.uiState.collectAsStateWithLifecycle()
-        PlaySettingsView(uiState = state, onSet = play::set, onBack = { nav.popBackStack() })
+        PlaySettingsView(uiState = state, onSet = play::set, onBack = { nav.popBackStack() }, onShowTipsAgain = play::showTipsAgain)
     }
 
     composable<PtutRoute.StampReveal> { entry ->
         val stampId = entry.toRoute<PtutRoute.StampReveal>().stampId
         val reveal = koinViewModel<StampRevealViewModel> { parametersOf(stampId) }
         val state by reveal.uiState.collectAsStateWithLifecycle()
-        StampRevealView(uiState = state, onTurn = reveal::turn, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
+        StampRevealView(uiState = state, onTurn = reveal::turn, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() }, tip = playTip(PlayTip.Stamp))
     }
 
     composable<PtutRoute.StampBook> {
@@ -66,6 +67,7 @@ internal fun NavGraphBuilder.playRoutes(nav: NavHostController) {
         val guess = koinViewModel<GuessViewModel> { parametersOf(monday) }
         val state by guess.uiState.collectAsStateWithLifecycle()
         GuessView(
+            tip = playTip(PlayTip.Guess),
             uiState = state,
             onNudge = guess::nudge,
             onSet = guess::set,
@@ -87,6 +89,7 @@ internal fun NavGraphBuilder.playRoutes(nav: NavHostController) {
         val jar = koinViewModel<GoalJarViewModel> { parametersOf(route.goalId.orEmpty(), route.name.orEmpty(), route.target.orEmpty()) }
         val state by jar.uiState.collectAsStateWithLifecycle()
         GoalJarView(
+            tip = playTip(PlayTip.Jar),
             uiState = state,
             onName = jar::setName,
             onTarget = jar::setTarget,

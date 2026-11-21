@@ -57,6 +57,9 @@ data class PlayChoices(
     val groupStamps: Boolean = true,
     val shareAmounts: Boolean = false,
     val weeklyReminder: Boolean = false,
+    /** Just-in-time tips: on until Skip all tips. [seenTips] holds each tip's name once its Got it is tapped. */
+    val tips: Boolean = true,
+    val seenTips: Set<String> = emptySet(),
 )
 
 /**

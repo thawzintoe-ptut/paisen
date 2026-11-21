@@ -36,4 +36,10 @@ class ObservePlayOnUseCase(
 
     /** Whether this build offers [part] at all, before the reader's switches. */
     fun offered(part: PlayPart): Boolean = gate.offers(part)
+
+    /** Whether [tip] shows now: the build and switches allow it and the reader has not seen it. */
+    fun tip(tip: PlayTip): Flow<Boolean> = choices().map { it.play.shows(tip, gate) }.distinctUntilChanged()
+
+    /** Whether this build shows tips at all (the `tips_on` flag). */
+    fun tipsOffered(): Boolean = gate.tipsOn && gate.flagOn
 }

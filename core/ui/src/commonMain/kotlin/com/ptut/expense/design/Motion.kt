@@ -139,6 +139,8 @@ data class PtutMotion(
     val jarIdle: Duration = 3_600.milliseconds,
     /** A meter's fill moving to its new share. */
     val meterFill: Duration = 600.milliseconds,
+    /** A just-in-time tip sliding up into place beside its feature. */
+    val tipIn: Duration = 320.milliseconds,
 
     // ---- page 01 · the curves themselves ----------------------------------------------------
     val standard: Easing = StandardEasing,

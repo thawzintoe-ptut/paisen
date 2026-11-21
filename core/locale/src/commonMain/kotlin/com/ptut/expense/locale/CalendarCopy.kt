@@ -9,6 +9,8 @@ data class CalendarCopy(
         "July", "August", "September", "October", "November", "December",
     ),
     val monthsShort: List<String> = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"),
+    /** History's month rail (#70): the narrowest form a reader still knows; null uses [monthsShort]. */
+    val monthsRail: List<String>? = null,
 )
 
 /** Burmese has no short forms in common use, so the short lists repeat the full names. */
@@ -19,6 +21,8 @@ val BurmeseCalendar = CalendarCopy(
         "ဇန်နဝါရီ", "ဖေဖော်ဝါရီ", "မတ်", "ဧပြီ", "မေ", "ဇွန်",
         "ဇူလိုင်", "သြဂုတ်", "စက်တင်ဘာ", "အောက်တိုဘာ", "နိုဝင်ဘာ", "ဒီဇင်ဘာ",
     ),
+    // The full names made the rail as wide as a row; the month's number under its year reads the same.
+    monthsRail = listOf("၁", "၂", "၃", "၄", "၅", "၆", "၇", "၈", "၉", "၁၀", "၁၁", "၁၂"),
     monthsShort = listOf(
         "ဇန်နဝါရီ", "ဖေဖော်ဝါရီ", "မတ်", "ဧပြီ", "မေ", "ဇွန်",
         "ဇူလိုင်", "သြဂုတ်", "စက်တင်ဘာ", "အောက်တိုဘာ", "နိုဝင်ဘာ", "ဒီဇင်ဘာ",

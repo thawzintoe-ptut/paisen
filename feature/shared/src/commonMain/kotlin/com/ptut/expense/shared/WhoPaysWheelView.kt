@@ -73,6 +73,8 @@ fun WhoPaysWheelView(
     onAdd: (payerMemberId: String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The Fair wheel tip, under the wheel and pointing at the switch; null when none is due. */
+    tip: (@Composable () -> Unit)? = null,
 ) {
     val state = uiState as? WheelUiState.Loaded
     val palette = wheelColors()
@@ -95,6 +97,7 @@ fun WhoPaysWheelView(
         item { SpinningWheel(state, palette) }
         state.tooFew?.let { line -> item { Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = Spacing.md)) } }
         item { FairRow(state, onFair) }
+        tip?.let { slot -> item { slot() } }
         if (state.tooFew == null) {
             item { SkyButton(state.spinLabel, onClick = onSpin, modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md)) }
         }

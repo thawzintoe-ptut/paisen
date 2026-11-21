@@ -232,3 +232,12 @@ New 2026-11-21, written without a native reader. Check before release.
 | large | ကြီးတယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeWhyLarge` |
 | Check the {n} {month} slips first | {month} စလစ် {n} ခု အရင် စစ်ပါ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeSealSlipsFirst` |
 | Go through the three steps first | အဆင့် သုံးဆင့် အရင် ကြည့်ပါ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeSealStepsFirst` |
+| Tip · {n} of {of} | အကြံပြုချက် · {of} ခုထဲက {n} | locale/PlayCopy.kt `PlayTipsCopy.eyebrow` |
+| Skip all tips | အကြံပြုချက် အားလုံး ကျော်မယ် | locale/PlayCopy.kt `PlayTipsCopy.skip` |
+| Got it | နားလည်ပြီ | locale/PlayCopy.kt `PlayTipsCopy.gotIt` |
+| Your tray clear run … (6 tip titles and bodies) | see `BurmesePlayTips.titles` / `.bodies` | locale/PlayCopy.kt `PlayTipsCopy.titles, bodies` |
+| Help and tips | အကူအညီနဲ့ အကြံပြုချက် | locale/PlayCopy.kt `PlayTipsCopy.group` |
+| Show tips | အကြံပြုချက် ပြမယ် | locale/PlayCopy.kt `PlayTipsCopy.show` |
+| One short tip the first time you meet a feature | အသစ်တစ်ခု ပထမဆုံး တွေ့တဲ့အခါ အကြံပြုချက် တိုတို တစ်ခု | locale/PlayCopy.kt `PlayTipsCopy.showLine` |
+| See all tips again | အကြံပြုချက်တွေ ပြန်ကြည့်မယ် | locale/PlayCopy.kt `PlayTipsCopy.again` |
+| Run, question, stamps, guess, jar, wheel | ရက်ဆက်၊ မေးခွန်း၊ တံဆိပ်၊ ခန့်မှန်း၊ ဘူး၊ ဘီး | locale/PlayCopy.kt `PlayTipsCopy.againLine` |

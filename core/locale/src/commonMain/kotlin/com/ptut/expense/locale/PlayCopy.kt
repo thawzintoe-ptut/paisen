@@ -16,8 +16,67 @@ data class PlayCopy(
     val extras: PlayExtrasCopy = PlayExtrasCopy(),
     /** Play inside shared groups (#93 to #97). */
     val group: PlayGroupCopy = PlayGroupCopy(),
+    /** Just-in-time tips and their Settings rows. */
+    val tips: PlayTipsCopy = PlayTipsCopy(),
     /** R8: every PaiSeN line says where it was worked out. */
     val local: String = "Worked out on this phone",
+)
+
+/** Just-in-time tips (V3 section 4): one per feature, keyed by the tip's name. */
+data class PlayTipsCopy(
+    val eyebrow: (number: Int, of: Int) -> String = { number, of -> "Tip · $number of $of" },
+    val skip: String = "Skip all tips",
+    val gotIt: String = "Got it",
+    val label: (title: String) -> String = { title -> "Tip: $title" },
+    val titles: Map<String, String> = mapOf(
+        "Run" to "Your tray clear run",
+        "Question" to "Today's 30 seconds",
+        "Stamp" to "Turn over your stamp",
+        "Guess" to "Guess the week",
+        "Jar" to "Your goal jar",
+        "Wheel" to "Fair wheel",
+    ),
+    val bodies: Map<String, String> = mapOf(
+        "Run" to "Check every slip in a day to add a day. Miss one and a freeze you earned keeps the run going.",
+        "Question" to "One question a day from your own week. Right or wrong, you keep your run.",
+        "Stamp" to "Every cleared day gives one. Most are the day's stamp; some days give a rare one.",
+        "Guess" to "Guess your week before you see it. PaiSeN guesses too. Closer than PaiSeN earns a stamp.",
+        "Jar" to "It fills from income less spending. No money moves; your bank stays as it is.",
+        "Wheel" to "Whoever paid fewer rounds lately gets a bigger slice. Turn it off for equal slices.",
+    ),
+    val group: String = "Help and tips",
+    val show: String = "Show tips",
+    val showLine: String = "One short tip the first time you meet a feature",
+    val again: String = "See all tips again",
+    val againLine: String = "Run, question, stamps, guess, jar, wheel",
+)
+
+val BurmesePlayTips = PlayTipsCopy(
+    eyebrow = { number, of -> "အကြံပြုချက် · ${of.inMyanmarDigits()} ခုထဲက ${number.inMyanmarDigits()}" },
+    skip = "အကြံပြုချက် အားလုံး ကျော်မယ်",
+    gotIt = "နားလည်ပြီ",
+    label = { title -> "အကြံပြုချက်: $title" },
+    titles = mapOf(
+        "Run" to "စလစ် ရှင်းတဲ့ ရက်ဆက်",
+        "Question" to "ဒီနေ့ စက္ကန့် ၃၀",
+        "Stamp" to "တံဆိပ်ကို လှန်ကြည့်ပါ",
+        "Guess" to "ဒီအပတ်ကို ခန့်မှန်းကြည့်",
+        "Jar" to "ပန်းတိုင်ဘူး",
+        "Wheel" to "တရားမျှတတဲ့ ဘီး",
+    ),
+    bodies = mapOf(
+        "Run" to "တစ်ရက်ထဲက စလစ်တိုင်း စစ်ရင် တစ်ရက် တိုးမယ်။ တစ်ရက် လွတ်သွားရင် ရထားတဲ့ freeze က ရက်ဆက်ကို ဆက်ထားပေးမယ်။",
+        "Question" to "ကိုယ့်အပတ်ထဲက တစ်နေ့ မေးခွန်း တစ်ခု။ မှန်မှန် မှားမှား ရက်ဆက် မပျက်ဘူး။",
+        "Stamp" to "ရှင်းတဲ့ နေ့တိုင်း တံဆိပ် တစ်ခု ရမယ်။ အများစုက အဲဒီနေ့ တံဆိပ်၊ တချို့နေ့ ရှားပါးတာ ရမယ်။",
+        "Guess" to "မကြည့်ခင် ကိုယ့်အပတ်ကို ခန့်မှန်းပါ။ PaiSeN လည်း ခန့်မှန်းတယ်။ PaiSeN ထက် နီးရင် တံဆိပ် ရမယ်။",
+        "Jar" to "ဝင်ငွေထဲက သုံးစွဲမှု နုတ်ပြီး ပြည့်တာပါ။ ငွေ ဘာမှ မရွှေ့ဘူး။ ဘဏ်ထဲမှာ ဒီအတိုင်း ရှိနေမယ်။",
+        "Wheel" to "မကြာသေးခင်က နည်းနည်း ပေးခဲ့သူ အပိုင်း ပိုကြီးမယ်။ ပိတ်ရင် အပိုင်းတွေ တူမယ်။",
+    ),
+    group = "အကူအညီနဲ့ အကြံပြုချက်",
+    show = "အကြံပြုချက် ပြမယ်",
+    showLine = "အသစ်တစ်ခု ပထမဆုံး တွေ့တဲ့အခါ အကြံပြုချက် တိုတို တစ်ခု",
+    again = "အကြံပြုချက်တွေ ပြန်ကြည့်မယ်",
+    againLine = "ရက်ဆက်၊ မေးခွန်း၊ တံဆိပ်၊ ခန့်မှန်း၊ ဘူး၊ ဘီး",
 )
 
 /** p22, word for word. */
@@ -366,5 +425,6 @@ val BurmesePlay = PlayCopy(
     reminder = PlayReminderCopy(channel = "အပတ်စဉ် ကစားစရာ", body = "သင့် အပတ် အဆင်သင့်ဖြစ်ပြီ။ အရင် ခန့်မှန်းကြည့်မလား။"),
     extras = BurmesePlayExtras,
     group = BurmesePlayGroup,
+    tips = BurmesePlayTips,
     local = "ဒီဖုန်းထဲမှာပဲ တွက်ထားတယ်",
 )

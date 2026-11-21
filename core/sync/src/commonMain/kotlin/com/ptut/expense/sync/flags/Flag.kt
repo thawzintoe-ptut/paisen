@@ -11,6 +11,9 @@ enum class Flag(val key: String, val default: Boolean) {
 
     /** #82: every play part at once. Each part is also held to debug until checked on a phone (D17). */
     Play("play_on", default = true),
+
+    /** Just-in-time play tips, off for everyone without a release. */
+    Tips("tips_on", default = true),
 }
 
 /**

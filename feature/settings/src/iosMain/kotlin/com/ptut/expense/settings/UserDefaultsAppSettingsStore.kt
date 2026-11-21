@@ -47,6 +47,8 @@ private const val PLAY_CHALLENGES = "ptut-play-challenges"
 private const val PLAY_GROUP_STAMPS = "ptut-play-group-stamps"
 private const val PLAY_SHARE_AMOUNTS = "ptut-play-share-amounts"
 private const val PLAY_WEEKLY_REMINDER = "ptut-play-weekly-reminder"
+private const val PLAY_TIPS = "ptut-play-tips"
+private const val PLAY_SEEN_TIPS = "ptut-play-seen-tips"
 private const val OWNER_FILE = "slip-owner.json"
 private const val NAME_FIELD = "name"
 private const val CANDIDATE_FIELD = "candidate"
@@ -104,6 +106,8 @@ class UserDefaultsAppSettingsStore(
                     groupStamps = readBool(PLAY_GROUP_STAMPS, play.groupStamps),
                     shareAmounts = readBool(PLAY_SHARE_AMOUNTS, play.shareAmounts),
                     weeklyReminder = readBool(PLAY_WEEKLY_REMINDER, play.weeklyReminder),
+                    tips = readBool(PLAY_TIPS, play.tips),
+                    seenTips = defaults.stringForKey(PLAY_SEEN_TIPS).toTipSet(),
                 )
             },
         )
@@ -142,6 +146,8 @@ class UserDefaultsAppSettingsStore(
         defaults.setBool(choices.play.groupStamps, PLAY_GROUP_STAMPS)
         defaults.setBool(choices.play.shareAmounts, PLAY_SHARE_AMOUNTS)
         defaults.setBool(choices.play.weeklyReminder, PLAY_WEEKLY_REMINDER)
+        defaults.setBool(choices.play.tips, PLAY_TIPS)
+        defaults.setObject(choices.play.seenTips.joinToString(TIP_SEPARATOR), PLAY_SEEN_TIPS)
         val target = choices.weeklyTarget
         if (target == null) {
             defaults.removeObjectForKey(TARGET_CATEGORY)

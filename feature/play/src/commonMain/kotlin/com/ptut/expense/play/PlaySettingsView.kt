@@ -31,6 +31,7 @@ fun PlaySettingsView(
     onSet: (PlaySetting, Boolean) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onShowTipsAgain: () -> Unit = {},
 ) {
     val ask = rememberNotificationAsk()
     val scope = rememberCoroutineScope()
@@ -49,7 +50,12 @@ fun PlaySettingsView(
             item(key = group.title) { SkyGroupTitle(group.title, Modifier.padding(top = Spacing.s20)) }
             item(key = "${group.title}-rows") {
                 SkyGroupedCard(
-                    rows = group.rows.map<PlaySettingRowUiModel, @Composable () -> Unit> { row -> { PlaySwitchRow(row, set) } },
+                    rows = group.rows.map<PlaySettingRowUiModel, @Composable () -> Unit> { row -> { PlaySwitchRow(row, set) } } +
+                        listOfNotNull(
+                            uiState.tipsAgain?.takeIf { group.rows.any { it.id == PlaySetting.Tips } }?.let { again ->
+                                @Composable { TipsAgainRow(again, onShowTipsAgain) }
+                            },
+                        ),
                     modifier = Modifier.padding(horizontal = Spacing.sm),
                 )
             }
@@ -84,5 +90,20 @@ private fun PlaySwitchRow(row: PlaySettingRowUiModel, onSet: (PlaySetting, Boole
             Text(row.line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         SkySwitch(checked = row.on, onCheckedChange = null)
+    }
+}
+
+/** Settings › Play › Help and tips: every tip shows again from its next appearance. */
+@Composable
+private fun TipsAgainRow(row: TipsAgainUiModel, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = SkySizes.transactionRow)
+            .tappable(PtutRadii.r12, Role.Button, onClick = onClick)
+            .padding(horizontal = Spacing.sm, vertical = Spacing.s12),
+    ) {
+        Text(row.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+        Text(row.line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

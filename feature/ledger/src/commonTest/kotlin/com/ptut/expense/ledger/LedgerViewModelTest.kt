@@ -297,7 +297,7 @@ class LedgerViewModelTest : ViewModelTest() {
         AppText.use(Language.Burmese)
 
         loaded(threeMonths) { state ->
-            assertEquals("သြဂုတ်", state.months[0].label)
+            assertEquals("၈", state.months[0].label)
             assertEquals("၂၀၂၆", state.months[0].year)
             assertEquals("၃ လအတွင်း ၆ ခု", state.months[0].behind)
         }

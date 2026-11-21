@@ -54,7 +54,7 @@ fun PlayChoices.allows(part: PlayPart): Boolean = on && when (part) {
  * What this build offers before the reader's switches: the Remote Config flag and each part's
  * release (D8, D17). Read once at launch, so it never changes under an open screen.
  */
-data class PlayGate(val flagOn: Boolean, val debug: Boolean) {
+data class PlayGate(val flagOn: Boolean, val debug: Boolean, val tipsOn: Boolean = true) {
 
     fun offers(part: PlayPart): Boolean = flagOn && part.offered(debug)
 

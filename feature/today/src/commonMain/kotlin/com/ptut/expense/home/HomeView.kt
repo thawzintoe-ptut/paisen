@@ -100,6 +100,9 @@ fun HomeView(
     onOpenChallenge: () -> Unit = {},
     onOpenShelf: (ShelfItemUiModel) -> Unit = {},
     modifier: Modifier = Modifier,
+    /** Just-in-time tips above the run card and the day's question; null when none is due. */
+    runTip: (@Composable () -> Unit)? = null,
+    questionTip: (@Composable () -> Unit)? = null,
 ) {
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         when (uiState) {
@@ -123,6 +126,8 @@ fun HomeView(
                 onOpenGuess = onOpenGuess,
                 onOpenChallenge = onOpenChallenge,
                 onOpenShelf = onOpenShelf,
+                runTip = runTip,
+                questionTip = questionTip,
             )
         }
     }
@@ -147,6 +152,8 @@ private fun LoadedHome(
     onOpenGuess: (String) -> Unit,
     onOpenChallenge: () -> Unit,
     onOpenShelf: (ShelfItemUiModel) -> Unit,
+    runTip: (@Composable () -> Unit)?,
+    questionTip: (@Composable () -> Unit)?,
 ) {
     val text = LocalCopy.current.home
     val common = LocalCopy.current.common
@@ -280,11 +287,13 @@ private fun LoadedHome(
 
         // #85, #87: the play stack waits under the day's list, so the purchases come first.
         state.question?.let { card ->
+            questionTip?.let { slot -> item { slot() } }
             item {
                 PlayQuestionCard(card, onOpen = onOpenQuestion, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm))
             }
         }
         state.play?.let { strip ->
+            runTip?.let { slot -> item { slot() } }
             item {
                 PlayRunCard(
                     strip = strip,
