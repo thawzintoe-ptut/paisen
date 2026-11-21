@@ -22,7 +22,7 @@ class PtutDatabaseMigrationTest {
         driver = BundledSQLiteDriver(),
         databaseClass = PtutDatabase::class,
         databaseFactory = { PtutDatabaseConstructor.initialize() },
-        autoMigrationSpecs = listOf(IncomeKeepsItsDirection()),
+        autoMigrationSpecs = listOf(IncomeKeepsItsDirection(), ReactionKeepsItsTime()),
     )
 
     @AfterTest
@@ -116,6 +116,38 @@ class PtutDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun aSchema24PhoneKeepsItsReactionsAndAnswersWithNoPickRecorded() {
+        helper.createDatabase(24).use { connection -> connection.seedReactionAndAnswer() }
+
+        helper.runMigrationsAndValidate(25).use { connection ->
+            assertEquals(listOf("r1|$SEEDED_AT"), connection.rows("SELECT id, createdAtEpochMillis FROM payment_reaction"))
+            assertEquals(listOf("2026-11-23|1|1"), connection.rows("SELECT date, answeredRight, pickedFirst IS NULL FROM play_day"))
+        }
+    }
+
+    @Test
+    fun aPhoneOnTheFirstPlayBuildHasItsReactionTimeColumnRenamed() {
+        helper.createDatabase(24).use { connection ->
+            // The first play build wrote schema 24 with the column under its old name.
+            connection.execSQL("ALTER TABLE payment_reaction RENAME COLUMN createdAtEpochMillis TO syncedAtEpochMillis")
+            connection.seedReactionAndAnswer(timeColumn = "syncedAtEpochMillis")
+        }
+
+        helper.runMigrationsAndValidate(25).use { connection ->
+            assertEquals(listOf("r1|$SEEDED_AT"), connection.rows("SELECT id, createdAtEpochMillis FROM payment_reaction"))
+        }
+    }
+
+    private fun SQLiteConnection.seedReactionAndAnswer(timeColumn: String = "createdAtEpochMillis") {
+        execSQL(
+            "INSERT INTO shared_group (id, name, type, icon, simplifyDebts, createdAtEpochMillis, meMemberId) " +
+                "VALUES ('g1', 'Chiang Mai', 'Trip', 'place', 1, $SEEDED_AT, 'm1')",
+        )
+        execSQL("INSERT INTO payment_reaction (id, groupId, paymentId, authorUid, kind, $timeColumn) VALUES ('r1', 'g1', 'p1', 'u1', 'Thanks', $SEEDED_AT)")
+        execSQL("INSERT INTO play_day (date, answeredAtEpochMillis, questionKey, answeredRight) VALUES ('2026-11-23', $SEEDED_AT, 'a|b', 1)")
+    }
+
     private fun SQLiteConnection.directions(): Map<String, String> = rows("SELECT id, direction FROM category ORDER BY id")
         .associate { row -> row.substringBefore('|') to row.substringAfter('|') }
 
@@ -139,7 +171,7 @@ class PtutDatabaseMigrationTest {
     }
 
     private companion object {
-        const val LATEST_SCHEMA = 24
+        const val LATEST_SCHEMA = 25
         const val SEEDED_AT = 1_700_000_000_000L
     }
 }

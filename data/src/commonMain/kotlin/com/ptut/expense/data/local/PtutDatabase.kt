@@ -84,7 +84,7 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         PlayGoalEntity::class,
         PaymentReactionEntity::class,
     ],
-    version = 24,
+    version = 25,
     // Schema 2 adds the nullable transactions.editedAt, and schema 4 the nullable memo and
     // slipAmountMinor beside it. Schema 5 adds the watched_folder table whole. A nullable column
     // with no default, and a new table, are the shapes Room migrates on its own. Schema 6 is
@@ -97,6 +97,7 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
     // cost tables whole (#133), the watched_folder shape eight times over. Schema 13 adds sync
     // state to groups and members, all nullable or defaulted, and the sync_outbox table (#189).
     // Schema 16 adds the deleted_built_in table whole (#219), and schema 17 the payment_removal table (#218).
+    // Schema 25 adds the nullable play_day.pickedFirst, and renames a first-build reaction column (see the spec).
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
@@ -126,6 +127,7 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         // #82 adds the five play tables and payment_reaction whole, the nullable shared_group.endedOn,
         // and group_member.playOff with a default that is right for every member already there.
         AutoMigration(from = 23, to = 24),
+        AutoMigration(from = 24, to = 25, spec = ReactionKeepsItsTime::class),
     ],
     exportSchema = true,
 )

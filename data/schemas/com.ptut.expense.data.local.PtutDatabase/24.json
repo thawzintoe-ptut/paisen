@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 24,
-    "identityHash": "5ea62f47e44614c2a617e15a99e9a126",
+    "identityHash": "b05c6878bb6af2aceb2275d77fab7078",
     "entities": [
       {
         "tableName": "transactions",
@@ -1572,7 +1572,7 @@
       },
       {
         "tableName": "play_day",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`date` TEXT NOT NULL, `clearedAtEpochMillis` INTEGER, `answeredAtEpochMillis` INTEGER, `questionKey` TEXT, `answeredRight` INTEGER, `pickedFirst` INTEGER, PRIMARY KEY(`date`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`date` TEXT NOT NULL, `clearedAtEpochMillis` INTEGER, `answeredAtEpochMillis` INTEGER, `questionKey` TEXT, `answeredRight` INTEGER, PRIMARY KEY(`date`))",
         "fields": [
           {
             "fieldPath": "date",
@@ -1598,11 +1598,6 @@
           {
             "fieldPath": "answeredRight",
             "columnName": "answeredRight",
-            "affinity": "INTEGER"
-          },
-          {
-            "fieldPath": "pickedFirst",
-            "columnName": "pickedFirst",
             "affinity": "INTEGER"
           }
         ],
@@ -1878,7 +1873,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5ea62f47e44614c2a617e15a99e9a126')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b05c6878bb6af2aceb2275d77fab7078')"
     ]
   }
 }
