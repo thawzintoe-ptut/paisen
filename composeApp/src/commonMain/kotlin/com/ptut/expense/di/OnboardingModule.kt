@@ -9,6 +9,8 @@ import com.ptut.expense.domain.folders.RefreshFolderCatalogUseCase
 import com.ptut.expense.domain.folders.WatchedFolderRepository
 import com.ptut.expense.domain.home.ChooseHomeUseCase
 import com.ptut.expense.domain.home.HomeBook
+import com.ptut.expense.domain.play.PlayBook
+import com.ptut.expense.domain.play.SaveGoalUseCase
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.onboarding.Onboarding
 import com.ptut.expense.onboarding.OnboardingViewModel
@@ -40,6 +42,9 @@ val onboardingModule: Module = module {
             refreshCatalog = getOrNull<FolderCatalog>()?.let { get<RefreshFolderCatalogUseCase>() },
             applyWatchedFolders = getOrNull<WatchedFolderRepository>()?.let { get<ApplyWatchedFoldersUseCase>() },
             photoSettings = getOrNull(),
+            // getOrNull: a screen test's graph has no play book; step three then saves no goal.
+            saveGoal = getOrNull<PlayBook>()?.let { get<SaveGoalUseCase>() },
+            markWelcomed = getOrNull(),
         )
     }
 }

@@ -60,6 +60,8 @@ data class PlayChoices(
     /** Just-in-time tips: on until Skip all tips. [seenTips] holds each tip's name once its Got it is tapped. */
     val tips: Boolean = true,
     val seenTips: Set<String> = emptySet(),
+    /** #102: the ISO day first run ended. Games and stamps stay off Today for its first seven days; null on older phones. */
+    val welcomedOn: String? = null,
 )
 
 /**

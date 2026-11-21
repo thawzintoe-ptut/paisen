@@ -41,6 +41,8 @@ data class TodayPlay(
     val challengeProgress: ChallengeProgress? = null,
     /** The shelf of ways in, each null or false while its part is off or has nothing to show. */
     val shelf: PlayShelf = PlayShelf(),
+    /** #102: the first seven days after first run. Games and stamps wait for day 8; a goal's jar does not. */
+    val firstWeek: Boolean = false,
 ) {
     companion object {
         val Off = TodayPlay()
@@ -79,10 +81,15 @@ class ObserveTodayPlayUseCase(
         combine(playOn(PlayPart.Challenge), playOn(PlayPart.GoalJar), playOn(PlayPart.Story), playOn(PlayPart.CloseMonth), playOn(PlayPart.Score), ::Extras),
         combine(book.days, book.stamps, book.weeks, book.months, book.goals, ::Facts),
         transactions?.invoke(LedgerSpan.All) ?: flowOf(LedgerSnapshot.Rows(emptyList())),
-        homeDays(clock),
-    ) { parts, extras, facts, ledger, _ ->
+        combine(homeDays(clock), playOn.welcomedOn(), ::Pair),
+    ) { parts, extras, facts, ledger, (_, welcomedOn) ->
         val (days, stamps, weeks, months, goals) = facts
         val today = homeToday()
+        val firstWeek = welcomedOn != null && today < welcomedOn.plus(FIRST_WEEK_DAYS, DateTimeUnit.DAY) && (parts.any || extras.anyButJar)
+        if (firstWeek) {
+            val goalId = goals.lastOrNull { it.archivedAtEpochMillis == null }?.id.takeIf { extras.jar }
+            return@combine TodayPlay(shelf = PlayShelf(jar = goalId != null, goalId = goalId), firstWeek = true)
+        }
         val rows = (ledger as? LedgerSnapshot.Rows)?.transactions.orEmpty()
         val thisMonday = mondayOfWeekOf(today)
         val lastMonday = thisMonday.minus(1, DateTimeUnit.WEEK)
@@ -110,9 +117,13 @@ class ObserveTodayPlayUseCase(
         )
     }.distinctUntilChanged().flowOn(work)
 
-    private data class Parts(val run: Boolean, val stamps: Boolean, val question: Boolean, val coach: Boolean, val guess: Boolean)
+    private data class Parts(val run: Boolean, val stamps: Boolean, val question: Boolean, val coach: Boolean, val guess: Boolean) {
+        val any: Boolean get() = run || stamps || question || coach || guess
+    }
 
-    private data class Extras(val challenge: Boolean, val jar: Boolean, val story: Boolean, val close: Boolean, val score: Boolean)
+    private data class Extras(val challenge: Boolean, val jar: Boolean, val story: Boolean, val close: Boolean, val score: Boolean) {
+        val anyButJar: Boolean get() = challenge || story || close || score
+    }
 
     private data class Facts(val days: List<PlayDay>, val stamps: List<Stamp>, val weeks: List<PlayWeek>, val months: List<PlayMonth>, val goals: List<Goal>)
 }
@@ -150,6 +161,9 @@ internal fun closeMonth(today: LocalDate, months: List<PlayMonth>): String? {
     }
     return month.takeIf { months.none { it.month == month && it.sealedAtEpochMillis != null } }
 }
+
+/** #102: games and stamps join on day 8, so days 1 to 7 count from the day first run ended. */
+private const val FIRST_WEEK_DAYS = 7
 
 /** The first week of a month offers last month's story and close. */
 private const val STORY_DAYS = 7

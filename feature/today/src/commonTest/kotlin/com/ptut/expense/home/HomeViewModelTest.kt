@@ -29,6 +29,7 @@ import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
 import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
 import com.ptut.expense.domain.play.DayMark
 import com.ptut.expense.domain.play.FakePlayBook
+import com.ptut.expense.domain.play.Goal
 import com.ptut.expense.domain.play.ObservePlayOnUseCase
 import com.ptut.expense.domain.play.ObserveTodayPlayUseCase
 import com.ptut.expense.domain.play.PlayDay
@@ -43,6 +44,7 @@ import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.domain.today.GetImportHealthUseCase
 import com.ptut.expense.domain.today.HomePeriod
 import com.ptut.expense.domain.today.ObserveScanningUseCase
+import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.BurmeseCopy
 import com.ptut.expense.locale.EnglishCopy
 import com.ptut.expense.locale.NoteTone
@@ -914,6 +916,39 @@ class HomeViewModelTest : ViewModelTest() {
     private class PlayFixture(val book: FakePlayBook = FakePlayBook(), val choices: PlayChoices = PlayChoices())
 
     private fun cleared(year: Int, month: Int, day: Int) = PlayDay(LocalDate(year, month, day), clearedAtEpochMillis = 1L)
+
+    // #102: first run ended Mon 10 Aug, so Fri 14 Aug is day 5 and Fri 7 Aug's start makes it day 8.
+
+    private val jar = Goal(id = "g1", name = "A trip", target = Satang(500_000), currency = "THB", start = LocalDate(2026, 8, 10), createdAtEpochMillis = 1L)
+
+    @Test
+    fun theFirstWeekHidesGamesAndStampsAndSaysWhenTheyJoin() = runTest {
+        val book = FakePlayBook(days = listOf(cleared(2026, 8, 12), cleared(2026, 8, 13)), goals = listOf(jar))
+        val viewModel = viewModel(transactions = emptyList(), play = PlayFixture(book, PlayChoices(welcomedOn = "2026-08-10")))
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+            val state = awaitItem() as HomeUiState.Success
+            assertNull(state.play)
+            assertNull(state.question)
+            assertNull(state.challenge)
+            assertEquals(AppText.copy.play.extras.firstWeek, state.firstWeekLine)
+            assertEquals(listOf(ShelfEntry.Jar), state.shelf.map { it.entry })
+        }
+    }
+
+    @Test
+    fun dayEightBringsGamesAndStampsBack() = runTest {
+        val book = FakePlayBook(days = listOf(cleared(2026, 8, 12), cleared(2026, 8, 13)))
+        val viewModel = viewModel(transactions = emptyList(), play = PlayFixture(book, PlayChoices(welcomedOn = "2026-08-07")))
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+            val state = awaitItem() as HomeUiState.Success
+            assertNotNull(state.play)
+            assertNull(state.firstWeekLine)
+        }
+    }
 
     @Test
     fun theRunCardShowsTheRunTheWeekAndTheNextStep() = runTest {

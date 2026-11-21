@@ -4,16 +4,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.backup.RestoreDriver
 import com.ptut.expense.domain.backup.RestoreStep
 import com.ptut.expense.domain.folders.ApplyWatchedFoldersUseCase
 import com.ptut.expense.domain.folders.DeviceFolder
 import com.ptut.expense.domain.folders.RefreshFolderCatalogUseCase
 import com.ptut.expense.domain.home.ChooseHomeUseCase
+import com.ptut.expense.domain.play.MarkWelcomedUseCase
+import com.ptut.expense.domain.play.SaveGoalUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.platform.photos.PhotoAccessRequest
 import com.ptut.expense.platform.photos.PhotoSettings
+import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.phrase
@@ -28,8 +32,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** First run's three steps, in order. */
-enum class OnboardingStep { Promise, Slips, Finish }
+/** First run's three steps, in order (#102): what PaiSeN does with slips, the slip folder, then an optional goal. */
+enum class OnboardingStep { Promise, Slips, Goal }
+
+/** #102: step three's ready-made goals. The reader names none of them; the copy does. */
+enum class GoalPreset { Trip, SomethingNew, Cushion }
 
 /** Step two's answer. [Unasked] until the dialog closes; [Denied] still has a way on. */
 sealed interface SlipAccess {
@@ -44,7 +51,17 @@ sealed interface SlipAccess {
 data class OnboardingUiState(
     val step: OnboardingStep = OnboardingStep.Promise,
     val access: SlipAccess = SlipAccess.Unasked,
-)
+    /** Step three: the picked goal and the amount as typed. Neither is saved until Start my jar. */
+    val goal: GoalPreset? = null,
+    val goalAmount: String = "",
+) {
+    /** "Step N of 3". */
+    val stepNumber: Int get() = step.ordinal + 1
+
+    val canStartJar: Boolean get() = goal != null && goalTarget(goalAmount) != null
+}
+
+internal fun goalTarget(typed: String): Satang? = AmountEntry.ofText(typed)?.toSatang()?.takeIf { it > Satang.Zero }
 
 /**
  * First run, the only screen that asks for anything (§4: one user, no accounts): the promise,
@@ -69,6 +86,10 @@ class OnboardingViewModel(
     private val applyWatchedFolders: ApplyWatchedFoldersUseCase? = null,
     /** The system page for a reader who refused; null where none is bound. */
     private val photoSettings: PhotoSettings? = null,
+    /** #102: Start my jar. Null where no play book is bound; step three then saves nothing. */
+    private val saveGoal: SaveGoalUseCase? = null,
+    /** #102: the day first run ended, which starts Today's first week. Null where no settings are bound. */
+    private val markWelcomed: MarkWelcomedUseCase? = null,
 ) : ViewModel() {
 
     private val state = MutableStateFlow(OnboardingUiState())
@@ -104,12 +125,32 @@ class OnboardingViewModel(
      */
     private var asking = false
 
-    /** Promise to Slips. */
+    /** One step on: Promise to Slips, Slips to Goal. The goal step ends with Start my jar or Skip. */
     fun next() {
-        state.update { if (it.step == OnboardingStep.Promise) it.copy(step = OnboardingStep.Slips) else it }
+        state.update {
+            when (it.step) {
+                OnboardingStep.Promise -> it.copy(step = OnboardingStep.Slips)
+                OnboardingStep.Slips -> it.copy(step = OnboardingStep.Goal)
+                OnboardingStep.Goal -> it
+            }
+        }
     }
 
-    /** FR-2, and Try again. The folders are read after the dialog closes, so the answer is in. */
+    /** #102: Back on every step after the first. What was answered stays answered. */
+    fun back() {
+        state.update {
+            when (it.step) {
+                OnboardingStep.Promise -> it
+                OnboardingStep.Slips -> it.copy(step = OnboardingStep.Promise)
+                OnboardingStep.Goal -> it.copy(step = OnboardingStep.Slips)
+            }
+        }
+    }
+
+    /**
+     * FR-2, and Try again. The folders are read after the dialog closes, so the answer is in. From
+     * step one, Allow photos moves on to step two, which shows the answer.
+     */
     fun requestPhotoAccess() {
         if (asking) return
         asking = true
@@ -118,6 +159,7 @@ class OnboardingViewModel(
             try {
                 photoAccess.ask()
                 readAccess()
+                state.update { if (it.step == OnboardingStep.Promise) it.copy(step = OnboardingStep.Slips) else it }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
@@ -162,20 +204,59 @@ class OnboardingViewModel(
         }
     }
 
-    /** Slips to Finish, whatever the answer was: NFR-2's path for a reader who would rather type. */
+    /** Slips to Goal, whatever the answer was: NFR-2's path for a reader who would rather type. */
     fun skip() {
-        state.update { it.copy(step = OnboardingStep.Finish) }
+        state.update { it.copy(step = OnboardingStep.Goal) }
     }
 
-    /** Open Today. */
-    fun finish() {
-        if (firstRunHome == null || chooseHomeUseCase == null) {
-            onboarding.finish()
-            return
-        }
-        viewModelScope.launch {
+    /** #102: a second tap on the picked goal lets it go. */
+    fun chooseGoal(preset: GoalPreset) {
+        state.update { now -> now.copy(goal = preset.takeIf { it != now.goal }) }
+    }
+
+    fun setGoalAmount(text: String) {
+        state.update { it.copy(goalAmount = text.filter { c -> c.isDigit() || c == '.' }) }
+    }
+
+    /** #102: Start my jar saves the goal, then opens Today. A goal that cannot be read saves nothing. */
+    fun startJar() {
+        val now = state.value
+        val preset = now.goal ?: return
+        val target = goalTarget(now.goalAmount) ?: return
+        val save = saveGoal ?: return finish()
+        whileFinishing {
             commitHome()
-            onboarding.finish()
+            save(goalId = null, name = preset.goalName(), target = target)
+        }
+    }
+
+    /**
+     * Open Today, with no goal: Skip on step three, and step one's Skip and I'll add by hand. A
+     * skipped goal leaves no jar.
+     */
+    fun finish() {
+        whileFinishing { commitHome() }
+    }
+
+    private var finishing = false
+
+    /** The home is written while the ledger is still empty, then first run ends and Today's first week starts. */
+    private fun whileFinishing(work: suspend () -> Unit) {
+        if (finishing) return
+        finishing = true
+        viewModelScope.launch {
+            try {
+                work()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                // A goal that failed to save is not a reason to keep the reader on first run.
+                toasts?.show(ToastMessage(AppText.copy.settings.didNotWork))
+            } finally {
+                markWelcomed?.invoke()
+                onboarding.finish()
+                finishing = false
+            }
         }
     }
 
@@ -243,5 +324,14 @@ class OnboardingViewModel(
                 restoring.value = false
             }
         }
+    }
+}
+
+/** The goal's name as the reader's language says it; the jar keeps it as saved. */
+private fun GoalPreset.goalName(): String = AppText.copy.onboarding.let { text ->
+    when (this) {
+        GoalPreset.Trip -> text.goalTrip
+        GoalPreset.SomethingNew -> text.goalNew
+        GoalPreset.Cushion -> text.goalCushion
     }
 }

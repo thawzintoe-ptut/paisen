@@ -309,6 +309,16 @@ private fun LoadedHome(
         if (state.shelf.isNotEmpty()) {
             item { PlayShelf(state.shelf, onOpen = onOpenShelf, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
         }
+        state.firstWeekLine?.let { line ->
+            item {
+                Text(
+                    text = line,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.s12),
+                )
+            }
+        }
         item { Box(Modifier.heightIn(min = SkySizes.pillClearance)) }
     }
 }

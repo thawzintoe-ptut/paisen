@@ -1,6 +1,6 @@
 package com.ptut.expense.locale
 
-/** First run, in three steps: the promise, the slips, and done. */
+/** First run, in three steps (#102): what PaiSeN does with slips, the slip folder, then an optional goal. */
 data class OnboardingCopy(
     val headline: String = "Spending,\nfinally\nsimple.",
     val promise: String = "PaiSeN turns your bank slips into a record of what you spend.",
@@ -24,6 +24,20 @@ data class OnboardingCopy(
     val openToday: String = "Open Today",
     val restore: String = "Restore from a backup",
     val restoreFailed: String = "That file could not be read. Nothing was changed.",
+    // #102
+    val stepOf: (step: Int, of: Int) -> String = { step, of -> "Step $step of $of" },
+    val back: String = "Back",
+    val skip: String = "Skip",
+    val kplusSample: String = "K PLUS › Settings › Slip language",
+    val kplusSampleValue: String = "English",
+    val goalTitle: String = "Save for something?",
+    val goalText: String = "Pick a goal and an amount. Good days fill the jar.",
+    val goalTrip: String = "A trip",
+    val goalNew: String = "Something new",
+    val goalCushion: String = "A safety cushion",
+    val goalAmount: String = "How much?",
+    val goalNoMoney: String = "No money moves. Your bank stays as it is.",
+    val startJar: String = "Start my jar",
     /** C-3. Kept for the first slip that fails to read; first run no longer shows it. */
     val settingTitle: String = "One setting to change.",
     val settingText: String = "Set K PLUS slip language to English so the reader can see the numbers.",
@@ -52,6 +66,19 @@ val BurmeseOnboarding = OnboardingCopy(
     openToday = "ဒီနေ့ စာမျက်နှာ ဖွင့်မယ်",
     restore = "Backup ကနေ ပြန်ယူမယ်",
     restoreFailed = "ဒီဖိုင်ကို ဖတ်လို့ မရဘူး။ ဘာမှ မပြောင်းလဲဘူး။",
+    stepOf = { step, of -> "အဆင့် ${step.inMyanmarDigits()}/${of.inMyanmarDigits()}" },
+    back = "နောက်သို့",
+    skip = "ကျော်မယ်",
+    kplusSample = "K PLUS › Settings › Slip language",
+    kplusSampleValue = "English",
+    goalTitle = "တစ်ခုခုအတွက် စုမလား။",
+    goalText = "ပန်းတိုင်နဲ့ ပမာဏ ရွေးပါ။ ငွေသုံးနည်းတဲ့ နေ့တွေက ဘူးကို ဖြည့်ပေးမယ်။",
+    goalTrip = "ခရီးထွက်ဖို့",
+    goalNew = "ပစ္စည်းအသစ်",
+    goalCushion = "အရေးပေါ် စုငွေ",
+    goalAmount = "ဘယ်လောက်လဲ",
+    goalNoMoney = "ငွေ ဘယ်မှ မရွှေ့ဘူး။ ဘဏ်ထဲက ငွေ ဒီအတိုင်းပဲ။",
+    startJar = "စုဘူး စမယ်",
     settingTitle = "ပြောင်းစရာ ဆက်တင် တစ်ခု ရှိတယ်။",
     settingText = "ဂဏန်းတွေ ဖတ်လို့ရအောင် K PLUS ရဲ့ စလစ်ဘာသာကို အင်္ဂလိပ်လို ပြောင်းထားပါ။",
 )
@@ -79,6 +106,19 @@ val ThaiOnboarding = OnboardingCopy(
     openToday = "เปิดหน้าวันนี้",
     restore = "กู้คืนจากข้อมูลสำรอง",
     restoreFailed = "อ่านไฟล์นั้นไม่ได้ ไม่มีอะไรเปลี่ยนแปลง",
+    stepOf = { step, of -> "ขั้นที่ $step จาก $of" },
+    back = "ย้อนกลับ",
+    skip = "ข้าม",
+    kplusSample = "K PLUS › ตั้งค่า › ภาษาสลิป",
+    kplusSampleValue = "English",
+    goalTitle = "เก็บเงินเพื่ออะไรสักอย่างไหม",
+    goalText = "เลือกเป้าหมายและจำนวนเงิน วันที่ใช้น้อยจะช่วยเติมโหล",
+    goalTrip = "ไปเที่ยว",
+    goalNew = "ของใหม่",
+    goalCushion = "เงินสำรองฉุกเฉิน",
+    goalAmount = "เท่าไร",
+    goalNoMoney = "ไม่มีการโอนเงิน บัญชีธนาคารของคุณยังเหมือนเดิม",
+    startJar = "เริ่มโหลของฉัน",
     settingTitle = "มีการตั้งค่าเดียวที่ต้องเปลี่ยน",
     settingText = "ตั้งภาษาสลิปของ K PLUS เป็นภาษาอังกฤษ เพื่อให้แอปอ่านตัวเลขได้",
 )

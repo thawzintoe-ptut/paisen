@@ -12,6 +12,8 @@ data class PlayExtrasCopy(
     val shelfStory: String = "Month story",
     val shelfClose: String = "Close the month",
     val shelfScore: String = "Money score",
+    /** #102: Today's first seven days. */
+    val firstWeek: String = "Games and stamps join on day 8",
     // #91, p05
     val challengeTitle: String = "This week's challenge",
     val challengePick: String = "Pick one for this week",
@@ -126,6 +128,7 @@ val BurmesePlayExtras = PlayExtrasCopy(
     shelfTitle = "နောက်ထပ် ကစားစရာ",
     shelfChallenge = "စိန်ခေါ်မှု",
     shelfJar = "ပန်းတိုင်ဘူး",
+    firstWeek = "ဂိမ်းနဲ့ တံဆိပ်တွေက ၈ ရက်မြောက်နေ့မှာ ရောက်လာမယ်",
     shelfStory = "လ ပုံပြင်",
     shelfClose = "လ ပိတ်မယ်",
     shelfScore = "ငွေ ရမှတ်",

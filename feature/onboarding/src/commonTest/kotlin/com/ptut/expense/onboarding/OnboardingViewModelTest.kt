@@ -3,6 +3,7 @@ package com.ptut.expense.onboarding
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.backup.BackupPreview
 import com.ptut.expense.domain.backup.BackupProblem
 import com.ptut.expense.domain.backup.BackupUnreadable
@@ -16,16 +17,27 @@ import com.ptut.expense.domain.folders.FolderCatalog
 import com.ptut.expense.domain.folders.RefreshFolderCatalogUseCase
 import com.ptut.expense.domain.home.ChooseHomeUseCase
 import com.ptut.expense.domain.home.FakeHomeBook
+import com.ptut.expense.domain.play.FakePlayBook
+import com.ptut.expense.domain.play.MarkWelcomedUseCase
+import com.ptut.expense.domain.play.SaveGoalUseCase
+import com.ptut.expense.domain.settings.appSettings
 import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.platform.photos.PhotoAccessRequest
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class OnboardingViewModelTest : ViewModelTest() {
 
@@ -43,6 +55,7 @@ class OnboardingViewModelTest : ViewModelTest() {
         viewModel.next()
         viewModel.skip()
         viewModel.finish()
+        runCurrent()
 
         assertTrue(onboarding.isFinished.value)
         assertEquals(0, photoAccess.asks, "skipping raised the photo dialog anyway")
@@ -226,7 +239,7 @@ class OnboardingViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `the steps run promise then slips then finish`() = runTest {
+    fun `the steps run promise then slips then goal`() = runTest {
         val viewModel = viewModel()
         assertEquals(OnboardingStep.Promise, viewModel.uiState.value.step)
 
@@ -234,11 +247,120 @@ class OnboardingViewModelTest : ViewModelTest() {
         assertEquals(OnboardingStep.Slips, viewModel.uiState.value.step)
 
         viewModel.skip()
-        assertEquals(OnboardingStep.Finish, viewModel.uiState.value.step)
-        assertFalse(onboarding.isFinished.value, "first run ended before Open Today")
+        assertEquals(OnboardingStep.Goal, viewModel.uiState.value.step)
+        assertFalse(onboarding.isFinished.value, "first run ended before the goal step was answered")
 
         viewModel.finish()
+        runCurrent()
         assertTrue(onboarding.isFinished.value)
+    }
+
+    // #102
+
+    private val book = FakePlayBook()
+    private val settings = appSettings()
+    private val homeToday = GetHomeTodayUseCase(FixedClock(LocalDateTime(2026, 11, 21, 12, 0).toInstant(TimeZone.of("Asia/Bangkok"))))
+
+    private class FixedClock(private val at: Instant) : Clock {
+        override fun now(): Instant = at
+    }
+
+    private fun goalViewModel() = OnboardingViewModel(
+        onboarding,
+        photoAccess,
+        saveGoal = SaveGoalUseCase(book, homeToday),
+        markWelcomed = MarkWelcomedUseCase(settings, homeToday),
+    )
+
+    @Test
+    fun `allow photos on step one asks and then shows step two`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.requestPhotoAccess()
+        photoAccess.answer()
+        runCurrent()
+
+        assertEquals(OnboardingStep.Slips, viewModel.uiState.value.step)
+        assertEquals(2, viewModel.uiState.value.stepNumber)
+    }
+
+    @Test
+    fun `by hand on step one opens Today without asking for photos`() = runTest {
+        val viewModel = goalViewModel()
+
+        viewModel.finish()
+        runCurrent()
+
+        assertTrue(onboarding.isFinished.value)
+        assertEquals(0, photoAccess.asks)
+        assertTrue(book.goals.value.isEmpty())
+    }
+
+    @Test
+    fun `back goes one step back and stops at the first`() = runTest {
+        val viewModel = viewModel()
+        viewModel.next()
+        viewModel.next()
+        assertEquals(OnboardingStep.Goal, viewModel.uiState.value.step)
+
+        viewModel.back()
+        assertEquals(OnboardingStep.Slips, viewModel.uiState.value.step)
+        viewModel.back()
+        viewModel.back()
+        assertEquals(OnboardingStep.Promise, viewModel.uiState.value.step)
+    }
+
+    @Test
+    fun `start my jar saves the picked goal and opens Today`() = runTest {
+        val viewModel = goalViewModel()
+        viewModel.next()
+        viewModel.skip()
+        viewModel.chooseGoal(GoalPreset.Trip)
+        viewModel.setGoalAmount("฿5,000")
+        assertTrue(viewModel.uiState.value.canStartJar)
+
+        viewModel.startJar()
+        runCurrent()
+
+        val goal = book.goals.value.single()
+        assertEquals(AppText.copy.onboarding.goalTrip, goal.name)
+        assertEquals(Satang(500_000), goal.target)
+        assertTrue(onboarding.isFinished.value)
+    }
+
+    @Test
+    fun `a goal with no amount cannot start a jar`() = runTest {
+        val viewModel = goalViewModel()
+        viewModel.chooseGoal(GoalPreset.Cushion)
+
+        viewModel.startJar()
+        runCurrent()
+
+        assertFalse(viewModel.uiState.value.canStartJar)
+        assertFalse(onboarding.isFinished.value)
+        assertTrue(book.goals.value.isEmpty())
+    }
+
+    @Test
+    fun `a second tap on the picked goal lets it go`() = runTest {
+        val viewModel = viewModel()
+        viewModel.chooseGoal(GoalPreset.SomethingNew)
+        viewModel.chooseGoal(GoalPreset.SomethingNew)
+
+        assertNull(viewModel.uiState.value.goal)
+    }
+
+    @Test
+    fun `skipping the goal leaves no jar and marks the day first run ended`() = runTest {
+        val viewModel = goalViewModel()
+        viewModel.chooseGoal(GoalPreset.Trip)
+        viewModel.setGoalAmount("200")
+
+        viewModel.finish()
+        runCurrent()
+
+        assertTrue(book.goals.value.isEmpty())
+        assertEquals("2026-11-21", settings.choices.value.play.welcomedOn)
     }
 
     @Test
@@ -248,7 +370,7 @@ class OnboardingViewModelTest : ViewModelTest() {
         viewModel.skip()
         viewModel.next()
 
-        assertEquals(OnboardingStep.Finish, viewModel.uiState.value.step)
+        assertEquals(OnboardingStep.Goal, viewModel.uiState.value.step)
     }
 
     @Test
@@ -266,7 +388,7 @@ class OnboardingViewModelTest : ViewModelTest() {
         assertEquals(1, settings.opens)
 
         viewModel.skip()
-        assertEquals(OnboardingStep.Finish, viewModel.uiState.value.step)
+        assertEquals(OnboardingStep.Goal, viewModel.uiState.value.step)
     }
 
     @Test

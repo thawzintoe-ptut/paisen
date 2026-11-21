@@ -3,9 +3,11 @@ package com.ptut.expense.domain.play
 import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
 import com.ptut.expense.domain.settings.PlayChoices
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.datetime.LocalDate
 
 /** #83: p22's switches as they change. */
 class ObservePlayChoicesUseCase(private val choices: ObserveAppChoicesUseCase) {
@@ -37,9 +39,17 @@ class ObservePlayOnUseCase(
     /** Whether this build offers [part] at all, before the reader's switches. */
     fun offered(part: PlayPart): Boolean = gate.offers(part)
 
+    /** #102: the day first run ended, or null on a phone that finished it before #102. */
+    fun welcomedOn(): Flow<LocalDate?> = choices().map { it.play.welcomedOn?.let(LocalDate::parse) }.distinctUntilChanged()
+
     /** Whether [tip] shows now: the build and switches allow it and the reader has not seen it. */
     fun tip(tip: PlayTip): Flow<Boolean> = choices().map { it.play.shows(tip, gate) }.distinctUntilChanged()
 
     /** Whether this build shows tips at all (the `tips_on` flag). */
     fun tipsOffered(): Boolean = gate.tipsOn && gate.flagOn
+}
+
+/** #102: first run ended today; Today's first week counts from here. */
+class MarkWelcomedUseCase(private val settings: AppSettings, private val homeToday: GetHomeTodayUseCase) {
+    operator fun invoke() = settings.setPlay(settings.choices.value.play.copy(welcomedOn = homeToday().toString()))
 }

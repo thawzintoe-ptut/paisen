@@ -109,7 +109,6 @@ private fun FirstRun() {
     }
     OnboardingView(
         state = state,
-        onNext = viewModel::next,
         onAllowPhotoAccess = viewModel::requestPhotoAccess,
         onChooseFolder = viewModel::chooseFolder,
         onSkip = viewModel::skip,
@@ -121,6 +120,10 @@ private fun FirstRun() {
         restorePreview = preview,
         onConfirmRestore = viewModel::confirmRestore,
         onCancelRestore = viewModel::cancelRestore,
+        onBack = viewModel::back,
+        onChooseGoal = viewModel::chooseGoal,
+        onGoalAmount = viewModel::setGoalAmount,
+        onStartJar = viewModel::startJar,
     )
 }
 

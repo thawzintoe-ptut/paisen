@@ -140,6 +140,8 @@ sealed interface HomeUiState {
         val challenge: ChallengeRowUiModel? = null,
         /** The ways into the extras whose parts are on. */
         val shelf: List<ShelfItemUiModel> = emptyList(),
+        /** #102: "Games and stamps join on day 8" through Today's first week, or null. */
+        val firstWeekLine: String? = null,
     ) : HomeUiState
 }
 
@@ -269,6 +271,7 @@ class HomeViewModel(
                 coach = coach,
                 challenge = if (onToday) extras.play.challengeRow(categories) else null,
                 shelf = if (onToday) extras.play.shelfItems() else emptyList(),
+                firstWeekLine = AppText.copy.play.extras.firstWeek.takeIf { onToday && extras.play.firstWeek },
                 topCategories = home.byCategory
                     .take(TOP_CATEGORIES)
                     .map { TopCategoryUiModel(name = it.category.name, icon = it.category.icon) },

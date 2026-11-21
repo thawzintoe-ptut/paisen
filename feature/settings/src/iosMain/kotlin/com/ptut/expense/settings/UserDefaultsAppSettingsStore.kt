@@ -49,6 +49,7 @@ private const val PLAY_SHARE_AMOUNTS = "ptut-play-share-amounts"
 private const val PLAY_WEEKLY_REMINDER = "ptut-play-weekly-reminder"
 private const val PLAY_TIPS = "ptut-play-tips"
 private const val PLAY_SEEN_TIPS = "ptut-play-seen-tips"
+private const val PLAY_WELCOMED_ON = "ptut-play-welcomed-on"
 private const val OWNER_FILE = "slip-owner.json"
 private const val NAME_FIELD = "name"
 private const val CANDIDATE_FIELD = "candidate"
@@ -108,6 +109,7 @@ class UserDefaultsAppSettingsStore(
                     weeklyReminder = readBool(PLAY_WEEKLY_REMINDER, play.weeklyReminder),
                     tips = readBool(PLAY_TIPS, play.tips),
                     seenTips = defaults.stringForKey(PLAY_SEEN_TIPS).toTipSet(),
+                    welcomedOn = defaults.stringForKey(PLAY_WELCOMED_ON),
                 )
             },
         )
@@ -148,6 +150,7 @@ class UserDefaultsAppSettingsStore(
         defaults.setBool(choices.play.weeklyReminder, PLAY_WEEKLY_REMINDER)
         defaults.setBool(choices.play.tips, PLAY_TIPS)
         defaults.setObject(choices.play.seenTips.joinToString(TIP_SEPARATOR), PLAY_SEEN_TIPS)
+        writeOptional(choices.play.welcomedOn, PLAY_WELCOMED_ON)
         val target = choices.weeklyTarget
         if (target == null) {
             defaults.removeObjectForKey(TARGET_CATEGORY)

@@ -7,6 +7,7 @@ import org.koin.dsl.module
 val playUseCases: Module = module {
     factory { ObservePlayChoicesUseCase(get()) }
     factory { SetPlayChoicesUseCase(get()) }
+    factory { MarkWelcomedUseCase(get(), get()) }
     factory { ObservePlayOnUseCase(get(), gate = getOrNull() ?: PlayGate.Off) }
     factory { ObserveTodayPlayUseCase(get(), get(), get(), transactions = get()) }
     factory { GetDailyQuestionUseCase(get(), get(), get()) }

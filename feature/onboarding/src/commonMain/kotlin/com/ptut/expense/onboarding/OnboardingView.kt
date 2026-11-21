@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,23 +33,26 @@ import com.ptut.expense.design.SlipFlightArt
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
 import com.ptut.expense.design.ptutType
+import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.folders.DeviceFolder
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyCheckbox
+import com.ptut.expense.ui.sky.SkyChip
+import com.ptut.expense.ui.sky.SkyEditableKeyValueRow
+import com.ptut.expense.ui.sky.SkyKeyValueRow
 import com.ptut.expense.ui.sky.SkyNoticeCard
 import com.ptut.expense.ui.sky.SkyTextAction
 
 /**
- * First run in Sky (p23), in three steps: the promise, the slips, and done. No sign-in: one user,
- * no accounts. RESTORE moved to the last step as a text link, so the first screen asks for nothing.
+ * First run in Sky (p23), in three steps (#102): what PaiSeN does with slips, the slip folder, then
+ * an optional goal. No sign-in: one user, no accounts. RESTORE sits on the last step as a text link.
  */
 @Composable
 fun OnboardingView(
     state: OnboardingUiState,
-    onNext: () -> Unit,
     onAllowPhotoAccess: () -> Unit,
     onChooseFolder: (String) -> Unit,
     onSkip: () -> Unit,
@@ -63,6 +67,10 @@ fun OnboardingView(
     restorePreview: String? = null,
     onConfirmRestore: () -> Unit = {},
     onCancelRestore: () -> Unit = {},
+    onBack: () -> Unit = {},
+    onChooseGoal: (GoalPreset) -> Unit = {},
+    onGoalAmount: (String) -> Unit = {},
+    onStartJar: () -> Unit = {},
 ) {
     val text = LocalCopy.current.onboarding
     Column(
@@ -78,11 +86,12 @@ fun OnboardingView(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = Spacing.md),
         ) {
-            Image(PtutBrandMark, contentDescription = "PaiSeN", modifier = Modifier.padding(top = Spacing.md).size(SkySizes.brandMark))
+            StepBar(state, onBack = onBack, onSkip = onFinish)
+            Image(PtutBrandMark, contentDescription = "PaiSeN", modifier = Modifier.padding(top = Spacing.xs).size(SkySizes.brandMark))
             when (state.step) {
                 OnboardingStep.Promise -> PromiseStep()
                 OnboardingStep.Slips -> SlipsStep(state.access, onChooseFolder)
-                OnboardingStep.Finish -> FinishStep()
+                OnboardingStep.Goal -> GoalStep(state, onChooseGoal, onGoalAmount)
             }
             restoreProblem?.let { problem ->
                 Text(
@@ -100,18 +109,44 @@ fun OnboardingView(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             when (state.step) {
-                OnboardingStep.Promise -> SkyButton(label = text.next, onClick = onNext, modifier = Modifier.fillMaxWidth())
+                // Allow photos asks, then step two shows the answer; by hand opens Today with no folder.
+                OnboardingStep.Promise -> {
+                    SkyButton(label = text.allowPhotos, onClick = onAllowPhotoAccess, modifier = Modifier.fillMaxWidth())
+                    SkyTextAction(label = text.byHand, onClick = onFinish, enabled = true, modifier = Modifier.padding(vertical = Spacing.xs))
+                }
 
                 OnboardingStep.Slips -> SlipsActions(state.access, onAllowPhotoAccess, onOpenSettings, onSkip)
 
-                OnboardingStep.Finish -> {
-                    SkyButton(label = text.openToday, onClick = onFinish, enabled = !restoring, modifier = Modifier.fillMaxWidth())
+                OnboardingStep.Goal -> {
+                    SkyButton(label = text.startJar, onClick = onStartJar, enabled = state.canStartJar && !restoring, modifier = Modifier.fillMaxWidth())
                     SkyTextAction(label = text.restore, onClick = onRestore, enabled = !restoring, modifier = Modifier.padding(vertical = Spacing.xs))
                 }
             }
         }
     }
     restorePreview?.let { holds -> RestorePreviewSheet(holds, working = restoring, onImport = onConfirmRestore, onCancel = onCancelRestore) }
+}
+
+/** #102: "Step N of 3", Back from step two on, and Skip, which opens Today with nothing more asked. */
+@Composable
+private fun StepBar(state: OnboardingUiState, onBack: () -> Unit, onSkip: () -> Unit) {
+    val text = LocalCopy.current.onboarding
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.weight(1f)) {
+            if (state.step != OnboardingStep.Promise) SkyTextAction(label = text.back, onClick = onBack, enabled = true)
+        }
+        Text(
+            text = text.stepOf(state.stepNumber, OnboardingStep.entries.size),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            SkyTextAction(label = text.skip, onClick = onSkip, enabled = true)
+        }
+    }
 }
 
 @Composable
@@ -147,7 +182,11 @@ private fun PromiseStep() {
     ) { SlipFlightArt() }
     StepTitle(text.headline)
     StepText(text.promise)
+    // #102: why photos, before the button that asks for them.
+    StepText(text.slipsText)
     SkyNoticeCard(text = text.privacy, icon = PtutIcon.Lock.image, modifier = Modifier.padding(top = Spacing.md))
+    // Android 14+ offers "Select photos" first; only Allow all lets new slips in unasked.
+    SkyNoticeCard(text = text.allowAllHint, icon = PtutIcon.PhotoLibrary.image, modifier = Modifier.padding(top = Spacing.s12))
 }
 
 @Composable
@@ -172,6 +211,9 @@ private fun SlipsStep(access: SlipAccess, onChooseFolder: (String) -> Unit) {
             access.folders.forEach { folder ->
                 FolderRow(folder, chosen = folder.id == access.chosen, onChoose = { onChooseFolder(folder.id) })
             }
+            // C-3: the one bank setting the reader needs, as the row K PLUS itself shows.
+            StepText(text.settingText)
+            SkyKeyValueRow(label = text.kplusSample, value = text.kplusSampleValue, modifier = Modifier.padding(top = Spacing.xs))
         }
     }
 }
@@ -217,11 +259,37 @@ private fun SlipsActions(access: SlipAccess, onAllow: () -> Unit, onOpenSettings
     }
 }
 
+/** #102: an optional goal. Nothing saves until Start my jar; Skip leaves no jar. */
 @Composable
-private fun FinishStep() {
+private fun GoalStep(state: OnboardingUiState, onChoose: (GoalPreset) -> Unit, onAmount: (String) -> Unit) {
     val text = LocalCopy.current.onboarding
-    StepTitle(text.setTitle)
-    StepText(text.setText)
+    StepTitle(text.goalTitle)
+    StepText(text.goalText)
+    FlowRow(
+        modifier = Modifier.padding(top = Spacing.md),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+    ) {
+        GoalPreset.entries.forEach { preset ->
+            SkyChip(label = preset.label(), selected = preset == state.goal, onClick = { onChoose(preset) })
+        }
+    }
+    SkyEditableKeyValueRow(
+        label = "${text.goalAmount} ${Home.money.symbol}",
+        value = state.goalAmount,
+        onValueChange = onAmount,
+        placeholder = "0",
+        modifier = Modifier.padding(top = Spacing.sm),
+    )
+    StepText(text.goalNoMoney)
+}
+
+@Composable
+private fun GoalPreset.label(): String = LocalCopy.current.onboarding.let { text ->
+    when (this) {
+        GoalPreset.Trip -> text.goalTrip
+        GoalPreset.SomethingNew -> text.goalNew
+        GoalPreset.Cushion -> text.goalCushion
+    }
 }
 
 /** #220: the same question Import my data asks, with its words, before a first-run restore merges. */
