@@ -25,14 +25,17 @@
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/home.png" width="260" alt="Home: what you spent this month and your latest purchases"><br>Home</td>
-    <td align="center"><img src="docs/screenshots/reports.png" width="260" alt="Reports: spending by week, month, 3 months, 6 months or a year"><br>Reports</td>
-    <td align="center"><img src="docs/screenshots/quick-add.png" width="260" alt="Quick add: type an amount, pick a category and save"><br>Quick add</td>
+    <td align="center"><img src="docs/screenshots/to-check.png" width="260" alt="To check: slips read from your photos wait here until you confirm them"><br>Slips to check</td>
+    <td align="center"><img src="docs/screenshots/home.png" width="260" alt="Today: what you spent today, how it compares with a usual day, and one slips-to-check row"><br>Today</td>
+    <td align="center"><img src="docs/screenshots/quick-add.png" width="260" alt="Quick add: type coffee 60 and it fills the amount and the category"><br>Quick add</td>
   </tr>
   <tr>
+    <td align="center"><img src="docs/screenshots/reports.png" width="260" alt="Reports: spending by week, month, 3 months, 6 months or a year"><br>Reports</td>
     <td align="center"><img src="docs/screenshots/shared.png" width="260" alt="Shared: what you are owed and what you owe across groups"><br>Shared</td>
-    <td align="center"><img src="docs/screenshots/group.png" width="260" alt="A shared group: members, balances and expenses for a trip"><br>A shared group</td>
-    <td align="center"><img src="docs/screenshots/settings.png" width="260" alt="Settings: photo folders, background import and categories"><br>Settings</td>
+    <td align="center"><img src="docs/screenshots/group.png" width="260" alt="A shared group: balances, settle up and each expense"><br>A shared group</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/settings.png" width="260" alt="Settings: your spending stays on this phone, photo folders and background import"><br>Settings</td>
   </tr>
 </table>
 
