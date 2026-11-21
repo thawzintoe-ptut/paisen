@@ -50,7 +50,7 @@ class PlayTipViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `the question tip waits until the run tip is seen, so Today shows one at a time`() = runTest {
+    fun `the question tip waits until the run tip is seen so Today shows one at a time`() = runTest {
         assertNull(tip(PlayTip.Question).uiState.value)
         assertNotNull(tip(PlayTip.Question, appSettings(AppChoices(play = PlayChoices(seenTips = setOf("Run"))))).uiState.value)
     }
