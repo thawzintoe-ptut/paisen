@@ -31,5 +31,6 @@ fun SettingsAction.opensScreen(): Boolean = when (this) {
     SettingsAction.Assistant,
     SettingsAction.Feedback,
     SettingsAction.Licences,
+    SettingsAction.Play,
     -> true
 }

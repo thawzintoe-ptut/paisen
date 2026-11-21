@@ -80,6 +80,8 @@ data class LedgerMonthUiModel(
     val dayKey: String,
     val keys: Set<String>,
     val behind: String,
+    /** #98: the month was closed and sealed; its rows can still be edited. */
+    val sealed: Boolean = false,
 )
 
 /**
@@ -146,6 +148,8 @@ class LedgerViewModel(
     private val scope: LedgerScope? = null,
     /** Turning a whole ledger into rows on every keystroke stays off the main thread too. */
     private val work: CoroutineDispatcher = Dispatchers.Default,
+    /** #98: the months closed and sealed, ISO `yyyy-MM`; none where play is off. */
+    sealedMonths: Flow<Set<String>> = flowOf(emptySet()),
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
@@ -156,8 +160,9 @@ class LedgerViewModel(
             filterLedger(query, chosen, categoryUpdates, SpendWords, scope?.let { LedgerSlice(DateRange(it.from, it.to), it.categoryId) }),
             // ShopNames too: naming a shop read as noise retitles its rows here without a restart.
             combine(subCategoryUpdates, ShopNames.names) { subCategories, _ -> subCategories },
-        ) { filtered, subCategories ->
-            filtered?.let { success(it, subCategories) } ?: LedgerUiState.Loading
+            sealedMonths,
+        ) { filtered, subCategories, sealed ->
+            filtered?.let { success(it, subCategories, sealed) } ?: LedgerUiState.Loading
         }.flowOn(work).stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
@@ -172,7 +177,7 @@ class LedgerViewModel(
         chosen.value = choice
     }
 
-    private fun success(filtered: FilteredLedger, subCategories: List<SubCategory>): LedgerUiState.Success {
+    private fun success(filtered: FilteredLedger, subCategories: List<SubCategory>, sealed: Set<String>): LedgerUiState.Success {
         val today = homeToday()
         val categories = filtered.categories
         return LedgerUiState.Success(
@@ -188,7 +193,7 @@ class LedgerViewModel(
             },
             hiddenByFilter = filtered.hiddenByFilter,
             scope = scope?.heading(categories),
-            months = filtered.days.monthIndex(),
+            months = filtered.days.monthIndex().map { month -> month.takeUnless { month.isoMonth in sealed } ?: month.sealedCopy() },
         )
     }
 
@@ -226,7 +231,15 @@ private fun List<DayBucket>.monthIndex(): List<LedgerMonthUiModel> {
     }
 }
 
-private fun LocalDate.dayKey(): String = "day-$this"
+private fun LocalDate.dayKey(): String = "$DAY_KEY$this"
+
+/** A month's ISO `yyyy-MM`, read off its first day's key. */
+private val LedgerMonthUiModel.isoMonth: String get() = dayKey.removePrefix(DAY_KEY).take(ISO_MONTH)
+
+private fun LedgerMonthUiModel.sealedCopy() = copy(sealed = true, spoken = AppText.copy.play.extras.sealedMonth(spoken))
+
+private const val DAY_KEY = "day-"
+private const val ISO_MONTH = 7
 
 private fun LedgerScope.heading(categories: List<Category>) = LedgerScopeUiModel(
     title = categoryId?.let { id -> (categories.firstOrNull { it.id == id } ?: UnknownCategory).name } ?: AppText.copy.history.title,

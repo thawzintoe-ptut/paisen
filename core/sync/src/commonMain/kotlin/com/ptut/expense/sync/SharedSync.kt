@@ -464,11 +464,16 @@ class SharedSync internal constructor(
         // H3: every PromptPay ID goes in the same commit, and the server's time dates the clean-up.
         val withPromptPay = firestore.list("groups/$groupId/members").filter { it.fields.string("promptPay") != null }
         val stored = firestore.promptPayDocs(groupId)
+        // D5 and #95: the opt-outs and this account's own reactions go too; the others' stay for the clean-up.
+        val playOffs = firestore.playDocs(groupId)
+        val reactions = firestore.reactionIdsOf(groupId, account().uid)
         firestore.commit(
             listOfNotNull(group.inviteCode?.let { firestore.updateWrite("invites/$it", OFF) }) +
                 firestore.stampedUpdateWrite("groups/$groupId", mapOf("deleted" to true, "inviteActive" to false), DELETED_AT) +
                 withPromptPay.map { firestore.updateWrite("groups/$groupId/members/${it.id}", mapOf("promptPay" to null)) } +
-                stored.map { firestore.deleteWrite("groups/$groupId/pay/${it.id}") },
+                stored.map { firestore.deleteWrite("groups/$groupId/pay/${it.id}") } +
+                playOffs.map { firestore.deleteWrite("groups/$groupId/play/${it.id}") } +
+                reactions.map { firestore.deleteWrite("groups/$groupId/reactions/$it") },
         )
         running.withLock { dao.forgetGroup(groupId) }
     }
@@ -488,7 +493,7 @@ class SharedSync internal constructor(
         }
         val me = dao.group(groupId)?.meMemberId
         pusher.noticesFor(groupId)?.left()?.let { pushes?.tellFirst(groupId, it) }
-        firestore.commit(firestore.leaveWrites(groupId, me, account.uid))
+        firestore.commit(firestore.leaveWrites(groupId, me, account.uid, firestore.reactionIdsOf(groupId, account.uid)))
         running.withLock { dao.forgetGroup(groupId) }
     }
 
@@ -517,10 +522,10 @@ class SharedSync internal constructor(
             val group = dao.group(groupId)
             // L2: nobody else can switch this creator's invite off, so it goes off as they leave for good.
             val created = group?.creatorUid == account.uid
-            val writes = firestore.leaveWrites(groupId, group?.meMemberId, account.uid, closeInvite = created)
             try {
+                val reactions = firestore.reactionIdsOf(groupId, account.uid)
                 pusher.noticesFor(groupId)?.left()?.let { pushes?.tellFirst(groupId, it) }
-                firestore.commit(writes)
+                firestore.commit(firestore.leaveWrites(groupId, group?.meMemberId, account.uid, reactions, closeInvite = created))
             } catch (refused: FirestoreException) {
                 // Not a member any more (left elsewhere, or taken out by the creator): nothing to leave.
                 if (refused.status != FirestoreStatus.FORBIDDEN) throw refused

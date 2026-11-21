@@ -28,6 +28,8 @@ import com.ptut.expense.domain.backup.MergeReport
 import com.ptut.expense.domain.domainModule
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.SampleLedgerRepository
+import com.ptut.expense.domain.play.FakePlayBook
+import com.ptut.expense.domain.play.PlayBook
 import com.ptut.expense.domain.settings.AppChoices
 import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.settings.FakeAppSettingsStore
@@ -112,6 +114,7 @@ class PtutAppTest {
                     single { SlipPictures { null } }
                     // #25: the shell asks for the lock. Off here, and no phone check to ask.
                     single<DeviceAuth> { NoDeviceAuth }
+                    single<PlayBook> { FakePlayBook() }
                     single { AppLock(enabled = { false }, nowMillis = { 0L }) }
                     // The shell sweeps evidence on start, so the graph has to answer for an
                     // importer even on a screen that never imports anything.

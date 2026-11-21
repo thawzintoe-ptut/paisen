@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import com.ptut.expense.design.QrPaper
+import com.ptut.expense.platform.share.encodePng
 
 /** A Thai bank app this phone can open, by its package name on Android. */
 data class BankApp(val id: String, val name: String)
@@ -36,8 +37,6 @@ interface BankApps {
 
 @Composable
 expect fun rememberBankApps(): BankApps
-
-expect fun ImageBitmap.encodePng(): ByteArray
 
 /**
  * The QR as a PNG a bank app can read from a photo: dark modules on white with a quiet border.

@@ -1,5 +1,6 @@
 package com.ptut.expense.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -29,4 +30,6 @@ data class GroupMemberEntity(
     val claimedByUid: String? = null,
     /** Schema 15 (#199): the PromptPay ID this member typed for their own name, for the QR. */
     val promptPayId: String? = null,
+    /** Schema 24 (D5): this member turned group stamps and awards off. Synced with the group. */
+    @ColumnInfo(defaultValue = "0") val playOff: Boolean = false,
 )

@@ -38,6 +38,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.ptut.expense.design.GlassBackdrop
 import com.ptut.expense.design.GlassSurface
+import com.ptut.expense.design.PlaySizes
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.Sizes
@@ -51,11 +52,14 @@ import com.ptut.expense.domain.shared.GroupRemoval
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.NewMember
 import com.ptut.expense.domain.shared.Person
+import com.ptut.expense.domain.shared.ReactionKind
 import com.ptut.expense.domain.shared.SharedTextLimits
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.platform.notify.rememberNotificationAsk
 import com.ptut.expense.sync.push.pushConfigured
+import com.ptut.expense.ui.play.PlayStamp
+import com.ptut.expense.ui.play.StampTone
 import com.ptut.expense.ui.sky.SkyBarIconAction
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
@@ -88,6 +92,8 @@ fun GroupDetailView(
     onRefresh: () -> Unit = {},
     /** #64: Expenses, Balances and Activity. */
     tabs: GroupTabsState = GroupTabsState(),
+    /** #94–#97: play's rows in the menu. */
+    play: GroupPlayEntries = GroupPlayEntries(),
 ) {
     val text = LocalCopy.current.shared
     when (uiState) {
@@ -105,7 +111,7 @@ fun GroupDetailView(
         }
 
         is GroupDetailUiState.Loaded -> Loaded(
-            uiState, onBack, onSettleUp, onBalances, onAddExpense, onOpenExpense, invite, onRepeat, onOpenRepeat, manage, refreshing, onRefresh, tabs, modifier,
+            uiState, onBack, onSettleUp, onBalances, onAddExpense, onOpenExpense, invite, onRepeat, onOpenRepeat, manage, refreshing, onRefresh, tabs, modifier, play,
         )
     }
 }
@@ -126,6 +132,7 @@ private fun Loaded(
     onRefresh: () -> Unit,
     tabs: GroupTabsState,
     modifier: Modifier = Modifier,
+    play: GroupPlayEntries = GroupPlayEntries(),
 ) {
     val text = LocalCopy.current.shared
     var menu by rememberSaveable { mutableStateOf(false) }
@@ -185,6 +192,7 @@ private fun Loaded(
                     )
                 }
             }
+            play.allSquare?.let { square -> item(key = "all-square") { AllSquareCard(square) } }
             item(key = "tabs") { GroupTabRow(tabs.selected, activityCount = tabs.activity?.fresh?.size ?: 0, onSelect = tabs.onSelect) }
             when (tabs.selected) {
                 GroupTab.Expenses -> expensesTab(
@@ -247,6 +255,10 @@ private fun Loaded(
                 color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.padding(top = Spacing.md),
             )
+            val playRows = groupPlayRows(play, ::pick)
+            if (playRows.isNotEmpty()) {
+                SkyGroupedCard(rows = playRows, color = MaterialTheme.colorScheme.surface, modifier = Modifier.padding(top = Spacing.s12))
+            }
             SkyGroupedCard(
                 rows = listOfNotNull<@Composable () -> Unit>(
                     { MenuRow(PtutIcon.Edit, text.detail.editGroup, onClick = pick { manageStep = STEP_EDIT }) },
@@ -330,7 +342,13 @@ private fun Loaded(
             onDismiss = { askRemovePayment = false },
         )
 
-        else -> PaymentSheet(row = payment, onRemove = { askRemovePayment = true }, onDismiss = { openPayment = null })
+        else -> PaymentSheet(
+            row = payment,
+            onRemove = { askRemovePayment = true },
+            onDismiss = { openPayment = null },
+            reactions = play.reactions[payment.id],
+            onReact = { kind -> play.onReact(payment.id, kind) },
+        )
     }
 
     when (inviteStep) {
@@ -677,7 +695,13 @@ internal fun ExpenseRow(row: GroupFeedRow.Expense, onClick: () -> Unit) {
 
 /** #218: one payment, what it was, and the way to take it back out of the balances. */
 @Composable
-private fun PaymentSheet(row: GroupFeedRow.Payment, onRemove: () -> Unit, onDismiss: () -> Unit) {
+private fun PaymentSheet(
+    row: GroupFeedRow.Payment,
+    onRemove: () -> Unit,
+    onDismiss: () -> Unit,
+    reactions: PaymentReactionsUiModel? = null,
+    onReact: (ReactionKind?) -> Unit = {},
+) {
     val text = LocalCopy.current.shared.payment
     SkyBottomSheet(onDismissRequest = onDismiss) {
         Text(text.detailTitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.sm))
@@ -686,6 +710,7 @@ private fun PaymentSheet(row: GroupFeedRow.Payment, onRemove: () -> Unit, onDism
         Text(row.detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
         Text(row.occurred, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(row.recorded, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
+        reactions?.let { ReactionRow(it, onReact, Modifier.padding(top = Spacing.md)) }
         SkyButton(text.remove, onClick = onRemove, kind = SkyButtonKind.DangerOutline, modifier = Modifier.fillMaxWidth().padding(top = Spacing.lg))
     }
 }
@@ -772,4 +797,63 @@ internal fun NewDot() {
             .background(MaterialTheme.ptut.signature)
             .semantics { contentDescription = label },
     )
+}
+
+/** #94–#97: the wheel, the trip's end and recap, and the month's awards, each only while its part is on. */
+private fun groupPlayRows(play: GroupPlayEntries, pick: (() -> Unit) -> () -> Unit): List<@Composable () -> Unit> {
+    val text = AppText.copy.play.group
+    return listOfNotNull(
+        play.onWheel?.let { open -> { MenuRow(PtutIcon.LocalActivity, text.wheelOpen, onClick = pick(open)) } },
+        play.tripEnded?.let { ended ->
+            { MenuRow(PtutIcon.Place, text.tripEnded, value = if (ended) text.tripOpenRecap else text.tripEndedLine, onClick = pick { play.onTripEnded(!ended) }) }
+        },
+        play.onRecap?.let { open -> { MenuRow(PtutIcon.BarChart, text.tripOpenRecap, onClick = pick(open)) } },
+        play.onAwards?.let { open -> { MenuRow(PtutIcon.EmojiEvents, text.awardsOpen, onClick = pick(open)) } },
+    )
+}
+
+/** #95: everyone is settled, and a stamp is in this phone's book. Ink and sky, never ruby (R3). */
+@Composable
+private fun AllSquareCard(square: AllSquareUiModel) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.sm)
+            .padding(top = Spacing.sm)
+            .clip(PtutRadii.r20)
+            .background(MaterialTheme.ptut.accent)
+            .padding(Spacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+            Text(square.title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            Text(square.line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+        }
+        PlayStamp(face = square.stampFace, caption = square.stampCaption, tone = StampTone.Sky, contentDescription = square.title)
+    }
+}
+
+/** #95 (D10): three words as pills; tapping mine again takes it back. Who sent each shows under them. */
+@Composable
+private fun ReactionRow(reactions: PaymentReactionsUiModel, onReact: (ReactionKind?) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Text(reactions.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            reactions.options.forEach { option ->
+                Text(
+                    text = option.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (option.chosen) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .heightIn(min = PlaySizes.step)
+                        .tappable(CircleShape, Role.Button) { onReact(if (option.chosen) null else option.kind) }
+                        .clip(CircleShape)
+                        .background(if (option.chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
+                        .padding(horizontal = Spacing.s12, vertical = Spacing.s10),
+                )
+            }
+        }
+        reactions.sent.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
 }

@@ -13,6 +13,12 @@ The first public version.
 
 ### Added
 
+- Play, in *Settings › Play*: a tray-clear run with freezes, stamps and a stamp book, *Guess the
+  week*, a 30-second daily question, one PaiSeN line on Today, week challenges, goal jars, month
+  stories, closing a month and a money score. Your own play is worked out on the phone. In shared
+  groups: a settle plan, a who-pays wheel, an *All square* stamp, reactions on payments, monthly
+  awards and a trip recap. Each part stays in debug builds until it has been checked on a phone,
+  and Remote Config's `play_on` turns all of it off.
 - Reading K PLUS payment slips from your photos on the phone, with ML Kit on Android and Apple
   Vision on iOS.
 - On Android 14 and later, *Select photos* works: the photos you pick are read, and Today and

@@ -1,9 +1,15 @@
 package com.ptut.expense.sync
 
+import com.ptut.expense.data.local.entity.PaymentReactionEntity
+import com.ptut.expense.data.local.entity.SyncOutboxEntity
 import com.ptut.expense.data.repository.KIND_MEMBER
+import com.ptut.expense.data.repository.KIND_REACTION
+import com.ptut.expense.data.repository.KIND_TRIP_END
+import com.ptut.expense.data.repository.REACTION_GONE
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -150,6 +156,96 @@ class GroupPullerTest {
 
         assertEquals(PullResult.Removed, puller.pull("g1"))
         assertTrue("g1" !in dao.groups)
+    }
+
+    @Test
+    fun `a trip's end comes down with the group unless this phone's own change waits to go up`() = runTest {
+        holds("g1")
+        firestore.docs["groups/g1"] = groupDoc("g1").let { it.copy(fields = it.fields + ("endedOn" to "2026-11-24")) }
+
+        puller.pull("g1")
+        assertEquals("2026-11-24", dao.groups.getValue("g1").endedOn)
+
+        dao.groups["g1"] = dao.groups.getValue("g1").copy(endedOn = null)
+        dao.outboxRows.value += SyncOutboxEntity("$KIND_TRIP_END:g1", "g1", KIND_TRIP_END, "g1", 1)
+        clock.nowMillis += TEN_MINUTES
+        puller.pull("g1")
+        assertNull(dao.groups.getValue("g1").endedOn)
+    }
+
+    @Test
+    fun `an awards opt-out counts only from the name's own holder`() = runTest {
+        holds("g1")
+        firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), heldDoc("bo", "uid-2"), heldDoc("cy", "uid-3"))
+        firestore.collections["groups/g1/play"] = listOf(
+            FirestoreDoc("bo", "groups/g1/play/bo", mapOf("awardsOff" to true, "claimedByUid" to "uid-2")),
+            FirestoreDoc("cy", "groups/g1/play/cy", mapOf("awardsOff" to true, "claimedByUid" to "uid-9")),
+        )
+
+        puller.pull("g1")
+
+        assertTrue(dao.members.getValue("bo").playOff)
+        assertFalse(dao.members.getValue("cy").playOff)
+    }
+
+    @Test
+    fun `the first pull takes the whole list of reactions and this phone's own unsent one stays`() = runTest {
+        holds("g1")
+        dao.groups["g1"] = dao.groups.getValue("g1").copy(lastSyncedAtEpochMillis = null)
+        dao.reactions["p2_$UID"] = PaymentReactionEntity("p2_$UID", "g1", "p2", UID, "Cheers", 1)
+        dao.reactions["p9_uid-2"] = PaymentReactionEntity("p9_uid-2", "g1", "p9", "uid-2", "Thanks", 1)
+        dao.outboxRows.value += SyncOutboxEntity("$KIND_REACTION:p2_$UID", "g1", KIND_REACTION, "p2_$UID", 1)
+        firestore.collections["groups/g1/reactions"] = listOf(
+            reactionDoc("p1", "uid-2", "WellPlayed"),
+            reactionDoc("p3", "uid-2", "Shame"),
+            reactionDoc("p4", "uid-2", REACTION_GONE),
+            reactionDoc("p5", "uid-2").copy(id = "p5_uid-3"),
+        )
+
+        puller.pull("g1")
+
+        assertTrue("list groups/g1/reactions" in firestore.calls)
+        assertEquals(setOf("p1_uid-2", "p2_$UID"), dao.reactions.keys)
+    }
+
+    @Test
+    fun `a new reaction arrives on the next pull even when the names are not listed again and moves the mark`() = runTest {
+        holds("g1")
+        puller.pull("g1")
+        val marks = dao.marks
+        firestore.collections["groups/g1/reactions"] = listOf(reactionDoc("p1", "uid-2"))
+
+        puller.pull("g1")
+
+        assertEquals(1, firestore.calls.count { it == "list groups/g1/members" })
+        assertFalse("list groups/g1/reactions" in firestore.calls)
+        assertEquals(setOf("p1_uid-2"), dao.reactions.keys)
+        assertEquals(marks + 1, dao.marks)
+    }
+
+    @Test
+    fun `a reaction taken back comes as Gone and leaves unless it is this phone's own unsent one`() = runTest {
+        holds("g1")
+        dao.reactions["p1_uid-2"] = PaymentReactionEntity("p1_uid-2", "g1", "p1", "uid-2", "Thanks", 1)
+        dao.reactions["p2_$UID"] = PaymentReactionEntity("p2_$UID", "g1", "p2", UID, "Cheers", 1)
+        dao.outboxRows.value += SyncOutboxEntity("$KIND_REACTION:p2_$UID", "g1", KIND_REACTION, "p2_$UID", 1)
+        firestore.collections["groups/g1/reactions"] = listOf(reactionDoc("p1", "uid-2", REACTION_GONE), reactionDoc("p2", UID, REACTION_GONE))
+
+        puller.pull("g1")
+
+        assertEquals(setOf("p2_$UID"), dao.reactions.keys)
+    }
+
+    @Test
+    fun `a reaction pulled again unchanged is not written again`() = runTest {
+        holds("g1")
+        firestore.collections["groups/g1/reactions"] = listOf(reactionDoc("p1", "uid-2"))
+        puller.pull("g1")
+        val written = dao.reactionWrites
+
+        puller.pull("g1")
+
+        assertEquals(written, dao.reactionWrites)
     }
 
     @Test

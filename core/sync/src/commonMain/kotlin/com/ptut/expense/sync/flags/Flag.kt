@@ -8,6 +8,9 @@ enum class Flag(val key: String, val default: Boolean) {
     Planned("planned_on", default = true),
     SlipGroupDebt("slip_group_debt_on", default = true),
     ThaiLanguage("thai_language_on", default = true),
+
+    /** #82: every play part at once. Each part is also held to debug until checked on a phone (D17). */
+    Play("play_on", default = true),
 }
 
 /**

@@ -61,6 +61,8 @@ class AddExpenseViewModel(
     /** #206: an amount ("600.00") and a description from Siri or Quick add, for a new expense only. */
     private val prefillAmount: String? = null,
     private val prefillDescription: String? = null,
+    /** #94: the wheel's pick pays; a member no longer in the group falls back to you. */
+    private val prefillPayer: String? = null,
 ) : ViewModel() {
 
     private val snapshot = observeSnapshot()
@@ -103,7 +105,7 @@ class AddExpenseViewModel(
             is ExpenseStart.New -> form.update {
                 it.copy(
                     currency = start.group.money,
-                    payerMemberId = start.group.meMemberId,
+                    payerMemberId = prefillPayer?.takeIf { id -> start.group.activeMembers.any { it.id == id } } ?: start.group.meMemberId,
                     categoryId = categories.firstOrNull()?.id,
                     amountText = prefillAmount ?: it.amountText,
                     description = prefillDescription ?: it.description,

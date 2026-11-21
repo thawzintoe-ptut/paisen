@@ -88,4 +88,19 @@ class AppSettingsTest {
         assertEquals("MMK", store.read().homeCurrency)
         assertEquals(Satang(250_000), store.read().weeklyTarget?.amount)
     }
+
+    @Test
+    fun `play ships on with amounts and the reminder off`() {
+        val play = AppSettings(FakeAppSettingsStore()).choices.value.play
+
+        assertEquals(PlayChoices(on = true, run = true, guess = true, challenges = true, groupStamps = true, shareAmounts = false, weeklyReminder = false), play)
+    }
+
+    @Test
+    fun `the play switches are what the next launch reads back`() {
+        val store = FakeAppSettingsStore()
+        AppSettings(store).setPlay(PlayChoices(on = false, guess = false, weeklyReminder = true))
+
+        assertEquals(PlayChoices(on = false, guess = false, weeklyReminder = true), AppSettings(store).choices.value.play)
+    }
 }

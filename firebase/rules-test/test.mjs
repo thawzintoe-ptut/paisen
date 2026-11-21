@@ -13,7 +13,7 @@ const env = await initializeTestEnvironment({
 });
 const as = (uid) => env.authenticatedContext(uid, { auth_time: AUTH_TIME }).firestore();
 
-async function seed({ group = {}, members = {}, invite = {}, pay = { mBob: { promptPay: '0812345678', claimedByUid: 'bob' } } } = {}) {
+async function seed({ group = {}, members = {}, invite = {}, pay = { mBob: { promptPay: '0812345678', claimedByUid: 'bob' } }, play = {}, reactions = {} } = {}) {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
@@ -30,6 +30,8 @@ async function seed({ group = {}, members = {}, invite = {}, pay = { mBob: { pro
     await setDoc(doc(db, 'groups/g1/entries/e0'), { kind: 'version', authorUid: 'alice', createdAt: 1 });
     await setDoc(doc(db, 'devices/devA'), { uid: 'alice', platform: 'android', language: 'en', updatedAt: 1 });
     for (const [mid, fields] of Object.entries(pay)) await setDoc(doc(db, `groups/g1/pay/${mid}`), fields);
+    for (const [mid, fields] of Object.entries(play)) await setDoc(doc(db, `groups/g1/play/${mid}`), fields);
+    for (const [rid, fields] of Object.entries(reactions)) await setDoc(doc(db, `groups/g1/reactions/${rid}`), fields);
   });
 }
 
@@ -597,6 +599,80 @@ await check('17.21 the pick: join registered, the name read back, then claimed',
   return joinCommit('eve', claimName('eve', 'mCara'));
 });
 await check('17.22 before the join is registered, the name cannot be read', 'deny', {}, () => getDoc(doc(as('eve'), 'groups/g1/members/mCara')));
+
+// 18. #95–#97: a trip's end, the awards opt-out and reactions
+const playDoc = (over = {}) => ({ awardsOff: true, claimedByUid: 'bob', ...over });
+const reaction = (uid, over = {}) => ({ authorUid: uid, paymentId: 'p1', kind: 'Thanks', createdAt: 1, syncedAt: serverTimestamp(), ...over });
+await check('18.1 a member marks the trip ended', 'allow', {}, () => updateDoc(doc(as('bob'), 'groups/g1'), { endedOn: '2026-11-24' }));
+await check('18.2 a member opens the trip again', 'allow', { group: { endedOn: '2026-11-24' } }, () => updateDoc(doc(as('bob'), 'groups/g1'), { endedOn: null }));
+await check('18.3 an end that is not a day', 'deny', {}, () => updateDoc(doc(as('bob'), 'groups/g1'), { endedOn: 'yesterday' }));
+await check('18.4 someone with the live code marks it ended', 'deny', {}, () => updateDoc(doc(as('mallory'), 'groups/g1'), { endedOn: '2026-11-24' }));
+await check('18.5 an older build renames a group that has an end', 'allow', { group: { endedOn: '2026-11-24' } }, () => updateDoc(doc(as('bob'), 'groups/g1'), { name: 'Trip home' }));
+await check('18.6 holder turns their awards off', 'allow', {}, () => setDoc(doc(as('bob'), 'groups/g1/play/mBob'), playDoc()));
+await check('18.7 a member turns awards off on someone else\'s name', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/play/mAlice'), playDoc()));
+await check('18.8 an opt-out with a field the app never sends', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/play/mBob'), playDoc({ score: 9 })));
+await check('18.9 someone with the live code reads an opt-out', 'deny', {}, () => getDoc(doc(as('mallory'), 'groups/g1/play/mBob')));
+await check('18.10 a member reacts to a payment', 'allow', {}, () => setDoc(doc(as('bob'), 'groups/g1/reactions/p1_bob'), reaction('bob')));
+await check('18.11 a member reacts in someone else\'s name', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/reactions/p1_alice'), reaction('bob')));
+await check('18.12 a reaction that is not one of the three', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/reactions/p1_bob'), reaction('bob', { kind: 'Shame' })));
+await check('18.13 a reaction with a text of its own', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/reactions/p1_bob'), reaction('bob', { note: 'pay up' })));
+await check('18.14 a member takes their reaction back', 'allow', {}, async () => {
+  await setDoc(doc(as('bob'), 'groups/g1/reactions/p1_bob'), reaction('bob'));
+  return deleteDoc(doc(as('bob'), 'groups/g1/reactions/p1_bob'));
+});
+await check('18.15 a member takes someone else\'s reaction back', 'deny', {}, async () => {
+  await setDoc(doc(as('alice'), 'groups/g1/reactions/p1_alice'), reaction('alice'));
+  return deleteDoc(doc(as('bob'), 'groups/g1/reactions/p1_alice'));
+});
+await check('18.16 deleted group: a member reacts', 'deny', { group: { deleted: true } }, () => setDoc(doc(as('bob'), 'groups/g1/reactions/p1_bob'), reaction('bob')));
+await check('18.17 a reaction taken back before it was sent', 'allow', {}, () => deleteDoc(doc(as('bob'), 'groups/g1/reactions/p9_bob')));
+await check('18.18 someone with the live code deletes a reaction', 'deny', {}, () => deleteDoc(doc(as('mallory'), 'groups/g1/reactions/p9_mallory')));
+// The trip's end: a day, set by any member of a live group, on its own.
+await check('18.19 an end that is a number', 'deny', {}, () => updateDoc(doc(as('bob'), 'groups/g1'), { endedOn: 20261124 }));
+await check('18.20 creator marks it ended and changes the code in one update', 'deny', {}, () => updateDoc(doc(as('alice'), 'groups/g1'), { endedOn: '2026-11-24', inviteCode: 'CODE9' }));
+await check('18.21 creator marks the trip ended', 'allow', {}, () => updateDoc(doc(as('alice'), 'groups/g1'), { endedOn: '2026-11-24' }));
+await check('18.22 deleted group: a member marks it ended', 'deny', deleted, () => updateDoc(doc(as('bob'), 'groups/g1'), { endedOn: '2026-11-24' }));
+await check('18.23 a stranger marks it ended', 'deny', {}, () => updateDoc(doc(as('eve'), 'groups/g1'), { endedOn: '2026-11-24' }));
+await check('18.24 an end on the 99th day of the 99th month', 'deny', {}, () => updateDoc(doc(as('bob'), 'groups/g1'), { endedOn: '9999-99-99' }));
+await check('18.25 a new group made with an end already set', 'allow', {}, () => setDoc(doc(as('carol'), 'groups/g2'), newGroup({ endedOn: '2026-11-24' })));
+// The opt-out, as pay/{mid}: only on the name this account holds.
+const bobOff = { play: { mBob: playDoc() } };
+await check('18.26 holder changes their opt-out', 'allow', bobOff, () => setDoc(doc(as('bob'), 'groups/g1/play/mBob'), playDoc({ awardsOff: false })));
+await check('18.27 an opt-out that is not a switch', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/play/mBob'), playDoc({ awardsOff: 'yes' })));
+await check('18.28 an opt-out naming another account as its holder', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/play/mBob'), playDoc({ claimedByUid: 'alice' })));
+await check('18.29 an opt-out on a name nobody holds', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/play/mCara'), playDoc()));
+await check('18.30 an opt-out on a name that does not exist', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/play/mNobody'), playDoc()));
+await check('18.31 removed member turns their awards off', 'deny', {}, () => removedThen(() => setDoc(doc(as('bob'), 'groups/g1/play/mBob'), playDoc())));
+await check('18.32 deleted group: holder turns their awards off', 'deny', { group: { deleted: true } }, () => setDoc(doc(as('bob'), 'groups/g1/play/mBob'), playDoc()));
+await check('18.33 holder takes their opt-out away', 'allow', bobOff, () => deleteDoc(doc(as('bob'), 'groups/g1/play/mBob')));
+await check('18.34 another member takes it away', 'deny', { ...three, ...bobOff }, () => deleteDoc(doc(as('carol'), 'groups/g1/play/mBob')));
+await check('18.35 new app removal: the commit also takes the opt-out away', 'allow', bobOff, async () => {
+  await rotate();
+  const db = as('alice');
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'groups/g1/members/mBob'), { archived: true, claimedByUid: null, promptPay: null });
+  batch.delete(doc(db, 'groups/g1/pay/mBob'));
+  batch.delete(doc(db, 'groups/g1/play/mBob'));
+  batch.update(doc(db, 'groups/g1'), { memberUids: arrayRemove('bob') });
+  return batch.commit();
+});
+await check('18.36 creator takes it away while its holder is still in', 'deny', bobOff, () => deleteDoc(doc(as('alice'), 'groups/g1/play/mBob')));
+// Reactions: one per account per payment, under the id that names both.
+const bobReacted = { reactions: { p1_bob: { authorUid: 'bob', paymentId: 'p1', kind: 'Thanks', createdAt: 1, syncedAt: Timestamp.fromMillis(1) } } };
+await check('18.37 a stranger reacts', 'deny', {}, () => setDoc(doc(as('eve'), 'groups/g1/reactions/p1_eve'), reaction('eve')));
+await check('18.38 removed member reacts', 'deny', {}, () => removedThen(() => setDoc(doc(as('bob'), 'groups/g1/reactions/p1_bob'), reaction('bob'))));
+await check('18.39 removed member takes their reaction back', 'deny', bobReacted, () => removedThen(() => deleteDoc(doc(as('bob'), 'groups/g1/reactions/p1_bob'))));
+await check('18.40 a member takes their reaction back as Gone (the app\'s take-back)', 'allow', bobReacted, () => setDoc(doc(as('bob'), 'groups/g1/reactions/p1_bob'), reaction('bob', { kind: 'Gone' })));
+await check('18.41 a reaction under your own id signed with someone else\'s account', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/reactions/p1_bob'), reaction('alice')));
+await check('18.42 a reaction stamped with a time the phone chose', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/reactions/p1_bob'), reaction('bob', { syncedAt: Timestamp.fromMillis(1) })));
+await check('18.43 a reaction on a payment id of 129 characters', 'deny', {}, () => setDoc(doc(as('bob'), `groups/g1/reactions/${'x'.repeat(129)}_bob`), reaction('bob', { paymentId: 'x'.repeat(129) })));
+await check('18.44 a reaction whose id names another payment', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/reactions/p2_bob'), reaction('bob', { paymentId: 'p1' })));
+await check('18.45 a reaction with text for its creation time', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/reactions/p1_bob'), reaction('bob', { createdAt: 'now' })));
+await check('18.46 a reaction created two days from now', 'deny', {}, () => setDoc(doc(as('bob'), 'groups/g1/reactions/p1_bob'), reaction('bob', { createdAt: Date.now() + 2 * 86_400_000 })));
+await check('18.47 a member lists the reactions', 'allow', bobReacted, () => getDocs(collection(as('alice'), 'groups/g1/reactions')));
+await check('18.48 someone with the live code lists the reactions', 'deny', bobReacted, () => getDocs(collection(as('mallory'), 'groups/g1/reactions')));
+await check('18.49 creator takes a departed member\'s reaction out', 'allow', bobReacted, () => removedThen(() => deleteDoc(doc(as('alice'), 'groups/g1/reactions/p1_bob'))));
+await check('18.50 creator takes a current member\'s reaction out', 'deny', bobReacted, () => deleteDoc(doc(as('alice'), 'groups/g1/reactions/p1_bob')));
 
 await env.cleanup();
 for (const [status, expect, name, why] of results) console.log(`${status}  ${expect.padEnd(5)}  ${name}${why ? `  -> ${why}` : ''}`);

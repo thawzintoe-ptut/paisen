@@ -2,6 +2,7 @@ package com.ptut.expense.design
 
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -36,6 +37,15 @@ private val OvershootEasing: Easing = CubicBezierEasing(0.2f, 1.4f, 0.4f, 1f)
  * read as the app being reluctant.
  */
 private val ExitEasing: Easing = CubicBezierEasing(0.4f, 0f, 1f, 1f)
+
+/**
+ * Play's press (#84, Design V3 `play.css`): a stamp landing past its size and settling. Play's two
+ * curves are its own; nothing outside play reads them, so page 01's four still hold everywhere else.
+ */
+private val PressEasing: Easing = CubicBezierEasing(0.3f, 1.6f, 0.5f, 1f)
+
+/** Play's turn: a card over on its edge that overshoots a touch, so it lands rather than stops. */
+private val TurnEasing: Easing = CubicBezierEasing(0.2f, 0.9f, 0.25f, 1.15f)
 
 /**
  * Every duration and curve the motion page names, in one place. NFR-8.
@@ -116,11 +126,30 @@ data class PtutMotion(
     val slipFlight: Duration = 3_200.milliseconds,
     val sharedSplit: Duration = 3_600.milliseconds,
 
+    // ---- #84 · play (Design V3 play.css) ----------------------------------------------------
+    /** A stamp pressed onto the page, 1.35× to 1×, after the card under it has turned. */
+    val stampPress: Duration = 500.milliseconds,
+    val stampPressDelay: Duration = 700.milliseconds,
+    /** A face-down card turning over on its Y axis. */
+    val cardTurn: Duration = 900.milliseconds,
+    /** The who-pays wheel from the tap to its landing (#94). */
+    val wheelSpin: Duration = 3_200.milliseconds,
+    /** The jar's water after a tap (#92), and one slow sway of its idle surface. */
+    val jarSlosh: Duration = 1_200.milliseconds,
+    val jarIdle: Duration = 3_600.milliseconds,
+    /** A meter's fill moving to its new share. */
+    val meterFill: Duration = 600.milliseconds,
+
     // ---- page 01 · the curves themselves ----------------------------------------------------
     val standard: Easing = StandardEasing,
     val emphasized: Easing = EmphasizedEasing,
     val overshoot: Easing = OvershootEasing,
     val exit: Easing = ExitEasing,
+    /** #84: play only. */
+    val press: Easing = PressEasing,
+    val turn: Easing = TurnEasing,
+    /** A steady rate, for a card's turn and the jar's idle water: the shape comes from the drawing, not the curve. */
+    val linear: Easing = LinearEasing,
 ) {
     /** The Undo window for this reader: [spokenUndoWindow] while a screen reader is on. */
     fun undoWindowFor(screenReader: Boolean): Duration = if (screenReader) spokenUndoWindow else undoWindow

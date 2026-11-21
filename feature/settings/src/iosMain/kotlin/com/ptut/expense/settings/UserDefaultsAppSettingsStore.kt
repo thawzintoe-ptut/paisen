@@ -4,6 +4,7 @@ import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.settings.AppChoices
 import com.ptut.expense.domain.settings.AppSettingsStore
+import com.ptut.expense.domain.settings.PlayChoices
 import com.ptut.expense.domain.slip.SlipOwner
 import com.ptut.expense.locale.NoteTone
 import com.ptut.expense.platform.files.documentsDirectory
@@ -37,6 +38,13 @@ private const val HIDDEN_NOTE_WEEK = "ptut-hidden-note-week"
 private const val ADD_CURRENCY = "ptut-add-currency"
 private const val HOME_CURRENCY = "ptut-home-currency"
 private const val HOME_ZONE = "ptut-home-zone"
+private const val PLAY_ON = "ptut-play-on"
+private const val PLAY_RUN = "ptut-play-run"
+private const val PLAY_GUESS = "ptut-play-guess"
+private const val PLAY_CHALLENGES = "ptut-play-challenges"
+private const val PLAY_GROUP_STAMPS = "ptut-play-group-stamps"
+private const val PLAY_SHARE_AMOUNTS = "ptut-play-share-amounts"
+private const val PLAY_WEEKLY_REMINDER = "ptut-play-weekly-reminder"
 private const val OWNER_FILE = "slip-owner.json"
 private const val NAME_FIELD = "name"
 private const val CANDIDATE_FIELD = "candidate"
@@ -84,8 +92,23 @@ class UserDefaultsAppSettingsStore(
             hiddenNoteWeek = defaults.stringForKey(HIDDEN_NOTE_WEEK),
             homeCurrency = defaults.stringForKey(HOME_CURRENCY),
             homeZone = defaults.stringForKey(HOME_ZONE),
+            play = shipped.play.let { play ->
+                PlayChoices(
+                    on = readBool(PLAY_ON, play.on),
+                    run = readBool(PLAY_RUN, play.run),
+                    guess = readBool(PLAY_GUESS, play.guess),
+                    challenges = readBool(PLAY_CHALLENGES, play.challenges),
+                    groupStamps = readBool(PLAY_GROUP_STAMPS, play.groupStamps),
+                    shareAmounts = readBool(PLAY_SHARE_AMOUNTS, play.shareAmounts),
+                    weeklyReminder = readBool(PLAY_WEEKLY_REMINDER, play.weeklyReminder),
+                )
+            },
         )
     }
+
+    /** `boolForKey` answers false for a missing key, so a switch that ships on reads its default until written. */
+    private fun readBool(key: String, shipped: Boolean): Boolean =
+        defaults.objectForKey(key)?.let { defaults.boolForKey(key) } ?: shipped
 
     override fun write(choices: AppChoices) {
         moveOwnerOutOfDefaults()
@@ -102,6 +125,13 @@ class UserDefaultsAppSettingsStore(
         defaults.removeObjectForKey(ADD_CURRENCY)
         writeOptional(choices.homeCurrency, HOME_CURRENCY)
         writeOptional(choices.homeZone, HOME_ZONE)
+        defaults.setBool(choices.play.on, PLAY_ON)
+        defaults.setBool(choices.play.run, PLAY_RUN)
+        defaults.setBool(choices.play.guess, PLAY_GUESS)
+        defaults.setBool(choices.play.challenges, PLAY_CHALLENGES)
+        defaults.setBool(choices.play.groupStamps, PLAY_GROUP_STAMPS)
+        defaults.setBool(choices.play.shareAmounts, PLAY_SHARE_AMOUNTS)
+        defaults.setBool(choices.play.weeklyReminder, PLAY_WEEKLY_REMINDER)
         val target = choices.weeklyTarget
         if (target == null) {
             defaults.removeObjectForKey(TARGET_CATEGORY)

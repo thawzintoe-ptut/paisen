@@ -91,6 +91,16 @@ fun HomeView(
     onOpenWeek: (WeeklyCardUiModel) -> Unit = {},
     /** #22: "Just hide this week" on the weekly note. */
     onHideNoteWeek: () -> Unit = {},
+    /** #88: the stamp book, and today's face-down stamp by its id. */
+    onOpenStamps: () -> Unit = {},
+    onTurnStamp: (String) -> Unit = {},
+    /** #87, #89, #86: today's question, the rows behind the coach line, and last week's guess. */
+    onOpenQuestion: () -> Unit = {},
+    onOpenCoach: (CoachLineUiModel) -> Unit = {},
+    onOpenGuess: (String) -> Unit = {},
+    /** #91 and the shelf's ways into the extras. */
+    onOpenChallenge: () -> Unit = {},
+    onOpenShelf: (ShelfItemUiModel) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
@@ -108,6 +118,13 @@ fun HomeView(
                 onOpenReceipt = onOpenReceipt,
                 onOpenWeek = onOpenWeek,
                 onHideNoteWeek = onHideNoteWeek,
+                onOpenStamps = onOpenStamps,
+                onTurnStamp = onTurnStamp,
+                onOpenQuestion = onOpenQuestion,
+                onOpenCoach = onOpenCoach,
+                onOpenGuess = onOpenGuess,
+                onOpenChallenge = onOpenChallenge,
+                onOpenShelf = onOpenShelf,
             )
         }
     }
@@ -125,6 +142,13 @@ private fun LoadedHome(
     onOpenReceipt: (String) -> Unit,
     onOpenWeek: (WeeklyCardUiModel) -> Unit,
     onHideNoteWeek: () -> Unit,
+    onOpenStamps: () -> Unit,
+    onTurnStamp: (String) -> Unit,
+    onOpenQuestion: () -> Unit,
+    onOpenCoach: (CoachLineUiModel) -> Unit,
+    onOpenGuess: (String) -> Unit,
+    onOpenChallenge: () -> Unit,
+    onOpenShelf: (ShelfItemUiModel) -> Unit,
 ) {
     val text = LocalCopy.current.home
     val common = LocalCopy.current.common
@@ -152,7 +176,8 @@ private fun LoadedHome(
                         lead = card.lead,
                         line = card.line,
                         icon = ptutIcon(card.glyph),
-                        onClick = { onOpenWeek(card) },
+                        // #86 (D4): while last week's guess waits, the card opens it first.
+                        onClick = { card.guessMonday?.let(onOpenGuess) ?: onOpenWeek(card) },
                         modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
                     )
                     if (card.showsNotRight) NotRightLink(card, onOpenWeek, onHideNoteWeek)
@@ -171,6 +196,9 @@ private fun LoadedHome(
                 state.target?.let { TargetLine(it, Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.s12)) }
                 if (state.topCategories.isNotEmpty()) {
                     TopCategoryTiles(state.topCategories, Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.md))
+                }
+                state.coach?.let { coach ->
+                    CoachRow(coach, onOpen = { onOpenCoach(coach) }, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm))
                 }
                 if (empty) {
                     SkyEmptyState(
@@ -222,6 +250,30 @@ private fun LoadedHome(
                     }
                 }
             }
+        }
+
+        // #85, #87: Main's play stack, under the pair and over the day's list.
+        state.question?.let { card ->
+            item {
+                PlayQuestionCard(card, onOpen = onOpenQuestion, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm))
+            }
+        }
+        state.play?.let { strip ->
+            item {
+                PlayRunCard(
+                    strip = strip,
+                    onOpenStamps = onOpenStamps,
+                    onTurnStamp = onTurnStamp,
+                    modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
+                )
+            }
+        }
+
+        state.challenge?.let { row ->
+            item { ChallengeRow(row, onOpen = onOpenChallenge, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
+        }
+        if (state.shelf.isNotEmpty()) {
+            item { PlayShelf(state.shelf, onOpen = onOpenShelf, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
         }
 
         if (!empty || state.savedToday.isNotEmpty()) {

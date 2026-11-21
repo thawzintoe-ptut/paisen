@@ -41,6 +41,8 @@ service cloud.firestore {
     function currencyCode(value) { return value is string && value.matches('[A-Z]{3}'); }
     // A phone number, a national or tax ID, or an e-wallet ID, digits only, as the app saves it.
     function promptPayId(value) { return value is string && value.matches('^(0[0-9]{9}|[0-9]{13}|[0-9]{15})$'); }
+    // #97: an ISO day, as LocalDate writes it.
+    function isoDay(value) { return value is string && value.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'); }
     // No rate, or one above zero with a scale every build can read.
     function rateOk(data) {
       return (data.get('rateUnscaled', null) == null && data.get('rateScale', null) == null)
@@ -72,7 +74,8 @@ service cloud.firestore {
       function groupFieldsOk() {
         let group = request.resource.data;
         return group.keys().hasOnly(['name', 'type', 'icon', 'simplifyDebts', 'createdAt', 'currency', 'creatorUid',
-            'memberUids', 'inviteCode', 'inviteActive', 'deleted', 'deletedAt'])
+            'memberUids', 'inviteCode', 'inviteActive', 'deleted', 'deletedAt', 'endedOn'])
+          && (group.get('endedOn', null) == null || isoDay(group.endedOn))
           && textUpTo(group.get('icon', ''), 64) && group.get('simplifyDebts', true) is bool
           && group.get('createdAt', 0) is int && textOrNull(group.get('inviteCode', null), 64)
           && group.get('inviteActive', false) is bool && group.get('deleted', false) is bool
@@ -96,8 +99,8 @@ service cloud.firestore {
         && request.resource.data.memberUids == [request.auth.uid]
         && groupName(request.resource.data.name) && groupTypeOk() && groupCurrencyOk();
       allow update: if deleteOneWay() && (
-        // Any member edits the name, icon or the Simplify debts switch, while the group is live.
-        (isMember(gid) && live(gid) && onlyChanged(['name', 'icon', 'type', 'simplifyDebts']) && groupFieldsOk()
+        // Any member edits the name, icon or the Simplify debts switch, or marks a trip ended (#97), while the group is live.
+        (isMember(gid) && live(gid) && onlyChanged(['name', 'icon', 'type', 'simplifyDebts', 'endedOn']) && groupFieldsOk()
             && (!changed().hasAny(['name']) || groupName(request.resource.data.name))
             && (!changed().hasAny(['type']) || groupTypeOk()))
         // Only the creator changes or switches off the invite (#190), or deletes the group for everyone.
@@ -189,6 +192,41 @@ service cloud.firestore {
         allow delete: if signedIn() && (resource == null || resource.data.claimedByUid == request.auth.uid
           || (isCreator(gid) && (getAfter(groupPath(gid)).data.get('deleted', false) == true
             || !(resource.data.claimedByUid in getAfter(groupPath(gid)).data.memberUids))));
+      }
+
+      // #96 (D5): a member's "stamps and awards" opt-out, on the name this account holds, as pay/{mid}.
+      match /play/{mid} {
+        function playOk() {
+          let play = request.resource.data;
+          return play.keys().hasOnly(['awardsOff', 'claimedByUid']) && play.claimedByUid == request.auth.uid && play.awardsOff is bool;
+        }
+        allow read: if isMember(gid) && live(gid);
+        allow create, update: if isMember(gid) && live(gid) && playOk()
+          && getAfter(memberPath(gid, mid)).data.claimedByUid == request.auth.uid;
+        allow delete: if signedIn() && (resource == null || resource.data.claimedByUid == request.auth.uid
+          || (isCreator(gid) && (getAfter(groupPath(gid)).data.get('deleted', false) == true
+            || !(resource.data.claimedByUid in getAfter(groupPath(gid)).data.memberUids))));
+      }
+
+      // #95 (D10): one word on a payment per account, Thanks, Well played or Cheers. Its id is
+      // `<paymentId>_<uid>`, so nobody reacts in someone else's name. Taking it back writes Gone over
+      // it, stamped like any change, so every phone's next pull learns it went without listing them all.
+      match /reactions/{rid} {
+        function reactionOk() {
+          let reaction = request.resource.data;
+          return reaction.keys().hasOnly(['authorUid', 'paymentId', 'kind', 'createdAt', 'syncedAt'])
+            && reaction.authorUid == request.auth.uid && shortId(reaction.paymentId)
+            && rid == reaction.paymentId + '_' + request.auth.uid
+            && reaction.kind in ['Thanks', 'WellPlayed', 'Cheers', 'Gone']
+            && reaction.createdAt is int && reaction.createdAt <= request.time.toMillis() + 86400000
+            && reaction.syncedAt == request.time;
+        }
+        allow read: if isMember(gid) && live(gid);
+        allow create, update: if isMember(gid) && live(gid) && reactionOk();
+        // Leaving takes your own along; one never sent finds nothing to delete, and that passes. The
+        // creator takes a departed member's out, in the commit that removes them or any time after.
+        allow delete: if (isMember(gid) && (resource == null || resource.data.authorUid == request.auth.uid))
+          || (isCreator(gid) && !(resource.data.authorUid in getAfter(groupPath(gid)).data.memberUids));
       }
 
       // syncedAt must be the server's own stamp, so no phone can backdate an entry out of another

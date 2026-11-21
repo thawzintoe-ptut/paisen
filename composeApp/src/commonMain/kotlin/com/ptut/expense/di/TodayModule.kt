@@ -1,6 +1,7 @@
 package com.ptut.expense.di
 
 import com.ptut.expense.activity.ActivityViewModel
+import com.ptut.expense.domain.play.ObserveSealedMonthsUseCase
 import com.ptut.expense.home.HomeViewModel
 import com.ptut.expense.home.WeeklyNoteSettings
 import com.ptut.expense.ledger.LedgerScope
@@ -41,6 +42,7 @@ val todayModule: Module = module {
             getHomeSummary = get(),
             getMoodRecap = get(),
             getWeeklyCheckIn = get(),
+            observeTodayPlay = get(),
         )
     }
     // #220: Reports passes the slice it opened; Home's History passes nothing and gets the whole table.
@@ -52,6 +54,7 @@ val todayModule: Module = module {
             subCategoryUpdates = liveSubCategories(),
             scope = params.getOrNull<LedgerScope>(),
             homeToday = get(),
+            sealedMonths = get<ObserveSealedMonthsUseCase>()(),
         )
     }
     viewModel {

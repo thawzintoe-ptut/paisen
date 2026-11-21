@@ -64,9 +64,12 @@ fun SkyRollingAmount(
  * [text] drawn one character per slot. A digit is a reel 0–9 that turns to its new place: up when
  * the value grows, down when it falls, and the lower places turn more, which reads as a counter.
  * A digit or comma that appears rolls in while its width opens; one that goes rolls out.
+ *
+ * [startFrom] rolls the first showing from another figure than 0, at the first showing's length, as
+ * the guess reveal needs (#86). A figure already shown before leaving the screen ignores it.
  */
 @Composable
-fun SkyRollingNumber(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier) {
+fun SkyRollingNumber(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier, startFrom: String? = null) {
     val measurer = rememberTextMeasurer()
     val drawn = remember(style, color) { style.copy(color = color) }
     val glyphs = remember(drawn, measurer) { Glyphs { char -> measurer.measure(char.toString(), drawn) } }
@@ -74,9 +77,11 @@ fun SkyRollingNumber(text: String, style: TextStyle, color: Color, modifier: Mod
     val still = ptutReduceMotion
     // The last figure shown, kept across leaving the screen, so coming back does not count up again.
     var shown by rememberSaveable { mutableStateOf("") }
-    val reels = remember { Reels(shown) }
+    val start = remember { rollStart(shown, startFrom) }
+    val reels = remember { Reels(start.from) }
     LaunchedEffect(text, still) {
-        reels.roll(from = shown, to = text, still = still, motion = motion)
+        val first = shown.isEmpty()
+        reels.roll(from = if (first) start.from else shown, to = text, still = still, motion = motion, long = first && start.long)
         shown = text
     }
     Spacer(
@@ -128,7 +133,7 @@ private class Reels(initial: String) {
         initial.reversed().forEachIndexed { place, char -> slots[place] = reelFor(char, presence = 1f) }
     }
 
-    suspend fun roll(from: String, to: String, still: Boolean, motion: PtutMotion) {
+    suspend fun roll(from: String, to: String, still: Boolean, motion: PtutMotion, long: Boolean) {
         val before = from.digitsValue()
         val after = to.digitsValue()
         val side = if (after >= before) 1f else -1f
@@ -151,7 +156,7 @@ private class Reels(initial: String) {
                     (reel.position.value.roundToInt() + turns(digitsBelow.getOrElse(place) { place }, before, after, target.digitToInt(), reel)) * 1f
                 }
                 // The first showing counts up at length; a later change is quick and lands together.
-                val spec = if (from.isEmpty()) {
+                val spec = if (long) {
                     tween<Float>(
                         durationMillis = motion.numberRoll.inMillis,
                         delayMillis = (count - 1 - place) * motion.numberStagger.inMillis,
@@ -216,6 +221,18 @@ private class Reels(initial: String) {
 
     private fun reelFor(char: Char, presence: Float) =
         Reel(digit = char.isDigit(), char = char, position = if (char.isDigit()) char.digitToInt() * 1f else 0f, presence = presence)
+}
+
+/** Where a figure's first roll starts, and whether it rolls at a first showing's length. */
+internal data class RollStart(val from: String, val long: Boolean)
+
+/**
+ * A figure kept from before leaving the screen starts there and changes quickly; otherwise the first
+ * showing counts up at length, from [startFrom] when one is given and from nothing when not.
+ */
+internal fun rollStart(shown: String, startFrom: String?): RollStart = when {
+    shown.isNotEmpty() -> RollStart(shown, long = false)
+    else -> RollStart(startFrom.orEmpty(), long = true)
 }
 
 private fun String.digitsValue(): Long = filter(Char::isDigit).take(MAX_DIGITS).toLongOrNull() ?: 0L

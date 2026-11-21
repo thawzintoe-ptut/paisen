@@ -28,6 +28,8 @@ import com.ptut.expense.domain.ledger.LedgerSpan
 import com.ptut.expense.domain.ledger.ObserveImportRunsUseCase
 import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
 import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
+import com.ptut.expense.domain.play.ObserveTodayPlayUseCase
+import com.ptut.expense.domain.play.TodayPlay
 import com.ptut.expense.domain.rules.ShopNames
 import com.ptut.expense.domain.slip.ObserveQueuedSlipsUseCase
 import com.ptut.expense.domain.today.GetHomeSummaryUseCase
@@ -124,6 +126,16 @@ sealed interface HomeUiState {
         val weeklyCard: WeeklyCardUiModel? = null,
         /** #21: the one weekly target, on the Week tab only. */
         val target: TargetUiModel? = null,
+        /** #85: the run card, on the Today tab only, while Play and its run are on. */
+        val play: PlayStripUiModel? = null,
+        /** #87: the ink Play card while today's question waits. */
+        val question: PlayQuestionCardUiModel? = null,
+        /** #89: PaiSeN's one line; while it shows, [compared] is null (D9). */
+        val coach: CoachLineUiModel? = null,
+        /** #91: the week's challenge, once picked. */
+        val challenge: ChallengeRowUiModel? = null,
+        /** The ways into the extras whose parts are on. */
+        val shelf: List<ShelfItemUiModel> = emptyList(),
     ) : HomeUiState
 }
 
@@ -174,6 +186,8 @@ class HomeViewModel(
     private val getHomeSummary: GetHomeSummaryUseCase = GetHomeSummaryUseCase(),
     private val getMoodRecap: GetMoodRecapUseCase = GetMoodRecapUseCase(),
     private val getWeeklyCheckIn: GetWeeklyCheckInUseCase = GetWeeklyCheckInUseCase(),
+    /** #82: what Today shows of play. None where nothing binds it, so a test sees Today as before. */
+    observeTodayPlay: ObserveTodayPlayUseCase? = null,
 ) : ViewModel() {
 
     private val period = MutableStateFlow(HomePeriod.Today)
@@ -193,8 +207,14 @@ class HomeViewModel(
             observeTransactions(LedgerSpan.Today),
             combine(observeLastImport(), observeImportRuns(), ::Pair),
             observeQueuedSlips(),
-            combine(observeScanning(), observeWatchedFolders(), moodByTimeOfDay, combine(weeklyCheckIn, weeklyTarget, weeklyNote, ::Triple), clockTicks) { scanning, folders, mood, weekly, _ ->
-                Extras(scanning, folders, mood, weekly.first, weekly.second, weekly.third)
+            combine(
+                observeScanning(),
+                observeWatchedFolders(),
+                moodByTimeOfDay,
+                combine(weeklyCheckIn, weeklyTarget, weeklyNote, observeTodayPlay?.invoke() ?: flowOf(TodayPlay.Off), ::Weekly),
+                clockTicks,
+            ) { scanning, folders, mood, weekly, _ ->
+                Extras(scanning, folders, mood, weekly.on, weekly.target, weekly.note, weekly.play)
             },
             // ShopNames too: naming a shop read as noise retitles its rows here without a restart.
             combine(observeTransactions(LedgerSpan.All), combine(categoryUpdates, subCategoryUpdates, ShopNames.names) { c, s, _ -> c to s }, period, ::Triple),
@@ -206,6 +226,8 @@ class HomeViewModel(
                 ?: return@combine HomeUiState.Loading
             val health = getImportHealth(sinceLastImportMillis, runs, stopSentences())
             val transactions = home.transactions
+            val onToday = chosen == HomePeriod.Today
+            val coach = if (onToday) extras.play.coachCard(today, categories) else null
             HomeUiState.Success(
                 heroLabel = "${chosen.spent()}${Separators.DOT}${if (chosen == HomePeriod.Today) today.dayLabel() else home.range.label()}",
                 summary = home.summary,
@@ -221,14 +243,20 @@ class HomeViewModel(
                 savedTodayMore = (home.savedToday.size - SAVED_TODAY_SHOWN).coerceAtLeast(0),
                 period = chosen,
                 amountLabel = chosen.spent(),
-                compared = home.usualDay?.asCompared(),
+                compared = home.usualDay?.asCompared().takeIf { coach == null },
                 moodCard = if (extras.mood && chosen == HomePeriod.Today) getMoodRecap(home.history, now)?.asMoodCard() else null,
                 weeklyCard = if (extras.weekly && chosen == HomePeriod.Today) {
                     getWeeklyCheckIn(home.history, today, extras.target, extras.note.on, extras.note.hiddenWeek)?.asCard(categories, extras.note.tone)
+                        ?.copy(guessMonday = extras.play.guessWeek?.toString())
                 } else {
                     null
                 },
                 target = home.target?.targetLine(categories),
+                play = if (onToday) extras.play.strip(queued.size) else null,
+                question = if (onToday) extras.play.questionCard() else null,
+                coach = coach,
+                challenge = if (onToday) extras.play.challengeRow(categories) else null,
+                shelf = if (onToday) extras.play.shelfItems() else emptyList(),
                 topCategories = home.byCategory
                     .take(TOP_CATEGORIES)
                     .map { TopCategoryUiModel(name = it.category.name, icon = it.category.icon) },
@@ -293,6 +321,8 @@ private fun Transaction.asSavedRow(categories: List<Category>, subCategories: Li
         row.copy(meta = listOfNotNull(occurredAtEpochMillis.dateIn(HomeTime).dayLabel(), row.parts.category).joinToString(Separators.DOT))
     }
 
+private data class Weekly(val on: Boolean, val target: WeeklyTarget?, val note: WeeklyNoteSettings, val play: TodayPlay)
+
 private data class Extras(
     val scanning: Boolean,
     val folders: List<WatchedFolder>,
@@ -300,6 +330,7 @@ private data class Extras(
     val weekly: Boolean,
     val target: WeeklyTarget?,
     val note: WeeklyNoteSettings,
+    val play: TodayPlay,
 )
 
 private fun UsualDay.asCompared() = ComparedUiModel(line = differencePhrase(), glyph = difference.trendGlyph())

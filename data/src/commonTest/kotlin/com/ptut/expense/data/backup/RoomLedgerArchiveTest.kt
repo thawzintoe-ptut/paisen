@@ -8,16 +8,22 @@ import com.ptut.expense.data.local.entity.CategoryEntity
 import com.ptut.expense.data.local.entity.RuleEntity
 import com.ptut.expense.data.local.entity.SubCategoryEntity
 import com.ptut.expense.data.local.entity.TransactionEntity
+import com.ptut.expense.data.repository.PlayTables
 import com.ptut.expense.data.repository.RoomLedgerArchive
+import com.ptut.expense.data.repository.RoomPlayBook
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
+import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.backup.BackupProblem
 import com.ptut.expense.domain.backup.BackupUnreadable
 import com.ptut.expense.domain.backup.LedgerBackup
 import com.ptut.expense.domain.home.FakeHomeBook
+import com.ptut.expense.domain.play.Goal
+import com.ptut.expense.domain.play.StampKind
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -182,6 +188,72 @@ class RoomLedgerArchiveTest {
     }
 
     @Test
+    fun `play's facts survive export and import`() = runTest {
+        val held = PlayTables()
+        val book = RoomPlayBook(held)
+        val monday = LocalDate(2026, 11, 23)
+        book.markCleared(monday, atEpochMillis = 10, stamp = StampKind.NightOwl)
+        book.answer(monday, "cat:food|cat:transport", right = true, pickedFirst = true, atEpochMillis = 11)
+        book.fixPaisenGuess(monday, Satang(120_000))
+        book.seal("2026-10", atEpochMillis = 12, on = monday)
+        book.saveGoal(Goal("g1", "Trip", Satang(500_000), "THB", monday, createdAtEpochMillis = 13))
+        val file = archive(holding = listOf(satangExact), play = held).export()
+
+        val empty = PlayTables()
+        archive(play = empty).restore(file)
+
+        assertEquals(held.dayRows.value, empty.dayRows.value)
+        assertEquals(held.weekRows.value, empty.weekRows.value)
+        assertEquals(held.monthRows.value, empty.monthRows.value)
+        assertEquals(held.stampRows.value, empty.stampRows.value)
+        assertEquals(held.goalRows.value, empty.goalRows.value)
+    }
+
+    @Test
+    fun `a day the phone marked before the import keeps its mark and takes the file's answer`() = runTest {
+        val monday = LocalDate(2026, 11, 23)
+        val held = PlayTables()
+        RoomPlayBook(held).answer(monday, "cat:food|cat:transport", right = false, pickedFirst = true, atEpochMillis = 11)
+        val file = archive(holding = listOf(satangExact), play = held).export()
+        // A fresh install clears its empty tray today before the reader reaches Import.
+        val fresh = PlayTables()
+        RoomPlayBook(fresh).markCleared(monday, atEpochMillis = 50, stamp = StampKind.Monday)
+
+        archive(play = fresh).restore(file)
+
+        val day = fresh.dayRows.value.getValue(monday.toString())
+        assertEquals(50L, day.clearedAtEpochMillis)
+        assertEquals("cat:food|cat:transport", day.questionKey)
+        assertEquals(true, day.pickedFirst)
+    }
+
+    @Test
+    fun `a restore keeps the phone's own turned card over the file's face-down one`() = runTest {
+        val monday = LocalDate(2026, 11, 23)
+        val older = PlayTables()
+        RoomPlayBook(older).markCleared(monday, atEpochMillis = 10, stamp = StampKind.Monday)
+        val file = archive(play = older).export()
+        val phone = PlayTables()
+        RoomPlayBook(phone).markCleared(monday, atEpochMillis = 10, stamp = StampKind.Monday)
+        RoomPlayBook(phone).reveal("Monday:2026-11-23", atEpochMillis = 20)
+
+        archive(play = phone).restore(file)
+
+        assertEquals(20L, phone.stampRows.value.getValue("Monday:2026-11-23").revealedAtEpochMillis)
+    }
+
+    @Test
+    fun `a format 4 file imports with no play`() = runTest {
+        val format4 = archive(holding = listOf(satangExact)).export().replace("\"format\": ${LedgerBackup.FORMAT}", "\"format\": 4")
+        val empty = PlayTables()
+
+        val report = archive(play = empty).restore(format4)
+
+        assertEquals(1, report.added)
+        assertTrue(empty.stampRows.value.isEmpty())
+    }
+
+    @Test
     fun `text that is not a ledger file is refused`() = runTest {
         assertFailsWith<BackupUnreadable> { archive().restore("""{"hello":"world"}""") }
     }
@@ -297,12 +369,14 @@ class RoomLedgerArchiveTest {
         table: FakeLedgerTable = FakeLedgerTable(),
         catalog: FakeCatalog? = null,
         homeBook: FakeHomeBook? = null,
+        play: PlayTables? = null,
     ) = RoomLedgerArchive(
         transactionDao = TransactionsOnDisk(holding) { mapOf("coffee" to "food") + catalog?.parents().orEmpty() },
         categoryDao = SeededCategories(setOf("food", "transport")),
         mergeDao = table,
         catalogDao = catalog,
         homeBook = homeBook,
+        playDao = play,
     )
 
     private fun row(

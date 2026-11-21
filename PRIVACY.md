@@ -76,6 +76,13 @@ For each shared group, these are stored with Google Firebase (Cloud Firestore) i
 - a PromptPay ID, if you add one
 - a push token for each phone, so it can be told when someone changes the group
 - which phone your account is signed in on (one phone at a time)
+- with Play on: the day a trip was marked ended, the word a member left on a payment (Thanks, Well
+  played or Cheers) and who left it, and whether you turned *Stamps and awards* off for groups. A
+  word you leave stores the id of the payment it sits on, and goes when you leave the group or
+  delete your account.
+
+Your own play (runs, stamps, guesses, challenges, goal jars and month seals) is worked out on your
+phone, is kept in your backup file, and is never part of a group.
 
 Every member of a group can see that group's data. Your own spending, slips and reports are not
 part of a shared group and never leave your phone.

@@ -27,7 +27,19 @@ import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.ledger.ObserveImportRunsUseCase
 import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
 import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
+import com.ptut.expense.domain.play.DayMark
+import com.ptut.expense.domain.play.FakePlayBook
+import com.ptut.expense.domain.play.ObservePlayOnUseCase
+import com.ptut.expense.domain.play.ObserveTodayPlayUseCase
+import com.ptut.expense.domain.play.PlayDay
+import com.ptut.expense.domain.play.PlayGate
+import com.ptut.expense.domain.play.StampKind
+import com.ptut.expense.domain.settings.AppChoices
+import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
+import com.ptut.expense.domain.settings.PlayChoices
+import com.ptut.expense.domain.settings.appSettings
 import com.ptut.expense.domain.slip.ObserveQueuedSlipsUseCase
+import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.domain.today.GetImportHealthUseCase
 import com.ptut.expense.domain.today.HomePeriod
 import com.ptut.expense.domain.today.ObserveScanningUseCase
@@ -35,11 +47,13 @@ import com.ptut.expense.locale.BurmeseCopy
 import com.ptut.expense.locale.EnglishCopy
 import com.ptut.expense.locale.NoteTone
 import com.ptut.expense.locale.ThaiCopy
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.toInstant
 import kotlin.test.Test
@@ -862,6 +876,7 @@ class HomeViewModelTest : ViewModelTest() {
         note: WeeklyNoteSettings = WeeklyNoteSettings(),
         scanning: Flow<Boolean> = flowOf(false),
         mood: Boolean = false,
+        play: PlayFixture? = null,
     ) = FakeLedger(transactions, sinceLastImportMillis, queued, all = transactions + saved, runs = runs).let { ledger ->
         HomeViewModel(
             observeTransactions = ObserveTransactionsUseCase(ledger),
@@ -878,7 +893,106 @@ class HomeViewModelTest : ViewModelTest() {
             clock = object : Clock {
                 override fun now(): Instant = now
             },
+            observeTodayPlay = play?.let { fixture ->
+                ObserveTodayPlayUseCase(
+                    playOn = ObservePlayOnUseCase(ObserveAppChoicesUseCase(appSettings(AppChoices(play = fixture.choices))), PlayGate(flagOn = true, debug = true)),
+                    book = fixture.book,
+                    homeToday = GetHomeTodayUseCase(
+                        object : Clock {
+                            override fun now(): Instant = now
+                        },
+                    ),
+                    transactions = ObserveTransactionsUseCase(ledger),
+                    work = Dispatchers.Unconfined,
+                )
+            },
         )
+    }
+
+    /** #85: what play holds for a test, and the reader's switches. */
+    private class PlayFixture(val book: FakePlayBook = FakePlayBook(), val choices: PlayChoices = PlayChoices())
+
+    private fun cleared(year: Int, month: Int, day: Int) = PlayDay(LocalDate(year, month, day), clearedAtEpochMillis = 1L)
+
+    @Test
+    fun theRunCardShowsTheRunTheWeekAndTheNextStep() = runTest {
+        // Friday 14 Aug: Wednesday and Thursday cleared, two slips waiting today.
+        val book = FakePlayBook(days = listOf(cleared(2026, 8, 12), cleared(2026, 8, 13)))
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            queued = listOf(slip("q1", "Cafe", ReviewReason.NewMerchant), slip("q2", "Shop", ReviewReason.NewMerchant)),
+            play = PlayFixture(book),
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+            val strip = assertNotNull((awaitItem() as HomeUiState.Success).play)
+            assertEquals("2 days", strip.runTitle)
+            assertEquals("Check 2 slips to make it 3 and turn over a stamp.", strip.nextLine)
+            assertEquals(listOf(DayMark.Missed, DayMark.Missed, DayMark.Cleared, DayMark.Cleared, DayMark.Today, DayMark.Ahead, DayMark.Ahead), strip.dots.map { it.mark })
+            assertEquals(2, strip.dots[4].waiting)
+            assertNull(strip.freezes)
+        }
+    }
+
+    @Test
+    fun aClearedTodayOffersItsFaceDownStamp() = runTest {
+        val book = FakePlayBook()
+        book.markCleared(LocalDate(2026, 8, 14), atEpochMillis = 1L, stamp = StampKind.Friday)
+        val viewModel = viewModel(transactions = emptyList(), play = PlayFixture(book))
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+            val strip = assertNotNull((awaitItem() as HomeUiState.Success).play)
+            assertEquals("Friday:2026-08-14", strip.stampId)
+            assertEquals("Tray clear today. A stamp is waiting.", strip.nextLine)
+        }
+    }
+
+    @Test
+    fun theCoachLineTakesComparedsPlaceAndPlayOffGivesComparedBack() = runTest {
+        val fridays = listOf(
+            spent("f1", at(2026, 7, 24, 12, 0), Satang(10_000)),
+            spent("f2", at(2026, 7, 31, 12, 0), Satang(10_000)),
+            spent("f3", at(2026, 8, 7, 12, 0), Satang(10_000)),
+        )
+        val today = listOf(spent("f4", at(2026, 8, 14, 10, 0), Satang(50_000)))
+
+        viewModel(transactions = today, saved = fridays, play = PlayFixture()).uiState.test {
+            val state = awaitSuccess()
+            assertEquals("Food & drink: ฿400 more than a usual Friday", state.coach?.text)
+            assertEquals("food", state.coach?.categoryId)
+            assertNull(state.compared)
+        }
+        viewModel(transactions = today, saved = fridays, play = PlayFixture(choices = PlayChoices(on = false))).uiState.test {
+            val state = awaitSuccess()
+            assertNull(state.coach)
+            assertNotNull(state.compared)
+        }
+    }
+
+    @Test
+    fun theWeeklyCardOpensLastWeeksGuessFirst() = runTest {
+        // Monday 10 Aug: the card is about the week of 3 Aug, with the weeks of 20 and 27 Jul behind it.
+        val earlier = listOf(
+            spent("w1", at(2026, 7, 21, 12, 0), Satang(100_000)),
+            spent("w2", at(2026, 7, 28, 12, 0), Satang(120_000)),
+            spent("w3", at(2026, 8, 4, 12, 0), Satang(110_000)),
+        )
+
+        viewModel(transactions = emptyList(), saved = earlier, weeklyCheckIn = true, now = bangkok(2026, 8, 10, 12), play = PlayFixture()).uiState.test {
+            assertEquals("2026-08-03", assertNotNull(awaitSuccess().weeklyCard).guessMonday)
+        }
+    }
+
+    @Test
+    fun theRunSwitchedOffDrawsNoRunCard() = runTest {
+        val viewModel = viewModel(transactions = emptyList(), play = PlayFixture(choices = PlayChoices(run = false)))
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+            assertNull((awaitItem() as HomeUiState.Success).play)
+        }
     }
 
     private fun transaction(amount: Satang, direction: Direction) = Transaction(

@@ -21,6 +21,8 @@ data class WeeklyCardUiModel(
     val categoryId: String?,
     /** #22: the line carries a note, so "That's not right" sits under it. */
     val showsNotRight: Boolean = false,
+    /** #86: last week's Monday while its guess waits; the card opens the guess first (D4). */
+    val guessMonday: String? = null,
 )
 
 /** #21: "Food: ฿1,900 of ฿2,500 this week" and how far along the bar is, full at the target. */

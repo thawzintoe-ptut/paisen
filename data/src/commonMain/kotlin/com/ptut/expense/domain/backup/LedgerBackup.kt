@@ -33,14 +33,16 @@ data class LedgerBackup(
      */
     val homeCurrency: String? = null,
     val homeZone: String? = null,
+    /** Format 5 (#82): play's facts on this phone. Absent in formats 1 to 4. */
+    val play: BackupPlay? = null,
 ) {
     /** The code every row without its own currency is in. */
     val homeCode: String get() = homeCurrency ?: HomeMoney.Baht.code
 
     companion object {
-        const val FORMAT: Int = 4
+        const val FORMAT: Int = 5
 
-        /** Formats 1 to 3 are format 4 with fewer fields, so all four still import. */
+        /** Formats 1 to 4 are format 5 with fewer fields, so all five still import. */
         val READABLE: IntRange = 1..FORMAT
 
         /**

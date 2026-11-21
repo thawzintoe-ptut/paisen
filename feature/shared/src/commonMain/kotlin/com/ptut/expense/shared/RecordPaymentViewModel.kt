@@ -98,6 +98,8 @@ class RecordPaymentViewModel(
     /** #197: a word, a haptic and Undo, as a v1 save gives. Null in a screen test's graph. */
     private val toasts: ToastMessages? = null,
     private val haptics: Haptics? = null,
+    /** #93: the settle plan's amount ("350.00"); it wins over what is owed. */
+    private val prefillAmount: String? = null,
 ) : ViewModel() {
 
     private val snapshot = observeSnapshot()
@@ -112,7 +114,8 @@ class RecordPaymentViewModel(
     init {
         viewModelScope.launch {
             val (group, owed) = between(snapshot.first { it.group(groupId) != null }) ?: return@launch
-            form.update { it.copy(amountText = if (owed > Satang.Zero) plain(owed, group) else "", loaded = true) }
+            val owedText = if (owed > Satang.Zero) plain(owed, group) else ""
+            form.update { it.copy(amountText = prefillAmount?.filter { c -> c.isDigit() || c == '.' } ?: owedText, loaded = true) }
             opened.value = form.value.content
         }
     }

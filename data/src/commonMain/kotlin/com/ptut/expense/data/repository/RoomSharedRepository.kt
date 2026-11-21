@@ -8,6 +8,7 @@ import com.ptut.expense.data.local.entity.ExpenseLinkEntity
 import com.ptut.expense.data.local.entity.ExpenseShareEntity
 import com.ptut.expense.data.local.entity.ExpenseVersionEntity
 import com.ptut.expense.data.local.entity.GroupMemberEntity
+import com.ptut.expense.data.local.entity.PaymentReactionEntity
 import com.ptut.expense.data.local.entity.PaymentRemovalEntity
 import com.ptut.expense.data.local.entity.PersonEntity
 import com.ptut.expense.data.local.entity.SharedGroupEntity
@@ -31,6 +32,7 @@ import com.ptut.expense.domain.shared.NewMember
 import com.ptut.expense.domain.shared.PaymentDraft
 import com.ptut.expense.domain.shared.Person
 import com.ptut.expense.domain.shared.Rate
+import com.ptut.expense.domain.shared.ReactionKind
 import com.ptut.expense.domain.shared.RepeatRule
 import com.ptut.expense.domain.shared.Share
 import com.ptut.expense.domain.shared.SharedGroup
@@ -86,10 +88,10 @@ class RoomSharedRepository(
             val byVersion = shares.groupBy { it.versionId }
             versions.mapNotNull { it.toDomain(byVersion[it.versionId].orEmpty()) }
         },
-        combine(dao.observePayments(), dao.observePaymentRemovals(), ::Pair),
+        combine(dao.observePayments(), dao.observePaymentRemovals(), dao.observeReactions(), ::Triple),
         dao.observeLinks(),
         dao.observeRepeats(),
-    ) { (groups, people), versions, (payments, removals), links, repeats ->
+    ) { (groups, people), versions, (payments, removals, reactions), links, repeats ->
         SharedSnapshot(
             groups = groups,
             people = people,
@@ -98,6 +100,7 @@ class RoomSharedRepository(
             links = links.associate { it.expenseId to it.transactionId },
             repeats = repeats.mapNotNull { it.toDomain() },
             paymentRemovals = removals.map { it.toDomain() },
+            reactions = reactions.mapNotNull { it.toDomain() },
         )
     }.stateIn(scope, SharingStarted.Eagerly, SharedSnapshot.Empty)
 
@@ -183,6 +186,28 @@ class RoomSharedRepository(
     override suspend fun setSimplifyDebts(groupId: String, on: Boolean) {
         dao.setSimplifyDebts(groupId, on)
         queueIfShared(groupId, KIND_GROUP, groupId)
+    }
+
+    override suspend fun setTripEnded(groupId: String, on: LocalDate?) {
+        dao.setEndedOn(groupId, on?.toString())
+        queueIfShared(groupId, KIND_TRIP_END, groupId)
+    }
+
+    override suspend fun setStampsOff(off: Boolean) {
+        val mine = snapshot.value.groups.mapNotNull { group -> group.meMemberId?.let { group.id to it } }
+        dao.setPlayOff(mine.map { it.second }, off)
+        mine.forEach { (groupId, memberId) -> queueIfShared(groupId, KIND_PLAY, memberId) }
+    }
+
+    override suspend fun react(groupId: String, paymentId: String, kind: ReactionKind?) {
+        val group = snapshot.value.group(groupId)?.takeIf { it.remote } ?: return
+        // The name this account claimed: a reaction is always signed by its own account.
+        val uid = group.meMemberId?.let(group::member)?.claimedByUid ?: return
+        val id = "${paymentId}_$uid"
+        // Taken back: the row stays as Gone until it is sent, so every other phone learns it went (#95).
+        if (kind == null && dao.reaction(id) == null) return
+        dao.upsertReaction(PaymentReactionEntity(id, groupId, paymentId, uid, kind?.name ?: REACTION_GONE, clock.now().toEpochMilliseconds()))
+        queueIfShared(groupId, KIND_REACTION, id)
     }
 
     override suspend fun saveExpense(draft: ExpenseDraft): String {

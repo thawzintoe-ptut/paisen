@@ -37,6 +37,7 @@ import com.ptut.expense.nav.PtutRoute
 import com.ptut.expense.nav.PtutShell
 import com.ptut.expense.nav.openProposed
 import com.ptut.expense.nav.pillSlot
+import com.ptut.expense.nav.playRoutes
 import com.ptut.expense.nav.recordRoutes
 import com.ptut.expense.nav.selectTab
 import com.ptut.expense.nav.settingsRoutes
@@ -205,6 +206,7 @@ private fun LedgerShell() {
     val koin = getKoin()
     val sharedSync = remember(koin) { koin.getOrNull<SharedSync>() }
     SyncOnResume(sharedSync)
+    PlayOnResume()
 
     // #123: the reader's Transparency switch, and whether this device can blur at all.
     val choices by koinInject<AppSettings>().choices.collectAsStateWithLifecycle()
@@ -240,6 +242,7 @@ private fun LedgerShell() {
             todayRoutes(navController, openAddSheet)
             sharedRoutes(navController)
             settingsRoutes(navController)
+            playRoutes(navController)
             recordRoutes(navController)
         }
     }

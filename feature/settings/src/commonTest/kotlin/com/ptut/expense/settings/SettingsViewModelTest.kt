@@ -9,6 +9,7 @@ import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.settings.DisableAppLockUseCase
 import com.ptut.expense.domain.settings.EnableAppLockUseCase
 import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
+import com.ptut.expense.domain.settings.PlayChoices
 import com.ptut.expense.domain.settings.SetMoodByTimeOfDayUseCase
 import com.ptut.expense.domain.settings.SetSlipOwnerUseCase
 import com.ptut.expense.domain.settings.SetTransparencyUseCase
@@ -69,6 +70,23 @@ class SettingsViewModelTest : ViewModelTest() {
             ),
             groups.map { group -> group.group to group.rows.map { it.name } },
         )
+    }
+
+    @Test
+    fun `the play row sits last in the daily card while the play flag is on`() = runTest {
+        val daily = viewModel(showPlay = true).uiState.value.groups.single { it.group == SettingsGroup.Daily }.rows
+
+        assertEquals(SettingsAction.Play, daily.last().id)
+        assertEquals("Stamps, guesses and challenges are on", daily.last().value)
+    }
+
+    @Test
+    fun `the play row says off when the master switch is off`() = runTest {
+        val settings = appSettings(AppChoices(play = PlayChoices(on = false)))
+
+        val play = viewModel(settings = settings, showPlay = true).uiState.value.rows.single { it.id == SettingsAction.Play }
+
+        assertEquals("Off: PaiSeN shows money only", play.value)
     }
 
     /** The address is the row's value, so a phone with no mail app still shows where to write. */
@@ -248,6 +266,7 @@ class SettingsViewModelTest : ViewModelTest() {
         cadence: SlipImportCadence = scheduled(),
         settings: AppSettings = appSettings(),
         canLock: Boolean = false,
+        showPlay: Boolean = false,
     ) = SettingsViewModel(
         observeLastImport = ObserveLastImportUseCase(FakeLedger(sinceLastImport = sinceLastImport)),
         observeChoices = ObserveAppChoicesUseCase(settings),
@@ -260,5 +279,6 @@ class SettingsViewModelTest : ViewModelTest() {
         disableAppLock = DisableAppLockUseCase(settings),
         switchNoteToneUseCase = SwitchNoteToneUseCase(settings),
         canLock = canLock,
+        showPlay = showPlay,
     )
 }

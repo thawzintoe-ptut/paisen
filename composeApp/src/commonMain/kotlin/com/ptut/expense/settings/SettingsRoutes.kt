@@ -46,4 +46,6 @@ fun SettingsAction.destination(): PtutRoute? = when (this) {
     SettingsAction.Feedback -> null
 
     SettingsAction.Licences -> PtutRoute.Licences
+
+    SettingsAction.Play -> PtutRoute.PlaySettings
 }

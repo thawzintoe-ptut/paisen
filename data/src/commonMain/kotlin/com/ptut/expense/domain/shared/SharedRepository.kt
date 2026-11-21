@@ -118,4 +118,13 @@ interface SharedRepository {
 
     /** Research finding 5: the newest row shown while the group is open. Local only, never synced. */
     suspend fun markSeen(groupId: String, atEpochMillis: Long)
+
+    /** #97 (D6): any member marks a trip ended, or opens it again with null. Expenses can still be added. */
+    suspend fun setTripEnded(groupId: String, on: LocalDate?) = Unit
+
+    /** #96 (D5): every group where this phone holds a name; the others never name an opted-out member. */
+    suspend fun setStampsOff(off: Boolean) = Unit
+
+    /** #95 (D10): this account's word on [paymentId]; null takes it back. Only in a shared group. */
+    suspend fun react(groupId: String, paymentId: String, kind: ReactionKind?) = Unit
 }

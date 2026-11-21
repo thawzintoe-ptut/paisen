@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asSkiaBitmap
+import com.ptut.expense.platform.share.ShareSheet
+import com.ptut.expense.platform.share.rememberShareSheet
 import com.ptut.expense.platform.toNSData
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.jetbrains.skia.EncodedImageFormat
@@ -19,7 +21,7 @@ import kotlin.coroutines.resume
  * #199 on iOS: Apple lets no app see which other apps are installed, so the QR is saved to Photos
  * and the share sheet offers it to whichever bank app the person uses.
  */
-private class IosBankApps : BankApps {
+private class IosBankApps(private val share: ShareSheet) : BankApps {
 
     override val canList: Boolean = false
 
@@ -37,16 +39,12 @@ private class IosBankApps : BankApps {
         }
     }
 
-    override fun sharePng(png: ByteArray, text: String?) {
-        val sheet = UIActivityViewController(activityItems = listOfNotNull(UIImage(data = png.toNSData()), text), applicationActivities = null)
-        var top = UIApplication.sharedApplication.keyWindow?.rootViewController
-        while (top?.presentedViewController != null) top = top.presentedViewController
-        top?.presentViewController(sheet, animated = true, completion = null)
-    }
+    /** #90, #97: one share sheet for every card, in :core:platform. */
+    override fun sharePng(png: ByteArray, text: String?) = share.sharePng(png, text)
 }
 
 @Composable
-actual fun rememberBankApps(): BankApps = remember { IosBankApps() }
-
-actual fun ImageBitmap.encodePng(): ByteArray =
-    Image.makeFromBitmap(asSkiaBitmap()).encodeToData(EncodedImageFormat.PNG)?.bytes ?: ByteArray(0)
+actual fun rememberBankApps(): BankApps {
+    val share = rememberShareSheet()
+    return remember(share) { IosBankApps(share) }
+}

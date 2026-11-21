@@ -17,6 +17,8 @@ import com.ptut.expense.domain.folders.FolderReadTally
 import com.ptut.expense.domain.folders.WatchedFolderRepository
 import com.ptut.expense.domain.ledger.FakeLedger
 import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.play.FakePlayBook
+import com.ptut.expense.domain.play.PlayBook
 import com.ptut.expense.domain.rules.RememberedMerchant
 import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.domain.settings.AppSettingsStore
@@ -198,6 +200,7 @@ private val databaseStandIns = module {
     single<CategoryRepository> { NoCategories }
     single<RuleRepository> { NoRules }
     single<SharedRepository> { NoShared }
+    single<PlayBook> { FakePlayBook() }
 }
 
 private object NoCategories : CategoryRepository {

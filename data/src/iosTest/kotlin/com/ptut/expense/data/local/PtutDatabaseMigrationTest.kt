@@ -94,6 +94,28 @@ class PtutDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun groupsFromSchema23RunOnWithEveryoneInPlayAndTheTablesAreEmpty() {
+        helper.createDatabase(23).use { connection ->
+            connection.execSQL(
+                "INSERT INTO shared_group (id, name, type, icon, simplifyDebts, createdAtEpochMillis, meMemberId) " +
+                    "VALUES ('g1', 'Chiang Mai', 'Trip', 'place', 1, $SEEDED_AT, 'm1')",
+            )
+            connection.execSQL(
+                "INSERT INTO group_member (id, groupId, name, personId, archived, createdAtEpochMillis) " +
+                    "VALUES ('m1', 'g1', 'You', NULL, 0, $SEEDED_AT)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(24).use { connection ->
+            assertEquals(listOf("g1|1"), connection.rows("SELECT id, endedOn IS NULL FROM shared_group"))
+            assertEquals(listOf("m1|0"), connection.rows("SELECT id, playOff FROM group_member"))
+            listOf("play_day", "play_week", "play_month", "play_stamp", "play_goal", "payment_reaction").forEach { table ->
+                assertEquals(listOf("0"), connection.rows("SELECT COUNT(*) FROM $table"), table)
+            }
+        }
+    }
+
     private fun SQLiteConnection.directions(): Map<String, String> = rows("SELECT id, direction FROM category ORDER BY id")
         .associate { row -> row.substringBefore('|') to row.substringAfter('|') }
 
@@ -117,7 +139,7 @@ class PtutDatabaseMigrationTest {
     }
 
     private companion object {
-        const val LATEST_SCHEMA = 23
+        const val LATEST_SCHEMA = 24
         const val SEEDED_AT = 1_700_000_000_000L
     }
 }

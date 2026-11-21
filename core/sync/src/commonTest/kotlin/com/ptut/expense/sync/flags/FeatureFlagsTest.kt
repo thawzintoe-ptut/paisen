@@ -75,6 +75,12 @@ class FeatureFlagsTest {
     }
 
     @Test
+    fun `play ships on and Remote Config can turn it off`() {
+        assertTrue(FeatureFlags.Defaults.isOn(Flag.Play, debug = false))
+        assertFalse(FeatureFlags(mapOf("play_on" to "false")).isOn(Flag.Play, debug = false))
+    }
+
+    @Test
     fun `the cache survives a round trip and a broken value reads as empty`() {
         val entries = mapOf("planned_on" to "false")
 

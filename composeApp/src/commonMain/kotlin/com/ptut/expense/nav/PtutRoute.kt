@@ -175,6 +175,8 @@ sealed interface PtutRoute {
         val transactionId: String? = null,
         val amount: String? = null,
         val description: String? = null,
+        /** #94: the member the wheel landed on, who pays. */
+        val payerMemberId: String? = null,
     ) : PtutRoute
 
     /** #184, opened by BALANCES on a group. */
@@ -183,7 +185,13 @@ sealed interface PtutRoute {
 
     /** #139: a payment between two members of a group. */
     @Serializable
-    data class RecordPayment(val groupId: String, val fromMemberId: String, val toMemberId: String) : PtutRoute
+    data class RecordPayment(
+        val groupId: String,
+        val fromMemberId: String,
+        val toMemberId: String,
+        /** #93: the settle plan's amount ("350.00"), which wins over what is owed. */
+        val amount: String? = null,
+    ) : PtutRoute
 
     /** #140: every group's timeline. One group's is the Activity tab of its screen (#64). */
     @Serializable
@@ -208,4 +216,56 @@ sealed interface PtutRoute {
     /** The licences of what ships inside the app: fonts, icons, myanmar-tools and Gemma's terms (#205, #207). */
     @Serializable
     data object Licences : PtutRoute
+
+    /** #83: Settings › Play (p22). */
+    @Serializable
+    data object PlaySettings : PtutRoute
+
+    /** #88: today's face-down stamp (p08), by its `<kind>:<ref>` id. */
+    @Serializable
+    data class StampReveal(val stampId: String) : PtutRoute
+
+    /** #88: the stamp book (p04). */
+    @Serializable
+    data object StampBook : PtutRoute
+
+    /** #87: today's question (p07). */
+    @Serializable
+    data object DailyQuestion : PtutRoute
+
+    /** #86: the guess for the week starting [monday], an ISO date (p01, p02). */
+    @Serializable
+    data class Guess(val monday: String) : PtutRoute
+
+    /** #94: the who-pays wheel for one group (p11). */
+    @Serializable
+    data class WhoPaysWheel(val groupId: String) : PtutRoute
+
+    /** #96: this month's awards in one group (p12). */
+    @Serializable
+    data class GroupAwards(val groupId: String) : PtutRoute
+
+    /** #97: an ended trip's recap (p13). */
+    @Serializable
+    data class TripRecap(val groupId: String) : PtutRoute
+
+    /** #92: a goal jar (p06): an existing one by [goalId], or a new one named and filled from a trip's estimate. */
+    @Serializable
+    data class GoalJar(val goalId: String? = null, val name: String? = null, val target: String? = null) : PtutRoute
+
+    /** #91: this week's challenge (p05). */
+    @Serializable
+    data object WeekChallenge : PtutRoute
+
+    /** #90: a month's story, ISO `yyyy-MM` (p03). */
+    @Serializable
+    data class MonthStory(val month: String) : PtutRoute
+
+    /** #98: close a month, ISO `yyyy-MM` (p20). */
+    @Serializable
+    data class CloseMonth(val month: String) : PtutRoute
+
+    /** #99: the money score (p21). */
+    @Serializable
+    data object MoneyScore : PtutRoute
 }

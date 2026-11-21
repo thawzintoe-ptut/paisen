@@ -16,20 +16,21 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 
-private const val ID_PREFIX = "repeat-"
-
 /**
  * #182 on iOS: one pending local notification per repeat. Without permission iOS keeps them and
  * shows nothing, so scheduling does not need to ask first.
  */
-private class IosRepeatReminders : RepeatReminders {
+private class IosRepeatReminders(kind: ReminderKind) : RepeatReminders {
+
+    /** "repeat-" for repeats, as before #83, so their pending requests keep their ids. */
+    private val prefix = "${kind.tag}-"
 
     override fun allowed(): Boolean = true
 
     override suspend fun replaceAll(plans: List<ReminderPlan>) {
         val center = UNUserNotificationCenter.currentNotificationCenter()
         // Only its own: a shared-group push posts through this centre too.
-        val ours = center.pendingIds().filter { it.startsWith(ID_PREFIX) }
+        val ours = center.pendingIds().filter { it.startsWith(prefix) }
         center.removePendingNotificationRequestsWithIdentifiers(ours)
         val now = Clock.System.now().toEpochMilliseconds()
         plans.filter { it.atEpochMillis > now }.forEach { plan ->
@@ -40,7 +41,7 @@ private class IosRepeatReminders : RepeatReminders {
             }
             val wait = (plan.atEpochMillis - now).milliseconds.toDouble(DurationUnit.SECONDS)
             val trigger = UNTimeIntervalNotificationTrigger.triggerWithTimeInterval(wait, repeats = false)
-            center.addNotificationRequest(UNNotificationRequest.requestWithIdentifier("$ID_PREFIX${plan.id}", content, trigger), withCompletionHandler = null)
+            center.addNotificationRequest(UNNotificationRequest.requestWithIdentifier("$prefix${plan.id}", content, trigger), withCompletionHandler = null)
         }
     }
 }
@@ -51,7 +52,7 @@ private suspend fun UNUserNotificationCenter.pendingIds(): List<String> = suspen
     }
 }
 
-actual fun repeatReminders(context: PtutDatabaseContext): RepeatReminders = IosRepeatReminders()
+actual fun repeatReminders(context: PtutDatabaseContext, kind: ReminderKind): RepeatReminders = IosRepeatReminders(kind)
 
 @Composable
 actual fun rememberNotificationAsk(): NotificationAsk = remember {

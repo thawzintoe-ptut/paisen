@@ -386,6 +386,18 @@ class AddExpenseViewModelTest : ViewModelTest() {
 
     private fun AddExpenseViewModel.ready() = assertIs<AddExpenseUiState.Ready>(uiState.value)
 
+    @Test
+    fun `the wheel's pick opens as the payer and a name no longer in the group falls back to you`() = runTest {
+        val picked = addExpenseViewModel(groupId = "g1", expenseId = null, repository = FakeSharedRepository(), categories = Category.seed(), payer = "aye")
+        val gone = addExpenseViewModel(groupId = "g1", expenseId = null, repository = FakeSharedRepository(), categories = Category.seed(), payer = "zed")
+        backgroundScope.launch { picked.uiState.collect {} }
+        backgroundScope.launch { gone.uiState.collect {} }
+        runCurrent()
+
+        assertEquals("aye", picked.ready().form.payerMemberId)
+        assertEquals("me", gone.ready().form.payerMemberId)
+    }
+
     /** The categories go in as the app hands them over: installed names already in the app's language. */
     private fun TestScope.titleSavedWithNoDescription(stored: List<Category>): String {
         val repository = FakeSharedRepository()
@@ -405,7 +417,7 @@ class AddExpenseViewModelTest : ViewModelTest() {
 }
 
 /** Add expense as Koin builds it, its use cases over [repository]. */
-private fun addExpenseViewModel(groupId: String, expenseId: String?, repository: FakeSharedRepository, categories: List<Category>, toasts: ToastMessages? = null) =
+private fun addExpenseViewModel(groupId: String, expenseId: String?, repository: FakeSharedRepository, categories: List<Category>, toasts: ToastMessages? = null, payer: String? = null) =
     AddExpenseViewModel(
         groupId = groupId,
         expenseId = expenseId,
@@ -417,4 +429,5 @@ private fun addExpenseViewModel(groupId: String, expenseId: String?, repository:
         removeExpense = RemoveSharedExpenseUseCase(repository),
         restoreExpense = RestoreSharedExpenseUseCase(repository),
         toasts = toasts,
+        prefillPayer = payer,
     )

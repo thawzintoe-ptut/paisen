@@ -12,6 +12,7 @@ import com.ptut.expense.data.local.entity.ExpenseLinkEntity
 import com.ptut.expense.data.local.entity.ExpenseShareEntity
 import com.ptut.expense.data.local.entity.ExpenseVersionEntity
 import com.ptut.expense.data.local.entity.GroupMemberEntity
+import com.ptut.expense.data.local.entity.PaymentReactionEntity
 import com.ptut.expense.data.local.entity.PaymentRemovalEntity
 import com.ptut.expense.data.local.entity.PersonEntity
 import com.ptut.expense.data.local.entity.RepeatRuleEntity
@@ -79,6 +80,56 @@ interface SharedDao {
 
     @Query("UPDATE shared_group SET simplifyDebts = :on WHERE id = :groupId")
     suspend fun setSimplifyDebts(groupId: String, on: Boolean)
+
+    /** #97: null opens the trip again. */
+    @Query("UPDATE shared_group SET endedOn = :endedOn WHERE id = :groupId")
+    suspend fun setEndedOn(groupId: String, endedOn: String?)
+
+    /** D5: this phone's names, in every group at once. */
+    @Query("UPDATE group_member SET playOff = :off WHERE id IN (:memberIds)")
+    suspend fun setPlayOff(memberIds: List<String>, off: Boolean)
+
+    /** #95 */
+    @Query("SELECT * FROM payment_reaction")
+    fun observeReactions(): Flow<List<PaymentReactionEntity>>
+
+    @Query("SELECT * FROM payment_reaction WHERE id = :id")
+    suspend fun reaction(id: String): PaymentReactionEntity?
+
+    @Upsert
+    suspend fun upsertReaction(reaction: PaymentReactionEntity)
+
+    @Query("SELECT * FROM payment_reaction WHERE groupId = :groupId")
+    suspend fun reactionsOf(groupId: String): List<PaymentReactionEntity>
+
+    @Query("DELETE FROM payment_reaction WHERE id IN (:ids)")
+    suspend fun deleteReactions(ids: List<String>)
+
+    @Upsert
+    suspend fun upsertReactions(rows: List<PaymentReactionEntity>)
+
+    /**
+     * #95: the group's reactions as the server lists them, in one transaction. [pending] are this
+     * phone's own not yet sent, which the pull leaves as they are. Only rows that differ are written:
+     * every write wakes the snapshot, and the deletes go by id so no statement binds more than SQLite allows.
+     */
+    @Transaction
+    suspend fun replaceReactions(groupId: String, pulled: List<PaymentReactionEntity>, pending: Set<String>) {
+        val stored = reactionsOf(groupId).associateBy { it.id }
+        val kept = pulled.filterNot { it.id in pending }
+        val gone = stored.keys - kept.map { it.id }.toSet() - pending
+        gone.chunked(SQLITE_VARIABLES).forEach { deleteReactions(it) }
+        val changed = kept.filter { it != stored[it.id] }
+        if (changed.isNotEmpty()) upsertReactions(changed)
+    }
+
+    /** #95: what the server stamped since the last pull: [gone] were taken back, and an unchanged row is not written again. */
+    @Transaction
+    suspend fun receiveReactions(changed: List<PaymentReactionEntity>, gone: List<String>) {
+        gone.chunked(SQLITE_VARIABLES).forEach { deleteReactions(it) }
+        val fresh = changed.filter { it != reaction(it.id) }
+        if (fresh.isNotEmpty()) upsertReactions(fresh)
+    }
 
     @Query("UPDATE shared_group SET name = :name, type = :type, icon = :icon WHERE id = :groupId")
     suspend fun editGroup(groupId: String, name: String, type: String, icon: String)

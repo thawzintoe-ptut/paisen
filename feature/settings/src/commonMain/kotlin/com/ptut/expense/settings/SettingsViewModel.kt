@@ -36,7 +36,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** Which row. It is the row's identity as well as the destination it opens. */
-enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, HomeCurrency, Assistant, Feedback, Licences }
+enum class SettingsAction { SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, HomeCurrency, Assistant, Feedback, Licences, Play }
 
 /** Where Send feedback writes to. The same address PRIVACY.md and SECURITY.md give. */
 const val FEEDBACK_ADDRESS = "developer.ptut@gmail.com"
@@ -110,6 +110,8 @@ class SettingsViewModel(
     private val showNoteTone: Boolean = false,
     /** #41: the home currency row, in builds that offer other currencies. */
     private val showHomeCurrency: Boolean = false,
+    /** #83: Settings › Play, while Remote Config's play switch is on. */
+    private val showPlay: Boolean = false,
 ) : ViewModel() {
 
     fun setMoodByTimeOfDay(on: Boolean) = saveMoodByTimeOfDay(on)
@@ -252,6 +254,15 @@ class SettingsViewModel(
             icon = "lock",
             switchedOn = choices.appLock,
         ).takeIf { canLock },
+        // #83: a screen of its own (p22), so its master switch sits there and not on this row.
+        AppText.copy.play.settings.let { play ->
+            SettingsRowUiModel(
+                id = SettingsAction.Play,
+                name = play.title,
+                value = if (choices.play.on) play.masterOn else play.masterOff,
+                icon = "local_activity",
+            ).takeIf { showPlay }
+        },
     )
 
     private fun regionRows(text: SettingsCopy) = listOfNotNull(

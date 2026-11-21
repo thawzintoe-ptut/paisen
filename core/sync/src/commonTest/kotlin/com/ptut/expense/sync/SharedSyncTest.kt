@@ -238,12 +238,19 @@ class SharedSyncTest {
     }
 
     @Test
-    fun `leaving lets go of the name and the group in one commit`() = runTest {
+    fun `leaving lets go of the name and its opt-out and its reactions and the group in one commit`() = runTest {
         holds("g1")
+        firestore.collections["groups/g1/reactions"] = listOf(reactionDoc("p1", UID), reactionDoc("p1", "uid-2"))
 
         sync.leaveGroup("g1")
 
-        assertEquals(listOf("commit update groups/g1/members/me-g1 [claimedByUid, promptPay], delete groups/g1/pay/me-g1, remove groups/g1 memberUids [$UID]"), firestore.writes)
+        assertEquals(
+            listOf(
+                "commit update groups/g1/members/me-g1 [claimedByUid, promptPay], delete groups/g1/pay/me-g1, delete groups/g1/play/me-g1, " +
+                    "delete groups/g1/reactions/p1_$UID, remove groups/g1 memberUids [$UID]",
+            ),
+            firestore.writes,
+        )
         assertNull(dao.groups["g1"])
     }
 
@@ -290,18 +297,20 @@ class SharedSyncTest {
     }
 
     @Test
-    fun `deleting for everyone clears every PromptPay ID and stamps the time in one commit`() = runTest {
+    fun `deleting for everyone clears every PromptPay ID and opt-out and this account's reactions and stamps the time in one commit`() = runTest {
         holds("g1")
         createdHere("g1")
         firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), heldDoc("bo", "uid-2", PROMPT_PAY))
         firestore.collections["groups/g1/pay"] = listOf(payDoc(ME, UID))
+        firestore.collections["groups/g1/play"] = listOf(FirestoreDoc("bo", "groups/g1/play/bo", mapOf("awardsOff" to true, "claimedByUid" to "uid-2")))
+        firestore.collections["groups/g1/reactions"] = listOf(reactionDoc("p1", UID), reactionDoc("p1", "uid-2"))
 
         sync.deleteForEveryone("g1")
 
         assertEquals(
             listOf(
                 "commit update invites/C1 [active, names], update groups/g1 [deleted, inviteActive] stamp deletedAt, " +
-                    "update groups/g1/members/bo [promptPay], delete groups/g1/pay/$ME",
+                    "update groups/g1/members/bo [promptPay], delete groups/g1/pay/$ME, delete groups/g1/play/bo, delete groups/g1/reactions/p1_$UID",
             ),
             firestore.writes,
         )
@@ -317,7 +326,7 @@ class SharedSyncTest {
 
         assertEquals(
             listOf(
-                "commit update groups/g1/members/me-g1 [claimedByUid, promptPay], delete groups/g1/pay/me-g1, remove groups/g1 memberUids [$UID] set {inviteActive=false}",
+                "commit update groups/g1/members/me-g1 [claimedByUid, promptPay], delete groups/g1/pay/me-g1, delete groups/g1/play/me-g1, remove groups/g1 memberUids [$UID] set {inviteActive=false}",
                 "patch invites/C1",
                 "delete sessions/$UID",
             ),
@@ -333,7 +342,7 @@ class SharedSyncTest {
         sync.deleteAccount()
 
         assertEquals(
-            listOf("commit update groups/g1/members/me-g1 [claimedByUid, promptPay], delete groups/g1/pay/me-g1, remove groups/g1 memberUids [$UID]", "delete sessions/$UID"),
+            listOf("commit update groups/g1/members/me-g1 [claimedByUid, promptPay], delete groups/g1/pay/me-g1, delete groups/g1/play/me-g1, remove groups/g1 memberUids [$UID]", "delete sessions/$UID"),
             firestore.writes,
         )
     }

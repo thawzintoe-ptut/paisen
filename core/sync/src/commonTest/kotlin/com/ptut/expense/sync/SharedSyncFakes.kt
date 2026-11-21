@@ -6,6 +6,7 @@ import com.ptut.expense.data.local.entity.ExpenseLinkEntity
 import com.ptut.expense.data.local.entity.ExpenseShareEntity
 import com.ptut.expense.data.local.entity.ExpenseVersionEntity
 import com.ptut.expense.data.local.entity.GroupMemberEntity
+import com.ptut.expense.data.local.entity.PaymentReactionEntity
 import com.ptut.expense.data.local.entity.PaymentRemovalEntity
 import com.ptut.expense.data.local.entity.PersonEntity
 import com.ptut.expense.data.local.entity.RepeatRuleEntity
@@ -144,11 +145,13 @@ internal class FakeSharedDao : SharedDao {
     val payments = mutableMapOf<String, SharedPaymentEntity>()
     val removals = mutableMapOf<String, PaymentRemovalEntity>()
     val repeats = mutableMapOf<String, RepeatRuleEntity>()
+    val reactions = mutableMapOf<String, PaymentReactionEntity>()
     val outboxRows = MutableStateFlow<List<SyncOutboxEntity>>(emptyList())
     var groupWrites = 0
     var memberWrites = 0
     var marks = 0
     var logWrites = 0
+    var reactionWrites = 0
 
     override fun observeOutbox(): Flow<List<SyncOutboxEntity>> = outboxRows
 
@@ -272,6 +275,33 @@ internal class FakeSharedDao : SharedDao {
     override fun observeLinks(): Flow<List<ExpenseLinkEntity>> = error("unused")
 
     override fun observePaymentRemovals(): Flow<List<PaymentRemovalEntity>> = error("unused")
+
+    override suspend fun setEndedOn(groupId: String, endedOn: String?) {
+        groups[groupId]?.let { groups[groupId] = it.copy(endedOn = endedOn) }
+    }
+
+    override suspend fun setPlayOff(memberIds: List<String>, off: Boolean) {
+        memberIds.forEach { id -> members[id]?.let { members[id] = it.copy(playOff = off) } }
+    }
+
+    override fun observeReactions(): Flow<List<PaymentReactionEntity>> = error("unused")
+
+    override suspend fun reaction(id: String): PaymentReactionEntity? = reactions[id]
+
+    override suspend fun upsertReaction(reaction: PaymentReactionEntity) {
+        reactions[reaction.id] = reaction
+    }
+
+    override suspend fun reactionsOf(groupId: String): List<PaymentReactionEntity> = reactions.values.filter { it.groupId == groupId }
+
+    override suspend fun deleteReactions(ids: List<String>) {
+        ids.forEach { reactions.remove(it) }
+    }
+
+    override suspend fun upsertReactions(rows: List<PaymentReactionEntity>) {
+        reactionWrites++
+        rows.forEach { reactions[it.id] = it }
+    }
 
     override suspend fun insertGroup(group: SharedGroupEntity) = error("unused")
 

@@ -6,7 +6,10 @@ import com.ptut.expense.data.repository.KIND_GROUP
 import com.ptut.expense.data.repository.KIND_MEMBER
 import com.ptut.expense.data.repository.KIND_PAYMENT
 import com.ptut.expense.data.repository.KIND_PAYMENT_REMOVAL
+import com.ptut.expense.data.repository.KIND_PLAY
+import com.ptut.expense.data.repository.KIND_REACTION
 import com.ptut.expense.data.repository.KIND_REPEAT
+import com.ptut.expense.data.repository.KIND_TRIP_END
 import com.ptut.expense.data.repository.KIND_VERSION
 import com.ptut.expense.data.repository.toDomain
 import com.ptut.expense.domain.shared.Member
@@ -166,7 +169,7 @@ internal class OutboxPusher(
         }
         if (dao.group(groupId)?.inviteActive == true) newInvite(groupId)
         // One commit: the rules refuse a claimed name archived without its account taken out.
-        firestore.commit(firestore.leaveWrites(groupId, memberId, holder, archive = true))
+        firestore.commit(firestore.leaveWrites(groupId, memberId, holder, firestore.reactionIdsOf(groupId, holder), archive = true))
     }
 
     /** The notice for what went up, or null when it was already there, tells nobody, or [notify] is off. */
@@ -204,6 +207,31 @@ internal class OutboxPusher(
                 notices?.takeIf { created }?.paymentRemoval(removal)
             }
 
+            // #97: only the end, so a patch from this build never carries a key older rules refuse.
+            KIND_TRIP_END -> {
+                firestore.patch("groups/${group.id}", mapOf("endedOn" to group.endedOn?.toString()))
+                null
+            }
+
+            // #96 (D5): on the name this account holds; the rules refuse it on anyone else's.
+            KIND_PLAY -> group.member(row.rowId)?.takeIf { it.claimedByUid == uid }?.let { member ->
+                firestore.set("groups/${group.id}/play/${member.id}", mapOf("awardsOff" to member.playOff, "claimedByUid" to uid))
+                null
+            }
+
+            // #95 (D16): no notice for a reaction. One taken back goes up as Gone, so every pull since learns
+            // it went; a row gone from Room altogether has nothing to say, so its document goes too.
+            KIND_REACTION -> {
+                val path = "groups/${group.id}/reactions/${row.rowId}"
+                val reaction = dao.reaction(row.rowId)
+                if (reaction == null) {
+                    firestore.delete(path)
+                } else {
+                    firestore.upsertStamped(path, reaction.fields(), SYNCED_AT)
+                }
+                null
+            }
+
             // #182: the template only. Each phone keeps its own progress and reminder choice. The
             // creation time it sends is the stored one, which the rules require to stay put.
             KIND_REPEAT -> dao.repeat(row.rowId)?.toDomain()?.let { rule ->
@@ -232,17 +260,26 @@ internal suspend fun SharedDao.groupOf(groupId: String): SharedGroup? = group(gr
 /**
  * [uid] lets go of [memberId] in [groupId] and leaves it, in one commit; with [archive] the name
  * is removed too, which the rules allow only together with its account going. [closeInvite]: the
- * creator leaving for good switches the invite off, since nobody else can (L2).
+ * creator leaving for good switches the invite off, since nobody else can (L2). [reactionIds] are
+ * [uid]'s reactions there, which go with the account (#95).
  */
-internal fun Firestore.leaveWrites(groupId: String, memberId: String?, uid: String, archive: Boolean = false, closeInvite: Boolean = false): List<JsonObject> =
+internal fun Firestore.leaveWrites(
+    groupId: String,
+    memberId: String?,
+    uid: String,
+    reactionIds: List<String> = emptyList(),
+    archive: Boolean = false,
+    closeInvite: Boolean = false,
+): List<JsonObject> =
     listOfNotNull(
         memberId?.let {
             val removed = if (archive) mapOf("archived" to true) else emptyMap()
             updateWrite("groups/$groupId/members/$it", removed + mapOf("claimedByUid" to null, "promptPay" to null))
         },
-        // M5: the name's PromptPay ID goes with its claim; the rules let a missing one pass.
+        // M5: the name's PromptPay ID and D5 opt-out go with its claim; the rules let a missing one pass.
         memberId?.let { deleteWrite("groups/$groupId/pay/$it") },
-        removeWrite("groups/$groupId", "memberUids", listOf(uid), alsoSet = if (closeInvite) mapOf("inviteActive" to false) else emptyMap()),
-    )
+        memberId?.let { deleteWrite("groups/$groupId/play/$it") },
+    ) + reactionIds.map { deleteWrite("groups/$groupId/reactions/$it") } +
+        removeWrite("groups/$groupId", "memberUids", listOf(uid), alsoSet = if (closeInvite) mapOf("inviteActive" to false) else emptyMap())
 
 private fun FirestoreException.isPermanent(): Boolean = FirestoreStatus.isPermanent(status)

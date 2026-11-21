@@ -5,6 +5,7 @@ import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.settings.AppChoices
 import com.ptut.expense.domain.settings.AppSettingsStore
+import com.ptut.expense.domain.settings.PlayChoices
 import com.ptut.expense.domain.slip.SlipOwner
 import com.ptut.expense.locale.NoteTone
 import kotlin.time.Duration.Companion.days
@@ -28,6 +29,13 @@ private const val HIDDEN_NOTE_WEEK = "hidden-note-week"
 private const val ADD_CURRENCY = "add-currency"
 private const val HOME_CURRENCY = "home-currency"
 private const val HOME_ZONE = "home-zone"
+private const val PLAY_ON = "play-on"
+private const val PLAY_RUN = "play-run"
+private const val PLAY_GUESS = "play-guess"
+private const val PLAY_CHALLENGES = "play-challenges"
+private const val PLAY_GROUP_STAMPS = "play-group-stamps"
+private const val PLAY_SHARE_AMOUNTS = "play-share-amounts"
+private const val PLAY_WEEKLY_REMINDER = "play-weekly-reminder"
 
 /**
  * Every import choice in its own file, so clearing it by hand puts the shipped defaults back.
@@ -63,6 +71,17 @@ class SharedPreferencesAppSettingsStore(context: Context) : AppSettingsStore {
             hiddenNoteWeek = choices.getString(HIDDEN_NOTE_WEEK, null),
             homeCurrency = choices.getString(HOME_CURRENCY, null),
             homeZone = choices.getString(HOME_ZONE, null),
+            play = shipped.play.let { play ->
+                PlayChoices(
+                    on = choices.getBoolean(PLAY_ON, play.on),
+                    run = choices.getBoolean(PLAY_RUN, play.run),
+                    guess = choices.getBoolean(PLAY_GUESS, play.guess),
+                    challenges = choices.getBoolean(PLAY_CHALLENGES, play.challenges),
+                    groupStamps = choices.getBoolean(PLAY_GROUP_STAMPS, play.groupStamps),
+                    shareAmounts = choices.getBoolean(PLAY_SHARE_AMOUNTS, play.shareAmounts),
+                    weeklyReminder = choices.getBoolean(PLAY_WEEKLY_REMINDER, play.weeklyReminder),
+                )
+            },
         )
     }
 
@@ -84,6 +103,13 @@ class SharedPreferencesAppSettingsStore(context: Context) : AppSettingsStore {
             .remove(ADD_CURRENCY)
             .putString(HOME_CURRENCY, choices.homeCurrency)
             .putString(HOME_ZONE, choices.homeZone)
+            .putBoolean(PLAY_ON, choices.play.on)
+            .putBoolean(PLAY_RUN, choices.play.run)
+            .putBoolean(PLAY_GUESS, choices.play.guess)
+            .putBoolean(PLAY_CHALLENGES, choices.play.challenges)
+            .putBoolean(PLAY_GROUP_STAMPS, choices.play.groupStamps)
+            .putBoolean(PLAY_SHARE_AMOUNTS, choices.play.shareAmounts)
+            .putBoolean(PLAY_WEEKLY_REMINDER, choices.play.weeklyReminder)
             .apply()
     }
 }

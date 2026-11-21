@@ -27,4 +27,16 @@ fun interface NotificationAsk {
 @Composable
 expect fun rememberNotificationAsk(): NotificationAsk
 
-expect fun repeatReminders(context: PtutDatabaseContext): RepeatReminders
+/**
+ * [kind] names the set [RepeatReminders.replaceAll] replaces and its channel, so the repeat reminders
+ * and #83's weekly play reminder never cancel each other. Repeats keep the ids they always had.
+ */
+expect fun repeatReminders(context: PtutDatabaseContext, kind: ReminderKind = ReminderKind.Repeat): RepeatReminders
+
+/** The two sets of local reminders, each replaced on its own. */
+enum class ReminderKind(val tag: String) {
+    Repeat("repeat"),
+
+    /** #83 (D15): Monday 09:00, while a guess is waiting. */
+    Play("play"),
+}

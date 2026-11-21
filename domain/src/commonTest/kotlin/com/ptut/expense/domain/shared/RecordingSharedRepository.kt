@@ -97,4 +97,6 @@ class RecordingSharedRepository(snapshot: SharedSnapshot = SharedSnapshot.Empty)
     override suspend fun markSeen(groupId: String, atEpochMillis: Long) = notThisTest()
 
     private fun notThisTest(): Nothing = error("Not expected in this test")
+
+    override suspend fun setStampsOff(off: Boolean) = write("setStampsOff $off")
 }

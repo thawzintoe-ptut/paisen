@@ -28,4 +28,6 @@ data class SharedGroupEntity(
     val lastSeenAtEpochMillis: Long? = null,
     /** Schema 22 (#48): what the group counts in, set when it is made and never changed. Every group before it is baht. */
     @ColumnInfo(defaultValue = "THB") val currency: String = "THB",
+    /** Schema 24 (#97): the ISO day a member marked the trip ended, or null while it runs. Synced. */
+    val endedOn: String? = null,
 )

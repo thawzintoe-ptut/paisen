@@ -18,6 +18,9 @@ value class Satang(val raw: Long) : Comparable<Satang> {
 
     operator fun unaryMinus(): Satang = Satang(-raw)
 
+    /** The size of a difference, whichever way it went. */
+    fun abs(): Satang = if (raw < 0L) Satang(-raw) else this
+
     override fun compareTo(other: Satang): Int = raw.compareTo(other.raw)
 
     /**

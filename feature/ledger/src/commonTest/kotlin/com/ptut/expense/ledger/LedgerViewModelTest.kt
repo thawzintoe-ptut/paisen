@@ -316,6 +316,18 @@ class LedgerViewModelTest : ViewModelTest() {
 
     private fun viewModel(rows: List<Transaction>) = LedgerViewModel(FilterLedgerUseCase(FakeLedger(rows), Dispatchers.Main), work = Dispatchers.Main)
 
+    @Test
+    fun `a sealed month carries its mark and says so`() = runTest {
+        val viewModel = LedgerViewModel(FilterLedgerUseCase(FakeLedger(threeMonths), Dispatchers.Main), work = Dispatchers.Main, sealedMonths = flowOf(setOf("2026-07")))
+
+        viewModel.uiState.test {
+            val months = awaitSuccess().months
+            assertEquals(listOf(false, true, false), months.map { it.sealed })
+            assertEquals("Go to July 2026, sealed", months[1].spoken)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     /**
      * Every assertion runs inside one subscription. Re-entering `test { }` per filter would read
      * the StateFlow's retained value before the change landed, and the assertion would pass or

@@ -27,22 +27,25 @@ import kotlinx.coroutines.CompletableDeferred
 import java.util.concurrent.TimeUnit
 
 /** #182 on Android: one WorkManager job per repeat, posting a local notification when it runs. */
-private class AndroidRepeatReminders(private val context: Context) : RepeatReminders {
+private class AndroidRepeatReminders(private val context: Context, private val kind: ReminderKind) : RepeatReminders {
+
+    /** "repeat-reminder" for repeats, as before #83, so nothing scheduled by an older build is orphaned. */
+    private val tag = "${kind.tag}$TAG_SUFFIX"
 
     override fun allowed(): Boolean = context.notificationsAllowed()
 
     override suspend fun replaceAll(plans: List<ReminderPlan>) {
         val work = WorkManager.getInstance(context)
-        work.cancelAllWorkByTag(TAG)
+        work.cancelAllWorkByTag(tag)
         val now = System.currentTimeMillis()
         plans.filter { it.atEpochMillis > now }.forEach { plan ->
             work.enqueueUniqueWork(
-                "$TAG-${plan.id}",
+                "$tag-${plan.id}",
                 ExistingWorkPolicy.REPLACE,
                 OneTimeWorkRequestBuilder<RepeatReminderWorker>()
                     .setInitialDelay(plan.atEpochMillis - now, TimeUnit.MILLISECONDS)
-                    .setInputData(workDataOf(KEY_ID to plan.id, KEY_TITLE to plan.title, KEY_BODY to plan.body))
-                    .addTag(TAG)
+                    .setInputData(workDataOf(KEY_ID to plan.id, KEY_TITLE to plan.title, KEY_BODY to plan.body, KEY_KIND to kind.name))
+                    .addTag(tag)
                     .build(),
             )
         }
@@ -56,12 +59,15 @@ class RepeatReminderWorker(context: Context, parameters: WorkerParameters) : Cor
         val context = applicationContext
         if (!context.notificationsAllowed()) return Result.success()
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel(CHANNEL, AppText.copy.folders.repeatsChannel, NotificationManager.IMPORTANCE_DEFAULT))
+        val kind = ReminderKind.entries.firstOrNull { it.name == inputData.getString(KEY_KIND) } ?: ReminderKind.Repeat
+        val channel = if (kind == ReminderKind.Play) PLAY_CHANNEL else CHANNEL
+        val channelName = if (kind == ReminderKind.Play) AppText.copy.play.reminder.channel else AppText.copy.folders.repeatsChannel
+        manager.createNotificationChannel(NotificationChannel(channel, channelName, NotificationManager.IMPORTANCE_DEFAULT))
         val open = context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
             PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE)
         }
         val id = inputData.getString(KEY_ID).orEmpty()
-        val notification = NotificationCompat.Builder(context, CHANNEL)
+        val notification = NotificationCompat.Builder(context, channel)
             .setSmallIcon(context.applicationInfo.icon)
             .setContentTitle(inputData.getString(KEY_TITLE))
             .setContentText(inputData.getString(KEY_BODY))
@@ -80,7 +86,7 @@ fun Context.notificationsAllowed(): Boolean {
     return granted && NotificationManagerCompat.from(this).areNotificationsEnabled()
 }
 
-actual fun repeatReminders(context: PtutDatabaseContext): RepeatReminders = AndroidRepeatReminders(context.applicationContext)
+actual fun repeatReminders(context: PtutDatabaseContext, kind: ReminderKind): RepeatReminders = AndroidRepeatReminders(context.applicationContext, kind)
 
 /** Android 13 and later ask; older versions only have the app-wide switch in system settings. */
 @Composable
@@ -103,8 +109,10 @@ actual fun rememberNotificationAsk(): NotificationAsk {
     }
 }
 
-private const val TAG = "repeat-reminder"
+private const val TAG_SUFFIX = "-reminder"
 private const val CHANNEL = "repeats"
+private const val PLAY_CHANNEL = "play"
+private const val KEY_KIND = "kind"
 private const val KEY_ID = "id"
 private const val KEY_TITLE = "title"
 private const val KEY_BODY = "body"

@@ -11,6 +11,7 @@ import com.ptut.expense.data.local.dao.ImportRunDao
 import com.ptut.expense.data.local.dao.ImportedSlipDao
 import com.ptut.expense.data.local.dao.LedgerMergeDao
 import com.ptut.expense.data.local.dao.LedgerMetaDao
+import com.ptut.expense.data.local.dao.PlayDao
 import com.ptut.expense.data.local.dao.QueuedSlipDao
 import com.ptut.expense.data.local.dao.RuleDao
 import com.ptut.expense.data.local.dao.SharedDao
@@ -28,8 +29,14 @@ import com.ptut.expense.data.local.entity.GroupMemberEntity
 import com.ptut.expense.data.local.entity.ImportRunEntity
 import com.ptut.expense.data.local.entity.ImportedSlipEntity
 import com.ptut.expense.data.local.entity.LedgerMetaEntity
+import com.ptut.expense.data.local.entity.PaymentReactionEntity
 import com.ptut.expense.data.local.entity.PaymentRemovalEntity
 import com.ptut.expense.data.local.entity.PersonEntity
+import com.ptut.expense.data.local.entity.PlayDayEntity
+import com.ptut.expense.data.local.entity.PlayGoalEntity
+import com.ptut.expense.data.local.entity.PlayMonthEntity
+import com.ptut.expense.data.local.entity.PlayStampEntity
+import com.ptut.expense.data.local.entity.PlayWeekEntity
 import com.ptut.expense.data.local.entity.QueuedSlipEntity
 import com.ptut.expense.data.local.entity.RepeatRuleEntity
 import com.ptut.expense.data.local.entity.RuleEntity
@@ -70,8 +77,14 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         DeletedBuiltInEntity::class,
         PaymentRemovalEntity::class,
         LedgerMetaEntity::class,
+        PlayDayEntity::class,
+        PlayWeekEntity::class,
+        PlayMonthEntity::class,
+        PlayStampEntity::class,
+        PlayGoalEntity::class,
+        PaymentReactionEntity::class,
     ],
-    version = 23,
+    version = 24,
     // Schema 2 adds the nullable transactions.editedAt, and schema 4 the nullable memo and
     // slipAmountMinor beside it. Schema 5 adds the watched_folder table whole. A nullable column
     // with no default, and a new table, are the shapes Room migrates on its own. Schema 6 is
@@ -110,6 +123,9 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         AutoMigration(from = 21, to = 22),
         // import_run.failureKind is nullable, so rows journalled before it keep their text alone.
         AutoMigration(from = 22, to = 23),
+        // #82 adds the five play tables and payment_reaction whole, the nullable shared_group.endedOn,
+        // and group_member.playOff with a default that is right for every member already there.
+        AutoMigration(from = 23, to = 24),
     ],
     exportSchema = true,
 )
@@ -140,6 +156,8 @@ abstract class PtutDatabase : RoomDatabase() {
     abstract fun catalogBackupDao(): CatalogBackupDao
 
     abstract fun ledgerMetaDao(): LedgerMetaDao
+
+    abstract fun playDao(): PlayDao
 }
 
 /** KSP writes the actual for each target; there is nothing to implement by hand. */

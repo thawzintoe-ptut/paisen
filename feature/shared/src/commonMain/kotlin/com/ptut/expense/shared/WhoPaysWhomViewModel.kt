@@ -6,17 +6,21 @@ import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.shared.GetSettlementUseCase
 import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
+import com.ptut.expense.domain.shared.ObserveSyncStatusUseCase
 import com.ptut.expense.domain.shared.PromptPay
 import com.ptut.expense.domain.shared.SavePromptPayUseCase
 import com.ptut.expense.domain.shared.SetSimplifyDebtsUseCase
+import com.ptut.expense.domain.shared.money
 import com.ptut.expense.domain.shared.moneyFormat
+import com.ptut.expense.domain.shared.typedText
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.sync.SyncHealth
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -50,8 +54,26 @@ sealed interface WhoPaysWhomUiState {
         val currencyNote: String?,
         /** SETTLE A PAYMENT opens the first card that involves you. */
         val firstMine: PaymentCardUiModel?,
+        /** #93: the plan, while Simplify debts is on and this phone is up to date (D7). */
+        val plan: SettlePlanUiModel? = null,
     ) : WhoPaysWhomUiState
 }
+
+/**
+ * #93 (p14): how few payments settle everyone. My part first with its badge, the rest neutral in the
+ * order the group settles them; nobody is ranked (R7).
+ */
+data class SettlePlanUiModel(
+    val headline: String,
+    val savesLine: String,
+    val badge: String,
+    val cards: List<PaymentCardUiModel>,
+    /** What I pay, or null when I pay nothing. */
+    val myPart: PaymentCardUiModel?,
+    /** Record payment's prefill, as the routes carry amounts ("350.00"). */
+    val myAmount: String?,
+    val settleMyPart: String,
+)
 
 /** #184: the payments that settle one group, from #135, and the switch back to the original pairings. */
 class WhoPaysWhomViewModel(
@@ -62,10 +84,14 @@ class WhoPaysWhomViewModel(
     private val setSimplifyDebts: SetSimplifyDebtsUseCase,
     /** Where the snapshot is mapped; tests hand in their own. */
     private val work: CoroutineDispatcher = Dispatchers.Default,
+    /** #93: the group's sync health; a phone that is behind shows no plan. */
+    observeSyncStatus: ObserveSyncStatusUseCase = ObserveSyncStatusUseCase(),
+    /** #93: Play and its settle plan are on, read when the screen is built. */
+    private val planOn: Boolean = false,
 ) : ViewModel() {
 
-    val uiState: StateFlow<WhoPaysWhomUiState> = observeSnapshot().map { snapshot ->
-        val (group, settlement, foreign) = getSettlement(snapshot, groupId) ?: return@map WhoPaysWhomUiState.Missing
+    val uiState: StateFlow<WhoPaysWhomUiState> = combine(observeSnapshot(), observeSyncStatus(groupId)) { snapshot, status ->
+        val (group, settlement, foreign) = getSettlement(snapshot, groupId) ?: return@combine WhoPaysWhomUiState.Missing
         val text = AppText.copy.shared.settle
         val you = AppText.copy.common.you
         val money = group.moneyFormat()
@@ -103,6 +129,7 @@ class WhoPaysWhomViewModel(
             cards = cards,
             currencyNote = foreign.takeIf { it.isNotEmpty() }?.let { text.converted(it, group.currency) },
             firstMine = cards.firstOrNull { it.fromIsMe || it.toIsMe },
+            plan = if (planOn && group.simplifyDebts && status.health in UP_TO_DATE) plan(cards, settlement.pairwiseCount, settlement.transfers.firstOrNull { group.isMe(it.fromMemberId) }?.amount?.let { group.money.typedText(it.toMinorUnits()) }) else null,
         )
     }.flowOn(work).stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), WhoPaysWhomUiState.Missing)
 
@@ -116,4 +143,21 @@ class WhoPaysWhomViewModel(
     fun setSimplify(on: Boolean) {
         viewModelScope.launch { setSimplifyDebts(groupId, on) }
     }
+
+    private fun plan(cards: List<PaymentCardUiModel>, pairwise: Int, myAmount: String?): SettlePlanUiModel? {
+        if (cards.isEmpty()) return null
+        val text = AppText.copy.play.group
+        val mine = cards.firstOrNull { it.fromIsMe }
+        return SettlePlanUiModel(
+            headline = text.planHeadline(cards.size),
+            savesLine = if (pairwise > cards.size) text.planSaves(pairwise) else text.planFewest,
+            badge = text.yourPart,
+            cards = listOfNotNull(mine) + cards.filterNot { it == mine },
+            myPart = mine,
+            myAmount = myAmount.takeIf { mine != null },
+            settleMyPart = text.settleMyPart,
+        )
+    }
 }
+
+/** A group only on this phone is always up to date with itself. */

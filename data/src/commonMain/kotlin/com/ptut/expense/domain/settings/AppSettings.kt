@@ -43,6 +43,20 @@ data class AppChoices(
      */
     val homeCurrency: String? = null,
     val homeZone: String? = null,
+    /** #83: Settings › Play. */
+    val play: PlayChoices = PlayChoices(),
+)
+
+/** #83: Settings › Play (p22). [on] is the master switch; the rest are its sub-switches. */
+data class PlayChoices(
+    val on: Boolean = true,
+    val run: Boolean = true,
+    val guess: Boolean = true,
+    val challenges: Boolean = true,
+    /** D5: every group sees this member's stamps and awards. Synced to each group as the opt-out. */
+    val groupStamps: Boolean = true,
+    val shareAmounts: Boolean = false,
+    val weeklyReminder: Boolean = false,
 )
 
 /**
@@ -116,6 +130,9 @@ class AppSettings(private val store: AppSettingsStore) {
         val moved = (it.homeCurrency ?: HomeMoney.Baht.code) != currency
         it.copy(homeCurrency = currency, homeZone = zone, weeklyTarget = if (moved) converted else it.weeklyTarget)
     }
+
+    /** #83: the switches are written whole, as [setWeeklyTarget] writes its target. */
+    fun setPlay(play: PlayChoices) = update { it.copy(play = play) }
 
     fun setSlipOwner(name: String?) = update { it.copy(slipOwner = SlipOwner(name = name?.trim()?.takeIf(String::isNotEmpty))) }
 

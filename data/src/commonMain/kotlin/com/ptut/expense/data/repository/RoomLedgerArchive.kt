@@ -3,6 +3,7 @@ package com.ptut.expense.data.repository
 import com.ptut.expense.data.local.dao.CatalogBackupDao
 import com.ptut.expense.data.local.dao.CategoryDao
 import com.ptut.expense.data.local.dao.LedgerMergeDao
+import com.ptut.expense.data.local.dao.PlayDao
 import com.ptut.expense.data.local.dao.SharedDao
 import com.ptut.expense.data.local.dao.TransactionDao
 import com.ptut.expense.data.local.dao.withCheckedSubCategory
@@ -12,6 +13,11 @@ import com.ptut.expense.data.local.entity.ExpenseShareEntity
 import com.ptut.expense.data.local.entity.ExpenseVersionEntity
 import com.ptut.expense.data.local.entity.GroupMemberEntity
 import com.ptut.expense.data.local.entity.PersonEntity
+import com.ptut.expense.data.local.entity.PlayDayEntity
+import com.ptut.expense.data.local.entity.PlayGoalEntity
+import com.ptut.expense.data.local.entity.PlayMonthEntity
+import com.ptut.expense.data.local.entity.PlayStampEntity
+import com.ptut.expense.data.local.entity.PlayWeekEntity
 import com.ptut.expense.data.local.entity.RepeatRuleEntity
 import com.ptut.expense.data.local.entity.RuleEntity
 import com.ptut.expense.data.local.entity.SharedGroupEntity
@@ -24,17 +30,23 @@ import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.backup.BackupCategory
 import com.ptut.expense.domain.backup.BackupExpenseVersion
+import com.ptut.expense.domain.backup.BackupGoal
 import com.ptut.expense.domain.backup.BackupGroup
 import com.ptut.expense.domain.backup.BackupLink
 import com.ptut.expense.domain.backup.BackupMember
 import com.ptut.expense.domain.backup.BackupPayment
 import com.ptut.expense.domain.backup.BackupPerson
+import com.ptut.expense.domain.backup.BackupPlay
+import com.ptut.expense.domain.backup.BackupPlayDay
+import com.ptut.expense.domain.backup.BackupPlayMonth
+import com.ptut.expense.domain.backup.BackupPlayWeek
 import com.ptut.expense.domain.backup.BackupPreview
 import com.ptut.expense.domain.backup.BackupProblem
 import com.ptut.expense.domain.backup.BackupRepeat
 import com.ptut.expense.domain.backup.BackupShare
 import com.ptut.expense.domain.backup.BackupShared
 import com.ptut.expense.domain.backup.BackupShopRule
+import com.ptut.expense.domain.backup.BackupStamp
 import com.ptut.expense.domain.backup.BackupSubCategory
 import com.ptut.expense.domain.backup.BackupTransaction
 import com.ptut.expense.domain.backup.BackupUnreadable
@@ -62,6 +74,8 @@ class RoomLedgerArchive(
     private val clock: Clock = Clock.System,
     /** #46: an empty ledger takes a file's home through it. Null where a test binds none. */
     private val homeBook: HomeBook? = null,
+    /** #82: play's facts. Null where only the ledger is backed up. */
+    private val playDao: PlayDao? = null,
 ) : LedgerArchive {
 
     override suspend fun export(): String = LedgerBackup.encode(
@@ -83,6 +97,7 @@ class RoomLedgerArchive(
             },
             homeCurrency = Home.money.code,
             homeZone = Home.choice.value.zoneId,
+            play = playDao?.let { exportPlay(it) },
         ),
     )
 
@@ -121,6 +136,8 @@ class RoomLedgerArchive(
         val added = mergeDao.merge(rows)
         // After the transactions, so a link finds the row it points at.
         val groupsAdded = backup.shared?.let { shared -> sharedDao?.let { restoreShared(it, shared, known) } } ?: 0
+        // #82: a clash keeps the phone's own row, so a restore never undoes a stamp or a turned card.
+        backup.play?.let { play -> playDao?.let { restorePlay(it, play) } }
         // Last of all: the new home rebuilds the shell, and nothing may still be merging under the old one.
         if (takesFileHome) homeBook?.adopt(fileHome)
         return MergeReport(
@@ -130,6 +147,26 @@ class RoomLedgerArchive(
             lostCategory = added.count { it in lost },
         )
     }
+
+    private suspend fun exportPlay(dao: PlayDao) = BackupPlay(
+        days = dao.allDays().map { BackupPlayDay(it.date, it.clearedAtEpochMillis, it.answeredAtEpochMillis, it.questionKey, it.answeredRight, it.pickedFirst) },
+        weeks = dao.allWeeks().map {
+            BackupPlayWeek(it.monday, it.paisenGuessMinor, it.guessMinor, it.totalMinor, it.challengeCategoryId, it.challengeLevel, it.challengeLimitMinor)
+        },
+        months = dao.allMonths().map { BackupPlayMonth(it.month, it.storySeenAtEpochMillis, it.sealedAtEpochMillis) },
+        stamps = dao.allStamps().map { BackupStamp(it.id, it.kind, it.ref, it.earnedOn, it.revealedAtEpochMillis) },
+        goals = dao.allGoals().map { BackupGoal(it.id, it.name, it.targetMinor, it.currency, it.startDate, it.createdAtEpochMillis, it.archivedAtEpochMillis) },
+    )
+
+    private suspend fun restorePlay(dao: PlayDao, play: BackupPlay) = dao.restore(
+        days = play.days.map { PlayDayEntity(it.date, it.clearedAtEpochMillis, it.answeredAtEpochMillis, it.questionKey, it.answeredRight, it.pickedFirst) },
+        weeks = play.weeks.map {
+            PlayWeekEntity(it.monday, it.paisenGuessMinor, it.guessMinor, it.totalMinor, it.challengeCategoryId, it.challengeLevel, it.challengeLimitMinor)
+        },
+        months = play.months.map { PlayMonthEntity(it.month, it.storySeenAtEpochMillis, it.sealedAtEpochMillis) },
+        stamps = play.stamps.map { PlayStampEntity(it.id, it.kind, it.ref, it.earnedOn, it.revealedAtEpochMillis) },
+        goals = play.goals.map { PlayGoalEntity(it.id, it.name, it.targetMinor, it.currency, it.startDate, it.createdAtEpochMillis, it.archivedAtEpochMillis) },
+    )
 
     /** #46: amounts in other money cannot join a ledger with rows; only an empty one can change home. */
     private suspend fun refuseOtherHome(backup: LedgerBackup) {

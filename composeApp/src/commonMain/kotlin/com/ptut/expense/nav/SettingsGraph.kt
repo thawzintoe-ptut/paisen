@@ -132,6 +132,7 @@ internal fun NavGraphBuilder.settingsRoutes(nav: NavHostController) {
                     SettingsAction.Language, SettingsAction.ExportLedger, SettingsAction.ImportLedger,
                     SettingsAction.Timezone, SettingsAction.HomeCurrency,
                     SettingsAction.Assistant, SettingsAction.Feedback, SettingsAction.Licences,
+                    SettingsAction.Play,
                     -> Unit
                 }
             },

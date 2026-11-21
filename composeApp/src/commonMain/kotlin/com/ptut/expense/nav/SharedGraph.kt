@@ -8,13 +8,19 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.ptut.expense.di.AppBuild
+import com.ptut.expense.domain.play.ObservePlayOnUseCase
+import com.ptut.expense.domain.play.PlayPart
 import com.ptut.expense.shared.AddExpenseActions
 import com.ptut.expense.shared.AddExpenseView
 import com.ptut.expense.shared.AddExpenseViewModel
+import com.ptut.expense.shared.GroupAwardsView
+import com.ptut.expense.shared.GroupAwardsViewModel
 import com.ptut.expense.shared.GroupDetailView
 import com.ptut.expense.shared.GroupDetailViewModel
 import com.ptut.expense.shared.GroupInvite
 import com.ptut.expense.shared.GroupManage
+import com.ptut.expense.shared.GroupPlayEntries
+import com.ptut.expense.shared.GroupPlayViewModel
 import com.ptut.expense.shared.GroupSettingsViewModel
 import com.ptut.expense.shared.GroupTab
 import com.ptut.expense.shared.GroupTabsState
@@ -31,6 +37,10 @@ import com.ptut.expense.shared.SharedActivityView
 import com.ptut.expense.shared.SharedActivityViewModel
 import com.ptut.expense.shared.SharedView
 import com.ptut.expense.shared.SharedViewModel
+import com.ptut.expense.shared.TripRecapView
+import com.ptut.expense.shared.TripRecapViewModel
+import com.ptut.expense.shared.WhoPaysWheelView
+import com.ptut.expense.shared.WhoPaysWheelViewModel
 import com.ptut.expense.shared.WhoPaysWhomUiState
 import com.ptut.expense.shared.WhoPaysWhomView
 import com.ptut.expense.shared.WhoPaysWhomViewModel
@@ -133,6 +143,10 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
         val activity = koinViewModel<SharedActivityViewModel> { parametersOf(groupId) }
         val activityState by activity.uiState.collectAsStateWithLifecycle()
         val activitySince by group.activitySince.collectAsStateWithLifecycle()
+        // #94–#97: read when the screen is built, as a flag is.
+        val playOn = koinInject<ObservePlayOnUseCase>()
+        val groupPlay = koinViewModel<GroupPlayViewModel> { parametersOf(groupId) }
+        val playState by groupPlay.uiState.collectAsStateWithLifecycle()
         LaunchedEffect(activitySince) { activity.since(activitySince) }
         LaunchedEffect(groupRemoved) { if (groupRemoved) nav.popBackStack() }
         GroupDetailView(
@@ -164,6 +178,16 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
             ),
             refreshing = refreshing,
             onRefresh = group::refresh,
+            play = GroupPlayEntries(
+                onWheel = { nav.navigate(PtutRoute.WhoPaysWheel(groupId)) { launchSingleTop = true } }.takeIf { playOn.now(PlayPart.Wheel) },
+                onAwards = { nav.navigate(PtutRoute.GroupAwards(groupId)) { launchSingleTop = true } }.takeIf { playOn.now(PlayPart.Awards) },
+                onRecap = { nav.navigate(PtutRoute.TripRecap(groupId)) { launchSingleTop = true } }.takeIf { playState.tripEnded == true },
+                tripEnded = playState.tripEnded,
+                onTripEnded = groupPlay::endTrip,
+                allSquare = playState.allSquare,
+                reactions = playState.reactions,
+                onReact = groupPlay::react,
+            ),
             tabs = GroupTabsState(
                 selected = tab,
                 onSelect = group::showTab,
@@ -178,7 +202,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
         val route = entry.toRoute<PtutRoute.AddSharedExpense>()
         // Koin's parameters do not carry a null, so a new expense travels as "".
         val add = koinViewModel<AddExpenseViewModel> {
-            parametersOf(route.groupId, route.expenseId.orEmpty(), route.transactionId.orEmpty(), route.amount.orEmpty(), route.description.orEmpty())
+            parametersOf(route.groupId, route.expenseId.orEmpty(), route.transactionId.orEmpty(), route.amount.orEmpty(), route.description.orEmpty(), route.payerMemberId.orEmpty())
         }
         val state by add.uiState.collectAsStateWithLifecycle()
         val saved by add.isSaved.collectAsStateWithLifecycle()
@@ -217,6 +241,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
             onBack = { nav.popBackStack() },
             onSimplify = who::setSimplify,
             onSettle = { from, to -> nav.navigate(PtutRoute.RecordPayment(groupId, from, to)) { launchSingleTop = true } },
+            onSettleMine = { from, to, amount -> nav.navigate(PtutRoute.RecordPayment(groupId, from, to, amount)) { launchSingleTop = true } },
             // Debug builds only until the card has been scanned by a real bank app.
             offerPayMe = koinInject<AppBuild>().debug,
             onPromptPay = who::setPromptPay,
@@ -225,7 +250,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
 
     composable<PtutRoute.RecordPayment> { entry ->
         val route = entry.toRoute<PtutRoute.RecordPayment>()
-        val payment = koinViewModel<RecordPaymentViewModel> { parametersOf(route.groupId, route.fromMemberId, route.toMemberId) }
+        val payment = koinViewModel<RecordPaymentViewModel> { parametersOf(route.groupId, route.fromMemberId, route.toMemberId, route.amount.orEmpty()) }
         val state by payment.uiState.collectAsStateWithLifecycle()
         val saved by payment.isSaved.collectAsStateWithLifecycle()
         val close: () -> Unit = { nav.popBackStack() }
@@ -237,6 +262,37 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
             onMethod = payment::setMethod,
             onTime = payment::setTime,
             onRecord = payment::record,
+        )
+    }
+
+    composable<PtutRoute.WhoPaysWheel> { entry ->
+        val groupId = entry.toRoute<PtutRoute.WhoPaysWheel>().groupId
+        val wheel = koinViewModel<WhoPaysWheelViewModel> { parametersOf(groupId) }
+        val state by wheel.uiState.collectAsStateWithLifecycle()
+        WhoPaysWheelView(
+            uiState = state,
+            onSpin = wheel::spin,
+            onFair = wheel::setFair,
+            onAdd = { payer -> nav.navigate(PtutRoute.AddSharedExpense(groupId, payerMemberId = payer)) { launchSingleTop = true } },
+            onBack = { nav.popBackStack() },
+        )
+    }
+
+    composable<PtutRoute.GroupAwards> { entry ->
+        val groupId = entry.toRoute<PtutRoute.GroupAwards>().groupId
+        val awards = koinViewModel<GroupAwardsViewModel> { parametersOf(groupId) }
+        val state by awards.uiState.collectAsStateWithLifecycle()
+        GroupAwardsView(uiState = state, onBack = { nav.popBackStack() })
+    }
+
+    composable<PtutRoute.TripRecap> { entry ->
+        val groupId = entry.toRoute<PtutRoute.TripRecap>().groupId
+        val recap = koinViewModel<TripRecapViewModel> { parametersOf(groupId) }
+        val state by recap.uiState.collectAsStateWithLifecycle()
+        TripRecapView(
+            uiState = state,
+            onStartJar = { name, target -> nav.navigate(PtutRoute.GoalJar(name = name, target = target)) { launchSingleTop = true } },
+            onBack = { nav.popBackStack() },
         )
     }
 

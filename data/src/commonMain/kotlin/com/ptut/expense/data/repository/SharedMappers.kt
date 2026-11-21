@@ -3,6 +3,7 @@ package com.ptut.expense.data.repository
 import com.ptut.expense.data.local.entity.ExpenseShareEntity
 import com.ptut.expense.data.local.entity.ExpenseVersionEntity
 import com.ptut.expense.data.local.entity.GroupMemberEntity
+import com.ptut.expense.data.local.entity.PaymentReactionEntity
 import com.ptut.expense.data.local.entity.PaymentRemovalEntity
 import com.ptut.expense.data.local.entity.RepeatRuleEntity
 import com.ptut.expense.data.local.entity.SharedGroupEntity
@@ -11,8 +12,10 @@ import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.Member
 import com.ptut.expense.domain.shared.PaymentMethod
+import com.ptut.expense.domain.shared.PaymentReaction
 import com.ptut.expense.domain.shared.PaymentRemoval
 import com.ptut.expense.domain.shared.Rate
+import com.ptut.expense.domain.shared.ReactionKind
 import com.ptut.expense.domain.shared.RepeatEnd
 import com.ptut.expense.domain.shared.RepeatFrequency
 import com.ptut.expense.domain.shared.RepeatKind
@@ -24,6 +27,7 @@ import com.ptut.expense.domain.shared.SharedPayment
 import com.ptut.expense.domain.shared.SplitMode
 import com.ptut.expense.domain.shared.readableRate
 import com.ptut.expense.domain.shared.toLocalDateOrNull
+import kotlinx.datetime.LocalDate
 
 /** What an outbox row carries (#189). */
 const val KIND_GROUP = "group"
@@ -32,6 +36,18 @@ const val KIND_VERSION = "version"
 const val KIND_PAYMENT = "payment"
 const val KIND_REPEAT = "repeat"
 const val KIND_PAYMENT_REMOVAL = "paymentRemoval"
+
+/** #97: a trip marked ended or opened again; its own patch, so older group patches never carry the key. */
+const val KIND_TRIP_END = "tripEnd"
+
+/** #96 (D5): this phone's member's stamps-and-awards opt-out, written to the group's play/{mid}. */
+const val KIND_PLAY = "play"
+
+/** #95: one reaction, written or taken back; the row id is the document id, `<paymentId>_<uid>`. */
+const val KIND_REACTION = "reaction"
+
+/** #95: a reaction taken back keeps its document under this kind, so every pull since learns it went. */
+const val REACTION_GONE = "Gone"
 
 fun SharedGroupEntity.toDomain(members: List<GroupMemberEntity>) = SharedGroup(
     id = id,
@@ -42,7 +58,7 @@ fun SharedGroupEntity.toDomain(members: List<GroupMemberEntity>) = SharedGroup(
     simplifyDebts = simplifyDebts,
     createdAtEpochMillis = createdAtEpochMillis,
     meMemberId = meMemberId,
-    members = members.map { Member(it.id, it.groupId, it.name, it.personId, it.archived, it.claimedByUid, it.promptPayId) },
+    members = members.map { Member(it.id, it.groupId, it.name, it.personId, it.archived, it.claimedByUid, it.promptPayId, it.playOff) },
     remote = remote,
     creatorUid = creatorUid,
     inviteCode = inviteCode,
@@ -50,6 +66,7 @@ fun SharedGroupEntity.toDomain(members: List<GroupMemberEntity>) = SharedGroup(
     lastSyncedAtEpochMillis = lastSyncedAtEpochMillis,
     lastSeenAtEpochMillis = lastSeenAtEpochMillis,
     currency = currency,
+    endedOn = endedOn?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
 )
 
 /**
@@ -168,3 +185,8 @@ fun RepeatRule.toEntity() = RepeatRuleEntity(
 const val END_NEVER = "Never"
 internal const val END_ON_DATE = "OnDate"
 internal const val END_AFTER = "After"
+
+/** Null for a kind this build does not know, such as one a newer build added. */
+fun PaymentReactionEntity.toDomain(): PaymentReaction? = ReactionKind.entries.firstOrNull { it.name == kind }?.let {
+    PaymentReaction(id = id, groupId = groupId, paymentId = paymentId, authorUid = authorUid, kind = it)
+}

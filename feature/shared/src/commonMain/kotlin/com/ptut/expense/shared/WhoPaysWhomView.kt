@@ -2,6 +2,7 @@ package com.ptut.expense.shared
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,13 +34,16 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import com.ptut.expense.design.PlaySizes
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
+import com.ptut.expense.design.ptut
 import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
 import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.platform.share.encodePngOffMain
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
@@ -56,6 +61,8 @@ fun WhoPaysWhomView(
     onSimplify: (Boolean) -> Unit,
     onSettle: (from: String, to: String) -> Unit,
     modifier: Modifier = Modifier,
+    /** #93: "Settle my part", with the plan's amount. */
+    onSettleMine: (from: String, to: String, amount: String) -> Unit = { _, _, _ -> },
     /** The "Pay me" card. Off until the shell turns it on. */
     offerPayMe: Boolean = false,
     onPromptPay: (String) -> Boolean = { false },
@@ -67,7 +74,7 @@ fun WhoPaysWhomView(
         SkyTopBar(title = text.whoPaysWhom, onBack = onBack)
         val state = uiState as? WhoPaysWhomUiState.Loaded ?: return@Column GroupGone(status = text.detail.goneStatus)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            WhoPaysWhomContent(state, onSimplify = onSimplify, onSettle = onSettle) { card ->
+            WhoPaysWhomContent(state, onSimplify = onSimplify, onSettle = onSettle, onSettleMine = onSettleMine) { card ->
                 if (offerPayMe && card.toIsMe) {
                     SkyButton(text.settle.askToPay(card.fromName), onClick = { askingFrom = card.fromId }, kind = SkyButtonKind.Outline, modifier = Modifier.fillMaxWidth())
                 }
@@ -98,6 +105,7 @@ internal fun WhoPaysWhomContent(
     onSimplify: (Boolean) -> Unit,
     onSettle: (from: String, to: String) -> Unit,
     modifier: Modifier = Modifier,
+    onSettleMine: (from: String, to: String, amount: String) -> Unit = { _, _, _ -> },
     belowCard: @Composable (PaymentCardUiModel) -> Unit = {},
 ) {
     val text = LocalCopy.current.shared
@@ -124,8 +132,10 @@ internal fun WhoPaysWhomContent(
         }
         Column(Modifier.padding(horizontal = Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.s12)) {
             Spacer(Modifier.height(Spacing.xs))
-            state.cards.forEach { card ->
-                PaymentCard(card, onClick = { onSettle(card.fromId, card.toId) })
+            state.plan?.let { plan -> SettlePlan(plan, onSettleMine) }
+            // #93: with the plan on, my part leads; the rest keep the order the group settles them in.
+            (state.plan?.cards ?: state.cards).forEach { card ->
+                PaymentCard(card, onClick = { onSettle(card.fromId, card.toId) }, badge = state.plan?.badge?.takeIf { card == state.plan.myPart })
                 belowCard(card)
             }
             state.currencyNote?.let { SkyNoticeCard(text = it, icon = PtutIcon.Info.image) }
@@ -144,9 +154,35 @@ internal fun WhoPaysWhomContent(
     }
 }
 
+/** #93 (p14): how few payments settle everyone, and "Settle my part" with the plan's amount. */
+@Composable
+private fun SettlePlan(plan: SettlePlanUiModel, onSettleMine: (from: String, to: String, amount: String) -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().clip(PtutRadii.r20).background(MaterialTheme.colorScheme.tertiaryContainer).padding(Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xxs),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            Box(Modifier.size(PlaySizes.aiDisc).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
+                Text("P", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary)
+            }
+            Text(plan.headline, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+        }
+        Text(plan.savesLine, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val mine = plan.myPart
+        val amount = plan.myAmount
+        if (mine != null && amount != null) {
+            SkyButton(
+                plan.settleMyPart,
+                onClick = { onSettleMine(mine.fromId, mine.toId, amount) },
+                modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs),
+            )
+        }
+    }
+}
+
 /** p30: payer, a dashed line and an arrow, payee, then the sentence and the amount. */
 @Composable
-private fun PaymentCard(card: PaymentCardUiModel, onClick: () -> Unit) {
+private fun PaymentCard(card: PaymentCardUiModel, onClick: () -> Unit, badge: String? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -167,6 +203,15 @@ private fun PaymentCard(card: PaymentCardUiModel, onClick: () -> Unit) {
         Column(Modifier.weight(1.6f), horizontalAlignment = Alignment.End) {
             Text(card.sentence, style = MaterialTheme.typography.bodySmall, color = card.tone.ink(), maxLines = 2, textAlign = TextAlign.End)
             Text(card.amount, style = MaterialTheme.typography.titleMedium, color = card.tone.ink())
+            // #93: ruby, because it is money going out (R3).
+            badge?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.ptut.onSignature,
+                    modifier = Modifier.padding(top = Spacing.xxs).clip(CircleShape).background(MaterialTheme.ptut.signature).padding(horizontal = Spacing.xs, vertical = Spacing.s2),
+                )
+            }
         }
     }
 }
@@ -192,7 +237,7 @@ private fun PayMeSheet(card: PayMeCard, onDismiss: () -> Unit) {
         )
         SkyButton(
             text.sendCard,
-            onClick = { scope.launch { banks.sharePng(layer.toImageBitmap().encodePng(), card.shareText) } },
+            onClick = { scope.launch { banks.sharePng(layer.toImageBitmap().encodePngOffMain(), card.shareText) } },
             modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
         )
     }

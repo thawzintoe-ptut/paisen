@@ -104,3 +104,6 @@ private fun List<Transaction>.shopsIn(categoryId: String): List<String> =
 
 /** The Monday that starts [this] date's week. PaiSeN's weeks run Monday to Sunday. */
 internal fun LocalDate.mondayOfWeek(): LocalDate = minus(dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
+
+/** [mondayOfWeek] for the use cases outside this module. */
+fun mondayOfWeekOf(day: LocalDate): LocalDate = day.mondayOfWeek()

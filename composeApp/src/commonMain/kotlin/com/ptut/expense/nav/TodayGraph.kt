@@ -18,6 +18,7 @@ import com.ptut.expense.domain.folders.FolderChooser
 import com.ptut.expense.home.AllowAllPhotosSheet
 import com.ptut.expense.home.HomeView
 import com.ptut.expense.home.HomeViewModel
+import com.ptut.expense.home.ShelfEntry
 import com.ptut.expense.ledger.LedgerView
 import com.ptut.expense.ledger.LedgerViewModel
 import com.ptut.expense.ledger.scope
@@ -58,6 +59,23 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
             onOpenReceipt = { nav.navigate(PtutRoute.DayReceipt(it)) },
             onOpenWeek = { nav.navigate(PtutRoute.LedgerSlice(it.from, it.to, it.categoryId)) { launchSingleTop = true } },
             onHideNoteWeek = viewModel::hideNoteWeek,
+            onOpenStamps = { nav.navigate(PtutRoute.StampBook) },
+            onTurnStamp = { nav.navigate(PtutRoute.StampReveal(it)) },
+            onOpenQuestion = { nav.navigate(PtutRoute.DailyQuestion) },
+            onOpenCoach = { nav.navigate(PtutRoute.LedgerSlice(it.from, it.to, it.categoryId)) { launchSingleTop = true } },
+            onOpenGuess = { nav.navigate(PtutRoute.Guess(it)) },
+            onOpenChallenge = { nav.navigate(PtutRoute.WeekChallenge) },
+            onOpenShelf = { item ->
+                nav.navigate(
+                    when (item.entry) {
+                        ShelfEntry.Challenge -> PtutRoute.WeekChallenge
+                        ShelfEntry.Jar -> PtutRoute.GoalJar(goalId = item.arg)
+                        ShelfEntry.Story -> PtutRoute.MonthStory(item.arg.orEmpty())
+                        ShelfEntry.Close -> PtutRoute.CloseMonth(item.arg.orEmpty())
+                        ShelfEntry.Score -> PtutRoute.MoneyScore
+                    },
+                )
+            },
         )
         if (askingAllowAll) {
             // Asked for only under "Select photos", the one case that offers Android's picker.

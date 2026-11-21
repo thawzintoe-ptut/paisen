@@ -324,6 +324,8 @@ private fun MonthIndex(
                     color = if (chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
+                // #98: a sealed month carries a small tick; its rows stay editable.
+                if (month.sealed) Icon(PtutIcon.Check.image, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.statusGlyph))
             }
         }
     }

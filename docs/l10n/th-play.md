@@ -1,0 +1,1 @@
+Thai for play (#82) is not written yet. Under Thai, play shows its English words (D12) until a native Thai reader signs off a Thai copy. The English strings are in `core/locale/src/commonMain/kotlin/com/ptut/expense/locale/PlayCopy.kt`, `PlayGroupCopy.kt` and `PlayExtrasCopy.kt`; `docs/l10n/my-play.md` lists them beside the Burmese.

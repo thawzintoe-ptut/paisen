@@ -47,6 +47,11 @@ fun Long.dateIn(zone: TimeZone): LocalDate =
 
 fun Instant.dateIn(zone: TimeZone): LocalDate = toLocalDateTime(zone).date
 
+/** ISO `yyyy-MM`, the key play and History use for a month. */
+fun LocalDate.isoMonth(): String = toString().take(ISO_MONTH_LENGTH)
+
+private const val ISO_MONTH_LENGTH = 7
+
 private fun Int.pad(): String = toString().padStart(2, '0')
 
 /** "Friday", for "฿180 less than a usual Friday" (#119). */

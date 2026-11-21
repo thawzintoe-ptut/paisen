@@ -12,6 +12,7 @@ import com.ptut.expense.data.repository.RoomHomeBook
 import com.ptut.expense.data.repository.RoomImportStore
 import com.ptut.expense.data.repository.RoomLedgerArchive
 import com.ptut.expense.data.repository.RoomLedgerRepository
+import com.ptut.expense.data.repository.RoomPlayBook
 import com.ptut.expense.data.repository.RoomRuleRepository
 import com.ptut.expense.data.repository.RoomSharedRepository
 import com.ptut.expense.data.repository.RoomWatchedFolderRepository
@@ -26,6 +27,8 @@ import com.ptut.expense.domain.folders.FolderReadTally
 import com.ptut.expense.domain.folders.WatchedFolderRepository
 import com.ptut.expense.domain.home.HomeBook
 import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.play.PlanPlayReminderUseCase
+import com.ptut.expense.domain.play.PlayBook
 import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.settings.AppSettingsStore
@@ -45,6 +48,7 @@ import com.ptut.expense.platform.UnavailableSlipTextReader
 import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.platform.lock.AppLock
 import com.ptut.expense.platform.lock.DeviceAuth
+import com.ptut.expense.platform.notify.ReminderKind
 import com.ptut.expense.platform.notify.repeatReminders
 import com.ptut.expense.platform.ocr.RoutingSlipTextReader
 import com.ptut.expense.platform.ocr.SlipTextReader
@@ -52,6 +56,7 @@ import com.ptut.expense.platform.photos.CompositeSlipSource
 import com.ptut.expense.platform.photos.InMemorySlipSource
 import com.ptut.expense.platform.photos.PhotoAccessRequest
 import com.ptut.expense.platform.photos.SlipSource
+import com.ptut.expense.play.PlayReminderCopyWords
 import com.ptut.expense.shared.RepeatReminderWords
 import com.ptut.expense.sync.syncModule
 import com.ptut.expense.ui.Haptics
@@ -74,7 +79,7 @@ import kotlin.time.Duration
  * one reaching for the other.
  */
 val viewModelModule: Module = module {
-    includes(appScopeModule, onboardingModule, todayModule, recordModule, settingsModule, sharedModule)
+    includes(appScopeModule, onboardingModule, todayModule, recordModule, settingsModule, sharedModule, playModule)
 
     single { ToastMessages() }
     // #114: raised where a save or delete lands, played by the shell like a toast.
@@ -153,6 +158,9 @@ val ledgerModule: Module = module {
         )
     }
 
+    // #82: play's facts, beside the ledger they are worked out from.
+    single<PlayBook> { RoomPlayBook(play = get<PtutDatabase>().playDao()) }
+
     single {
         val settings = get<AppSettings>()
         SlipImporter(
@@ -179,6 +187,7 @@ val ledgerModule: Module = module {
             sharedDao = database.sharedDao(),
             catalogDao = database.catalogBackupDao(),
             homeBook = getOrNull(),
+            playDao = database.playDao(),
         )
     }
 
@@ -249,6 +258,16 @@ fun dataModule(databaseContext: PtutDatabaseContext): Module = module {
     single { screenReader(databaseContext) }
     // A single: its lock keeps two runs from adding the same repeat twice.
     single { RunDueRepeatsUseCase(repository = get(), reminders = get(), words = RepeatReminderWords) }
+    // #83 (D15): its own set of reminders, so it and the repeats never cancel each other. A single for its lock.
+    single {
+        PlanPlayReminderUseCase(
+            reminders = repeatReminders(databaseContext, ReminderKind.Play),
+            playOn = get(),
+            transactions = get(),
+            book = get(),
+            words = PlayReminderCopyWords,
+        )
+    }
 
     /**
      * First run's two platform halves: where the answer survives, and how the photo dialog is

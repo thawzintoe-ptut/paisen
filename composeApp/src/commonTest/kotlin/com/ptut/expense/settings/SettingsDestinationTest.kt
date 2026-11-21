@@ -37,6 +37,8 @@ class SettingsDestinationTest {
                 // Opens the phone's mail app, not a screen.
                 null,
                 PtutRoute.Licences,
+                // #83: Settings › Play.
+                PtutRoute.PlaySettings,
             ),
             SettingsAction.entries.map { it.destination() },
         )

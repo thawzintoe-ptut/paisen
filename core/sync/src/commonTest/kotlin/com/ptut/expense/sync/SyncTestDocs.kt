@@ -5,6 +5,7 @@ import com.ptut.expense.data.local.entity.SharedGroupEntity
 import com.ptut.expense.data.local.entity.SharedPaymentEntity
 import com.ptut.expense.data.local.entity.SyncOutboxEntity
 import com.ptut.expense.data.repository.KIND_PAYMENT
+import com.ptut.expense.data.repository.REACTION_GONE
 import com.ptut.expense.domain.shared.GroupType
 
 internal const val UID = "uid-1"
@@ -88,6 +89,13 @@ internal fun payDoc(memberId: String, holder: String, promptPay: String = PROMPT
     id = memberId,
     name = "groups/g1/pay/$memberId",
     fields = mapOf("promptPay" to promptPay, "claimedByUid" to holder),
+)
+
+/** [author]'s reaction on [paymentId], under the id the rules require; [REACTION_GONE] for one taken back. */
+internal fun reactionDoc(paymentId: String, author: String, kind: String = "Thanks") = FirestoreDoc(
+    id = "${paymentId}_$author",
+    name = "groups/g1/reactions/${paymentId}_$author",
+    fields = mapOf("authorUid" to author, "paymentId" to paymentId, "kind" to kind, "createdAt" to 3L),
 )
 
 /** A name held by [holder], with [promptPay] on the name itself, as builds before M5 store it. */

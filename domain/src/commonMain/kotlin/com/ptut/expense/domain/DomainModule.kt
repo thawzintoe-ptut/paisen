@@ -4,6 +4,7 @@ import com.ptut.expense.domain.folders.ObserveWatchedFoldersUseCase
 import com.ptut.expense.domain.ledger.ObserveImportRunsUseCase
 import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
 import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
+import com.ptut.expense.domain.play.playUseCases
 import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
 import com.ptut.expense.domain.settings.settingsUseCases
 import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
@@ -22,7 +23,7 @@ import org.koin.dsl.module
  * state; [com.ptut.expense.domain.shared.RunDueRepeatsUseCase] does, so it is a single beside the reminders.
  */
 val domainModule: Module = module {
-    includes(sharedUseCases, todayUseCases, recordUseCases, settingsUseCases)
+    includes(sharedUseCases, todayUseCases, recordUseCases, settingsUseCases, playUseCases)
 
     factory { ObserveTransactionsUseCase(get()) }
     factory { ObserveImportRunsUseCase(get()) }

@@ -23,6 +23,8 @@ data class Copy(
     val categories: CategoriesCopy = CategoriesCopy(),
     val settings: SettingsCopy = SettingsCopy(),
     val shared: SharedCopy = SharedCopy(),
+    /** #82: Thai shows the English until a Thai reader signs it off (D12). */
+    val play: PlayCopy = PlayCopy(),
 )
 
 val EnglishCopy = Copy()
@@ -45,6 +47,7 @@ val BurmeseCopy = Copy(
     categories = BurmeseCategories,
     settings = BurmeseSettings,
     shared = BurmeseShared,
+    play = BurmesePlay,
 )
 
 /** An area not listed here shows English until its Thai is written. */

@@ -2,6 +2,7 @@ package com.ptut.expense.domain.shared
 
 import com.ptut.expense.domain.HomeMoney
 import com.ptut.expense.domain.Satang
+import kotlinx.datetime.LocalDate
 
 /**
  * v2's shared costs (#133). Every id is a UUID so a group can later sync between phones (#189)
@@ -17,6 +18,12 @@ enum class SplitMode { Equally, Exact, Percent, Shares }
 /** p31's chips. A label only: no money moves through PaiSen. */
 enum class PaymentMethod { BankTransfer, Cash, PromptPay, OtherApp }
 
+/** #95 (D10): the three words a member may leave on a payment. Words only, never an emoji picker. */
+enum class ReactionKind { Thanks, WellPlayed, Cheers }
+
+/** One member's word on one payment. [authorUid] is the account; its claimed name is who the others see. */
+data class PaymentReaction(val id: String, val groupId: String, val paymentId: String, val authorUid: String, val kind: ReactionKind)
+
 /** A name on this phone that can belong to no group or many (#56). */
 data class Person(val id: String, val name: String, val archived: Boolean = false)
 
@@ -31,6 +38,8 @@ data class Member(
     val claimedByUid: String? = null,
     /** #199: the PromptPay ID this member added for their own name, for the payer's QR. */
     val promptPayId: String? = null,
+    /** D5: this member turned group stamps and awards off; their name never shows on an award. */
+    val playOff: Boolean = false,
 )
 
 data class SharedGroup(
@@ -55,6 +64,8 @@ data class SharedGroup(
     val lastSeenAtEpochMillis: Long? = null,
     /** #48: what the group counts in, for every member, whatever each one's home is. */
     val currency: String = "THB",
+    /** #97: the day a member marked the trip ended, or null while it runs. */
+    val endedOn: LocalDate? = null,
 ) {
     val activeMembers: List<Member> get() = members.filterNot { it.archived }
 
@@ -161,6 +172,8 @@ data class SharedSnapshot(
     val repeats: List<RepeatRule> = emptyList(),
     /** #218: every removal and put-back of a payment, oldest first. */
     val paymentRemovals: List<PaymentRemoval> = emptyList(),
+    /** #95: the words members left on payments. */
+    val reactions: List<PaymentReaction> = emptyList(),
 ) {
     fun group(id: String): SharedGroup? = groups.firstOrNull { it.id == id }
 

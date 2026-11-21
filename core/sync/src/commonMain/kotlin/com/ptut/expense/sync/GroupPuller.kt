@@ -6,7 +6,10 @@ import com.ptut.expense.data.local.entity.SharedGroupEntity
 import com.ptut.expense.data.local.entity.SyncOutboxEntity
 import com.ptut.expense.data.repository.KIND_GROUP
 import com.ptut.expense.data.repository.KIND_MEMBER
+import com.ptut.expense.data.repository.KIND_PLAY
+import com.ptut.expense.data.repository.KIND_REACTION
 import com.ptut.expense.data.repository.KIND_REPEAT
+import com.ptut.expense.data.repository.KIND_TRIP_END
 import com.ptut.expense.data.repository.toDomain
 import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.shared.Currencies
@@ -72,6 +75,12 @@ internal class GroupPuller(
         val log = if (since == null) wholeLog(groupId) else newerLog(groupId, since)
         val members = if (membersDue(groupId, fields, before, meMemberId, log)) firestore.list("groups/$groupId/members") else null
         val payIds = if (members != null) firestore.promptPayDocs(groupId).associate { it.id to it.fields } else emptyMap()
+        // #96 (D5): the opt-outs travel with the names, on the same cadence.
+        val playOffs = if (members != null) firestore.playDocs(groupId).associate { it.id to it.fields } else emptyMap()
+        // #95 (D16): the whole list once, then only what the server stamped after the mark, which costs a
+        // read only for new ones. A taken-back reaction keeps its document as Gone, so it comes the same way.
+        val reactions = if (since == null) firestore.reactionDocs(groupId) else null
+        val newerReactions = if (since != null) firestore.newerReactionDocs(groupId, since) else null
 
         // Read after the network: a change saved while it answered is not undone below.
         val local = dao.group(groupId)
@@ -98,12 +107,14 @@ internal class GroupPuller(
             // This phone's own mark, never on the server: a pull must not reset it.
             lastSeenAtEpochMillis = local?.lastSeenAtEpochMillis,
             currency = currency,
+            // #97: an end this phone set and has not sent yet stays as it is.
+            endedOn = if ("$KIND_TRIP_END:$groupId" in pending) local?.endedOn else fields.string("endedOn"),
         )
         // Every write wakes the snapshot and the screens that read it, so an unchanged row is not written.
         if (group != local) dao.upsertGroup(group)
         if (members != null) {
             val pickable = pickableNames(dao.membersOf(groupId))
-            storeMembers(groupId, members, payIds, pending)
+            storeMembers(groupId, members, payIds, playOffs, pending)
             moveOwnPromptPay(groupId, group.meMemberId, members, pending)
             if (pickableNames(dao.membersOf(groupId)) != pickable) publishNames(groupId)
         }
@@ -112,9 +123,17 @@ internal class GroupPuller(
         val batch = LogBatch()
         log.entries.forEach { doc -> batch.add(groupId, doc, WireAmount.key(currency)) }
         if (batch.isNotEmpty()) dao.receiveLog(batch.versions, batch.payments, batch.removals)
+        val mine = pending.filter { it.startsWith("$KIND_REACTION:") }.map { it.removePrefix("$KIND_REACTION:") }.toSet()
+        reactions?.let { docs -> dao.replaceReactions(groupId, docs.mapNotNull { reactionEntity(groupId, it) }, mine) }
+        newerReactions?.takeIf { it.isNotEmpty() }?.let { docs ->
+            val changed = docs.mapNotNull { reactionEntity(groupId, it) }.filterNot { it.id in mine }
+            val gone = docs.mapNotNull { it.takenBackReaction() }.filterNot { it in mine }
+            dao.receiveReactions(changed, gone)
+        }
         log.repeats.forEach { doc -> receiveRepeat(groupId, doc) }
         // An empty answer leaves the mark: the next pull asks from the same place and costs the same.
-        if (since == null || log.entries.isNotEmpty() || log.repeats.isNotEmpty()) dao.markSynced(groupId, log.readTimeEpochMillis ?: now())
+        val gotNew = log.entries.isNotEmpty() || log.repeats.isNotEmpty() || !newerReactions.isNullOrEmpty()
+        if (since == null || gotNew) dao.markSynced(groupId, log.readTimeEpochMillis ?: now())
         seenGroupDocs[groupId] = fields
         if (members != null) membersListedAt[groupId] = now()
         return PullResult.Kept
@@ -133,7 +152,7 @@ internal class GroupPuller(
         return named.isNotEmpty() && !dao.membersOf(groupId).map { it.id }.toSet().containsAll(named)
     }
 
-    private suspend fun storeMembers(groupId: String, members: List<FirestoreDoc>, payIds: Map<String, Fields>, pending: Set<String>) {
+    private suspend fun storeMembers(groupId: String, members: List<FirestoreDoc>, payIds: Map<String, Fields>, playOffs: Map<String, Fields>, pending: Set<String>) {
         val known = dao.membersOf(groupId).associateBy { it.id }
         val pulled = members.filterNot { "$KIND_MEMBER:${it.id}" in pending }.map { doc ->
             val holder = doc.fields.string("claimedByUid")
@@ -150,6 +169,12 @@ internal class GroupPuller(
                 promptPayId = holder?.let {
                     (payIds[doc.id]?.takeIf { pay -> pay.string("claimedByUid") == holder }?.string("promptPay") ?: doc.fields.string("promptPay"))
                         ?.let(PromptPay::normalize)
+                },
+                // D5: an opt-out counts only from the name's own holder; this phone's own waits to be sent.
+                playOff = if ("$KIND_PLAY:${doc.id}" in pending) {
+                    known[doc.id]?.playOff == true
+                } else {
+                    holder != null && playOffs[doc.id]?.takeIf { it.string("claimedByUid") == holder }?.bool("awardsOff") == true
                 },
             )
         }
@@ -205,6 +230,34 @@ internal class GroupPuller(
     private suspend fun pendingIn(groupId: String): Set<String> = dao.outbox().filter { it.groupId == groupId }.map { it.id }.toSet()
 
     private fun now(): Long = clock.now().toEpochMilliseconds()
+}
+
+/** #96: the members' opt-outs. A refusal reads as none, so a pull from before the rules allowed them goes on. */
+internal suspend fun Firestore.playDocs(groupId: String): List<FirestoreDoc> = try {
+    list("groups/$groupId/play")
+} catch (refused: FirestoreException) {
+    if (refused.status != FirestoreStatus.FORBIDDEN) throw refused
+    emptyList()
+}
+
+/** #95: every reaction in the group, or none where the rules do not allow them yet. */
+internal suspend fun Firestore.reactionDocs(groupId: String): List<FirestoreDoc>? = try {
+    list("groups/$groupId/reactions")
+} catch (refused: FirestoreException) {
+    if (refused.status != FirestoreStatus.FORBIDDEN) throw refused
+    null
+}
+
+/** #95: the ids of [uid]'s reactions in [groupId], as the server holds them, so a leave can take them along. */
+internal suspend fun Firestore.reactionIdsOf(groupId: String, uid: String): List<String> =
+    reactionDocs(groupId).orEmpty().filter { it.fields.string("authorUid") == uid }.map { it.id }
+
+/** #95: reactions the server stamped after [since]; none where the rules do not allow them yet. */
+internal suspend fun Firestore.newerReactionDocs(groupId: String, since: Long): List<FirestoreDoc>? = try {
+    changedSince("groups/$groupId", "reactions", SYNCED_AT, since).docs
+} catch (refused: FirestoreException) {
+    if (refused.status != FirestoreStatus.FORBIDDEN) throw refused
+    null
 }
 
 /** M5: every PromptPay ID stored in [groupId] where only members read; none while the rules have no such place. */

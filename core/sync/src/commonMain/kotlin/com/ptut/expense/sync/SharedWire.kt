@@ -2,6 +2,7 @@ package com.ptut.expense.sync
 
 import com.ptut.expense.data.local.entity.ExpenseShareEntity
 import com.ptut.expense.data.local.entity.ExpenseVersionEntity
+import com.ptut.expense.data.local.entity.PaymentReactionEntity
 import com.ptut.expense.data.local.entity.PaymentRemovalEntity
 import com.ptut.expense.data.local.entity.RepeatRuleEntity
 import com.ptut.expense.data.local.entity.SharedPaymentEntity
@@ -9,11 +10,13 @@ import com.ptut.expense.data.repository.END_NEVER
 import com.ptut.expense.data.repository.KIND_PAYMENT
 import com.ptut.expense.data.repository.KIND_PAYMENT_REMOVAL
 import com.ptut.expense.data.repository.KIND_VERSION
+import com.ptut.expense.data.repository.REACTION_GONE
 import com.ptut.expense.data.repository.toDomain
 import com.ptut.expense.data.repository.toEntity
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.PaymentRemoval
+import com.ptut.expense.domain.shared.ReactionKind
 import com.ptut.expense.domain.shared.RepeatRule
 import com.ptut.expense.domain.shared.SharedExpense
 import com.ptut.expense.domain.shared.SharedGroup
@@ -250,3 +253,26 @@ internal fun RepeatRule.fields(uid: String): Fields = toEntity().let { rule ->
         "weights" to rule.weights,
     )
 }
+
+/** #95: what a reaction sends, a taken-back one as [REACTION_GONE]; the server stamps syncedAt. */
+internal fun PaymentReactionEntity.fields(): Fields = mapOf(
+    "authorUid" to authorUid,
+    "paymentId" to paymentId,
+    "kind" to kind,
+    "createdAt" to createdAtEpochMillis,
+)
+
+/** #95: a reaction as the server holds it, or null when it is not one this build can show, or was taken back. */
+internal fun reactionEntity(groupId: String, doc: FirestoreDoc): PaymentReactionEntity? {
+    val fields = doc.fields
+    val author = fields.string("authorUid") ?: return null
+    val payment = fields.string("paymentId") ?: return null
+    // The rules hold the id to `<paymentId>_<authorUid>`; a document from before they did is not taken.
+    if (doc.id != "${payment}_$author") return null
+    val kind = fields.string("kind")?.takeIf { kind -> ReactionKind.entries.any { it.name == kind } } ?: return null
+    return PaymentReactionEntity(doc.id, groupId, payment, author, kind, fields.long("createdAt") ?: 0L)
+}
+
+/** #95: the id of a reaction its author took back, or null for one still standing. */
+internal fun FirestoreDoc.takenBackReaction(): String? =
+    id.takeIf { fields.string("kind") == REACTION_GONE && it == "${fields.string("paymentId")}_${fields.string("authorUid")}" }

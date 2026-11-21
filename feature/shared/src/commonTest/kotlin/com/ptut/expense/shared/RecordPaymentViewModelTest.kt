@@ -79,6 +79,22 @@ class RecordPaymentViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun `the settle plan's amount wins over what is owed`() = runTest {
+        val repository = FakeSharedRepository()
+        repository.snapshot.value = repository.snapshot.value.copy(expenseVersions = listOf(dinner(paidBy = "me")))
+        val viewModel = recordPaymentViewModel(groupId = "g1", fromMemberId = "aye", toMemberId = "me", repository = repository, amount = "150.00")
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+
+        assertEquals("150.00", viewModel.ready().form.amountText)
+    }
+
+    @Test
+    fun `with no plan amount the payment opens on what is owed`() = runTest {
+        assertEquals("240.00", ready(dinner(paidBy = "me"), from = "aye", to = "me").form.amountText)
+    }
+
+    @Test
     fun `nothing owed offers no Ask to pay`() = runTest {
         val ready = ready(expense = null, from = "aye", to = "me")
 
@@ -220,7 +236,7 @@ class RecordPaymentViewModelTest : ViewModelTest() {
 }
 
 /** Record payment as Koin builds it, its use cases over [repository]. */
-private fun recordPaymentViewModel(groupId: String, fromMemberId: String, toMemberId: String, repository: FakeSharedRepository) = RecordPaymentViewModel(
+private fun recordPaymentViewModel(groupId: String, fromMemberId: String, toMemberId: String, repository: FakeSharedRepository, amount: String? = null) = RecordPaymentViewModel(
     groupId = groupId,
     fromMemberId = fromMemberId,
     toMemberId = toMemberId,
@@ -228,4 +244,5 @@ private fun recordPaymentViewModel(groupId: String, fromMemberId: String, toMemb
     getPaymentBetween = GetPaymentBetweenUseCase(),
     recordPayment = RecordPaymentUseCase(repository),
     removePayment = RemovePaymentUseCase(repository),
+    prefillAmount = amount,
 )

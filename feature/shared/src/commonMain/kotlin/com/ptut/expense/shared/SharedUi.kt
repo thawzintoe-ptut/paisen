@@ -33,6 +33,7 @@ import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.spoken
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.sync.SyncHealth
 import com.ptut.expense.ui.sky.SkyEmptyState
 import com.ptut.expense.ui.sky.SkyRollingAmount
 import kotlinx.datetime.LocalDate
@@ -179,3 +180,6 @@ internal fun GroupGone(status: String, modifier: Modifier = Modifier) {
         modifier = modifier.padding(horizontal = Spacing.md).padding(top = Spacing.md),
     )
 }
+
+/** The phone holds every change the group has: a plan or an award drawn from it names the same thing on every phone. */
+internal val UP_TO_DATE = setOf(SyncHealth.UpToDate, SyncHealth.Local)

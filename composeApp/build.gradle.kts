@@ -52,6 +52,7 @@ kotlin {
             implementation(projects.feature.settings)
             implementation(projects.feature.categories)
             implementation(projects.feature.onboarding)
+            implementation(projects.feature.play)
 
             implementation(libs.androidx.navigation.compose)
             // The Koin graph builds the database and hands out its DAOs.
