@@ -1,5 +1,6 @@
 import com.ptut.gradle.VerifyNativeNames
 import com.ptut.gradle.VerifyNoAccountNumbers
+import com.ptut.gradle.VerifySchemaFrozen
 import com.ptut.gradle.VerifySourceRules
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -99,3 +100,15 @@ val verifyNativeNames = tasks.register<VerifyNativeNames>("verifyNativeNames") {
 }
 
 tasks.named("check") { dependsOn(verifySourceRules, verifyNoAccountNumbers, verifyNativeNames) }
+
+// Only the module that exports Room schemas. It reads git, so it runs on request and in CI, not in check.
+if (layout.projectDirectory.dir("schemas").asFile.isDirectory) {
+    tasks.register<VerifySchemaFrozen>("verifySchemaFrozen") {
+        group = "verification"
+        description = "Fails when a released Room schema changed or the exported schema is not committed."
+        dependsOn("copyRoomSchemas")
+        schemaDirectory.set(layout.projectDirectory.dir("schemas/com.ptut.expense.data.local.PtutDatabase"))
+        databaseSource.set(layout.projectDirectory.file("src/commonMain/kotlin/com/ptut/expense/data/local/PtutDatabase.kt"))
+        repositoryRoot.set(rootProject.layout.projectDirectory)
+    }
+}

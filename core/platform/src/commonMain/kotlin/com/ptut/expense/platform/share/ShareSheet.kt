@@ -12,6 +12,12 @@ import kotlinx.coroutines.withContext
 interface ShareSheet {
     /** [text] goes beside the picture where the receiving app takes both. */
     fun sharePng(png: ByteArray, text: String? = null)
+
+    /** Raw bytes as a file, such as a ledger the app could not open. A fake may ignore it. */
+    fun shareFile(bytes: ByteArray, fileName: String, mimeType: String) = Unit
+
+    /** Plain text, such as a crash report. A fake may ignore it. */
+    fun shareText(text: String) = Unit
 }
 
 @Composable

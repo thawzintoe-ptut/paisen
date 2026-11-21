@@ -3,6 +3,10 @@ package com.ptut.expense.di
 import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.RestoreDriver
+import com.ptut.expense.domain.folders.ApplyWatchedFoldersUseCase
+import com.ptut.expense.domain.folders.FolderCatalog
+import com.ptut.expense.domain.folders.RefreshFolderCatalogUseCase
+import com.ptut.expense.domain.folders.WatchedFolderRepository
 import com.ptut.expense.domain.home.ChooseHomeUseCase
 import com.ptut.expense.domain.home.HomeBook
 import com.ptut.expense.domain.shared.Currencies
@@ -32,6 +36,10 @@ val onboardingModule: Module = module {
             chooseHomeUseCase = getOrNull<HomeBook>()?.let { get<ChooseHomeUseCase>() },
             // #41: first run starts every ledger in baht, in this phone's zone; Settings changes the money.
             firstRunHome = if (currenciesOn()) HomeChoice(Currencies.Thb.toHomeMoney(), phoneZone()) else null,
+            // getOrNull: a screen test's graph has no folder seams; step two then skips the folder list.
+            refreshCatalog = getOrNull<FolderCatalog>()?.let { get<RefreshFolderCatalogUseCase>() },
+            applyWatchedFolders = getOrNull<WatchedFolderRepository>()?.let { get<ApplyWatchedFoldersUseCase>() },
+            photoSettings = getOrNull(),
         )
     }
 }

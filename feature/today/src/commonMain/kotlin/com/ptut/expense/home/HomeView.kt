@@ -5,9 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,6 +33,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
@@ -46,9 +45,6 @@ import com.ptut.expense.design.ptut
 import com.ptut.expense.design.ptutIcon
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.ImportFix
-import com.ptut.expense.domain.Satang
-import com.ptut.expense.domain.format
-import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.formatParts
 import com.ptut.expense.domain.spoken
 import com.ptut.expense.domain.today.HomePeriod
@@ -57,6 +53,8 @@ import com.ptut.expense.locale.HomeCopy
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.noteCopy
 import com.ptut.expense.ui.categoryAndProvenance
+import com.ptut.expense.ui.sky.SkyButton
+import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyEmptyState
 import com.ptut.expense.ui.sky.SkyMoodCard
 import com.ptut.expense.ui.sky.SkyPageSheet
@@ -223,57 +221,18 @@ private fun LoadedHome(
             }
         }
 
-        // p05's pair, Compared beside To check; either one alone takes the full width (#119).
-        if (state.compared != null || state.review != null) {
+        state.compared?.let { compared ->
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
-                ) {
-                    state.compared?.let { compared ->
-                        SkyStatCard(
-                            title = text.compared,
-                            line = compared.line,
-                            icon = ptutIcon(compared.glyph),
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                        )
-                    }
-                    state.review?.let { review ->
-                        SkyStatCard(
-                            title = review.title,
-                            line = review.detail,
-                            icon = PtutIcon.Inbox.image,
-                            onClick = onOpenReview,
-                            filled = true,
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                        )
-                    }
-                }
-            }
-        }
-
-        // #85, #87: Main's play stack, under the pair and over the day's list.
-        state.question?.let { card ->
-            item {
-                PlayQuestionCard(card, onOpen = onOpenQuestion, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm))
-            }
-        }
-        state.play?.let { strip ->
-            item {
-                PlayRunCard(
-                    strip = strip,
-                    onOpenStamps = onOpenStamps,
-                    onTurnStamp = onTurnStamp,
-                    modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
+                SkyStatCard(
+                    title = text.compared,
+                    line = compared.line,
+                    icon = ptutIcon(compared.glyph),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
                 )
             }
         }
-
-        state.challenge?.let { row ->
-            item { ChallengeRow(row, onOpen = onOpenChallenge, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
-        }
-        if (state.shelf.isNotEmpty()) {
-            item { PlayShelf(state.shelf, onOpen = onOpenShelf, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
+        state.review?.let { review ->
+            item { ReviewRow(review, onOpenReview, Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm)) }
         }
 
         if (!empty || state.savedToday.isNotEmpty()) {
@@ -317,11 +276,55 @@ private fun LoadedHome(
                     }
                 }
             }
-            // The sheet runs on under the pill, so the last row comes to rest above it.
-            item { SheetRow { Box(Modifier.heightIn(min = SkySizes.pillClearance)) } }
-        } else {
-            item { Box(Modifier.heightIn(min = SkySizes.pillClearance)) }
         }
+
+        // #85, #87: the play stack waits under the day's list, so the purchases come first.
+        state.question?.let { card ->
+            item {
+                PlayQuestionCard(card, onOpen = onOpenQuestion, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm))
+            }
+        }
+        state.play?.let { strip ->
+            item {
+                PlayRunCard(
+                    strip = strip,
+                    onOpenStamps = onOpenStamps,
+                    onTurnStamp = onTurnStamp,
+                    modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
+                )
+            }
+        }
+        state.challenge?.let { row ->
+            item { ChallengeRow(row, onOpen = onOpenChallenge, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
+        }
+        if (state.shelf.isNotEmpty()) {
+            item { PlayShelf(state.shelf, onOpen = onOpenShelf, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
+        }
+        item { Box(Modifier.heightIn(min = SkySizes.pillClearance)) }
+    }
+}
+
+/** Slips waiting, on the quiet card fill: a to-do is not money going out, so never ruby. */
+@Composable
+private fun ReviewRow(review: ReviewCardUiModel, onOpenReview: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(PtutRadii.r20)
+            .tappable(PtutRadii.r20, Role.Button, onClick = onOpenReview)
+            .background(MaterialTheme.colorScheme.tertiaryContainer)
+            .padding(Spacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(PtutIcon.Inbox.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(SkySizes.cardGlyph))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(review.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            if (review.detail.isNotEmpty()) {
+                Text(review.detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        SkyButton(label = review.action, onClick = onOpenReview, kind = SkyButtonKind.Outline)
     }
 }
 
@@ -496,19 +499,15 @@ private fun PeriodAmount(state: HomeUiState.Success, empty: Boolean, modifier: M
             fractionColor = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = Spacing.xs),
         )
-        // Income and Net for the span, shown nowhere else in Sky (#146, K1).
-        if (!empty) {
-            val net = state.summary.net
-            val netInk = when {
-                net < Satang.Zero -> MaterialTheme.ptut.signatureInk
-                net > Satang.Zero -> MaterialTheme.ptut.ok
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
-            }
+        // Income and Net for the span, only once the ledger holds any income (#146, K1).
+        val line = state.incomeLine
+        if (!empty && line != null) {
+            // Ruby is money out, so only a net below zero takes it.
+            val netInk = if (line.netBelowZero) MaterialTheme.ptut.signatureInk else MaterialTheme.colorScheme.onSurfaceVariant
             Text(
                 text = buildAnnotatedString {
-                    append("${common.income} ${state.summary.income.format()} · ${text.net} ")
-                    // Read as the rows are: no sign, no empty satang, ruby below zero and green above.
-                    withStyle(SpanStyle(color = netInk)) { append(net.formatCompact()) }
+                    append("${common.income} ${line.income} · ${text.net} ")
+                    withStyle(SpanStyle(color = netInk)) { append(line.net) }
                 },
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -121,7 +121,10 @@ fun MemberAvatar(label: String, isMe: Boolean, modifier: Modifier = Modifier, si
     }
 }
 
-/** A group's icon on a circle: sky for a trip, ink for a home (p26). */
+/**
+ * A group's icon on a circle: sky for a trip, ink for a home (p26). The icon syncs from every
+ * member's phone, so a glyph this build does not know (an older build's "plane") draws as a group.
+ */
 @Composable
 fun GroupTile(icon: String, ink: Boolean, modifier: Modifier = Modifier, size: Dp = SkySizes.rowCircle) {
     Box(
@@ -132,7 +135,7 @@ fun GroupTile(icon: String, ink: Boolean, modifier: Modifier = Modifier, size: D
             .background(if (ink) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer),
     ) {
         Icon(
-            imageVector = PtutIcon.named(icon).image,
+            imageVector = (PtutIcon.find(icon) ?: PtutIcon.Group).image,
             contentDescription = null,
             tint = if (ink) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier.size(SkySizes.rowGlyph),

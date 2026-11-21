@@ -3,10 +3,10 @@ package com.ptut.expense.di
 import com.ptut.expense.AppViewModel
 import com.ptut.expense.agent.SpeechInput
 import com.ptut.expense.agent.agentModule
+import com.ptut.expense.data.local.LedgerGate
 import com.ptut.expense.data.local.PtutDatabase
 import com.ptut.expense.data.local.PtutDatabaseContext
-import com.ptut.expense.data.local.openPtutDatabase
-import com.ptut.expense.data.local.ptutDatabaseBuilder
+import com.ptut.expense.data.local.ptutLedgerGate
 import com.ptut.expense.data.repository.RoomCategoryRepository
 import com.ptut.expense.data.repository.RoomHomeBook
 import com.ptut.expense.data.repository.RoomImportStore
@@ -245,7 +245,9 @@ val ledgerModule: Module = module {
 fun dataModule(databaseContext: PtutDatabaseContext): Module = module {
     includes(ledgerModule)
 
-    single<PtutDatabase> { databaseContext.ptutDatabaseBuilder().openPtutDatabase() }
+    // Opened at launch so a refused file shows the recovery screen instead of crashing a screen later.
+    single { databaseContext.ptutLedgerGate(now = { Clock.System.now().toEpochMilliseconds() }) }
+    single<PtutDatabase> { get<LedgerGate<PtutDatabase>>().database() }
 
     /** FR-22 at both ends is a system picker, so the platform supplies it. */
     single<LedgerFileStore> { ledgerFileStore(databaseContext) }

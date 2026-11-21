@@ -47,6 +47,7 @@ import com.ptut.expense.nav.todayRoutes
 import com.ptut.expense.onboarding.Onboarding
 import com.ptut.expense.onboarding.OnboardingView
 import com.ptut.expense.onboarding.OnboardingViewModel
+import com.ptut.expense.recovery.RestoreAfterRecovery
 import com.ptut.expense.shared.SignedOutElsewhereSheet
 import com.ptut.expense.sync.InviteLinks
 import com.ptut.expense.sync.SharedSync
@@ -100,9 +101,20 @@ private fun FirstRun() {
     val restoring by viewModel.isRestoring.collectAsStateWithLifecycle()
     val problem by viewModel.restoreProblem.collectAsStateWithLifecycle()
     val preview by viewModel.restorePreview.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // Access granted in the phone's settings shows when the reader comes back.
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshAccess()
+        onPauseOrDispose { }
+    }
     OnboardingView(
+        state = state,
+        onNext = viewModel::next,
         onAllowPhotoAccess = viewModel::requestPhotoAccess,
+        onChooseFolder = viewModel::chooseFolder,
         onSkip = viewModel::skip,
+        onFinish = viewModel::finish,
+        onOpenSettings = viewModel::openPhoneSettings.takeIf { viewModel.canOpenSettings },
         onRestore = viewModel::restore,
         restoring = restoring,
         restoreProblem = problem,
@@ -183,6 +195,11 @@ private fun LedgerShell() {
     // #190: an invite link can arrive before the graph exists, so it waits in InviteLinks.
     TakeFromInbox(InviteLinks.pendingCode, graphReady, InviteLinks::consume) { code ->
         navController.navigate(PtutRoute.Join(code)) { launchSingleTop = true }
+    }
+
+    // "Restore from a backup" on the recovery screen opened an empty ledger first; Import follows.
+    TakeFromInbox(RestoreAfterRecovery.pendingRestore, graphReady, RestoreAfterRecovery::consume) {
+        navController.navigate(PtutRoute.ImportData) { launchSingleTop = true }
     }
 
     // A tapped push opens its group; like an invite link it can arrive before the graph exists.

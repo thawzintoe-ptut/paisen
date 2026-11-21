@@ -59,8 +59,18 @@ fun CloseMonthView(uiState: CloseMonthUiState?, onNext: () -> Unit, onSeal: () -
                     PlayStamp(face = uiState.stampFace, caption = uiState.stampCaption, tone = StampTone.Sky, contentDescription = uiState.sealed, pressed = true)
                     Text(uiState.sealed, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
                 } else {
-                    SkyButton(uiState.seal, onClick = onSeal, enabled = uiState.last, modifier = Modifier.weight(1f))
+                    SkyButton(uiState.seal, onClick = onSeal, enabled = uiState.canSeal, modifier = Modifier.weight(1f))
                 }
+            }
+        }
+        uiState.sealBlocked?.takeIf { uiState.sealed == null }?.let { reason ->
+            item {
+                Text(
+                    reason,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md).semantics { liveRegion = LiveRegionMode.Polite },
+                )
             }
         }
     }

@@ -38,6 +38,9 @@ data class CloseMonthUiState(
     val at: Int = 0,
     val stampFace: String = "",
     val stampCaption: String = "",
+    val canSeal: Boolean = false,
+    /** Why the seal is off; null once it can be pressed. */
+    val sealBlocked: String? = null,
 )
 
 /** #98 (p20): three steps with one action each, then the seal. Sealing never locks a row. */
@@ -63,7 +66,8 @@ class CloseMonthViewModel(
 
     private fun MonthCloseState.asUiState(at: Int, categories: List<Category>): CloseMonthUiState {
         val text = AppText.copy.play.extras
-        val name = runCatching { YearMonth.parse(month) }.getOrNull()?.let { "${it.month.longName()} ${it.year}" } ?: month
+        val yearMonth = runCatching { YearMonth.parse(month) }.getOrNull()
+        val name = yearMonth?.let { "${it.month.longName()} ${it.year}" } ?: month
         val shop: (String) -> Pair<String, String> = { id -> rows.firstOrNull { it.id == id }?.let { row -> (row.counterparty ?: row.categoryId?.let { categories.named(it).first } ?: name) to row.amount.format() } ?: (id to "") }
         val steps = listOf(
             CloseStepUiModel(
@@ -75,8 +79,10 @@ class CloseMonthViewModel(
                 title = text.closeBig,
                 lines = (
                     close.duplicates.map { (first, _) -> shop(first).let { (s, a) -> text.closeDuplicate(s, a) } } +
-                        close.risenRepeats.map { id -> shop(id).let { (s, a) -> text.closeRisen(s, a) } } +
-                        close.large.map { id -> shop(id).let { (s, a) -> text.closeLarge(s, a) } }
+                        close.bigCosts.map { cost ->
+                            val why = listOfNotNull(text.closeWhyRisen.takeIf { cost.risen }, text.closeWhyLarge.takeIf { cost.large }).joinToString(", ")
+                            shop(cost.id).let { (s, a) -> text.closeBigCost(s, a, why) }
+                        }
                     ).ifEmpty { listOf(text.closeNothingOdd) },
                 action = null,
             ),
@@ -107,6 +113,12 @@ class CloseMonthViewModel(
             at = if (sealed) STEPS else at,
             stampFace = runCatching { YearMonth.parse(month) }.getOrNull()?.let { AppText.copy.calendar.monthsShort[it.month.ordinal] } ?: month,
             stampCaption = text.closeStampCaption,
+            canSeal = at == STEPS - 1 && waitingSlips == 0,
+            sealBlocked = when {
+                waitingSlips > 0 -> text.closeSealSlipsFirst(waitingSlips, yearMonth?.month?.longName() ?: month)
+                at < STEPS - 1 -> text.closeSealStepsFirst
+                else -> null
+            },
         )
     }
 }

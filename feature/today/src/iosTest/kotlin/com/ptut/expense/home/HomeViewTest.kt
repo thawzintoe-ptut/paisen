@@ -122,7 +122,7 @@ class HomeViewTest {
                 success(
                     spent = Satang.Zero,
                     transactions = emptyList(),
-                    review = ReviewCardUiModel(title = "17 slips need you", detail = "Six new shops"),
+                    review = ReviewCardUiModel(title = "17 slips need you", detail = "Six new shops", action = "Check 17"),
                     saved = listOf(savedRow()),
                 ),
             )

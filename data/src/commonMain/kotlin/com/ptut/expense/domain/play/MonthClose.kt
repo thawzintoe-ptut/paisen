@@ -2,6 +2,7 @@ package com.ptut.expense.domain.play
 
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.HomeTime
+import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.dateIn
@@ -25,7 +26,20 @@ data class MonthClose(
     val risenRepeats: List<String>,
     val large: List<String>,
     val versusLastMonth: Satang?,
-)
+) {
+    /** Risen and large merged by row id, so a row that is both shows once (risen order first). */
+    val bigCosts: List<BigCost>
+        get() = (risenRepeats + large).distinct().map { BigCost(it, risen = it in risenRepeats, large = it in large) }
+}
+
+/** One row in p20's second step and why it is there. */
+data class BigCost(val id: String, val risen: Boolean, val large: Boolean)
+
+/** Queued slips dated inside [month]; a slip from another month neither blocks the seal nor counts. */
+fun List<QueuedSlip>.waitingIn(month: String, zone: TimeZone = HomeTime): Int {
+    val yearMonth = runCatching { YearMonth.parse(month) }.getOrNull() ?: return 0
+    return count { it.occurredAtEpochMillis.dateIn(zone).let { day -> day.year == yearMonth.year && day.month == yearMonth.month } }
+}
 
 fun List<Transaction>.monthClose(month: String, zone: TimeZone = HomeTime): MonthClose {
     val yearMonth = runCatching { YearMonth.parse(month) }.getOrNull() ?: return MonthClose(emptyList(), emptyList(), emptyList(), null)

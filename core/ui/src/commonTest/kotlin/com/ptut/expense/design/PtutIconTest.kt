@@ -150,4 +150,10 @@ class PtutIconTest {
             is VectorGroup -> node.paths()
         }
     }
+
+    @Test
+    fun `a glyph another phone wrote that this build never drew is found as nothing rather than thrown`() {
+        assertEquals(null, PtutIcon.find("plane"))
+        assertEquals(PtutIcon.Group, PtutIcon.find(PtutIcon.Group.designName))
+    }
 }

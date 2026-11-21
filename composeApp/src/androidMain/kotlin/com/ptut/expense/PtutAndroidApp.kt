@@ -12,6 +12,9 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ptut.expense.agent.AndroidSpeechInput
 import com.ptut.expense.agent.SpeechInput
+import com.ptut.expense.data.local.LedgerGate
+import com.ptut.expense.data.local.LedgerOpen
+import com.ptut.expense.data.local.PtutDatabase
 import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.onboarding.Onboarding
 import com.ptut.expense.platform.files.LedgerFileStore
@@ -41,7 +44,9 @@ fun PtutAndroidApp() {
     LedgerFilePickers()
     PhotoAccessDialog()
     MicrophoneDialog()
-    SlipImportOnOpen()
+    val ledger by koinInject<LedgerGate<PtutDatabase>>().state.collectAsStateWithLifecycle()
+    // A refused ledger: the slip worker would only fail against it.
+    if (ledger is LedgerOpen.Ready) SlipImportOnOpen()
     App()
 }
 

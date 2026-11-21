@@ -84,4 +84,19 @@ class UserDefaultsAppSettingsStoreTest {
 
         assertEquals(SlipOwner(), store.read().slipOwner)
     }
+
+    @Test
+    fun `a phone that finished first run with no play key keeps play on`() {
+        val upgraded = UserDefaultsAppSettingsStore(defaults, ownerFile, firstRunFinished = { true })
+
+        assertTrue(upgraded.read().play.on)
+        assertNull(defaults.objectForKey("ptut-play-on"))
+    }
+
+    @Test
+    fun `a fresh install starts with play off and keeps it after first run`() {
+        assertFalse(UserDefaultsAppSettingsStore(defaults, ownerFile, firstRunFinished = { false }).read().play.on)
+
+        assertFalse(UserDefaultsAppSettingsStore(defaults, ownerFile, firstRunFinished = { true }).read().play.on)
+    }
 }

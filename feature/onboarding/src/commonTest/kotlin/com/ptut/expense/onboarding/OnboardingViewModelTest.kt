@@ -9,6 +9,11 @@ import com.ptut.expense.domain.backup.BackupUnreadable
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.MergeReport
 import com.ptut.expense.domain.backup.RestoreDriver
+import com.ptut.expense.domain.folders.ApplyWatchedFoldersUseCase
+import com.ptut.expense.domain.folders.DeviceFolder
+import com.ptut.expense.domain.folders.FakeFolders
+import com.ptut.expense.domain.folders.FolderCatalog
+import com.ptut.expense.domain.folders.RefreshFolderCatalogUseCase
 import com.ptut.expense.domain.home.ChooseHomeUseCase
 import com.ptut.expense.domain.home.FakeHomeBook
 import com.ptut.expense.domain.shared.Currencies
@@ -33,8 +38,11 @@ class OnboardingViewModelTest : ViewModelTest() {
      * answered — and NFR-2's manual path does not need the folder, so declining is a whole answer.
      */
     @Test
-    fun `skipping first run still finishes it`() = runTest {
-        viewModel().skip()
+    fun `skipping photos still reaches the end of first run`() = runTest {
+        val viewModel = viewModel()
+        viewModel.next()
+        viewModel.skip()
+        viewModel.finish()
 
         assertTrue(onboarding.isFinished.value)
         assertEquals(0, photoAccess.asks, "skipping raised the photo dialog anyway")
@@ -50,7 +58,7 @@ class OnboardingViewModelTest : ViewModelTest() {
         val book = FakeHomeBook()
         val viewModel = OnboardingViewModel(onboarding, photoAccess, chooseHomeUseCase = ChooseHomeUseCase(book), firstRunHome = bahtInYangon)
 
-        viewModel.skip()
+        viewModel.finish()
         runCurrent()
 
         assertEquals(listOf(bahtInYangon), book.chosen)
@@ -129,7 +137,7 @@ class OnboardingViewModelTest : ViewModelTest() {
         viewModel.requestPhotoAccess()
         runCurrent()
         assertEquals(2, flaky.asks)
-        assertTrue(onboarding.isFinished.value)
+        assertEquals(SlipAccess.Granted(emptyList()), viewModel.uiState.value.access)
     }
 
     /** Throws on the first ask, as a platform with no activity to show the dialog on would. */
@@ -167,22 +175,20 @@ class OnboardingViewModelTest : ViewModelTest() {
         val book = FakeHomeBook()
         val viewModel = OnboardingViewModel(onboarding, photoAccess, chooseHomeUseCase = ChooseHomeUseCase(book))
 
-        viewModel.skip()
+        viewModel.finish()
 
         assertTrue(book.chosen.isEmpty())
     }
 
-    /**
-     * FR-2. The dialog is raised whatever the reader then answers, and first run ends either way —
-     * a refusal leaves the ledger fillable by hand rather than leaving the reader on this screen.
-     */
     @Test
-    fun `allowing photo access raises the dialog and then finishes first run`() = runTest {
-        viewModel().requestPhotoAccess()
+    fun `allowing photo access raises the dialog and does not end first run`() = runTest {
+        val viewModel = viewModel()
+        viewModel.requestPhotoAccess()
         runCurrent()
 
         assertEquals(1, photoAccess.asks)
-        assertTrue(onboarding.isFinished.value)
+        assertFalse(onboarding.isFinished.value)
+        assertEquals(SlipAccess.Granted(emptyList()), viewModel.uiState.value.access)
     }
 
     /** The answer has to be in before Today is, or the first scan runs against a live dialog. */
@@ -190,10 +196,11 @@ class OnboardingViewModelTest : ViewModelTest() {
     fun `first run stays up while the dialog is open`() = runTest {
         photoAccess.holdOpen()
 
-        viewModel().requestPhotoAccess()
+        val viewModel = viewModel()
+        viewModel.requestPhotoAccess()
         runCurrent()
 
-        assertFalse(onboarding.isFinished.value, "first run ended before the dialog was answered")
+        assertEquals(SlipAccess.Unasked, viewModel.uiState.value.access, "the folders were read before the dialog was answered")
     }
 
     /**
@@ -215,8 +222,117 @@ class OnboardingViewModelTest : ViewModelTest() {
         photoAccess.answer()
         runCurrent()
 
+        assertEquals(SlipAccess.Granted(emptyList()), viewModel.uiState.value.access)
+    }
+
+    @Test
+    fun `the steps run promise then slips then finish`() = runTest {
+        val viewModel = viewModel()
+        assertEquals(OnboardingStep.Promise, viewModel.uiState.value.step)
+
+        viewModel.next()
+        assertEquals(OnboardingStep.Slips, viewModel.uiState.value.step)
+
+        viewModel.skip()
+        assertEquals(OnboardingStep.Finish, viewModel.uiState.value.step)
+        assertFalse(onboarding.isFinished.value, "first run ended before Open Today")
+
+        viewModel.finish()
         assertTrue(onboarding.isFinished.value)
     }
+
+    @Test
+    fun `next on a later step does not go back to slips`() = runTest {
+        val viewModel = viewModel()
+        viewModel.next()
+        viewModel.skip()
+        viewModel.next()
+
+        assertEquals(OnboardingStep.Finish, viewModel.uiState.value.step)
+    }
+
+    @Test
+    fun `no folders after the dialog is a refusal with a way on`() = runTest {
+        val settings = FakePhotoSettings()
+        val viewModel = folderViewModel(offered = emptyList(), photoSettings = settings)
+        viewModel.next()
+
+        viewModel.requestPhotoAccess()
+        runCurrent()
+        assertEquals(SlipAccess.Denied, viewModel.uiState.value.access)
+        assertTrue(viewModel.canOpenSettings)
+
+        viewModel.openPhoneSettings()
+        assertEquals(1, settings.opens)
+
+        viewModel.skip()
+        assertEquals(OnboardingStep.Finish, viewModel.uiState.value.step)
+    }
+
+    @Test
+    fun `access given in the phone settings shows on return`() = runTest {
+        val catalog = FakeCatalog(emptyList())
+        val viewModel = folderViewModel(catalog = catalog)
+        viewModel.requestPhotoAccess()
+        runCurrent()
+        assertEquals(SlipAccess.Denied, viewModel.uiState.value.access)
+
+        catalog.offers = listOf(kplus)
+        viewModel.refreshAccess()
+        runCurrent()
+
+        assertEquals(SlipAccess.Granted(listOf(kplus)), viewModel.uiState.value.access)
+    }
+
+    @Test
+    fun `a chosen folder is watched and a second pick replaces it`() = runTest {
+        val folders = FakeFolders()
+        val viewModel = folderViewModel(offered = listOf(kplus, camera), folders = folders)
+        viewModel.requestPhotoAccess()
+        runCurrent()
+
+        viewModel.chooseFolder(kplus.id)
+        runCurrent()
+        assertEquals(SlipAccess.Granted(listOf(kplus, camera), chosen = kplus.id), viewModel.uiState.value.access)
+        assertEquals(listOf(kplus.id), folders.folders.value.filter { it.watched }.map { it.id })
+
+        viewModel.chooseFolder(camera.id)
+        runCurrent()
+        assertEquals(listOf(camera.id), folders.folders.value.filter { it.watched }.map { it.id })
+    }
+
+    @Test
+    fun `a folder the list does not hold is ignored`() = runTest {
+        val folders = FakeFolders()
+        val viewModel = folderViewModel(offered = listOf(kplus), folders = folders)
+        viewModel.requestPhotoAccess()
+        runCurrent()
+
+        viewModel.chooseFolder("gone")
+        runCurrent()
+
+        assertTrue(folders.folders.value.isEmpty())
+    }
+
+    private val kplus = DeviceFolder(id = "1", name = "K PLUS", path = "Pictures/K PLUS", imageCount = 12)
+    private val camera = DeviceFolder(id = "2", name = "Camera", path = "DCIM/Camera", imageCount = 300)
+
+    private class FakeCatalog(var offers: List<DeviceFolder>) : FolderCatalog {
+        override suspend fun available(): List<DeviceFolder> = offers
+    }
+
+    private fun folderViewModel(
+        offered: List<DeviceFolder> = emptyList(),
+        catalog: FakeCatalog = FakeCatalog(offered),
+        folders: FakeFolders = FakeFolders(),
+        photoSettings: FakePhotoSettings? = null,
+    ) = OnboardingViewModel(
+        onboarding = onboarding,
+        photoAccess = photoAccess,
+        refreshCatalog = RefreshFolderCatalogUseCase(catalog),
+        applyWatchedFolders = ApplyWatchedFoldersUseCase(folders),
+        photoSettings = photoSettings,
+    )
 
     private fun viewModel() = OnboardingViewModel(onboarding = onboarding, photoAccess = photoAccess)
 }

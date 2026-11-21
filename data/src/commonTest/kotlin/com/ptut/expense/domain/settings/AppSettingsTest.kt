@@ -103,4 +103,14 @@ class AppSettingsTest {
 
         assertEquals(PlayChoices(on = false, guess = false, weeklyReminder = true), AppSettings(store).choices.value.play)
     }
+
+    @Test
+    fun `a phone that finished first run before keeps play on`() {
+        assertEquals(true, playOnWhenUnset(firstRunFinished = true))
+    }
+
+    @Test
+    fun `a fresh install starts with play off`() {
+        assertEquals(false, playOnWhenUnset(firstRunFinished = false))
+    }
 }

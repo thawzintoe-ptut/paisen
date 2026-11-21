@@ -4,6 +4,7 @@ import androidx.compose.ui.window.ComposeUIViewController
 import com.ptut.expense.data.local.IosPtutDatabaseContext
 import com.ptut.expense.di.AppBuild
 import com.ptut.expense.di.initKoin
+import com.ptut.expense.di.ledgerOpened
 import com.ptut.expense.platform.share.SharedSlipReceiver
 import com.ptut.expense.platform.work.SlipImportSchedule
 import com.ptut.expense.sync.InviteLinks
@@ -40,7 +41,8 @@ internal val graphStarted: Unit by lazy {
  */
 private val koinStarted: Unit by lazy {
     graphStarted
-    KoinPlatform.getKoin().get<SlipImportSchedule>().start()
+    val koin = KoinPlatform.getKoin()
+    if (koin.ledgerOpened()) koin.get<SlipImportSchedule>().start()
 }
 
 /** Entry point the Xcode wrapper calls. */

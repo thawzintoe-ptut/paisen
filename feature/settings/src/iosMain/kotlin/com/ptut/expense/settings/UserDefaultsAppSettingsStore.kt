@@ -5,8 +5,10 @@ import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.settings.AppChoices
 import com.ptut.expense.domain.settings.AppSettingsStore
 import com.ptut.expense.domain.settings.PlayChoices
+import com.ptut.expense.domain.settings.playOnWhenUnset
 import com.ptut.expense.domain.slip.SlipOwner
 import com.ptut.expense.locale.NoteTone
+import com.ptut.expense.onboarding.UserDefaultsOnboardingFlag
 import com.ptut.expense.platform.files.documentsDirectory
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
@@ -60,6 +62,7 @@ private const val CANDIDATE_FIELD = "candidate"
 class UserDefaultsAppSettingsStore(
     private val defaults: NSUserDefaults = NSUserDefaults.standardUserDefaults,
     private val ownerFile: Path = requireNotNull(documentsDirectory().path) { "iOS documents directory has no path" }.toPath() / OWNER_FILE,
+    private val firstRunFinished: () -> Boolean = { UserDefaultsOnboardingFlag().hasFinished() },
 ) : AppSettingsStore {
 
     private val files = FileSystem.SYSTEM
@@ -94,7 +97,7 @@ class UserDefaultsAppSettingsStore(
             homeZone = defaults.stringForKey(HOME_ZONE),
             play = shipped.play.let { play ->
                 PlayChoices(
-                    on = readBool(PLAY_ON, play.on),
+                    on = readPlayOn(),
                     run = readBool(PLAY_RUN, play.run),
                     guess = readBool(PLAY_GUESS, play.guess),
                     challenges = readBool(PLAY_CHALLENGES, play.challenges),
@@ -109,6 +112,13 @@ class UserDefaultsAppSettingsStore(
     /** `boolForKey` answers false for a missing key, so a switch that ships on reads its default until written. */
     private fun readBool(key: String, shipped: Boolean): Boolean =
         defaults.objectForKey(key)?.let { defaults.boolForKey(key) } ?: shipped
+
+    private fun readPlayOn(): Boolean {
+        if (defaults.objectForKey(PLAY_ON) != null) return defaults.boolForKey(PLAY_ON)
+        val on = playOnWhenUnset(firstRunFinished())
+        if (!on) defaults.setBool(false, PLAY_ON)
+        return on
+    }
 
     override fun write(choices: AppChoices) {
         moveOwnerOutOfDefaults()

@@ -1,6 +1,8 @@
 package com.ptut.expense.domain.play
 
 import com.ptut.expense.domain.BangkokTime
+import com.ptut.expense.domain.QueuedSlip
+import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
@@ -34,5 +36,28 @@ class MonthCloseTest {
 
         assertEquals(listOf("big"), close.large)
         assertNull(close.versusLastMonth)
+    }
+
+    @Test
+    fun `slips dated in the next month are not counted as waiting`() {
+        val slips = listOf(slip("dec", LocalDate(2026, 12, 2)), slip("nov", LocalDate(2026, 11, 28)))
+
+        assertEquals(1, slips.waitingIn("2026-11", BangkokTime))
+        assertEquals(0, listOf(slip("dec", LocalDate(2026, 12, 2))).waitingIn("2026-11", BangkokTime))
+    }
+
+    @Test
+    fun `a row both risen and large shows once in the big costs`() {
+        val rows = listOf(row("old", LocalDate(2026, 10, 5), 10_000, shop = "Shopee")) +
+            (1..5).map { row("s$it", LocalDate(2026, 11, it), 10_000) } +
+            row("big", LocalDate(2026, 11, 9), 129_000, shop = "Shopee")
+
+        val close = rows.monthClose("2026-11", BangkokTime)
+
+        assertEquals(listOf(BigCost("big", risen = true, large = true)), close.bigCosts)
+    }
+
+    private fun slip(id: String, day: LocalDate) = row(id, day, 0).let {
+        QueuedSlip(id, "Shop", it.occurredAtEpochMillis, "", null, ReviewReason.AmountUnclear, it.occurredAtEpochMillis)
     }
 }

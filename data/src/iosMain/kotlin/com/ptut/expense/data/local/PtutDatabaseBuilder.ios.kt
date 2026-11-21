@@ -5,6 +5,7 @@ import androidx.room.RoomDatabase
 import com.ptut.expense.platform.files.documentsDirectory
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.newSingleThreadContext
+import okio.FileSystem
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -16,7 +17,11 @@ import kotlin.coroutines.CoroutineContext
 internal actual val databaseQueryContext: CoroutineContext = newSingleThreadContext("ptut-db")
 
 actual fun PtutDatabaseContext.ptutDatabaseBuilder(): RoomDatabase.Builder<PtutDatabase> =
-    Room.databaseBuilder<PtutDatabase>(name = "${documentsPath()}/$PTUT_DATABASE_FILE")
+    Room.databaseBuilder<PtutDatabase>(name = ptutDatabasePath())
+
+actual fun PtutDatabaseContext.ptutDatabasePath(): String = "${documentsPath()}/$PTUT_DATABASE_FILE"
+
+actual fun ledgerFiles(): LedgerFiles = OkioLedgerFiles(FileSystem.SYSTEM)
 
 /** Room takes a path and not a URL, and a URL with no path is a directory that does not exist. */
 private fun documentsPath(): String =

@@ -60,6 +60,13 @@ data class PlayChoices(
 )
 
 /**
+ * Play's master switch when no build has written it yet. A phone that finished first run before
+ * Play shipped off keeps it on, as it had it; a fresh install starts with it off.
+ * The stores write the off at once, so it still holds after first run finishes.
+ */
+fun playOnWhenUnset(firstRunFinished: Boolean): Boolean = firstRunFinished
+
+/**
  * Where [AppChoices] survives a process death. `SharedPreferences` on Android,
  * `NSUserDefaults` on iOS — the whole record either way, so a half-written pair is not a state.
  *

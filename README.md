@@ -56,7 +56,7 @@ those slips and turns them into a record of where your money went.
   <tr><td><b>Quick add</b></td><td>Type or say “coffee 60” in English, Thai or Burmese. On Android, a language your phone cannot recognise offline, like Burmese, is recognised online by Google.</td></tr>
   <tr><td><b>Shared groups (optional)</b></td><td>Split a bill or a trip. Join by link or QR, settle up with a PromptPay QR.</td></tr>
   <tr><td><b>Your file</b></td><td>Export the whole record and import it on a new phone.</td></tr>
-  <tr><td><b>English, မြန်မာ and ไทย</b></td><td>Burmese digits and Thai Buddhist Era years, in light and dark.</td></tr>
+  <tr><td><b>English and မြန်မာ</b></td><td>Burmese digits, in light and dark. ไทย, with Buddhist Era years, is in test builds until a native reader signs it off.</td></tr>
 </table>
 
 ## Privacy

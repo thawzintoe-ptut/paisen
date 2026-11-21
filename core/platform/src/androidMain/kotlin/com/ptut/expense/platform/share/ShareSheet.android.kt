@@ -32,6 +32,22 @@ private class AndroidShareSheet(private val context: Context) : ShareSheet {
         text?.let { send.putExtra(Intent.EXTRA_TEXT, it) }
         context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
+
+    override fun shareFile(bytes: ByteArray, fileName: String, mimeType: String) {
+        val file = File(context.cacheDir, "$SHARE_FOLDER/$fileName").apply {
+            parentFile?.mkdirs()
+            writeBytes(bytes)
+        }
+        val uri = FileProvider.getUriForFile(context, context.packageName + SHARE_AUTHORITY, file)
+        val send = Intent(Intent.ACTION_SEND).setType(mimeType).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        send.clipData = ClipData.newRawUri(null, uri)
+        context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    override fun shareText(text: String) {
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+        context.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 }
 
 @Composable

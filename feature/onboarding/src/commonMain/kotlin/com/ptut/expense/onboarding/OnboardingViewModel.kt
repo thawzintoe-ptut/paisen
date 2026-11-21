@@ -6,10 +6,14 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.backup.RestoreDriver
 import com.ptut.expense.domain.backup.RestoreStep
+import com.ptut.expense.domain.folders.ApplyWatchedFoldersUseCase
+import com.ptut.expense.domain.folders.DeviceFolder
+import com.ptut.expense.domain.folders.RefreshFolderCatalogUseCase
 import com.ptut.expense.domain.home.ChooseHomeUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.platform.photos.PhotoAccessRequest
+import com.ptut.expense.platform.photos.PhotoSettings
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.phrase
@@ -21,18 +25,33 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** First run's three steps, in order. */
+enum class OnboardingStep { Promise, Slips, Finish }
+
+/** Step two's answer. [Unasked] until the dialog closes; [Denied] still has a way on. */
+sealed interface SlipAccess {
+    data object Unasked : SlipAccess
+
+    data object Denied : SlipAccess
+
+    /** [chosen] is the folder id the reader picked, or null before they pick. */
+    data class Granted(val folders: List<DeviceFolder>, val chosen: String? = null) : SlipAccess
+}
+
+data class OnboardingUiState(
+    val step: OnboardingStep = OnboardingStep.Promise,
+    val access: SlipAccess = SlipAccess.Unasked,
+)
+
 /**
- * First run's two exits. §4: the spec has one user and no accounts, so this screen replaces sign-in
- * and is the only place the app asks for anything.
+ * First run, the only screen that asks for anything (§4: one user, no accounts): the promise,
+ * photo access with the slip folder, then done.
  *
- * Neither exit can fail, and that is deliberate. FR-2's photo access is what makes the ledger fill
- * itself, but NFR-2's manual path does not depend on it — so a refusal ends first run exactly as an
- * allow does, and the reader lands on Today either way.
- *
- * There is no `uiState`: nothing on this screen changes with what the app knows. The copy is fixed
- * and the two buttons are always live, so a state flow here would carry a constant.
+ * Refusing photos is not a dead end. NFR-2's manual path needs none, so [SlipAccess.Denied] says
+ * what still works and lets the reader go on or try again.
  */
 class OnboardingViewModel(
     private val onboarding: Onboarding,
@@ -45,7 +64,18 @@ class OnboardingViewModel(
     private val chooseHomeUseCase: ChooseHomeUseCase? = null,
     /** #41: what first run sets, or null where the build does not offer a home. Settings changes it later. */
     private val firstRunHome: HomeChoice? = null,
+    /** Photo folders' own seams. Null where no catalogue is bound; access then reads as granted with no folders. */
+    private val refreshCatalog: RefreshFolderCatalogUseCase? = null,
+    private val applyWatchedFolders: ApplyWatchedFoldersUseCase? = null,
+    /** The system page for a reader who refused; null where none is bound. */
+    private val photoSettings: PhotoSettings? = null,
 ) : ViewModel() {
+
+    private val state = MutableStateFlow(OnboardingUiState())
+
+    val uiState: StateFlow<OnboardingUiState> = state.asStateFlow()
+
+    val canOpenSettings: Boolean get() = photoSettings != null
 
     /** Written before first run ends, while the ledger is still empty. */
     private suspend fun commitHome() {
@@ -70,12 +100,16 @@ class OnboardingViewModel(
 
     /**
      * Guards the second tap while the system dialog is up. Without it a double tap queues a second
-     * ask, which on Android resolves instantly against the dialog already showing and finishes first
-     * run under the reader's finger before they have answered it.
+     * ask, which on Android resolves instantly against the dialog already showing.
      */
     private var asking = false
 
-    /** FR-2. Finishes on the dialog closing, not on the tap, so the answer is in before Today is. */
+    /** Promise to Slips. */
+    fun next() {
+        state.update { if (it.step == OnboardingStep.Promise) it.copy(step = OnboardingStep.Slips) else it }
+    }
+
+    /** FR-2, and Try again. The folders are read after the dialog closes, so the answer is in. */
     fun requestPhotoAccess() {
         if (asking) return
         asking = true
@@ -83,12 +117,10 @@ class OnboardingViewModel(
         viewModelScope.launch {
             try {
                 photoAccess.ask()
-                commitHome()
-                onboarding.finish()
+                readAccess()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
-                // The line under the buttons, as for a restore: toasts only draw inside the shell.
                 problem.value = AppText.copy.settings.didNotWork
             } finally {
                 asking = false
@@ -96,8 +128,47 @@ class OnboardingViewModel(
         }
     }
 
-    /** NFR-2's path for a reader who would rather type. The folder simply stays unread. */
+    /** Access granted in the system settings shows when the reader comes back. */
+    fun refreshAccess() {
+        if (state.value.access != SlipAccess.Denied) return
+        viewModelScope.launch { readAccess() }
+    }
+
+    fun openPhoneSettings() {
+        photoSettings?.open()
+    }
+
+    /** An empty catalogue is how both platforms say no access, as Photo folders reads it. */
+    private suspend fun readAccess() {
+        val catalog = refreshCatalog ?: run {
+            state.update { it.copy(access = SlipAccess.Granted(emptyList())) }
+            return
+        }
+        val folders = catalog()
+        state.update { it.copy(access = if (folders.isEmpty()) SlipAccess.Denied else SlipAccess.Granted(folders)) }
+    }
+
+    /** FR-5: the picked folder is watched; a second pick replaces the first. */
+    fun chooseFolder(id: String) {
+        val granted = state.value.access as? SlipAccess.Granted ?: return
+        val folder = granted.folders.firstOrNull { it.id == id } ?: return
+        if (granted.chosen == id) return
+        state.update { it.copy(access = granted.copy(chosen = id)) }
+        val apply = applyWatchedFolders ?: return
+        viewModelScope.launch {
+            if (!apply(stop = listOfNotNull(granted.chosen), watch = listOf(folder))) {
+                problem.value = AppText.copy.settings.didNotWork
+            }
+        }
+    }
+
+    /** Slips to Finish, whatever the answer was: NFR-2's path for a reader who would rather type. */
     fun skip() {
+        state.update { it.copy(step = OnboardingStep.Finish) }
+    }
+
+    /** Open Today. */
+    fun finish() {
         if (firstRunHome == null || chooseHomeUseCase == null) {
             onboarding.finish()
             return

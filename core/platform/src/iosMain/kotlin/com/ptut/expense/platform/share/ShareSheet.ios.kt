@@ -7,14 +7,27 @@ import androidx.compose.ui.graphics.asSkiaBitmap
 import com.ptut.expense.platform.toNSData
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
+import platform.Foundation.NSTemporaryDirectory
+import platform.Foundation.NSURL
+import platform.Foundation.writeToFile
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIApplication
 import platform.UIKit.UIImage
 
 /** The share sheet over whatever is on screen, so it shows above a bottom sheet as well. */
 private class IosShareSheet : ShareSheet {
-    override fun sharePng(png: ByteArray, text: String?) {
-        val sheet = UIActivityViewController(activityItems = listOfNotNull(UIImage(data = png.toNSData()), text), applicationActivities = null)
+    override fun sharePng(png: ByteArray, text: String?) = present(listOfNotNull(UIImage(data = png.toNSData()), text))
+
+    override fun shareFile(bytes: ByteArray, fileName: String, mimeType: String) {
+        val path = NSTemporaryDirectory() + fileName
+        bytes.toNSData().writeToFile(path, atomically = true)
+        present(listOf(NSURL.fileURLWithPath(path)))
+    }
+
+    override fun shareText(text: String) = present(listOf(text))
+
+    private fun present(items: List<Any>) {
+        val sheet = UIActivityViewController(activityItems = items, applicationActivities = null)
         var top = UIApplication.sharedApplication.keyWindow?.rootViewController
         while (top?.presentedViewController != null) top = top.presentedViewController
         top?.presentViewController(sheet, animated = true, completion = null)

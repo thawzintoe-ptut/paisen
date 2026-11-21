@@ -10,6 +10,7 @@ import com.ptut.expense.domain.MetaParts
 import com.ptut.expense.domain.PeriodSummary
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
+import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
@@ -22,6 +23,7 @@ import com.ptut.expense.domain.folders.ObserveWatchedFoldersUseCase
 import com.ptut.expense.domain.folders.WatchedFolder
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
+import com.ptut.expense.domain.formatNet
 import com.ptut.expense.domain.iconName
 import com.ptut.expense.domain.label
 import com.ptut.expense.domain.ledger.LedgerSpan
@@ -89,6 +91,8 @@ sealed interface HomeUiState {
         val heroLabel: String,
         /** The chosen period's money: the amount, and Income and Net beside it (#146, K1). */
         val summary: PeriodSummary,
+        /** "Income ฿0.00 · Net −฿655.00", or null while the ledger holds no income at all. */
+        val incomeLine: IncomeLineUiModel? = null,
         /** The chosen period's rows, newest first. */
         val transactions: List<TransactionRowUiModel>,
         val importStatus: ImportStatusUiModel,
@@ -140,7 +144,10 @@ sealed interface HomeUiState {
 }
 
 /** The way into the review queue, stated as a count and a reason rather than a bare badge. */
-data class ReviewCardUiModel(val title: String, val detail: String)
+data class ReviewCardUiModel(val title: String, val detail: String, val action: String)
+
+/** The period's income and its signed net; [netBelowZero] is the one case that is money out. */
+data class IncomeLineUiModel(val income: String, val net: String, val netBelowZero: Boolean)
 
 /** "฿180 less than a usual Friday" and its trend glyph's name (#119). */
 data class ComparedUiModel(val line: String, val glyph: String)
@@ -227,10 +234,20 @@ class HomeViewModel(
             val health = getImportHealth(sinceLastImportMillis, runs, stopSentences())
             val transactions = home.transactions
             val onToday = chosen == HomePeriod.Today
-            val coach = if (onToday) extras.play.coachCard(today, categories) else null
+            val weeklyCard = if (extras.weekly && onToday) {
+                getWeeklyCheckIn(home.history, today, extras.target, extras.note.on, extras.note.hiddenWeek)?.asCard(categories, extras.note.tone)
+                    ?.copy(guessMonday = extras.play.guessWeek?.toString())
+            } else {
+                null
+            }
+            // Today keeps one insight line, in screen order: weekly note, then coach, then Compared.
+            val coach = if (onToday && weeklyCard == null) extras.play.coachCard(today, categories) else null
             HomeUiState.Success(
                 heroLabel = "${chosen.spent()}${Separators.DOT}${if (chosen == HomePeriod.Today) today.dayLabel() else home.range.label()}",
                 summary = home.summary,
+                incomeLine = home.summary.takeIf { home.history.any { it.direction == Direction.Income } }?.let {
+                    IncomeLineUiModel(income = it.income.format(), net = it.net.formatNet(), netBelowZero = it.net < Satang.Zero)
+                },
                 transactions = transactions.map { it.asRow(categories, subCategories) },
                 importStatus = health.asImportStatus(),
                 watchLine = extras.folders.watchLine(sinceLastImportMillis),
@@ -243,14 +260,9 @@ class HomeViewModel(
                 savedTodayMore = (home.savedToday.size - SAVED_TODAY_SHOWN).coerceAtLeast(0),
                 period = chosen,
                 amountLabel = chosen.spent(),
-                compared = home.usualDay?.asCompared().takeIf { coach == null },
+                compared = home.usualDay?.asCompared().takeIf { coach == null && weeklyCard == null },
                 moodCard = if (extras.mood && chosen == HomePeriod.Today) getMoodRecap(home.history, now)?.asMoodCard() else null,
-                weeklyCard = if (extras.weekly && chosen == HomePeriod.Today) {
-                    getWeeklyCheckIn(home.history, today, extras.target, extras.note.on, extras.note.hiddenWeek)?.asCard(categories, extras.note.tone)
-                        ?.copy(guessMonday = extras.play.guessWeek?.toString())
-                } else {
-                    null
-                },
+                weeklyCard = weeklyCard,
                 target = home.target?.targetLine(categories),
                 play = if (onToday) extras.play.strip(queued.size) else null,
                 question = if (onToday) extras.play.questionCard() else null,
@@ -301,6 +313,7 @@ private fun ReviewCounts.asReviewCard(): ReviewCardUiModel {
     return ReviewCardUiModel(
         title = text.slipsToCheck(total),
         detail = reasons.joinToString(AppText.copy.phrases.listComma).replaceFirstChar { it.uppercase() },
+        action = text.checkSlips(total),
     )
 }
 

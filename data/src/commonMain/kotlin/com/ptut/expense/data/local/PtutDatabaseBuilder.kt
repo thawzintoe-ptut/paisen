@@ -1,9 +1,11 @@
 package com.ptut.expense.data.local
 
 import androidx.room.RoomDatabase
+import androidx.room.useReaderConnection
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.ptut.expense.domain.Category
+import kotlinx.coroutines.runBlocking
 import kotlin.coroutines.CoroutineContext
 
 internal const val PTUT_DATABASE_FILE = "ptut-expense.db"
@@ -61,3 +63,24 @@ private object SeedCategories : RoomDatabase.Callback() {
         }
     }
 }
+
+/** Where the ledger file lives on this platform. */
+expect fun PtutDatabaseContext.ptutDatabasePath(): String
+
+expect fun ledgerFiles(): LedgerFiles
+
+/**
+ * Room opens lazily, so a refused file would otherwise surface as a crash on the first query from
+ * whichever screen asked. One read here moves that open to launch, where it can be caught.
+ */
+fun PtutDatabaseContext.ptutLedgerGate(now: () -> Long): LedgerGate<PtutDatabase> =
+    LedgerGate(path = ptutDatabasePath(), files = ledgerFiles(), now = now) {
+        val database = ptutDatabaseBuilder().openPtutDatabase()
+        try {
+            runBlocking { database.useReaderConnection { it.usePrepared("SELECT 1") { statement -> statement.step() } } }
+        } catch (refused: Exception) {
+            database.close()
+            throw refused
+        }
+        database
+    }

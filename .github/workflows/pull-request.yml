@@ -49,6 +49,9 @@ jobs:
       - run: ./gradlew verifyNoAccountNumbers
       # A comma in a backtick test name compiles here and breaks the iOS target.
       - run: ./gradlew verifyNativeNames
+      # A released Room schema never changes, and the exported one is committed. Needs the tags.
+      - run: git fetch --depth=1 origin 'refs/tags/v*:refs/tags/v*'
+      - run: ./gradlew verifySchemaFrozen
       # #191: no banned HTTP client or telemetry SDK on a shipped classpath (Ktor is for sync/).
       - run: ./gradlew :composeApp:verifyNoNetworkDependencies :androidApp:verifyNoNetworkDependencies
       # #191: the merged manifest keeps no telemetry upload backend.

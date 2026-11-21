@@ -196,8 +196,7 @@ Burmese for play (#82), for a native reader to check. None of it is native-corre
 | Open slips to check | စစ်ဖို့ စလစ်တွေ ဖွင့်မယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeSlipsAction` |
 | Look at the big costs | ကြီးတဲ့ ကုန်ကျစရိတ်တွေ ကြည့်မယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeBig` |
 | Maybe twice: {shop}, {amount} | နှစ်ခါ ဖြစ်နိုင်: {shop}၊ {amount} | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeDuplicate` |
-| {shop} came to more: {amount} | {shop} ပိုကုန်လာတယ်: {amount} | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeRisen` |
-| Large: {shop}, {amount} | ကြီးတယ်: {shop}၊ {amount} | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeLarge` |
+| {shop} · {amount} · {why} | {shop} · {amount} · {why} | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeBigCost` |
 | Nothing looks odd | ထူးဆန်းတာ မရှိဘူး | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeNothingOdd` |
 | Compare with last month | ပြီးခဲ့တဲ့လနဲ့ နှိုင်းယှဉ်မယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeCompare` |
 | {amount} more than last month | ပြီးခဲ့တဲ့လထက် {amount} ပိုတယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeMore` |
@@ -222,3 +221,14 @@ Burmese for play (#82), for a native reader to check. None of it is native-corre
 | Strong / Steady / Building / Starting | ခိုင်မာတယ် / တည်ငြိမ်တယ် / တည်ဆောက်နေတယ် / စနေပြီ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.scoreWord` |
 | If you make it | အောင်ရင် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.challengeIfMade` |
 | challenge (stamp) | စိန်ခေါ်မှု | locale/PlayExtrasCopy.kt `PlayExtrasCopy.challengeStampCaption` |
+
+### Close the month: needs a native read
+
+New 2026-11-21, written without a native reader. Check before release.
+
+| English | Burmese | Where |
+|---|---|---|
+| more than last month | ပြီးခဲ့တဲ့လထက် ပိုတယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeWhyRisen` |
+| large | ကြီးတယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeWhyLarge` |
+| Check the {n} {month} slips first | {month} စလစ် {n} ခု အရင် စစ်ပါ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeSealSlipsFirst` |
+| Go through the three steps first | အဆင့် သုံးဆင့် အရင် ကြည့်ပါ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.closeSealStepsFirst` |

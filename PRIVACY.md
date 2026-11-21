@@ -21,6 +21,7 @@ On iPhone, if you ask Siri or a Shortcut for your spending, the app gives the to
 that Shortcut on your phone, after the phone is unlocked.
 
 The app has no ads, no analytics and no crash reporting. It does not sell or share your data.
+If the app crashes, it writes a short report that stays on your phone unless you choose Share.
 
 The app also turns off Android cloud backup, Android phone-to-phone transfer and iCloud backup for
 its ledger. To move your ledger to a new phone, use **Settings › Export** and **Import**. The export

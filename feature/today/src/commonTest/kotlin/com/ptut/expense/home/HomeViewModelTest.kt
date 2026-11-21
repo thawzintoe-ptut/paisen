@@ -665,6 +665,7 @@ class HomeViewModelTest : ViewModelTest() {
             val review = (awaitItem() as HomeUiState.Success).review
             assertEquals("2 slips to check", review?.title)
             assertEquals("One new shop, one unreadable amount", review?.detail)
+            assertEquals("Check 2", review?.action)
         }
     }
 
@@ -982,6 +983,49 @@ class HomeViewModelTest : ViewModelTest() {
 
         viewModel(transactions = emptyList(), saved = earlier, weeklyCheckIn = true, now = bangkok(2026, 8, 10, 12), play = PlayFixture()).uiState.test {
             assertEquals("2026-08-03", assertNotNull(awaitSuccess().weeklyCard).guessMonday)
+        }
+    }
+
+    @Test
+    fun aLedgerWithNoIncomeShowsNoIncomeOrNet() = runTest {
+        viewModel(transactions = listOf(transaction(Satang(12_875), Direction.Expense))).uiState.test {
+            assertNull(awaitSuccess().incomeLine)
+        }
+    }
+
+    @Test
+    fun incomeAnywhereInTheLedgerShowsTheNetWithItsSign() = runTest {
+        viewModel(
+            transactions = listOf(transaction(Satang(450_000), Direction.Income), transaction(Satang(12_875), Direction.Expense)),
+        ).uiState.test {
+            assertEquals(IncomeLineUiModel(income = "฿4,500.00", net = "+฿4,371.25", netBelowZero = false), awaitSuccess().incomeLine)
+        }
+        // An older income still counts; today's net is then below zero, the one case drawn in ruby.
+        viewModel(
+            transactions = listOf(transaction(Satang(12_875), Direction.Expense)),
+            saved = listOf(spent("salary", at(2026, 8, 1, 9, 0), Satang(900_000)).copy(direction = Direction.Income)),
+        ).uiState.test {
+            assertEquals(IncomeLineUiModel(income = "฿0.00", net = "−฿128.75", netBelowZero = true), awaitSuccess().incomeLine)
+        }
+    }
+
+    @Test
+    fun todayShowsOneInsightWhenTheWeeklyNoteCoachAndComparedAllHaveOne() = runTest {
+        val mondays = listOf(
+            spent("m1", at(2026, 10, 26, 12, 0), Satang(10_000)),
+            spent("m2", at(2026, 11, 2, 12, 0), Satang(10_000)),
+            spent("m3", at(2026, 11, 9, 12, 0), Satang(10_000)),
+        )
+        val today = listOf(spent("m4", at(2026, 11, 16, 10, 0), Satang(50_000)))
+
+        viewModel(transactions = today, saved = weekOfSpending() + mondays, now = MONDAY_NOON, weeklyCheckIn = true, play = PlayFixture()).uiState.test {
+            val state = awaitSuccess()
+            assertNotNull(state.weeklyCard)
+            assertNull(state.coach)
+            assertNull(state.compared)
+        }
+        viewModel(transactions = today, saved = weekOfSpending() + mondays, now = MONDAY_NOON, play = PlayFixture()).uiState.test {
+            assertNotNull(awaitSuccess().coach)
         }
     }
 

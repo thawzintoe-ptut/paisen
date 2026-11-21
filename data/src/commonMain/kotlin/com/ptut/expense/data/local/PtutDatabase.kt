@@ -84,7 +84,7 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         PlayGoalEntity::class,
         PaymentReactionEntity::class,
     ],
-    version = 25,
+    version = PTUT_SCHEMA_VERSION,
     // Schema 2 adds the nullable transactions.editedAt, and schema 4 the nullable memo and
     // slipAmountMinor beside it. Schema 5 adds the watched_folder table whole. A nullable column
     // with no default, and a new table, are the shapes Room migrates on its own. Schema 6 is
@@ -167,3 +167,6 @@ abstract class PtutDatabase : RoomDatabase() {
 expect object PtutDatabaseConstructor : RoomDatabaseConstructor<PtutDatabase> {
     override fun initialize(): PtutDatabase
 }
+
+/** Read by `verifySchemaFrozen` and written into each crash report. Bump it with a new N.json, never edit an old one. */
+const val PTUT_SCHEMA_VERSION = 25

@@ -159,7 +159,7 @@ class GetMonthCloseUseCase(
 ) {
     operator fun invoke(month: String): Flow<MonthCloseState> = combine(book.months, transactions(LedgerSpan.All), queued()) { months, ledger, slips ->
         val rows = ledger.rows()
-        MonthCloseState(month, rows.monthClose(month), rows, slips.size, months.any { it.month == month && it.sealedAtEpochMillis != null })
+        MonthCloseState(month, rows.monthClose(month), rows, slips.waitingIn(month), months.any { it.month == month && it.sealedAtEpochMillis != null })
     }
 }
 

@@ -126,6 +126,12 @@ enum class PtutIcon(val designName: String, val image: ImageVector) {
             ?: error("No icon named \"$designName\". Add it to PtutIcon, with a Heroicon to draw.")
 
         /**
+         * For a name another phone or an older build wrote, such as a shared group's icon: null
+         * rather than a throw, so one glyph this build never drew cannot close the screen.
+         */
+        fun find(designName: String): PtutIcon? = byDesignName[designName]
+
+        /**
          * What a category may wear, in the order the picker draws them. A subset of [entries] and
          * not the whole table: `arrow_back` and `backspace` are chrome, and a reader naming what
          * they buy should be offered things they buy.

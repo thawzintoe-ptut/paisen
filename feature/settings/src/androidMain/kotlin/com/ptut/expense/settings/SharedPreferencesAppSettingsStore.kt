@@ -6,8 +6,10 @@ import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.settings.AppChoices
 import com.ptut.expense.domain.settings.AppSettingsStore
 import com.ptut.expense.domain.settings.PlayChoices
+import com.ptut.expense.domain.settings.playOnWhenUnset
 import com.ptut.expense.domain.slip.SlipOwner
 import com.ptut.expense.locale.NoteTone
+import com.ptut.expense.onboarding.SharedPreferencesOnboardingFlag
 import kotlin.time.Duration.Companion.days
 
 private const val CHOICES_FILE = "ptut-import-settings"
@@ -43,7 +45,10 @@ private const val PLAY_WEEKLY_REMINDER = "play-weekly-reminder"
  * The stored form is whole days rather than a serialised [kotlin.time.Duration]: the picker only
  * offers whole days, and an integer is the one shape both platforms' stores hold natively.
  */
-class SharedPreferencesAppSettingsStore(context: Context) : AppSettingsStore {
+class SharedPreferencesAppSettingsStore(
+    context: Context,
+    private val firstRunFinished: () -> Boolean = { SharedPreferencesOnboardingFlag(context).hasFinished() },
+) : AppSettingsStore {
 
     private val choices = context.applicationContext
         .getSharedPreferences(CHOICES_FILE, Context.MODE_PRIVATE)
@@ -73,7 +78,7 @@ class SharedPreferencesAppSettingsStore(context: Context) : AppSettingsStore {
             homeZone = choices.getString(HOME_ZONE, null),
             play = shipped.play.let { play ->
                 PlayChoices(
-                    on = choices.getBoolean(PLAY_ON, play.on),
+                    on = readPlayOn(),
                     run = choices.getBoolean(PLAY_RUN, play.run),
                     guess = choices.getBoolean(PLAY_GUESS, play.guess),
                     challenges = choices.getBoolean(PLAY_CHALLENGES, play.challenges),
@@ -83,6 +88,13 @@ class SharedPreferencesAppSettingsStore(context: Context) : AppSettingsStore {
                 )
             },
         )
+    }
+
+    private fun readPlayOn(): Boolean {
+        if (choices.contains(PLAY_ON)) return choices.getBoolean(PLAY_ON, true)
+        val on = playOnWhenUnset(firstRunFinished())
+        if (!on) choices.edit().putBoolean(PLAY_ON, false).apply()
+        return on
     }
 
     override fun write(choices: AppChoices) {
