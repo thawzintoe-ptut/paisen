@@ -67,6 +67,11 @@ data class HomeCopy(
     val weekRise: (category: String, amount: String, shops: List<String>) -> String = { category, amount, shops ->
         "$category rose most, $amount more" + (if (shops.isEmpty()) "" else ", mostly at ${shops.joinToString(" and ")}") + "."
     },
+    /** #103: the toast when an importer files a slip; [source] is its folder, such as K PLUS, when known. */
+    val caught: (source: String?, amount: String, category: String?) -> String = { source, amount, category ->
+        "Caught ${source?.let { "a $it slip" } ?: "a slip"} · $amount" + (category?.let { " in $it" } ?: "")
+    },
+    val caughtChange: String = "Change",
 )
 
 private fun Int.homeSpelled(): String = if (this == 1) "one" else toString()
@@ -139,6 +144,10 @@ val BurmeseHome = HomeCopy(
     weekRise = { category, amount, shops ->
         "$category က အများဆုံး တက်တယ်၊ $amount ပိုသုံးတယ်" + (if (shops.isEmpty()) "" else "၊ အများစုက ${shops.joinToString(" နဲ့ ")} မှာ") + "။"
     },
+    caught = { source, amount, category ->
+        "${source?.let { "$it စလစ်" } ?: "စလစ်"} ရပြီ · $amount" + (category?.let { " · $it" } ?: "")
+    },
+    caughtChange = "ပြင်မယ်",
 )
 
 val ThaiHome = HomeCopy(
@@ -203,4 +212,8 @@ val ThaiHome = HomeCopy(
     weekRise = { category, amount, shops ->
         "หมวด $category เพิ่มขึ้นมากที่สุด $amount" + (if (shops.isEmpty()) "" else " ส่วนใหญ่ที่ ${shops.joinToString(" และ ")}")
     },
+    caught = { source, amount, category ->
+        "ได้${source?.let { "สลิป $it" } ?: "สลิป"}แล้ว · $amount" + (category?.let { " ใน $it" } ?: "")
+    },
+    caughtChange = "แก้ไข",
 )

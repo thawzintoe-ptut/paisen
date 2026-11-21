@@ -1,7 +1,9 @@
 package com.ptut.expense.di
 
 import com.ptut.expense.activity.ActivityViewModel
+import com.ptut.expense.domain.play.ObservePlayOnUseCase
 import com.ptut.expense.domain.play.ObserveSealedMonthsUseCase
+import com.ptut.expense.domain.play.PlayPart
 import com.ptut.expense.home.HomeViewModel
 import com.ptut.expense.home.WeeklyNoteSettings
 import com.ptut.expense.ledger.LedgerScope
@@ -43,6 +45,9 @@ val todayModule: Module = module {
             getMoodRecap = get(),
             getWeeklyCheckIn = get(),
             observeTodayPlay = get(),
+            // #103: the press and roll are play's motion, so they follow the switch that turns play off.
+            playMotion = get<ObservePlayOnUseCase>()(PlayPart.Stamps),
+            toasts = get(),
         )
     }
     // #220: Reports passes the slice it opened; Home's History passes nothing and gets the whole table.

@@ -1,5 +1,6 @@
 package com.ptut.expense.nav
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +43,14 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
         val photoSettings = koinInject<PhotoSettings>()
         val pickScope = rememberCoroutineScope()
         var askingAllowAll by remember { mutableStateOf(false) }
+        // #103: the caught toast's Change.
+        val editing by viewModel.editRequests.collectAsStateWithLifecycle()
+        LaunchedEffect(editing) {
+            editing?.let {
+                viewModel.editOpened()
+                nav.editTransaction(it)
+            }
+        }
         HomeView(
             runTip = playTip(PlayTip.Run),
             questionTip = playTip(PlayTip.Question),

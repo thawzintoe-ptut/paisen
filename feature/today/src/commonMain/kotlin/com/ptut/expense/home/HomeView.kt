@@ -1,8 +1,11 @@
 package com.ptut.expense.home
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -10,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,15 +23,20 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -35,14 +44,20 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import com.ptut.expense.design.LocalReduceMotion
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.PulseDot
 import com.ptut.expense.design.QuietDayArt
+import com.ptut.expense.design.Sizes
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
+import com.ptut.expense.design.inMillis
 import com.ptut.expense.design.ptut
 import com.ptut.expense.design.ptutIcon
+import com.ptut.expense.design.ptutMotion
+import com.ptut.expense.design.ptutReduceMotion
+import com.ptut.expense.design.stampScaleAt
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.formatParts
@@ -255,7 +270,10 @@ private fun LoadedHome(
                 SheetRow { PlaceholderRow(contentDescription = text.readingSlips) }
             }
             items(state.transactions, key = { it.id }) { row ->
-                SheetRow { SkyRow(row = row, onOpenTransaction = onOpenTransaction) }
+                SheetRow(caught = row.caught) {
+                    SkyRow(row = row, onOpenTransaction = onOpenTransaction)
+                    if (row.caught) CaughtTick(pressed = state.playMotion, modifier = Modifier.align(Alignment.CenterStart))
+                }
             }
             if (state.savedToday.isNotEmpty()) {
                 item {
@@ -349,14 +367,50 @@ private fun ReviewRow(review: ReviewCardUiModel, onOpenReview: () -> Unit, modif
 
 /** A row of the white sheet, continuing the [SkyPageSheet] the section header opened. */
 @Composable
-private fun SheetRow(content: @Composable () -> Unit) {
+private fun SheetRow(caught: Boolean = false, content: @Composable BoxScope.() -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.tertiaryContainer)
+            // #103: a soft wash under the slip just caught, while its toast is up.
+            .background(if (caught) MaterialTheme.ptut.infoBg else MaterialTheme.colorScheme.tertiaryContainer)
             .padding(horizontal = Spacing.s20),
-    ) { content() }
+        content = content,
+    )
 }
+
+/**
+ * #103: the tick on a caught slip's tile, at the circle's lower right. It lands as play's stamp does,
+ * 1.35× to its size; with Play off or reduced motion it is simply there.
+ */
+@Composable
+private fun CaughtTick(pressed: Boolean, modifier: Modifier = Modifier) {
+    val motion = MaterialTheme.ptutMotion
+    val still = ptutReduceMotion || !pressed
+    var landed by rememberSaveable { mutableStateOf(still) }
+    val progress = remember { Animatable(if (landed) 1f else 0f) }
+    LaunchedEffect(still) {
+        if (still || landed) return@LaunchedEffect
+        progress.animateTo(1f, tween(durationMillis = motion.stampPress.inMillis, easing = motion.linear))
+        landed = true
+    }
+    val tick = Sizes.toastIcon
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .offset(x = SkySizes.rowCircle - tick * TICK_INSET, y = SkySizes.rowCircle / 2 - tick * TICK_INSET)
+            .size(tick)
+            .scale(if (landed || still) 1f else stampScaleAt(progress.value, motion.press))
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary)
+            .clearAndSetSemantics {},
+    ) {
+        Icon(PtutIcon.Check.image, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(tick * TICK_GLYPH))
+    }
+}
+
+/** How far the tick sits back over the tile's edge, and its glyph inside the disc, as shares of the tick. */
+private const val TICK_INSET = 0.75f
+private const val TICK_GLYPH = 0.7f
 
 @Composable
 private fun SkyRow(
@@ -510,14 +564,17 @@ private fun PeriodAmount(state: HomeUiState.Success, empty: Boolean, modifier: M
     ) {
         Text(state.heroLabel, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         // Rolls to the next period's figure, and counts up from 0 the first time Today opens.
-        SkyRollingAmount(
-            symbol = "${parts.symbol} ",
-            whole = parts.whole,
-            fraction = parts.fraction,
-            color = ink,
-            fractionColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = Spacing.xs),
-        )
+        // #103: a caught slip's roll is play's motion, so with Play off the number just changes.
+        CompositionLocalProvider(LocalReduceMotion provides (ptutReduceMotion || (state.caught && !state.playMotion))) {
+            SkyRollingAmount(
+                symbol = "${parts.symbol} ",
+                whole = parts.whole,
+                fraction = parts.fraction,
+                color = ink,
+                fractionColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Spacing.xs),
+            )
+        }
         // Income and Net for the span, only once the ledger holds any income (#146, K1).
         val line = state.incomeLine
         if (!empty && line != null) {

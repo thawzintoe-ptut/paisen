@@ -1,5 +1,6 @@
 package com.ptut.expense.home
 
+import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.TurbineTestContext
 import app.cash.turbine.test
 import com.ptut.expense.ViewModelTest
@@ -49,6 +50,7 @@ import com.ptut.expense.locale.BurmeseCopy
 import com.ptut.expense.locale.EnglishCopy
 import com.ptut.expense.locale.NoteTone
 import com.ptut.expense.locale.ThaiCopy
+import com.ptut.expense.ui.ToastMessages
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,6 +70,108 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 
 class HomeViewModelTest : ViewModelTest() {
+
+    @Test
+    fun aSlipFiledWhileTodayIsUpRaisesOneToastAndTicksItsRow() = runTest {
+        val toasts = ToastMessages()
+        lateinit var ledger: FakeLedger
+        val viewModel = viewModel(transactions = listOf(caughtSlip("old")), toasts = toasts, onLedger = { ledger = it })
+
+        viewModel.uiState.test {
+            skipItems(2)
+            ledger.file(caughtSlip("new"))
+
+            val state = awaitCaught()
+            assertEquals(listOf(true, false), state.transactions.map { it.caught })
+            cancelAndIgnoreRemainingEvents()
+        }
+        toasts.messages.test {
+            assertEquals("Caught a K PLUS slip · ฿155 in Food & drink", awaitItem().text)
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun whatTodayAlreadyHeldRaisesNoToast() = runTest {
+        val toasts = ToastMessages()
+        val viewModel = viewModel(transactions = listOf(caughtSlip("old")), toasts = toasts)
+
+        viewModel.uiState.test {
+            skipItems(1)
+            assertFalse((awaitItem() as HomeUiState.Success).caught)
+        }
+        toasts.messages.test { expectNoEvents() }
+    }
+
+    @Test
+    fun aSlipTypedByHandRaisesNoToast() = runTest {
+        val toasts = ToastMessages()
+        lateinit var ledger: FakeLedger
+        val viewModel = viewModel(transactions = emptyList(), toasts = toasts, onLedger = { ledger = it })
+
+        viewModel.uiState.test {
+            skipItems(2)
+            ledger.file(caughtSlip("cash").copy(source = TransactionSource.Manual))
+            assertFalse((awaitItem() as HomeUiState.Success).caught)
+            cancelAndIgnoreRemainingEvents()
+        }
+        toasts.messages.test { expectNoEvents() }
+    }
+
+    @Test
+    fun changeInTheToastAsksToEditTheCaughtSlipAndClearsItsTick() = runTest {
+        val toasts = ToastMessages()
+        lateinit var ledger: FakeLedger
+        val viewModel = viewModel(transactions = emptyList(), toasts = toasts, onLedger = { ledger = it })
+
+        viewModel.uiState.test {
+            skipItems(2)
+            ledger.file(caughtSlip("new"))
+            awaitCaught()
+
+            toasts.messages.test { assertNotNull(awaitItem().action).onAction() }
+
+            assertFalse((awaitItem() as HomeUiState.Success).caught)
+            assertEquals("new", viewModel.editRequests.value)
+            viewModel.editOpened()
+            assertNull(viewModel.editRequests.value)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun withPlayOffTheCaughtSlipKeepsStill() = runTest {
+        lateinit var ledger: FakeLedger
+        val viewModel = viewModel(transactions = emptyList(), playMotion = false, onLedger = { ledger = it })
+
+        viewModel.uiState.test {
+            skipItems(2)
+            ledger.file(caughtSlip("new"))
+            assertFalse(awaitCaught().playMotion)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun withPlayOnTheCaughtSlipPressesAndRolls() = runTest {
+        val viewModel = viewModel(transactions = emptyList(), playMotion = true)
+
+        viewModel.uiState.test {
+            skipItems(1)
+            assertTrue((awaitItem() as HomeUiState.Success).playMotion)
+        }
+    }
+
+    /** The new row lands a beat before its tick: the rows and the caught slip are two facts. */
+    private suspend fun ReceiveTurbine<HomeUiState>.awaitCaught(): HomeUiState.Success {
+        while (true) {
+            val state = awaitItem() as HomeUiState.Success
+            if (state.caught) return state
+        }
+    }
+
+    private fun caughtSlip(id: String) =
+        saved(id, LocalDateTime(2026, 8, 14, 11, 0).toInstant(BangkokTime).toEpochMilliseconds(), filed = 0L).copy(sourceFolder = "K PLUS")
 
     @Test
     fun showsTodaysNetAndTheDaysTransactions() = runTest {
@@ -880,8 +984,14 @@ class HomeViewModelTest : ViewModelTest() {
         scanning: Flow<Boolean> = flowOf(false),
         mood: Boolean = false,
         play: PlayFixture? = null,
+        toasts: ToastMessages? = null,
+        playMotion: Boolean = false,
+        onLedger: (FakeLedger) -> Unit = {},
     ) = FakeLedger(transactions, sinceLastImportMillis, queued, all = transactions + saved, runs = runs).let { ledger ->
+        onLedger(ledger)
         HomeViewModel(
+            toasts = toasts,
+            playMotion = flowOf(playMotion),
             observeTransactions = ObserveTransactionsUseCase(ledger),
             observeLastImport = ObserveLastImportUseCase(ledger),
             observeImportRuns = ObserveImportRunsUseCase(ledger),
@@ -1111,9 +1221,16 @@ class HomeViewModelTest : ViewModelTest() {
         all: List<Transaction>,
         runs: List<ImportRun>,
     ) : LedgerRepository {
-        override val todaysTransactions: StateFlow<LedgerSnapshot> =
-            MutableStateFlow(LedgerSnapshot.Rows(transactions))
-        override val allTransactions: StateFlow<LedgerSnapshot> = MutableStateFlow(LedgerSnapshot.Rows(all))
+        private val today = MutableStateFlow<LedgerSnapshot>(LedgerSnapshot.Rows(transactions))
+        private val everything = MutableStateFlow<LedgerSnapshot>(LedgerSnapshot.Rows(all))
+        override val todaysTransactions: StateFlow<LedgerSnapshot> = today
+        override val allTransactions: StateFlow<LedgerSnapshot> = everything
+
+        /** An importer filing [row] for today while the screen is up. */
+        fun file(row: Transaction) {
+            today.value = LedgerSnapshot.Rows(listOf(row) + (today.value as LedgerSnapshot.Rows).transactions)
+            everything.value = LedgerSnapshot.Rows(listOf(row) + (everything.value as LedgerSnapshot.Rows).transactions)
+        }
 
         override val recentTransactions: StateFlow<LedgerSnapshot> =
             MutableStateFlow(LedgerSnapshot.Rows(transactions))

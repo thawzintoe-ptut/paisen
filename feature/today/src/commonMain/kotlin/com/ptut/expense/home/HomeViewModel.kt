@@ -25,7 +25,9 @@ import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.formatNet
 import com.ptut.expense.domain.iconName
+import com.ptut.expense.domain.isAutomatic
 import com.ptut.expense.domain.label
+import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.ledger.LedgerSpan
 import com.ptut.expense.domain.ledger.ObserveImportRunsUseCase
 import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
@@ -47,6 +49,9 @@ import com.ptut.expense.domain.today.ReviewCounts
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.SpendWords
+import com.ptut.expense.ui.ToastAction
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.displayName
 import com.ptut.expense.ui.metaLine
 import com.ptut.expense.ui.metaParts
@@ -55,8 +60,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 
@@ -76,6 +83,8 @@ data class TransactionRowUiModel(
     val icon: String,
     /** The category's tint, so one row is the same colour here and in the Ledger. */
     val color: String,
+    /** #103: the slip an importer just filed, drawn with a tick on its tile until its toast goes. */
+    val caught: Boolean = false,
 )
 
 sealed interface HomeUiState {
@@ -142,6 +151,10 @@ sealed interface HomeUiState {
         val shelf: List<ShelfItemUiModel> = emptyList(),
         /** #102: "Games and stamps join on day 8" through Today's first week, or null. */
         val firstWeekLine: String? = null,
+        /** #103: a slip was just caught, so the total's change is its roll. */
+        val caught: Boolean = false,
+        /** #103: the stamp press and the rolling total; false with Play off, and the number just changes. */
+        val playMotion: Boolean = false,
     ) : HomeUiState
 }
 
@@ -197,12 +210,58 @@ class HomeViewModel(
     private val getWeeklyCheckIn: GetWeeklyCheckInUseCase = GetWeeklyCheckInUseCase(),
     /** #82: what Today shows of play. None where nothing binds it, so a test sees Today as before. */
     observeTodayPlay: ObserveTodayPlayUseCase? = null,
+    /** #103: Play's switch for the caught slip's press and roll. Off where nothing binds it. */
+    playMotion: Flow<Boolean> = flowOf(false),
+    /** #103: the app's one toast, where "Caught a K PLUS slip" goes. None where nothing binds it. */
+    private val toasts: ToastMessages? = null,
 ) : ViewModel() {
 
     private val period = MutableStateFlow(HomePeriod.Today)
 
     /** Bumped when the screen comes back, so a card that belongs to the morning goes at noon. */
     private val clockTicks = MutableStateFlow(0)
+
+    /** #103: the newest slip an importer filed for today after the screen first read the day, until its toast goes. */
+    private val caughtId = MutableStateFlow<String?>(null)
+
+    private val edits = MutableStateFlow<String?>(null)
+
+    /** #103: the row the toast's Change asked to edit; the screen opens Edit and calls [editOpened]. */
+    val editRequests: StateFlow<String?> = edits
+
+    init {
+        // The first read only learns what is there, so a cold start or a new holder never replays a toast.
+        viewModelScope.launch {
+            var known: Set<String>? = null
+            observeTransactions(LedgerSpan.Today).collect { snapshot ->
+                val rows = (snapshot as? LedgerSnapshot.Rows)?.transactions ?: return@collect
+                val seen = known
+                known = rows.mapTo(HashSet()) { it.id }
+                if (seen != null) rows.firstOrNull { it.id !in seen && it.source.isAutomatic }?.let { caught(it, categoryUpdates.first(), subCategoryUpdates.first()) }
+            }
+        }
+    }
+
+    private suspend fun caught(row: Transaction, categories: List<Category>, subCategories: List<SubCategory>) {
+        caughtId.value = row.id
+        val text = AppText.copy.home
+        val category = row.metaParts(categories, subCategories = subCategories).category
+        toasts?.show(
+            ToastMessage(
+                text = text.caught(row.sourceFolder, row.amount.formatCompact(), category),
+                action = ToastAction(text.caughtChange) {
+                    caughtId.value = null
+                    edits.value = row.id
+                },
+                // Another slip's toast may have taken over; only this slip's tick goes with this toast.
+                onGone = { caughtId.compareAndSet(row.id, null) },
+            ),
+        )
+    }
+
+    fun editOpened() {
+        edits.value = null
+    }
 
     /** #22: no note for this week; next Monday shows its own. */
     fun hideNoteWeek() = hideWeeklyNote()
@@ -221,9 +280,9 @@ class HomeViewModel(
                 observeWatchedFolders(),
                 moodByTimeOfDay,
                 combine(weeklyCheckIn, weeklyTarget, weeklyNote, observeTodayPlay?.invoke() ?: flowOf(TodayPlay.Off), ::Weekly),
-                clockTicks,
-            ) { scanning, folders, mood, weekly, _ ->
-                Extras(scanning, folders, mood, weekly.on, weekly.target, weekly.note, weekly.play)
+                combine(clockTicks, caughtId, playMotion) { _, caught, motion -> caught to motion },
+            ) { scanning, folders, mood, weekly, (caught, motion) ->
+                Extras(scanning, folders, mood, weekly.on, weekly.target, weekly.note, weekly.play, caught, motion)
             },
             // ShopNames too: naming a shop read as noise retitles its rows here without a restart.
             combine(observeTransactions(LedgerSpan.All), combine(categoryUpdates, subCategoryUpdates, ShopNames.names) { c, s, _ -> c to s }, period, ::Triple),
@@ -250,7 +309,7 @@ class HomeViewModel(
                 incomeLine = home.summary.takeIf { home.history.any { it.direction == Direction.Income } }?.let {
                     IncomeLineUiModel(income = it.income.format(), net = it.net.formatNet(), netBelowZero = it.net < Satang.Zero)
                 },
-                transactions = transactions.map { it.asRow(categories, subCategories) },
+                transactions = transactions.map { it.asRow(categories, subCategories).copy(caught = it.id == extras.caughtId) },
                 importStatus = health.asImportStatus(),
                 watchLine = extras.folders.watchLine(sinceLastImportMillis),
                 isScanning = extras.scanning,
@@ -272,6 +331,8 @@ class HomeViewModel(
                 challenge = if (onToday) extras.play.challengeRow(categories) else null,
                 shelf = if (onToday) extras.play.shelfItems() else emptyList(),
                 firstWeekLine = AppText.copy.play.extras.firstWeek.takeIf { onToday && extras.play.firstWeek },
+                caught = extras.caughtId != null && transactions.any { it.id == extras.caughtId },
+                playMotion = extras.playMotion,
                 topCategories = home.byCategory
                     .take(TOP_CATEGORIES)
                     .map { TopCategoryUiModel(name = it.category.name, icon = it.category.icon) },
@@ -347,6 +408,8 @@ private data class Extras(
     val target: WeeklyTarget?,
     val note: WeeklyNoteSettings,
     val play: TodayPlay,
+    val caughtId: String?,
+    val playMotion: Boolean,
 )
 
 private fun UsualDay.asCompared() = ComparedUiModel(line = differencePhrase(), glyph = difference.trendGlyph())
