@@ -123,11 +123,11 @@ class PlaySettingsViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `a part this build does not offer has no row`() = runTest {
-        // A release build offers no part yet (D17), so only the master shows its groups, empty.
+    fun `a release build shows the rows of the parts it offers`() = runTest {
+        // Every part passed its phone check (D17), so a release build lists them as debug does.
         val state = latest(viewModel(gate = PlayGate(flagOn = true, debug = false)).uiState)
 
-        assertTrue(state.groups.isEmpty())
+        assertTrue(state.groups.isNotEmpty())
     }
 
     @Test

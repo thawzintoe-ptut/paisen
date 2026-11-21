@@ -50,10 +50,9 @@ class ObservePlayOnUseCaseTest {
     }
 
     @Test
-    fun `a release build hides a part not yet checked on a phone`() = runTest {
+    fun `a release build offers a part once it is checked on a phone`() = runTest {
         val release = on(gate = PlayGate(flagOn = true, debug = false))
 
-        assertFalse(release(PlayPart.Run).first())
-        assertFalse(release.offered(PlayPart.Run))
+        assertTrue(release.offered(PlayPart.Run))
     }
 }
