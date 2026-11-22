@@ -344,7 +344,9 @@ service cloud.firestore {
       allow get, delete: if signedIn() && uid == request.auth.uid;
       allow create, update: if signedIn() && uid == request.auth.uid
         && request.resource.data.keys().hasOnly(['signedInAt']) && request.resource.data.signedInAt is int
-        && request.resource.data.signedInAt <= request.auth.token.auth_time;
+        && request.resource.data.signedInAt <= request.auth.token.auth_time
+        // Never back: an older phone writing its own sign-in would keep the Worker from ending it.
+        && (resource == null || request.resource.data.signedInAt >= resource.data.signedInAt);
       allow list: if false;
     }
 

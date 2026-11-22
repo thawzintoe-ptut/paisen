@@ -13,7 +13,7 @@ const env = await initializeTestEnvironment({
 });
 const as = (uid) => env.authenticatedContext(uid, { auth_time: AUTH_TIME }).firestore();
 
-async function seed({ group = {}, members = {}, invite = {}, pay = { mBob: { promptPay: '0812345678', claimedByUid: 'bob' } }, play = {}, reactions = {} } = {}) {
+async function seed({ group = {}, members = {}, invite = {}, pay = { mBob: { promptPay: '0812345678', claimedByUid: 'bob' } }, play = {}, reactions = {}, session } = {}) {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
@@ -32,6 +32,7 @@ async function seed({ group = {}, members = {}, invite = {}, pay = { mBob: { pro
     for (const [mid, fields] of Object.entries(pay)) await setDoc(doc(db, `groups/g1/pay/${mid}`), fields);
     for (const [mid, fields] of Object.entries(play)) await setDoc(doc(db, `groups/g1/play/${mid}`), fields);
     for (const [rid, fields] of Object.entries(reactions)) await setDoc(doc(db, `groups/g1/reactions/${rid}`), fields);
+    if (session !== undefined) await setDoc(doc(db, 'sessions/alice'), { signedInAt: session });
   });
 }
 
@@ -232,6 +233,9 @@ await check('5.2 the owner rewrites their device document', 'allow', {}, () => s
 await check('5.3 a new phone registers', 'allow', {}, () => setDoc(doc(as('bob'), 'devices/devB'), { uid: 'bob', platform: 'ios', language: 'en', updatedAt: 2 }));
 await check('5.4 session stores this sign-in\'s auth_time', 'allow', {}, () => setDoc(doc(as('alice'), 'sessions/alice'), { signedInAt: AUTH_TIME }));
 await check('5.5 session stores a time still to come', 'deny', {}, () => setDoc(doc(as('alice'), 'sessions/alice'), { signedInAt: AUTH_TIME + 86_400 }));
+await check('5.5b an older phone writes its own earlier sign-in back', 'deny', { session: AUTH_TIME }, () => setDoc(doc(as('alice'), 'sessions/alice'), { signedInAt: AUTH_TIME - 3_600 }));
+await check('5.5c a newer sign-in replaces an older one', 'allow', { session: AUTH_TIME - 3_600 }, () => setDoc(doc(as('alice'), 'sessions/alice'), { signedInAt: AUTH_TIME }));
+await check('5.5d the same sign-in written again', 'allow', { session: AUTH_TIME }, () => setDoc(doc(as('alice'), 'sessions/alice'), { signedInAt: AUTH_TIME }));
 await check('5.6 deleted group: member adds an expense', 'deny', { group: { deleted: true } }, () => entry('groups/g1/entries/e1', 'bob', version()));
 await check('5.7 deleted group: member renames it', 'deny', { group: { deleted: true } }, () => updateDoc(doc(as('bob'), 'groups/g1'), { name: 'New' }));
 await check('5.8 deleted group: member adds a name', 'deny', { group: { deleted: true } }, () => setDoc(doc(as('bob'), 'groups/g1/members/mNew'), { name: 'Dan', claimedByUid: null, archived: false, createdAt: 1 }));
