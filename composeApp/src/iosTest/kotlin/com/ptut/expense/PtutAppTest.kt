@@ -141,7 +141,7 @@ class PtutAppTest {
     fun firstRunDrawsNeitherThePillNorTheAddAction() = runComposeUiTest {
         setContent { TestApp(firstRunAnswered = false) }
 
-        onNodeWithContentDescription("Continue").assertIsDisplayed()
+        onNodeWithContentDescription("Allow photos").assertIsDisplayed()
         onNode(pillSlot("Reports")).assertDoesNotExist()
         onNodeWithContentDescription("Add an expense by hand").assertDoesNotExist()
     }
@@ -151,9 +151,7 @@ class PtutAppTest {
     fun decliningPhotoAccessStillOpensTheLedger() = runComposeUiTest {
         setContent { TestApp(firstRunAnswered = false) }
 
-        onNodeWithContentDescription("Continue").performClick()
         onNodeWithText("I'll add expenses by hand").performClick()
-        onNodeWithContentDescription("Open Today").performClick()
 
         onNode(pillSlot("Reports")).assertIsDisplayed()
         onNodeWithContentDescription("Add an expense by hand").assertIsDisplayed()
@@ -312,6 +310,8 @@ class PtutAppTest {
         onNodeWithText("Fix").performClick()
 
         onNodeWithText("Your spending stays on this phone", substring = true).assertIsDisplayed()
+        assertMarked("Advanced")
+        openAdvanced()
         assertMarked("Background import")
         assertNotMarked("Photo folders")
     }
@@ -326,6 +326,8 @@ class PtutAppTest {
 
         onNodeWithText("Fix").performClick()
 
+        assertMarked("Advanced")
+        openAdvanced()
         assertMarked("Photo folders")
         assertNotMarked("Background import")
     }
@@ -342,7 +344,7 @@ class PtutAppTest {
 
         openSettings()
 
-        onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Timezone"))
+        onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Only shared groups sync", substring = true))
         onNodeWithText("DEBUG · INJECT A SLIP").assertDoesNotExist()
     }
 
@@ -356,6 +358,7 @@ class PtutAppTest {
         setContent { TestApp(sinceLastImport = null) }
 
         openSettings()
+        openAdvanced()
         onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Background import"))
         onNodeWithText("Background import").performClick()
 
@@ -368,6 +371,7 @@ class PtutAppTest {
         setContent { TestApp(sinceLastImport = null) }
 
         openSettings()
+        openAdvanced()
         onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Timezone"))
         // Through the click action: Timezone is the last row, and the scroll leaves it under the pill (#155).
         onNodeWithText("Timezone").performSemanticsAction(SemanticsActions.OnClick)
@@ -382,6 +386,13 @@ class PtutAppTest {
     private fun ComposeUiTest.openSettings() {
         onNodeWithText("Fix").performClick()
         onNodeWithText("Your spending stays on this phone", substring = true).assertIsDisplayed()
+    }
+
+    /** #101: slip reading, folders and the day's zone sit one tap deeper, under Advanced. */
+    private fun ComposeUiTest.openAdvanced() {
+        onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Advanced"))
+        onNodeWithText("Advanced").performClick()
+        onNodeWithText("Most people never need these", substring = true).assertIsDisplayed()
     }
 
     private fun ComposeUiTest.assertMarked(row: String) = markedRow(row).assertExists()
@@ -399,8 +410,8 @@ class PtutAppTest {
     )
 
     /**
-     * #144, N1: both platforms draw one pill, the four destinations in [BarDestination]'s order and
-     * add between Reports and Shared (#33). The order is worth a test because it comes from one list,
+     * #106: both platforms draw one capsule, the four destinations in [BarDestination]'s order, and
+     * Add on its own to the right of it. The order is worth a test because it comes from one list,
      * and the cheap way to draw chrome is to write the slots out again by hand.
      */
     @Test
@@ -418,8 +429,8 @@ class PtutAppTest {
             "the pill draws the destinations in an order BarDestination does not give",
         )
         assertTrue(
-            add.positionInRoot.x > slots[1].positionInRoot.x && add.positionInRoot.x < slots[2].positionInRoot.x,
-            "add is not between Reports and Shared",
+            add.positionInRoot.x > slots.last().positionInRoot.x,
+            "add is not to the right of the tabs",
         )
     }
 }
