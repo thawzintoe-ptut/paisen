@@ -80,6 +80,8 @@ internal interface Firestore {
 
     suspend fun whereContains(collection: String, field: String, value: String): List<FirestoreDoc>
 
+    suspend fun whereEquals(collection: String, field: String, value: String): List<FirestoreDoc>
+
     suspend fun changedSince(parent: String, collection: String, field: String, since: Long): Pulled
 
     suspend fun createStamped(collection: String, id: String, fields: Fields, stamp: String): Boolean
@@ -163,6 +165,10 @@ internal class FirestoreClient(
     /** The documents in [collection] whose array [field] holds [value]. */
     override suspend fun whereContains(collection: String, field: String, value: String): List<FirestoreDoc> =
         runQuery(null, structuredQuery(collection, field, "ARRAY_CONTAINS", value)).docs
+
+    /** The documents in [collection] whose [field] is [value]. */
+    override suspend fun whereEquals(collection: String, field: String, value: String): List<FirestoreDoc> =
+        runQuery(null, structuredQuery(collection, field, "EQUAL", value)).docs
 
     /** The documents in [parent]'s [collection] whose server-stamped [field] is later than [since]. */
     override suspend fun changedSince(parent: String, collection: String, field: String, since: Long): Pulled =

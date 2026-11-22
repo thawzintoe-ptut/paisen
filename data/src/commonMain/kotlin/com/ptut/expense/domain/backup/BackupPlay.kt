@@ -16,6 +16,8 @@ data class BackupPlay(
     val goals: List<BackupGoal> = emptyList(),
     /** Format 6 (#104): days counted into a jar, and days turned down. Absent in format 5. */
     val goalDays: List<BackupGoalDay> = emptyList(),
+    /** Format 7 (J02): money that went into a jar. Absent in formats 5 and 6. */
+    val deposits: List<BackupDeposit> = emptyList(),
 )
 
 @Serializable
@@ -54,6 +56,19 @@ data class BackupGoal(
     val startDate: String,
     val createdAtEpochMillis: Long,
     val archivedAtEpochMillis: Long? = null,
+    /** Format 7 (J04). */
+    val savingsAccount: String? = null,
+)
+
+@Serializable
+data class BackupDeposit(
+    val id: String,
+    val goalId: String,
+    val amountMinor: Long,
+    val date: String,
+    val atEpochMillis: Long,
+    val source: String,
+    val account: String? = null,
 )
 
 @Serializable

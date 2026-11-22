@@ -52,6 +52,8 @@ project.
    - **Firebase Cloud Messaging API Admin** (`roles/firebasecloudmessaging.admin`): it holds
      `cloudmessaging.messages.create`, the send permission. To narrow further, make a custom role
      with only `cloudmessaging.messages.create` and grant that instead.
+   - **Firebase Authentication Admin** (`roles/firebaseauth.admin`): the daily run ends an old
+     phone's sign-ins (below). To narrow further, a custom role with only `firebaseauth.users.update`.
    Save.
 3. Service accounts → `paisen-push-worker` → Keys → **Add key** → Create new key → JSON. Keep the
    file outside the repo; it goes only into the Worker secret below.
@@ -96,6 +98,14 @@ any other), every invite naming it, and then its own document, in batch writes o
 Each run makes at most 40 Firestore calls and carries on the next day where it stopped. The log
 holds counts only. To run it once by hand: `npx wrangler dev --test-scheduled`, then open
 `/__scheduled` (this touches the real project).
+
+## One phone per account, a week later
+
+The app signs an older phone out at its next sync once a newer one signs in. The same daily run also
+ends the account's older sign-ins on the server once the newest is 7 days old, so a lost or unused
+phone loses access even if it never syncs. The week lets an offline phone send what it still holds.
+It reads `sessions` whose `signedInAt` turned 7 days old in the last 3 days and sets the account's
+`validSince` to that sign-in, at most 6 accounts a run. The phone that signed in then stays signed in.
 
 ## Type check and local run
 

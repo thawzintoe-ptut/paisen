@@ -111,6 +111,9 @@ interface ImportStore {
      */
     suspend fun file(slip: FiledSlip): Boolean
 
+    /** J05: a slip that filled a jar instead of the ledger. Its hash is kept, so the picture is never read twice. */
+    suspend fun recordImported(hash: String, occurredAtEpochMillis: Long)
+
     /**
      * Returns false when this hash was already queued, so a rescan cannot queue one picture twice
      * — and cannot report having done so either.

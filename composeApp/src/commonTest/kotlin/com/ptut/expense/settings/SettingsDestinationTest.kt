@@ -42,6 +42,9 @@ class SettingsDestinationTest {
                 PtutRoute.Licences,
                 // #83: Settings › Play.
                 PtutRoute.PlaySettings,
+                // The sign-in sheet and the help list open over Settings.
+                null,
+                null,
             ),
             SettingsAction.entries.map { it.destination() },
         )

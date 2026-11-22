@@ -139,23 +139,30 @@ object SkySizes {
     val barGlyph = 24.dp
 
     /**
-     * The nav pill (p05): five 44 circles, 6 apart and 6 in from the pill's edge, so the pill is 56
-     * tall. It floats 12 above the system's own bottom inset.
+     * The nav capsule (V2 N01–N05, #106): four 48 tabs, 6 in from the capsule's edge, so it is 60
+     * tall; a 60 ruby Add 12 to its right. The bar sits 16 in from each side and 8 above the
+     * system's own bottom inset.
      */
-    val pillSlot = 44.dp
-    val pillGap = 6.dp
-    val pillGlyph = 24.dp
-    val pillMargin = 12.dp
-    val pillShadow = 12.dp
+    val navTab = 48.dp
+    val navInset = 6.dp
+    val navGlyph = 22.dp
+    val navLabelGap = 2.dp
+    val navAdd = 60.dp
+    val navAddGlyph = 26.dp
+    val navAddGap = 12.dp
+    val navSide = 16.dp
+    val navMargin = 8.dp
+    val navShadow = 12.dp
+    val navBar = navTab + navInset * 2
 
     /** How far glass blurs what scrolls under it (#123). Sky gives no value; iOS glass blurs this hard. */
     val glassBlur = 28.dp
 
     /**
-     * What the end of a scroll leaves free under the pill: its 12 of margin, its 56 and 20 more, so
-     * the last row comes to rest clear of it rather than under it.
+     * What the end of a scroll leaves free under the bar (#109): its margin, its height and 24 more,
+     * so the last row comes to rest clear of the capsule and Add, shadow included.
      */
-    val pillClearance = 88.dp
+    val pillClearance = navMargin + navBar + 24.dp
 
     /**
      * Reports' chart on the sky field (p14): bars in a 220 band, an empty bucket as a 6 stub (p15),

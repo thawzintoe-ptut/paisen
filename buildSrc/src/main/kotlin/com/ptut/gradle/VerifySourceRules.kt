@@ -80,7 +80,7 @@ abstract class VerifySourceRules : DefaultTask() {
         ),
         Rule(
             pattern = Regex("""androidx\.compose\.material\.icons"""),
-            why = "Material icon — the design ships Heroicons v2, so draw a PtutIcon",
+            why = "Material icon — the design ships its own soft set, so draw a PtutIcon",
         ),
         Rule(
             // #20. A style built from nothing has no family, so its text falls back to the system

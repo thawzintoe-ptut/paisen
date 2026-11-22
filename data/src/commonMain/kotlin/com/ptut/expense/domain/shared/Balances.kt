@@ -167,9 +167,7 @@ fun SharedSnapshot.peopleBalances(): List<PersonBalance> {
     groups.forEach { group ->
         val balances = withMe(group.id)
         group.members.filterNot { group.isMe(it.id) }.forEach { member ->
-            // A name pulled from a shared group has no person here: the account that claimed it is
-            // the same person in every group, where two "Tom"s in two groups may not be.
-            val key = member.personId ?: member.claimedByUid?.let { "uid:$it" } ?: "name:${member.name.lowercase()}"
+            val key = member.balanceKey()
             val amount = balances[member.id] ?: Satang.Zero
             val row = rows[key to group.currency]
             rows[key to group.currency] = if (row == null) {
@@ -271,3 +269,9 @@ val LogOrder: Comparator<SharedExpense> = compareBy<SharedExpense>({ it.createdA
 
 /** #218: the same order for a payment's removal rows, so every phone agrees on the latest one. */
 val RemovalOrder: Comparator<PaymentRemoval> = compareBy<PaymentRemoval>({ it.createdAtEpochMillis }, { it.id })
+
+/**
+ * Who a member is across groups. A name pulled from a shared group has no person here: the account that
+ * claimed it is the same person in every group, where two "Tom"s in two groups may not be.
+ */
+fun Member.balanceKey(): String = personId ?: claimedByUid?.let { "uid:$it" } ?: "name:${name.lowercase()}"

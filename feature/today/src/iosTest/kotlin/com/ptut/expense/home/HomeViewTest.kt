@@ -156,7 +156,6 @@ class HomeViewTest {
         onOpenLedger: () -> Unit = {},
     ) = HomeView(
         uiState = uiState,
-        onChoosePeriod = {},
         onOpenReview = {},
         onOpenLedger = onOpenLedger,
         onAddByHand = {},

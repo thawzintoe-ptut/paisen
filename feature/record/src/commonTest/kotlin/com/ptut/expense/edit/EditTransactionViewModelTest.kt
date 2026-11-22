@@ -110,6 +110,22 @@ class EditTransactionViewModelTest : ViewModelTest() {
      * An empty ledger is Room before it has answered, not a row that went — the reader reaches
      * this screen from the record, so there was one.
      */
+    /** Hick's law: the row's category leads, the two most filed follow, the rest wait behind More. */
+    @Test
+    fun `the chips lead with the row's category and then what the ledger files most`() = runTest {
+        val rows = listOf(filedSlip) +
+            List(3) { filedSlip.copy(id = "bus$it", categoryId = "transport", slipAmount = null, reference = null) } +
+            List(2) { filedSlip.copy(id = "bill$it", categoryId = "bills", slipAmount = null, reference = null) }
+
+        EditTransactionViewModel("t1", FakeLedger(rows)).uiState.test {
+            assertEquals(EditTransactionUiState.Loading, awaitItem())
+            val chips = (awaitItem() as EditTransactionUiState.Loaded).chips
+            assertEquals(listOf("groceries", "transport", "bills"), chips.shown.map { it.id })
+            assertEquals(3, chips.moreCount)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `a ledger that has not answered yet stays loading`() = runTest {
         EditTransactionViewModel("t1", FakeLedger()).uiState.test {

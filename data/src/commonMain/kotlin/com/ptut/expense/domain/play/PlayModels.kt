@@ -79,7 +79,11 @@ data class Stamp(
 
 fun stampId(kind: StampKind, ref: String): String = "${kind.name}:$ref"
 
-/** #92: a goal jar. No money moves; days counted under the usual fill it (#104). */
+/**
+ * #92: a goal jar. It counts only money that really left the spending account (J02): a transfer slip to
+ * [savingsAccount], or a deposit the reader said they made. [savingsAccount] is a mask such as `••4821`,
+ * [CASH_ACCOUNT] for a reader who keeps cash, or null until J04 asked.
+ */
 data class Goal(
     val id: String,
     val name: String,
@@ -89,7 +93,33 @@ data class Goal(
     val start: LocalDate,
     val createdAtEpochMillis: Long,
     val archivedAtEpochMillis: Long? = null,
+    val savingsAccount: String? = null,
+) {
+    val savesCash: Boolean get() = savingsAccount == CASH_ACCOUNT
+}
+
+/** [Goal.savingsAccount] for a reader who keeps the money as cash and taps "I moved it" each time. */
+const val CASH_ACCOUNT = "cash"
+
+/** How money got into a jar: a transfer slip PaiSeN read, or the reader saying they moved it. */
+enum class DepositSource { Slip, Said }
+
+/**
+ * J02: one amount that went into a jar. [id] is `slip:<reference>` for [DepositSource.Slip], so a second
+ * picture of one transfer fills the jar once; [account] is the mask the money went to, or null for cash.
+ */
+data class GoalDeposit(
+    val id: String,
+    val goalId: String,
+    val amount: Satang,
+    val day: LocalDate,
+    val atEpochMillis: Long,
+    val source: DepositSource,
+    val account: String? = null,
 )
+
+/** J04: an account of the reader's own that their slips moved money to, offered as the savings account. */
+data class SeenAccount(val mask: String, val holder: String, val count: Int, val lastSeenEpochMillis: Long)
 
 /**
  * #104: a day answered on Today's card. [usual] is a usual day for its weekday when it was counted, or

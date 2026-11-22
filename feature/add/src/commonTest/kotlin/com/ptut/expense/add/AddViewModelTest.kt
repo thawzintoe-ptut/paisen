@@ -36,8 +36,10 @@ import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -86,6 +88,24 @@ class AddViewModelTest : ViewModelTest() {
 
         assertTrue(tips in viewModel.uiState.value.categories)
         assertFalse(gym in viewModel.uiState.value.categories)
+    }
+
+    /** Hick's law: three chips, the ones most filed, and the chosen one leads once there is one. */
+    @Test
+    fun `the chips lead with what is filed most and then with what was chosen`() = runTest {
+        val viewModel = AddViewModel(
+            ledger = RecordingLedger(),
+            toasts = ToastMessages(),
+            categoryUsage = flowOf(mapOf("transport" to 5, "bills" to 3, "food" to 1)),
+        )
+        runCurrent()
+
+        assertEquals(listOf("transport", "bills", "food"), viewModel.uiState.value.chips.shown.map { it.id })
+        assertEquals(3, viewModel.uiState.value.chips.moreCount)
+
+        viewModel.choose(Category.seed().first { it.id == "shopping" })
+
+        assertEquals(listOf("shopping", "transport", "bills"), viewModel.uiState.value.chips.shown.map { it.id })
     }
 
     /**
@@ -217,6 +237,42 @@ class AddViewModelTest : ViewModelTest() {
         runCurrent()
 
         assertEquals("supermarket", ledger.recorded.single().subCategoryId)
+    }
+
+    @Test
+    fun `a renamed category stays selected and saves under its new name`() = runTest {
+        var held = Category.seed()
+        val ledger = RecordingLedger()
+        val toasts = ToastMessages()
+        val viewModel = AddViewModel(ledger = ledger, toasts = toasts, categories = { held.forDirection(it) })
+        runCurrent()
+
+        viewModel.type(entryOf("485"))
+        viewModel.choose(Groceries)
+        held = held.map { if (it.id == "groceries") it.copy(name = "Market run") else it }
+        viewModel.save()
+        runCurrent()
+
+        assertEquals("groceries", ledger.recorded.single().categoryId)
+        assertEquals("Market run", viewModel.uiState.value.category?.name)
+    }
+
+    @Test
+    fun `a deleted category clears the selection and nothing is saved`() = runTest {
+        var held = Category.seed()
+        val ledger = RecordingLedger()
+        val viewModel = AddViewModel(ledger = ledger, toasts = ToastMessages(), categories = { held.forDirection(it) })
+        runCurrent()
+
+        viewModel.type(entryOf("485"))
+        viewModel.choose(Groceries)
+        held = held.filterNot { it.id == "groceries" }
+        viewModel.save()
+        runCurrent()
+
+        assertNull(viewModel.uiState.value.category)
+        assertTrue(viewModel.uiState.value.triedSave)
+        assertTrue(ledger.recorded.isEmpty())
     }
 
     // Another currency
@@ -832,10 +888,12 @@ private fun AddViewModel(
     speech: SpeechInput? = null,
     offersCurrencies: Boolean = false,
     rates: RateBook? = null,
+    categoryUsage: Flow<Map<String, Int>> = flowOf(emptyMap()),
 ): AddViewModel = AddViewModel(
     toasts = toasts,
     categories = categories,
     subCategories = subCategories,
+    categoryUsage = categoryUsage,
     interpretQuickAdd = agent?.let(::InterpretQuickAddUseCase),
     answerQuestion = AnswerQuickAddQuestionUseCase(reader),
     speech = speech,

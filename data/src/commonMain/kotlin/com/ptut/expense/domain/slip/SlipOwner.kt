@@ -36,6 +36,17 @@ fun SlipRead.Readable.direction(owner: String?): Direction {
 }
 
 /**
+ * J04: the recipient's account when the recipient is the reader, or null. With the reader's name known,
+ * the recipient must be them; before it is learned, a slip whose sender and recipient are one person is
+ * a move between their own accounts. Only such a transfer can fill a jar, so a shop stays spending.
+ */
+fun SlipRead.Readable.ownAccount(owner: String?): String? {
+    val account = recipientAccount ?: return null
+    val mine = if (owner != null) SlipNames.same(owner, counterparty) else sender?.let { SlipNames.same(it, counterparty) } == true
+    return account.takeIf { mine }
+}
+
+/**
  * K PLUS prints the sender as `MR. THAW Z` and the recipient as `MR. THAW ZIN TOE`: the title, the
  * given name, then the surname whole or as one letter. Two names are the same person when the
  * given names match and one surname starts with the other.

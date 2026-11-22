@@ -75,14 +75,12 @@ class RoomImportStore(
      */
     override suspend fun file(slip: FiledSlip): Boolean {
         val written = transactionDao.insertIfNew(slip.toEntity()) != IGNORED
-        importedSlipDao.record(
-            ImportedSlipEntity(
-                hash = slip.hash,
-                importedAtEpochMillis = slip.read.occurredAtEpochMillis,
-            ),
-        )
+        recordImported(slip.hash, slip.read.occurredAtEpochMillis)
         return written
     }
+
+    override suspend fun recordImported(hash: String, occurredAtEpochMillis: Long) =
+        importedSlipDao.record(ImportedSlipEntity(hash = hash, importedAtEpochMillis = occurredAtEpochMillis))
 
     override suspend fun queue(slip: QueuedSlipEntry): Boolean =
         queuedSlipDao.queue(slip.toEntity()) != IGNORED

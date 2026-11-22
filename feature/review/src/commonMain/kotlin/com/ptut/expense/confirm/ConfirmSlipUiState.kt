@@ -3,6 +3,8 @@ package com.ptut.expense.confirm
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.SubCategory
+import com.ptut.expense.domain.categories.CategoryChips
+import com.ptut.expense.domain.categories.chips
 import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.currencyCopy
@@ -39,6 +41,10 @@ data class ConfirmSlipUiState(
     val lowConfidence: Set<SlipField>,
     val category: Category?,
     val categories: List<Category>,
+    /** How often each category was filed, so the three chips drawn are the ones most likely wanted. */
+    val categoryUsage: Map<String, Int> = emptyMap(),
+    /** [category] came from the shop's name, not from a tap, so the screen says so under the chips. */
+    val suggestedFromShop: Boolean = false,
     /** #26: the slip names you as the recipient, so the payee row reads "Money in from". */
     val moneyIn: Boolean = false,
     /** #22: marked planned before saving; offered for money out in builds with the weekly note. */
@@ -77,6 +83,12 @@ data class ConfirmSlipUiState(
     val askForRate: Boolean = false,
 ) {
     val saving: Boolean get() = phase == ConfirmSlipPhase.Saving
+
+    /** The suggested or chosen category first, then the most used, with the rest behind More. */
+    val chips: CategoryChips get() = categories.chips(category, categoryUsage)
+
+    /** Under the chips while the shop's name picked the category and nobody has changed it. */
+    val suggestionNote: String? get() = AppText.copy.slips.pickedFromShop.takeIf { suggestedFromShop }
 
     /** True once the row is durable. The shell leaves the screen on it. */
     val saved: Boolean get() = phase == ConfirmSlipPhase.Saved

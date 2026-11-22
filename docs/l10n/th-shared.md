@@ -67,10 +67,14 @@ Choices to check in this area:
 | {name} repeats yearly | {name} ทุกปี | SharedHomeCopy.kt `repeatsYearly` |
 | Search groups and people | ค้นหากลุ่มและคน | SharedHomeCopy.kt `search` |
 | New group or person | กลุ่มใหม่หรือคนใหม่ | SharedHomeCopy.kt `newGroupOrPerson` |
-| You are owed | คุณจะได้รับ | SharedHomeCopy.kt `totalOwed` |
-| You owe | คุณต้องจ่าย | SharedHomeCopy.kt `totalOwe` |
+| You're owed {amount} | คุณจะได้รับ {amount} | SharedHomeCopy.kt `owedLine` |
+| you owe {amount} | คุณต้องจ่าย {amount} | SharedHomeCopy.kt `oweLine` |
+| Pay {name} {amount} | จ่าย {name} {amount} | SharedHomeCopy.kt `pay` |
+| The only payment you owe | รายการเดียวที่คุณต้องจ่าย | SharedHomeCopy.kt `onlyPayment` |
+| and {n} more | และอีก {n} รายการ | SharedHomeCopy.kt `andMore` |
 | Nothing shared yet. | ยังไม่มีอะไรที่แชร์ | SharedHomeCopy.kt `emptyTitle` |
-| Add a person to split one bill, or make a group for a trip or a flat. They join from a link, and your own spending stays on this phone. | เพิ่มคนเพื่อหารบิลเดียว หรือสร้างกลุ่มสำหรับทริปหรือห้องเช่า เขาเข้าร่วมจากลิงก์ และรายจ่ายของคุณเองยังอยู่ในโทรศัพท์เครื่องนี้ | SharedHomeCopy.kt `emptyBody` |
+| Make a group for a trip, a flat or just the two of you. People join from a link, and your own spending stays on this phone. | สร้างกลุ่มสำหรับทริป ห้องเช่า หรือแค่คุณสองคน คนอื่นเข้าร่วมจากลิงก์ และรายจ่ายของคุณเองยังอยู่ในโทรศัพท์เครื่องนี้ | SharedHomeCopy.kt `emptyBody` |
+| Start a group | เริ่มกลุ่ม | SharedHomeCopy.kt `startGroup` |
 | I have an invite code | ฉันมีโค้ดเชิญ | SharedHomeCopy.kt `haveInviteCode` |
 | Add | เพิ่ม | SharedHomeCopy.kt `add` |
 | New person | คนใหม่ | SharedHomeCopy.kt `newPerson` |
@@ -133,7 +137,9 @@ Choices to check in this area:
 | Make a new link | สร้างลิงก์ใหม่ | SharedAccountCopy.kt `newLink` |
 | Each person opens the link, signs in and picks their own name in {group}. | แต่ละคนเปิดลิงก์ ลงชื่อเข้าใช้ และเลือกชื่อของตัวเองใน {group} | SharedAccountCopy.kt `howToJoin` |
 | QR code for the invite link | QR โค้ดสำหรับลิงก์เชิญ | SharedAccountCopy.kt `qr` |
-| Copy | คัดลอก | SharedAccountCopy.kt `copyLink` |
+| Copy link | คัดลอกลิงก์ | SharedAccountCopy.kt `copyLink` |
+| Copy code | คัดลอกโค้ด | SharedAccountCopy.kt `copyCode` |
+| Link options | ตัวเลือกลิงก์ | SharedAccountCopy.kt `linkOptions` |
 | Share link | แชร์ลิงก์ | SharedAccountCopy.kt `shareLink` |
 | Join {group} on PaiSen: {link} (sent to LINE) | เข้าร่วม {group} บน PaiSeN: {link} | SharedAccountCopy.kt `message` |
 | Switch this link off | ปิดลิงก์นี้ | SharedAccountCopy.kt `switchOff` |
@@ -168,6 +174,7 @@ Choices to check in this area:
 | Signed out · {n} changes not sent | ออกจากระบบแล้ว · ยังไม่ได้ส่ง {n} รายการ | SharedSyncCopy.kt `signedOutGroup` |
 | Signed out. Sign in to keep your shared groups in sync. | ออกจากระบบแล้ว ลงชื่อเข้าใช้เพื่อซิงก์กลุ่มของคุณต่อ | SharedSyncCopy.kt `signedOutHome` |
 | Sign in with the same account, and your shared groups sync again. | ลงชื่อเข้าใช้ด้วยบัญชีเดิม แล้วกลุ่มของคุณจะซิงก์อีกครั้ง | SharedSyncCopy.kt `signInAgainReason` |
+| Signed in on another phone · {n} changes still to send | ลงชื่อเข้าใช้ในโทรศัพท์อีกเครื่องแล้ว · ยังต้องส่งอีก {n} รายการ | SharedSyncCopy.kt `endingElsewhere` |
 
 ## Push notices (other members' lock screens)
 
@@ -210,6 +217,8 @@ Choices to check in this area:
 | Edit group | แก้ไขกลุ่ม | SharedGroupCopy.kt `editGroup` |
 | My PromptPay | PromptPay ของฉัน | SharedGroupCopy.kt `myPromptPay` |
 | Repeat an expense | ตั้งรายการประจำ | SharedGroupCopy.kt `repeatAnExpense` |
+| Group settings | ตั้งค่ากลุ่ม | SharedGroupCopy.kt `groupSettings` |
+| Name, PromptPay, people, delete | ชื่อ พร้อมเพย์ คน ลบ | SharedGroupCopy.kt `groupSettingsLine` |
 | Delete group | ลบกลุ่ม | SharedGroupCopy.kt `deleteGroup` |
 | Delete for everyone | ลบสำหรับทุกคน | SharedGroupCopy.kt `deleteForEveryone` |
 | Leave group | ออกจากกลุ่ม | SharedGroupCopy.kt `leaveGroup` |
@@ -391,10 +400,7 @@ Choices to check in this area:
 | 2 weeks | 2 สัปดาห์ | SharedExpenseCopy.kt `freqTwoWeeks` |
 | Monthly | รายเดือน | SharedExpenseCopy.kt `freqMonthly` |
 | Yearly | รายปี | SharedExpenseCopy.kt `freqYearly` |
-| Rent | ค่าเช่า | SharedExpenseCopy.kt `kindRent` |
-| Utilities | ค่าน้ำค่าไฟ | SharedExpenseCopy.kt `kindUtilities` |
-| Internet | อินเทอร์เน็ต | SharedExpenseCopy.kt `kindInternet` |
-| Subscription | ค่าสมาชิก | SharedExpenseCopy.kt `kindSubscription` |
+| Name | ชื่อ | SharedExpenseCopy.kt `SharedRepeatCopy.name` |
 | Repeat saved. No reminder: notifications are off for PaiSen in system settings. | บันทึกรายการประจำแล้ว ไม่มีการเตือน: การแจ้งเตือนของ PaiSeN ปิดอยู่ในการตั้งค่าระบบ | SharedExpenseCopy.kt `noReminder` |
 | {name} owes you {amount} | {name} ต้องจ่ายคุณ {amount} | SharedExpenseCopy.kt `owesYou` |
 | You are owed {amount} | คุณจะได้รับ {amount} | SharedExpenseCopy.kt `SharedRepeatCopy.youAreOwed` |

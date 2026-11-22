@@ -25,9 +25,6 @@ data class WeeklyCardUiModel(
     val guessMonday: String? = null,
 )
 
-/** #21: "Food: ฿1,900 of ฿2,500 this week" and how far along the bar is, full at the target. */
-data class TargetUiModel(val line: String, val fraction: Float)
-
 /** #22: whether the weekly note is on in this build, its tone, and the Monday whose note was hidden. */
 data class WeeklyNoteSettings(val on: Boolean = false, val tone: NoteTone = NoteTone.Plain, val hiddenWeek: String? = null)
 
@@ -52,15 +49,6 @@ internal fun WeeklyLookBack.asCard(categories: List<Category>, tone: NoteTone): 
         from = check.from.toString(),
         to = check.to.toString(),
         categoryId = rise?.categoryId.takeIf { riseName != null },
-    )
-}
-
-/** #21: null when the target's category is gone, so a deleted category draws nothing. */
-internal fun TargetWeek.targetLine(categories: List<Category>): TargetUiModel? {
-    val name = categories.shownName(categoryId) ?: return null
-    return TargetUiModel(
-        line = targetCopy().weekLine(name, progress.spent.formatCompact(), progress.target.formatCompact()),
-        fraction = progress.fraction,
     )
 }
 

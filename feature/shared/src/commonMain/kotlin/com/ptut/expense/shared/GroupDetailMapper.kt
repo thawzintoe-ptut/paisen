@@ -188,6 +188,8 @@ private fun GroupSyncStatus.syncLine(): String? {
 
         health == SyncHealth.SignedOut -> text.sync.signedOutGroup(waiting)
 
+        health == SyncHealth.EndingElsewhere -> text.sync.endingElsewhere(waiting)
+
         health == SyncHealth.UpToDate -> text.detail.upToDate
 
         health == SyncHealth.Waiting -> text.changesWaiting(waiting)

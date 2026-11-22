@@ -15,6 +15,8 @@ These are stored in the app's private storage and are never sent anywhere:
 
 - your transactions, categories, sub-categories, notes and shop rules
 - the bank slips the app reads, and the text it reads from them
+- for a goal jar, the last 4 digits of your own accounts that your slips moved money to, so the app
+  can tell a move to savings from spending. It keeps no full account number.
 - your reports and settings
 
 On iPhone, if you ask Siri or a Shortcut for your spending, the app gives the total to Siri or

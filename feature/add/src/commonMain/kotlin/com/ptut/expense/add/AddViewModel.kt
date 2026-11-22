@@ -23,6 +23,8 @@ import com.ptut.expense.domain.agent.QuickAddReading
 import com.ptut.expense.domain.agent.QuickAnswer
 import com.ptut.expense.domain.agent.TransactionPicks
 import com.ptut.expense.domain.agent.mergeProposedTransaction
+import com.ptut.expense.domain.categories.CategoryChips
+import com.ptut.expense.domain.categories.chips
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatCompact
@@ -43,9 +45,11 @@ import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -59,6 +63,8 @@ data class AddUiState(
     val category: Category? = null,
     /** The chips for [kind]. A salary has no business being offered Groceries. */
     val categories: List<Category> = Category.seed().forDirection(Direction.Expense),
+    /** How often each category was filed, so the three chips drawn are the ones most likely wanted. */
+    val categoryUsage: Map<String, Int> = emptyMap(),
     /** The chosen category's own sub-categories. Empty until one with any is chosen (#111). */
     val subCategories: List<SubCategory> = emptyList(),
     val subCategory: SubCategory? = null,
@@ -98,6 +104,9 @@ data class AddUiState(
     /** "Saved as ฿241.90" under the rate. */
     val homeLine: String? = null,
 ) {
+    /** The chosen category first, then the most used, with the rest behind More. */
+    val chips: CategoryChips get() = categories.chips(category, categoryUsage)
+
     /** True while the note sheet is open over this one. */
     val editingMemo: Boolean get() = overlay == AddOverlay.Memo
 
@@ -216,6 +225,8 @@ class AddViewModel(
     private val toasts: ToastMessages,
     private val categories: (Direction) -> List<Category> = { Category.seed().forDirection(it) },
     private val subCategories: () -> List<SubCategory> = { emptyList() },
+    /** Rows filed per category id, counted once for the app; none offers the categories in their own order. */
+    private val categoryUsage: Flow<Map<String, Int>> = flowOf(emptyMap()),
     /** #114: a haptic on every save and delete, played by the shell. */
     private val haptics: Haptics = Haptics(),
     /** #207: reads a typed sentence. Null in a graph that binds no agent. */
@@ -231,8 +242,19 @@ class AddViewModel(
     private val recordTransaction: RecordTransactionUseCase,
 ) : ViewModel() {
 
+    private var usage: Map<String, Int> = emptyMap()
+
     private val state = MutableStateFlow(fresh(voice = null))
     val uiState: StateFlow<AddUiState> = state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            categoryUsage.collect { counted ->
+                usage = counted
+                state.update { it.copy(categoryUsage = counted) }
+            }
+        }
+    }
 
     private var listening: Job? = null
 
@@ -306,6 +328,7 @@ class AddViewModel(
     /** The mic carries over: which languages this phone hears does not change between opens. */
     private fun fresh(voice: QuickAddVoice? = state.value.voice) = AddUiState(
         categories = categories(Direction.Expense),
+        categoryUsage = usage,
         quickAdd = interpretQuickAdd != null,
         voice = voice?.copy(listening = false),
         currency = home(),
@@ -504,7 +527,7 @@ class AddViewModel(
      * the categories are on each switch, because this holder lives as long as the shell.
      */
     fun choose(category: Category) = state.update {
-        val chosen = if (it.category == category) null else category
+        val chosen = if (it.category?.id == category.id) null else category
         it.copy(category = chosen, subCategories = subCategories().under(chosen?.id), subCategory = null)
     }
 
@@ -537,7 +560,10 @@ class AddViewModel(
     fun save() {
         val current = state.value
         if (current.saving) return
-        val category = current.category
+        // Read again by id: a category renamed while chosen keeps its new name, a deleted one is unpicked.
+        val live = Direction.entries.flatMap(categories)
+        val category = current.category?.let { chosen -> live.firstOrNull { it.id == chosen.id } }
+        if (category != current.category) state.update { it.copy(category = category, categories = categories(current.kind)) }
         if (current.missing != null || category == null) {
             // SAVE stays lit, so a tap too early is answered with what is missing. A missing rate
             // is answered with the sheet that takes it, once the amount and category are there.

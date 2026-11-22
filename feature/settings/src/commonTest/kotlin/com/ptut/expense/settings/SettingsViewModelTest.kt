@@ -43,19 +43,20 @@ class SettingsViewModelTest : ViewModelTest() {
         assertEquals(
             listOf(
                 "Language",
-                "Mood by time of day",
-                "Export",
+                "Backup",
                 "Advanced",
+                "Help and feedback",
                 "Photo folders",
                 "Background import",
                 "Keep unread slips",
                 "Your name on slips",
-                "Activity",
                 "Categories",
                 "Timezone",
-                "Import",
+                "Import log",
+                "Restore from a backup",
                 "Weekly check-in",
                 "Transparency",
+                "Mood by time of day",
                 "Send feedback",
                 "Licences",
             ),
@@ -70,20 +71,29 @@ class SettingsViewModelTest : ViewModelTest() {
         assertEquals(
             listOf(
                 SettingsGroup.Saving to listOf("Goal jar", "Play"),
-                SettingsGroup.You to listOf("Language", "Mood by time of day"),
-                SettingsGroup.Safe to listOf("Export"),
-                SettingsGroup.More to listOf("Advanced"),
+                SettingsGroup.You to listOf("Language"),
+                SettingsGroup.Safe to listOf("Backup", "Advanced"),
+                SettingsGroup.Account to listOf("Help and feedback"),
             ),
             state.groups.map { group -> group.group to group.rows.map { it.name } },
         )
         assertEquals(
             listOf(
-                SettingsGroup.Slips to listOf("Photo folders", "Background import", "Keep unread slips", "Your name on slips", "Activity"),
-                SettingsGroup.Ledger to listOf("Categories", "Timezone", "Import", "Weekly check-in", "Transparency"),
-                SettingsGroup.Help to listOf("Send feedback", "Licences"),
+                SettingsGroup.Slips to listOf("Photo folders", "Background import", "Keep unread slips", "Your name on slips"),
+                SettingsGroup.Ledger to listOf("Categories", "Timezone", "Import log", "Restore from a backup", "Weekly check-in"),
+                SettingsGroup.Look to listOf("Transparency", "Mood by time of day"),
             ),
             state.advanced.map { group -> group.group to group.rows.map { it.name } },
         )
+        assertEquals(listOf(SettingsAction.Feedback, SettingsAction.Licences), state.help.map { it.id })
+    }
+
+    @Test
+    fun `the help row says what waits behind it and the advanced row says what it tunes`() = runTest {
+        val rows = viewModel().uiState.value.rows
+
+        assertEquals("Send feedback, licences", rows.row(SettingsAction.Help).value)
+        assertEquals("Slip reading, folders, rules and more", rows.row(SettingsAction.Advanced).value)
     }
 
     @Test

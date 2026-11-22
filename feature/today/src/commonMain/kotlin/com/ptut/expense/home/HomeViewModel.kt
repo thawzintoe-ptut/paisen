@@ -26,13 +26,14 @@ import com.ptut.expense.domain.formatCompact
 import com.ptut.expense.domain.formatNet
 import com.ptut.expense.domain.iconName
 import com.ptut.expense.domain.isAutomatic
-import com.ptut.expense.domain.label
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.ledger.LedgerSpan
 import com.ptut.expense.domain.ledger.ObserveImportRunsUseCase
 import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
 import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
-import com.ptut.expense.domain.play.AnswerGoalDayUseCase
+import com.ptut.expense.domain.play.DepositSource
+import com.ptut.expense.domain.play.Goal
+import com.ptut.expense.domain.play.GoalDeposit
 import com.ptut.expense.domain.play.ObserveTodayPlayUseCase
 import com.ptut.expense.domain.play.TodayPlay
 import com.ptut.expense.domain.rules.ShopNames
@@ -69,8 +70,20 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 
-/** One of the period's three biggest categories (p05): its name and glyph, in rank order. */
-data class TopCategoryUiModel(val name: String, val icon: String)
+/** One of today's three biggest categories: its name, glyph and total, in rank order. */
+data class TopCategoryUiModel(val name: String, val icon: String, val amount: String)
+
+/**
+ * The one card under the amount. Today shows a single next step, so the reader has one thing
+ * to do, not a stack: slips waiting (only while the import is fresh), then the jar, then the run.
+ */
+sealed interface NextStepUiModel {
+    data class Slips(val review: ReviewCardUiModel) : NextStepUiModel
+
+    data class Jar(val jar: JarCardUiModel) : NextStepUiModel
+
+    data class Play(val strip: PlayStripUiModel) : NextStepUiModel
+}
 
 /** One row of the day's list, with every string already resolved. */
 data class TransactionRowUiModel(
@@ -100,11 +113,11 @@ sealed interface HomeUiState {
     data class Success(
         /** "Spent today · Fri 14 Aug" — the hero number is useless without the span it covers. */
         val heroLabel: String,
-        /** The chosen period's money: the amount, and Income and Net beside it (#146, K1). */
+        /** Today's money: the amount, and Income and Net beside it (#146, K1). */
         val summary: PeriodSummary,
         /** "Income ฿0.00 · Net −฿655.00", or null while the ledger holds no income at all. */
         val incomeLine: IncomeLineUiModel? = null,
-        /** The chosen period's rows, newest first. */
+        /** Today's rows, newest first. */
         val transactions: List<TransactionRowUiModel>,
         val importStatus: ImportStatusUiModel,
         /** p24's status line on an empty period: who is watched, and when the importer last looked (#124). */
@@ -128,30 +141,25 @@ sealed interface HomeUiState {
         val savedToday: List<TransactionRowUiModel>,
         /** How many more were saved today than [savedToday] shows. History holds them by day. */
         val savedTodayMore: Int,
-        val period: HomePeriod = HomePeriod.Today,
-        /** "Spent today", "Spent this week", "Spent this month" (p05). */
-        val amountLabel: String = AppText.copy.home.spentToday,
         /** At most three, biggest first; fewer when fewer categories carry spending. */
         val topCategories: List<TopCategoryUiModel> = emptyList(),
-        /** p05's Compared card, on the Today tab only; null with too little history (#119). */
+        /** The line under the amount, today beside a usual one; null with too little history (#119). */
         val compared: ComparedUiModel? = null,
         /** p07 and p08's card under the tabs: yesterday before noon, today after 18:00 (#121, #122). */
         val moodCard: MoodCardUiModel? = null,
         /** #20: Monday's look back at last week, on the Today tab only. */
         val weeklyCard: WeeklyCardUiModel? = null,
-        /** #21: the one weekly target, on the Week tab only. */
-        val target: TargetUiModel? = null,
         /** #85: the run card, on the Today tab only, while Play and its run are on. */
         val play: PlayStripUiModel? = null,
         /** #87: the ink Play card while today's question waits. */
         val question: PlayQuestionCardUiModel? = null,
-        /** #89: PaiSeN's one line; while it shows, [compared] is null (D9). */
+        /** #89: PaiSeN's one line, plain text under the category totals. */
         val coach: CoachLineUiModel? = null,
         /** #91: the week's challenge, once picked. */
         val challenge: ChallengeRowUiModel? = null,
         /** The ways into the extras whose parts are on. */
         val shelf: List<ShelfItemUiModel> = emptyList(),
-        /** #104: the goal jar and today's Count it card, on the Today tab only. */
+        /** J01: the goal jar, with Put money in on a day under its usual. */
         val jar: JarCardUiModel? = null,
         /** #102: "Games and stamps join on day 8" through Today's first week, or null. */
         val firstWeekLine: String? = null,
@@ -159,7 +167,19 @@ sealed interface HomeUiState {
         val caught: Boolean = false,
         /** #103: the stamp press and the rolling total; false with Play off, and the number just changes. */
         val playMotion: Boolean = false,
-    ) : HomeUiState
+    ) : HomeUiState {
+        /** Only this one is drawn; [review], [jar] and [play] stay as facts for whatever else reads them. */
+        val nextStep: NextStepUiModel? = when {
+            // An import problem has its own banner above; it only hides the Slips step.
+            review != null && importStatus is ImportStatusUiModel.Fresh -> NextStepUiModel.Slips(review)
+
+            jar != null -> NextStepUiModel.Jar(jar)
+
+            play != null -> NextStepUiModel.Play(play)
+
+            else -> null
+        }
+    }
 }
 
 /** The way into the review queue, stated as a count and a reason rather than a bare badge. */
@@ -214,15 +234,15 @@ class HomeViewModel(
     private val getWeeklyCheckIn: GetWeeklyCheckInUseCase = GetWeeklyCheckInUseCase(),
     /** #82: what Today shows of play. None where nothing binds it, so a test sees Today as before. */
     observeTodayPlay: ObserveTodayPlayUseCase? = null,
-    /** #104: Count it and Not today. None where nothing binds it, so the card's buttons do nothing. */
-    private val answerGoalDay: AnswerGoalDayUseCase? = null,
+    /** J05: money into a jar, for the "went into your jar" toast. None where nothing binds it. */
+    deposits: Flow<List<GoalDeposit>> = flowOf(emptyList()),
+    /** J05: the jars, for the toast's name. */
+    goals: Flow<List<Goal>> = flowOf(emptyList()),
     /** #103: Play's switch for the caught slip's press and roll. Off where nothing binds it. */
     playMotion: Flow<Boolean> = flowOf(false),
     /** #103: the app's one toast, where "Caught a K PLUS slip" goes. None where nothing binds it. */
     private val toasts: ToastMessages? = null,
 ) : ViewModel() {
-
-    private val period = MutableStateFlow(HomePeriod.Today)
 
     /** Bumped when the screen comes back, so a card that belongs to the morning goes at noon. */
     private val clockTicks = MutableStateFlow(0)
@@ -232,15 +252,15 @@ class HomeViewModel(
 
     private val edits = MutableStateFlow<String?>(null)
 
-    /** #104: Count it landed on this screen, so the jar's stamp presses once. */
-    private val countedNow = MutableStateFlow(false)
-
-    private var answering = false
+    /** J05: the toast's See asked for the jar; the screen opens it and calls [jarOpened]. */
+    private val jarOpens = MutableStateFlow<String?>(null)
+    val jarRequests: StateFlow<String?> = jarOpens
 
     /** #103: the row the toast's Change asked to edit; the screen opens Edit and calls [editOpened]. */
     val editRequests: StateFlow<String?> = edits
 
     init {
+        watchDeposits(deposits, goals)
         // The first read only learns what is there, so a cold start or a new holder never replays a toast.
         viewModelScope.launch {
             var known: Set<String>? = null
@@ -270,15 +290,29 @@ class HomeViewModel(
         )
     }
 
-    /** #104: Count it, or Not today when [count] is false. A second tap while the first writes does nothing. */
-    fun answerDay(goalId: String, count: Boolean) {
-        val answer = answerGoalDay ?: return
-        if (answering) return
-        answering = true
+    /**
+     * J05: one toast per transfer slip that fills a jar while Today is up. The reader's own "I moved it"
+     * and deposits a restore brings back are older than this watcher, or not from a slip, so they stay quiet.
+     */
+    private fun watchDeposits(deposits: Flow<List<GoalDeposit>>, goals: Flow<List<Goal>>) {
+        val since = clock.now().toEpochMilliseconds()
         viewModelScope.launch {
-            runSuspendCatching { answer(goalId, count) }.onSuccess { counted -> if (counted) countedNow.value = true }
-            answering = false
+            val toasted = HashSet<String>()
+            deposits.collect { rows ->
+                val fresh = rows.filter { it.source == DepositSource.Slip && it.atEpochMillis >= since && toasted.add(it.id) }
+                if (fresh.isEmpty()) return@collect
+                val names = goals.first().associate { it.id to it.name }
+                val text = AppText.copy.play.extras
+                fresh.forEach { deposit ->
+                    val name = names[deposit.goalId] ?: return@forEach
+                    toasts?.show(ToastMessage(text = text.jarFilled(deposit.amount.formatCompact(), name), action = ToastAction(text.jarSee) { jarOpens.value = deposit.goalId }))
+                }
+            }
         }
+    }
+
+    fun jarOpened() {
+        jarOpens.value = null
     }
 
     fun editOpened() {
@@ -302,31 +336,31 @@ class HomeViewModel(
                 observeWatchedFolders(),
                 moodByTimeOfDay,
                 combine(weeklyCheckIn, weeklyTarget, weeklyNote, observeTodayPlay?.invoke() ?: flowOf(TodayPlay.Off), ::Weekly),
-                combine(clockTicks, caughtId, playMotion, countedNow) { _, caught, motion, counted -> Triple(caught, motion, counted) },
-            ) { scanning, folders, mood, weekly, (caught, motion, counted) ->
-                Extras(scanning, folders, mood, weekly.on, weekly.target, weekly.note, weekly.play, caught, motion, counted)
+                combine(clockTicks, caughtId, playMotion) { _, caught, motion -> caught to motion },
+            ) { scanning, folders, mood, weekly, (caught, motion) ->
+                Extras(scanning, folders, mood, weekly.on, weekly.target, weekly.note, weekly.play, caught, motion)
             },
             // ShopNames too: naming a shop read as noise retitles its rows here without a restart.
-            combine(observeTransactions(LedgerSpan.All), combine(categoryUpdates, subCategoryUpdates, ShopNames.names) { c, s, _ -> c to s }, period, ::Triple),
-        ) { todays, (sinceLastImportMillis, runs), queued, extras, (ledger, filing, chosen) ->
+            combine(observeTransactions(LedgerSpan.All), combine(categoryUpdates, subCategoryUpdates, ShopNames.names) { c, s, _ -> c to s }, ::Pair),
+        ) { todays, (sinceLastImportMillis, runs), queued, extras, (ledger, filing) ->
             val (categories, subCategories) = filing
             val now = clock.now()
             val today = now.toLocalDateTime(HomeTime).date
-            val home = getHomeSummary(todays, ledger, chosen, today, queued, categories, extras.target, SpendWords)
+            // Reports owns the week and the month, so Today asks for one day only.
+            val home = getHomeSummary(todays, ledger, HomePeriod.Today, today, queued, categories, extras.target, SpendWords)
                 ?: return@combine HomeUiState.Loading
             val health = getImportHealth(sinceLastImportMillis, runs, stopSentences())
             val transactions = home.transactions
-            val onToday = chosen == HomePeriod.Today
-            val weeklyCard = if (extras.weekly && onToday) {
+            val weeklyCard = if (extras.weekly) {
                 getWeeklyCheckIn(home.history, today, extras.target, extras.note.on, extras.note.hiddenWeek)?.asCard(categories, extras.note.tone)
                     ?.copy(guessMonday = extras.play.guessWeek?.toString())
             } else {
                 null
             }
-            // Today keeps one insight line, in screen order: weekly note, then coach, then Compared.
-            val coach = if (onToday && weeklyCard == null) extras.play.coachCard(today, categories) else null
+            // The weekly note and the coach say the same kind of thing, so Monday keeps the note.
+            val coach = if (weeklyCard == null) extras.play.coachCard(today, categories) else null
             HomeUiState.Success(
-                heroLabel = "${chosen.spent()}${Separators.DOT}${if (chosen == HomePeriod.Today) today.dayLabel() else home.range.label()}",
+                heroLabel = "${AppText.copy.home.spentToday}${Separators.DOT}${today.dayLabel()}",
                 summary = home.summary,
                 incomeLine = home.summary.takeIf { home.history.any { it.direction == Direction.Income } }?.let {
                     IncomeLineUiModel(income = it.income.format(), net = it.net.formatNet(), netBelowZero = it.net < Satang.Zero)
@@ -341,34 +375,27 @@ class HomeViewModel(
                 review = home.review?.asReviewCard(),
                 savedToday = home.savedToday.take(SAVED_TODAY_SHOWN).map { it.asSavedRow(categories, subCategories) },
                 savedTodayMore = (home.savedToday.size - SAVED_TODAY_SHOWN).coerceAtLeast(0),
-                period = chosen,
-                amountLabel = chosen.spent(),
-                compared = home.usualDay?.asCompared().takeIf { coach == null && weeklyCard == null },
-                moodCard = if (extras.mood && chosen == HomePeriod.Today) getMoodRecap(home.history, now)?.asMoodCard() else null,
+                compared = home.usualDay?.asCompared(),
+                moodCard = if (extras.mood) getMoodRecap(home.history, now)?.asMoodCard() else null,
                 weeklyCard = weeklyCard,
-                target = home.target?.targetLine(categories),
-                play = if (onToday) extras.play.strip(queued.size) else null,
-                question = if (onToday) extras.play.questionCard() else null,
+                play = extras.play.strip(queued.size),
+                question = extras.play.questionCard(),
                 coach = coach,
-                challenge = if (onToday) extras.play.challengeRow(categories) else null,
-                shelf = if (onToday) extras.play.shelfItems() else emptyList(),
-                jar = if (onToday) extras.play.jarCard(pressed = extras.countedNow && extras.playMotion) else null,
-                firstWeekLine = AppText.copy.play.extras.firstWeek.takeIf { onToday && extras.play.firstWeek },
+                challenge = extras.play.challengeRow(categories),
+                shelf = extras.play.shelfItems(),
+                jar = extras.play.jarCard(),
+                firstWeekLine = AppText.copy.play.extras.firstWeek.takeIf { extras.play.firstWeek },
                 caught = extras.caughtId != null && transactions.any { it.id == extras.caughtId },
                 playMotion = extras.playMotion,
                 topCategories = home.byCategory
                     .take(TOP_CATEGORIES)
-                    .map { TopCategoryUiModel(name = it.category.name, icon = it.category.icon) },
+                    .map { TopCategoryUiModel(name = it.category.name, icon = it.category.icon, amount = it.total.formatCompact()) },
             )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
             initialValue = HomeUiState.Loading,
         )
-
-    fun show(period: HomePeriod) {
-        this.period.value = period
-    }
 }
 
 /** Home shows a few. History holds the rest, each under its own day. */
@@ -377,16 +404,8 @@ private const val SAVED_TODAY_SHOWN = 3
 /** #68: enough to show where rows land without promising how many a scan will find. */
 private const val PLACEHOLDER_ROWS = 2
 
-/** p05 draws three tiles. */
+/** The totals line names three. */
 private const val TOP_CATEGORIES = 3
-
-private fun HomePeriod.spent(): String = AppText.copy.home.let { text ->
-    when (this) {
-        HomePeriod.Today -> text.spentToday
-        HomePeriod.Week -> text.spentThisWeek
-        HomePeriod.Month -> text.spentThisMonth
-    }
-}
 
 private fun ReviewCounts.asReviewCard(): ReviewCardUiModel {
     val text = AppText.copy.home
@@ -433,7 +452,6 @@ private data class Extras(
     val play: TodayPlay,
     val caughtId: String?,
     val playMotion: Boolean,
-    val countedNow: Boolean,
 )
 
 private fun UsualDay.asCompared() = ComparedUiModel(line = differencePhrase(), glyph = difference.trendGlyph())

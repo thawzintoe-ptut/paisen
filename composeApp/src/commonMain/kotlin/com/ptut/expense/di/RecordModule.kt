@@ -5,19 +5,43 @@ import com.ptut.expense.agent.AgentLoop
 import com.ptut.expense.confirm.ConfirmSlipViewModel
 import com.ptut.expense.detail.TransactionDetailViewModel
 import com.ptut.expense.domain.agent.InterpretQuickAddUseCase
+import com.ptut.expense.domain.categories.categoryUsage
 import com.ptut.expense.domain.forDirection
+import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.rules.RuleRepository
+import com.ptut.expense.domain.rules.forShop
 import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
 import com.ptut.expense.domain.slip.FindSlipDebtsUseCase
 import com.ptut.expense.edit.EditTransactionViewModel
 import com.ptut.expense.review.ReviewViewModel
 import com.ptut.expense.shoprule.ShopRuleViewModel
 import com.ptut.expense.sync.flags.Flag
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
+import org.koin.core.qualifier.named
+import org.koin.core.scope.Scope
 import org.koin.dsl.module
+
+// Above the module: a top-level val is read in file order, and the module reads this one.
+private val CATEGORY_USAGE = named("categoryUsage")
 
 /** Every way a row is written or changed: the Add sheet, the slip queue, one record and its edit. */
 val recordModule: Module = module {
+    // Counted once per ledger change, off the main thread, and shared by every category picker.
+    single(CATEGORY_USAGE) {
+        get<LedgerRepository>().allTransactions
+            .map { snapshot -> (snapshot as? LedgerSnapshot.Rows)?.transactions.orEmpty().categoryUsage() }
+            .flowOn(Dispatchers.Default)
+            .stateIn(appScope(), SharingStarted.Eagerly, emptyMap())
+    }
+
     // "A slip closes the debt", behind its own switch until it has been tried with real groups.
     factory { FindSlipDebtsUseCase(enabled = flagOn(Flag.SlipGroupDebt), shared = getOrNull()) }
 
@@ -43,6 +67,8 @@ val recordModule: Module = module {
             observeSlip = get(),
             toasts = get(),
             categories = storedCategories(),
+            categoryUsage = categoryUsage(),
+            suggestCategory = { shop -> get<RuleRepository>().rules.value.forShop(shop)?.let { rule -> storedCategories().firstOrNull { it.id == rule.categoryId } } },
             offersPlanned = flagOn(Flag.Planned),
             subCategories = storedSubCategories(),
             findDebts = get(),
@@ -93,6 +119,7 @@ val recordModule: Module = module {
         AddViewModel(
             toasts = get(),
             categories = { scope.storedCategories().forDirection(it) },
+            categoryUsage = categoryUsage(),
             subCategories = { scope.storedSubCategories() },
             haptics = get(),
             // getOrNull, as before: a graph that binds no agent draws no Quick add.
@@ -113,6 +140,10 @@ val recordModule: Module = module {
             renameShop = get(),
             forgetShop = get(),
             categories = storedCategories(),
+            categoryUsage = categoryUsage(),
         )
     }
 }
+
+/** How often each category was used, for the three chips a picker shows first (Hick's law pass). */
+private fun Scope.categoryUsage(): StateFlow<Map<String, Int>> = get(CATEGORY_USAGE)

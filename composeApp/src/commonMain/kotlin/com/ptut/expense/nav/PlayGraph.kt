@@ -17,6 +17,7 @@ import com.ptut.expense.play.GoalJarView
 import com.ptut.expense.play.GoalJarViewModel
 import com.ptut.expense.play.GuessView
 import com.ptut.expense.play.GuessViewModel
+import com.ptut.expense.play.JarSheetActions
 import com.ptut.expense.play.MoneyScoreView
 import com.ptut.expense.play.MoneyScoreViewModel
 import com.ptut.expense.play.MonthStoryView
@@ -27,6 +28,7 @@ import com.ptut.expense.play.StampBookView
 import com.ptut.expense.play.StampBookViewModel
 import com.ptut.expense.play.StampRevealView
 import com.ptut.expense.play.StampRevealViewModel
+import com.ptut.expense.shared.rememberBankApps
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -86,17 +88,33 @@ internal fun NavGraphBuilder.playRoutes(nav: NavHostController) {
     composable<PtutRoute.GoalJar> { entry ->
         val route = entry.toRoute<PtutRoute.GoalJar>()
         // Koin's parameters do not carry a null, so a missing one travels as "".
-        val jar = koinViewModel<GoalJarViewModel> { parametersOf(route.goalId.orEmpty(), route.name.orEmpty(), route.target.orEmpty()) }
+        val jar = koinViewModel<GoalJarViewModel> { parametersOf(route.goalId.orEmpty(), route.name.orEmpty(), route.target.orEmpty(), route.putIn) }
         val state by jar.uiState.collectAsStateWithLifecycle()
+        val bankApps = rememberBankApps()
         GoalJarView(
             tip = playTip(PlayTip.Jar),
             uiState = state,
             onName = jar::setName,
             onTarget = jar::setTarget,
             onSave = jar::save,
-            onWhatIf = jar::whatIf,
+            onEdit = jar::edit,
+            onPutIn = jar::openPutIn,
+            onChangeAccount = jar::changeAccount,
+            onRemoveDeposit = jar::remove,
             onArchive = { jar.archive { nav.popBackStack() } },
             onBack = { nav.popBackStack() },
+            sheet = JarSheetActions(
+                onDismiss = jar::dismissSheet,
+                onPick = jar::pick,
+                // J03: K PLUS where the phone can name it; elsewhere the reader opens it, and the sheet goes either way.
+                onOpenBank = {
+                    bankApps.installed().firstOrNull { it.name == K_PLUS }?.let(bankApps::open)
+                    jar.bankOpened()
+                },
+                onMoved = jar::moved,
+                onPickAccount = jar::pickAccount,
+                onUseAccount = jar::useAccount,
+            ),
         )
     }
 
@@ -126,3 +144,6 @@ internal fun NavGraphBuilder.playRoutes(nav: NavHostController) {
         MoneyScoreView(uiState = state, onBack = { nav.popBackStack() })
     }
 }
+
+/** The bank app whose slips the jar reads, as [com.ptut.expense.shared.BankApp.name] has it. */
+private const val K_PLUS = "K PLUS"

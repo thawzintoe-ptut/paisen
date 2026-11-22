@@ -14,4 +14,6 @@ data class PlayGoalEntity(
     val startDate: String,
     val createdAtEpochMillis: Long,
     val archivedAtEpochMillis: Long? = null,
+    /** Schema 27 (J04): the account mask the jar's money goes to, `cash`, or null until asked. */
+    val savingsAccount: String? = null,
 )

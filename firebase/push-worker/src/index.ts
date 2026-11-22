@@ -1,4 +1,5 @@
 import { accessToken, verifyIdToken } from './auth';
+import { endOldSignIns } from './sessions';
 import { cleanUp } from './cleanup';
 import { sendToDevice } from './fcm';
 import { deleteDevice, devicesFor, readGroup, type Device, type Group } from './firestore';
@@ -42,6 +43,14 @@ export default {
       console.log(JSON.stringify({ cleanup: counts }));
     } catch (error) {
       console.error(`cleanup failed: ${error instanceof HttpError ? error.message : 'internal'}`);
+    }
+    // Apart from the cleanup, so a failed purge never keeps an old phone signed in.
+    try {
+      const token = await accessToken(env.FIREBASE_SERVICE_ACCOUNT);
+      const ended = await endOldSignIns(env.FIREBASE_PROJECT_ID, token, controller.scheduledTime);
+      console.log(JSON.stringify({ sessions: { ended } }));
+    } catch (error) {
+      console.error(`session end failed: ${error instanceof HttpError ? error.message : 'internal'}`);
     }
   },
 } satisfies ExportedHandler<Env>;

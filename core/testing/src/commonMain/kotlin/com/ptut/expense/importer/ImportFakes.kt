@@ -91,6 +91,10 @@ class InMemoryImportStore(rules: List<MerchantRule> = emptyList()) : ImportStore
         return true
     }
 
+    override suspend fun recordImported(hash: String, occurredAtEpochMillis: Long) {
+        importedHashes += hash
+    }
+
     override suspend fun queue(slip: QueuedSlipEntry): Boolean {
         if (queued.any { it.hash == slip.hash }) return false
         queued += slip

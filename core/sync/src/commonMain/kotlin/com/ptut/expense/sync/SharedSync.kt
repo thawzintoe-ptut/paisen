@@ -33,8 +33,11 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-/** #189: what the group screen says about sync. [SignedOut]: a shared group on a phone whose session ended (#218). */
-enum class SyncHealth { Local, UpToDate, Waiting, Offline, SignedOut }
+/**
+ * #189: what the group screen says about sync. [SignedOut]: a shared group on a phone whose session ended (#218).
+ * [EndingElsewhere]: the account signed in on another phone, and this one signs out once what waits is sent.
+ */
+enum class SyncHealth { Local, UpToDate, Waiting, Offline, SignedOut, EndingElsewhere }
 
 /** [refused] counts changes the group would not take (#194); they have left the outbox. */
 data class GroupSyncStatus(val health: SyncHealth, val waiting: Int, val refused: Int = 0)
@@ -81,6 +84,7 @@ class SharedSync internal constructor(
     /** Null in a build with no push Worker: no notice is built or sent. */
     private val pushes: PushSender? = null,
     private val registrar: PushRegistrar? = null,
+    private val notice: EndedHereNotice = MemoryEndedHereNotice(),
 ) {
     val available: Boolean get() = auth.available
 
@@ -91,34 +95,45 @@ class SharedSync internal constructor(
     val isSignedIn: Boolean get() = auth.account.value is Account.SignedIn
 
     private val failed = MutableStateFlow<Set<String>>(emptySet())
-    private val endedHere = MutableStateFlow(false)
+    private val endedHere = MutableStateFlow(notice.read())
+    private val endingElsewhere = MutableStateFlow(false)
     private val running = Mutex()
 
     // In memory only, read and written under [running]: a new process checks everything once.
+    private var sessionCheckedAt: Pair<String, Long>? = null
     private var accountCheckedAt: Pair<String, Long>? = null
 
     private val puller = GroupPuller(firestore, dao, clock, ::publishNames) { (auth.account.value as? Account.SignedIn)?.uid }
     private val pusher = OutboxPusher(firestore, dao, repository, clock, pushes, failed, ::account, ::newInvite, ::publishNames)
 
     fun status(groupId: String): Flow<GroupSyncStatus> =
-        combine(repository.snapshot, dao.observeOutbox(), failed, pusher.refused, auth.account) { snapshot, outbox, failed, refused, account ->
+        combine(repository.snapshot, dao.observeOutbox(), failed, pusher.refused, session()) { snapshot, outbox, failed, refused, session ->
             val group = snapshot.group(groupId)
             val waiting = outbox.count { it.groupId == groupId }
-            health(remote = group?.remote == true, account is Account.SignedIn, groupId in failed, waiting, notTaken = refused[groupId] ?: 0)
+            health(remote = group?.remote == true, session, groupId in failed, waiting, notTaken = refused[groupId] ?: 0)
         }
 
     /** #196: the same, across every shared group, for the Shared tab's one line. */
     fun overallStatus(): Flow<GroupSyncStatus> =
-        combine(repository.snapshot, dao.observeOutbox(), failed, pusher.refused, auth.account) { snapshot, outbox, failed, refused, account ->
+        combine(repository.snapshot, dao.observeOutbox(), failed, pusher.refused, session()) { snapshot, outbox, failed, refused, session ->
             val remote = snapshot.groups.filter { it.remote }.map { it.id }.toSet()
             val waiting = outbox.count { it.groupId in remote }
             val notTaken = refused.filterKeys { it in remote }.values.sum()
-            health(remote = remote.isNotEmpty(), account is Account.SignedIn, failed.any { it in remote }, waiting, notTaken)
+            health(remote = remote.isNotEmpty(), session, failed.any { it in remote }, waiting, notTaken)
         }
 
-    private fun health(remote: Boolean, signedIn: Boolean, failed: Boolean, waiting: Int, notTaken: Int): GroupSyncStatus = when {
+    /** [SyncHealth.SignedOut], [SyncHealth.EndingElsewhere], or null while this phone holds the account. */
+    private fun session(): Flow<SyncHealth?> = combine(auth.account, endingElsewhere) { account, ending ->
+        when {
+            account !is Account.SignedIn -> SyncHealth.SignedOut
+            ending -> SyncHealth.EndingElsewhere
+            else -> null
+        }
+    }
+
+    private fun health(remote: Boolean, session: SyncHealth?, failed: Boolean, waiting: Int, notTaken: Int): GroupSyncStatus = when {
         !remote -> GroupSyncStatus(SyncHealth.Local, 0)
-        !signedIn -> GroupSyncStatus(SyncHealth.SignedOut, waiting, notTaken)
+        session != null -> GroupSyncStatus(session, waiting, notTaken)
         failed -> GroupSyncStatus(SyncHealth.Offline, waiting, notTaken)
         waiting > 0 -> GroupSyncStatus(SyncHealth.Waiting, waiting, notTaken)
         else -> GroupSyncStatus(SyncHealth.UpToDate, 0, notTaken)
@@ -131,6 +146,7 @@ class SharedSync internal constructor(
     val signedOutElsewhere: StateFlow<Boolean> get() = endedHere
 
     fun acknowledgeSignedOutElsewhere() {
+        notice.write(false)
         endedHere.value = false
     }
 
@@ -143,15 +159,12 @@ class SharedSync internal constructor(
 
     /** [syncAll], also saying whether it failed, so a poll can wait longer before the next. */
     suspend fun syncAllOutcome(): SyncOutcome = synced { account ->
-        // The session check and the restore query cost reads on every poll; once in a while is enough.
-        val mine = if (accountCheckDue(account.uid)) {
-            if (!holdsSession(account.uid)) return@synced SyncOutcome(groupsChanged = endHere(), failed = false)
-            memberships(account.uid)?.also { accountCheckedAt = account.uid to now() }
-        } else {
-            null
-        }
+        // The restore query costs reads on every poll; once in a while is enough.
+        val mine = if (due(accountCheckedAt, account.uid)) memberships(account.uid) else null
         val docs = mine.orEmpty().associateBy { it.id }
         val tried = mine?.let { restore(it, docs) }.orEmpty()
+        // A group that could not come back is looked for again on the next sync.
+        if (mine != null && tried.values.all { it }) accountCheckedAt = account.uid to now()
         val restored = tried.filterValues { it }.keys
         var changed = restored.isNotEmpty()
         var anyFailed = false in tried.values
@@ -183,7 +196,11 @@ class SharedSync internal constructor(
             val account = auth.account.value as? Account.SignedIn ?: return@withLock QUIET
             try {
                 forgetOtherAccounts(account.uid)
+                // As costly as the restore query, so checked as seldom; also from the group screen's poll.
+                val ended = endingElsewhere.value || (due(sessionCheckedAt, account.uid) && holdsSession(account.uid) == false)
                 pusher.push()
+                // Another phone holds the account: only what waits goes up, nothing more comes down.
+                if (ended) return@withLock SyncOutcome(groupsChanged = endHere(), failed = false)
                 work(account)
             } catch (noToken: AuthException) {
                 // #218: no group says "Up to date" when the sign-in behind every call has failed.
@@ -193,8 +210,8 @@ class SharedSync internal constructor(
         }
     }
 
-    private fun accountCheckDue(uid: String): Boolean {
-        val (checkedUid, at) = accountCheckedAt ?: return true
+    private fun due(checkedAt: Pair<String, Long>?, uid: String): Boolean {
+        val (checkedUid, at) = checkedAt ?: return true
         return checkedUid != uid || now() - at >= ACCOUNT_CHECK_EVERY.inWholeMilliseconds
     }
 
@@ -251,9 +268,9 @@ class SharedSync internal constructor(
     suspend fun signOut() {
         running.withLock {
             pusher.push()
-            val waiting = waitingToSend()
+            val waiting = dao.forgetSharedGroupsUnlessWaiting()
             if (waiting > 0) throw ChangesWaiting(waiting)
-            forgetSharedGroups()
+            forgotSharedGroups()
         }
         registrar?.forgetDevice()
         auth.signOut()
@@ -539,22 +556,31 @@ class SharedSync internal constructor(
     /** #187: shared groups leave this phone with the account. Your own spending stays. */
     private suspend fun forgetSharedGroups() {
         dao.remoteGroupIds().forEach { dao.forgetGroup(it) }
+        forgotSharedGroups()
+    }
+
+    private fun forgotSharedGroups() {
         failed.value = emptySet()
         puller.forget()
+        endingElsewhere.value = false
         // Signing in again brings the groups back at once rather than at the next check.
+        sessionCheckedAt = null
         accountCheckedAt = null
     }
 
     /**
      * One phone at a time: this phone stores its sign-in when it is the newest, and learns when
-     * another phone's is newer. True while this phone holds the account, and when it cannot tell.
+     * another phone's is newer. True while this phone holds the account; null when it cannot tell,
+     * which keeps syncing and asks again on the next sync.
      */
-    private suspend fun holdsSession(uid: String): Boolean {
-        val mine = authTimeOf(auth.idToken()) ?: return true
-        return try {
+    private suspend fun holdsSession(uid: String): Boolean? {
+        val mine = authTimeOf(auth.idToken()) ?: return null
+        val holds = try {
             when (sessionVerdict(firestore.get("sessions/$uid")?.fields?.long("signedInAt"), mine)) {
                 SessionVerdict.Claim -> {
                     firestore.set("sessions/$uid", mapOf("signedInAt" to mine))
+                    // The phone this sign-in replaced stops getting the account's pushes.
+                    registrar?.forgetOtherDevices()
                     true
                 }
 
@@ -563,20 +589,25 @@ class SharedSync internal constructor(
                 SessionVerdict.EndHere -> false
             }
         } catch (unknown: FirestoreException) {
-            true
+            null
         }
+        if (holds == true) sessionCheckedAt = uid to now()
+        return holds
     }
 
     /**
      * The account signed in on another phone later, so this one lets go of its shared groups and
-     * signs out. Not while changes still wait: they go first, on a later sync.
+     * signs out. Not while changes still wait: they go first, on a later sync, and the status says so.
      */
     private suspend fun endHere(): Boolean {
-        if (waitingToSend() > 0) return false
-        forgetSharedGroups()
+        endingElsewhere.value = true
+        if (dao.forgetSharedGroupsUnlessWaiting() > 0) return false
+        forgotSharedGroups()
         registrar?.forgetDevice()
-        auth.signOut()
+        // Before signing out, so the notice still shows if the app dies on the way.
+        notice.write(true)
         endedHere.value = true
+        auth.signOut()
         return true
     }
 

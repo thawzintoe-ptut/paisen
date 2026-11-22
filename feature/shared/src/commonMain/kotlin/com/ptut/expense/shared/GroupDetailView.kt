@@ -223,7 +223,7 @@ private fun Loaded(
     }
 
     if (menu) {
-        // One filled action, then grouped rows as in Settings (p21), and the way out kept apart in red.
+        // One filled action, then five rows as in Settings (p21); what changes the group sits one step down.
         SkyBottomSheet(onDismissRequest = { menu = false }) {
             fun pick(then: () -> Unit): () -> Unit = {
                 menu = false
@@ -248,10 +248,25 @@ private fun Loaded(
                 )
             }
             SkyGroupedCard(
-                rows = listOf(
-                    { MenuRow(PtutIcon.Payments, text.whoPaysWhom, onClick = pick(onBalances)) },
-                    { MenuRow(PtutIcon.Sync, text.detail.repeatAnExpense, onClick = pick(onRepeat)) },
-                ),
+                rows = state.menuEntries().map<GroupMenuEntry, @Composable () -> Unit> { entry ->
+                    when (entry) {
+                        GroupMenuEntry.WhoPaysWhom -> {
+                            { MenuRow(PtutIcon.Payments, text.whoPaysWhom, onClick = pick(onBalances)) }
+                        }
+
+                        GroupMenuEntry.RepeatAnExpense -> {
+                            { MenuRow(PtutIcon.Sync, text.detail.repeatAnExpense, onClick = pick(onRepeat)) }
+                        }
+
+                        GroupMenuEntry.Activity -> {
+                            { MenuRow(PtutIcon.History, text.activity, onClick = pick { tabs.onSelect(GroupTab.Activity) }) }
+                        }
+
+                        GroupMenuEntry.GroupSettings -> {
+                            { MenuRow(PtutIcon.Settings, text.detail.groupSettings, value = text.detail.groupSettingsLine, onClick = pick { manageStep = STEP_SETTINGS }) }
+                        }
+                    }
+                },
                 color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.padding(top = Spacing.md),
             )
@@ -259,29 +274,12 @@ private fun Loaded(
             if (playRows.isNotEmpty()) {
                 SkyGroupedCard(rows = playRows, color = MaterialTheme.colorScheme.surface, modifier = Modifier.padding(top = Spacing.s12))
             }
-            SkyGroupedCard(
-                rows = listOfNotNull<@Composable () -> Unit>(
-                    { MenuRow(PtutIcon.Edit, text.detail.editGroup, onClick = pick { manageStep = STEP_EDIT }) },
-                    { MenuRow(PtutIcon.AccountBalanceWallet, text.detail.myPromptPay, value = state.myPromptPay, onClick = pick { manageStep = STEP_PROMPTPAY }) },
-                    { MenuRow(PtutIcon.GroupAdd, text.detail.addPeople, onClick = pick { manageStep = STEP_ADD_PEOPLE }) },
-                    if (state.canRemovePeople && state.others.isNotEmpty()) {
-                        { MenuRow(PtutIcon.Group, text.detail.removeSomeone, onClick = pick { manageStep = STEP_REMOVE_PEOPLE }) }
-                    } else {
-                        null
-                    },
-                ),
-                color = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.padding(top = Spacing.s12),
-            )
-            SkyGroupedCard(
-                rows = listOf({ MenuRow(PtutIcon.Delete, state.removal.label(), onClick = pick { manageStep = STEP_REMOVE }, danger = true) }),
-                color = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.padding(top = Spacing.s12),
-            )
         }
     }
 
     when (manageStep) {
+        STEP_SETTINGS -> GroupSettingsSheet(state, onPick = { manageStep = it }, onDismiss = { manageStep = null })
+
         STEP_EDIT -> EditGroupSheet(
             name = state.name,
             type = state.type,
@@ -436,6 +434,45 @@ private fun MenuRow(icon: PtutIcon, label: String, onClick: () -> Unit, value: S
         if (!danger) {
             Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.settingsTrailing))
         }
+    }
+}
+
+/** The second step of the menu: name, PromptPay and people, and the way out kept apart in red. */
+@Composable
+private fun GroupSettingsSheet(state: GroupDetailUiState.Loaded, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val text = LocalCopy.current.shared.detail
+    SkyBottomSheet(onDismissRequest = onDismiss) {
+        Text(text.groupSettings, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.sm))
+        SkyGroupedCard(
+            rows = state.settingsEntries().mapNotNull<GroupSettingsEntry, @Composable () -> Unit> { entry ->
+                when (entry) {
+                    GroupSettingsEntry.EditGroup -> {
+                        { MenuRow(PtutIcon.Edit, text.editGroup, onClick = { onPick(STEP_EDIT) }) }
+                    }
+
+                    GroupSettingsEntry.MyPromptPay -> {
+                        { MenuRow(PtutIcon.AccountBalanceWallet, text.myPromptPay, value = state.myPromptPay, onClick = { onPick(STEP_PROMPTPAY) }) }
+                    }
+
+                    GroupSettingsEntry.AddPeople -> {
+                        { MenuRow(PtutIcon.GroupAdd, text.addPeople, onClick = { onPick(STEP_ADD_PEOPLE) }) }
+                    }
+
+                    GroupSettingsEntry.RemoveSomeone -> {
+                        { MenuRow(PtutIcon.Group, text.removeSomeone, onClick = { onPick(STEP_REMOVE_PEOPLE) }) }
+                    }
+
+                    GroupSettingsEntry.LeaveOrDelete -> null
+                }
+            },
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.padding(top = Spacing.md),
+        )
+        SkyGroupedCard(
+            rows = listOf({ MenuRow(PtutIcon.Delete, state.removal.label(), onClick = { onPick(STEP_REMOVE) }, danger = true) }),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.padding(top = Spacing.s12),
+        )
     }
 }
 
@@ -658,6 +695,7 @@ private const val STEP_SIGN_IN = "sign-in"
 private const val STEP_SIGN_IN_AGAIN = "sign-in-again"
 private const val STEP_ADD_PEOPLE = "add-people"
 private const val STEP_REMOVE_PEOPLE = "remove-people"
+private const val STEP_SETTINGS = "settings"
 private const val STEP_EDIT = "edit"
 private const val STEP_PROMPTPAY = "promptpay"
 private const val STEP_REMOVE = "remove"

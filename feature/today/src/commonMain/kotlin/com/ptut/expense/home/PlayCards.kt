@@ -67,40 +67,47 @@ internal fun TodayPlay.shelfItems(): List<ShelfItemUiModel> {
 }
 
 /**
- * #104: the jar on Today, its meter, and the card to count today while it sits under its usual.
- * [pressed] is true right after Count it, for the stamp's press.
+ * J01: the jar on Today. [plan] says the weekly pace and the month it lands; [nudge] and [putIn] show on a
+ * day under its usual, so the leftover is one button away. The jar fills only from money that moved.
  */
 data class JarCardUiModel(
     val open: ShelfItemUiModel,
+    val goalId: String,
     val name: String,
     val saved: MoneyParts,
     val ofTarget: String,
     val fraction: Float,
     val label: String,
-    val under: UnderUsualUiModel?,
-    val pressed: Boolean,
-    val counted: String,
+    val plan: String?,
+    val thisWeek: String?,
+    val nudge: String?,
+    val putIn: String?,
 )
 
-data class UnderUsualUiModel(val goalId: String, val title: String, val line: String, val count: String, val notToday: String)
-
-internal fun TodayPlay.jarCard(pressed: Boolean): JarCardUiModel? {
+internal fun TodayPlay.jarCard(): JarCardUiModel? {
     val jar = jar ?: return null
     val text = AppText.copy.play.extras
-    val fraction = jar.saved.ratioTo(jar.goal.target).coerceIn(0f, 1f)
+    val fraction = jar.pace.saved.ratioTo(jar.goal.target).coerceIn(0f, 1f)
     val percent = (fraction * PERCENT).toInt()
+    val perWeek = jar.pace.perWeek
+    val reach = jar.pace.reachOn
     return JarCardUiModel(
         open = ShelfItemUiModel(ShelfEntry.Jar, text.shelfJar, "account_balance_wallet", jar.goal.id),
-        name = jar.goal.name,
-        saved = jar.saved.formatCompactParts(),
+        goalId = jar.goal.id,
+        name = reach?.let { text.jarGoalBy(jar.goal.name, it.month.longName()) } ?: jar.goal.name,
+        saved = jar.pace.saved.formatCompactParts(),
         ofTarget = text.jarOf(jar.goal.target.formatCompact(), percent),
         fraction = fraction,
         label = text.jarLabel(percent),
-        under = jar.under?.let { under ->
-            UnderUsualUiModel(jar.goal.id, text.underUsual(under.formatCompact(), jar.weekday.longName()), text.underUsualLine, text.countIt, text.notToday)
+        plan = when {
+            jar.pace.fills(jar.goal.target) -> text.jarFull
+            perWeek == null -> null
+            reach == null -> text.jarPlanFar(perWeek.formatCompact())
+            else -> text.jarPlan(perWeek.formatCompact(), reach.month.longName())
         },
-        pressed = pressed,
-        counted = text.counted,
+        thisWeek = perWeek?.let { text.jarThisWeek(jar.thisWeek.formatCompact(), it.formatCompact()) },
+        nudge = jar.under?.let { text.jarNudge(it.formatCompact(), jar.weekday.longName()) },
+        putIn = jar.under?.let { text.jarPutInAmount(it.formatCompact()) },
     )
 }
 

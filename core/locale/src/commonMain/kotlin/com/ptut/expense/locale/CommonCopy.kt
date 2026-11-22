@@ -29,6 +29,9 @@ data class CommonCopy(
     val discardBody: String = "What you changed here will be lost.",
     val keepEditing: String = "Keep editing",
     val discard: String = "Discard",
+    val more: String = "More",
+    /** What a screen reader hears on the More chip under a category row. */
+    val moreCategories: (Int) -> String = { n -> "$n more categories" },
 )
 
 val BurmeseCommon = CommonCopy(
@@ -59,6 +62,8 @@ val BurmeseCommon = CommonCopy(
     discardBody = "ဒီမှာ ပြင်ထားတာတွေ ပျောက်သွားမယ်။",
     keepEditing = "ဆက်ပြင်မယ်",
     discard = "ပယ်မယ်",
+    more = "နောက်ထပ်",
+    moreCategories = { n -> "နောက်ထပ် အမျိုးအစား ${n.inMyanmarDigits()} ခု" },
 )
 
 val ThaiCommon = CommonCopy(
@@ -89,4 +94,6 @@ val ThaiCommon = CommonCopy(
     discardBody = "สิ่งที่คุณแก้ไขตรงนี้จะหายไป",
     keepEditing = "แก้ไขต่อ",
     discard = "ทิ้ง",
+    more = "เพิ่มเติม",
+    moreCategories = { n -> "อีก $n หมวดหมู่" },
 )

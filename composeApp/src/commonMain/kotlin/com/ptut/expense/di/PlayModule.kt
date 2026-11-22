@@ -34,7 +34,7 @@ val playModule: Module = module {
     viewModel { DailyQuestionViewModel(getDailyQuestion = get(), answer = get(), categories = liveCategories()) }
     viewModel { (monday: String) -> GuessViewModel(monday = monday, startGuess = get(), revealGuess = get()) }
     viewModel { ChallengeViewModel(getChoices = get(), pickChallenge = get(), categories = liveCategories()) }
-    viewModel { (goalId: String, name: String, target: String) ->
+    viewModel { (goalId: String, name: String, target: String, putIn: Boolean) ->
         GoalJarViewModel(
             goalId = goalId.ifEmpty { null },
             name = name.ifEmpty { null },
@@ -42,7 +42,11 @@ val playModule: Module = module {
             observeJar = get(),
             saveGoal = get(),
             archiveGoal = get(),
-            categories = liveCategories(),
+            putMoneyIn = get(),
+            chooseAccount = get(),
+            removeSaidDeposit = get(),
+            ownAccounts = get(),
+            openPutIn = putIn,
         )
     }
     viewModel { (month: String) ->

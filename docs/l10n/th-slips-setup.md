@@ -178,3 +178,9 @@ Choices to check in this area:
 |---|---|---|
 | Reading the slip… | กำลังอ่านสลิป… | `SlipsCopy` readingSlip |
 | Reading… | กำลังอ่าน… | `SlipsCopy` reading |
+
+## Fewer choices at each step (22 Nov, not yet checked)
+
+| English | Thai | Where |
+|---|---|---|
+| Picked from the shop name. Change it if it's wrong. | เลือกจากชื่อร้าน ถ้าไม่ถูกต้องเปลี่ยนได้ | `SlipsCopy` pickedFromShop |

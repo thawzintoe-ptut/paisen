@@ -14,6 +14,8 @@ class FakePlayBook(
     stamps: List<Stamp> = emptyList(),
     goals: List<Goal> = emptyList(),
     goalDays: List<GoalDay> = emptyList(),
+    deposits: List<GoalDeposit> = emptyList(),
+    seenAccounts: List<SeenAccount> = emptyList(),
 ) : PlayBook {
 
     private val dayRows = MutableStateFlow(days)
@@ -22,6 +24,8 @@ class FakePlayBook(
     private val stampRows = MutableStateFlow(stamps)
     private val goalRows = MutableStateFlow(goals)
     private val goalDayRows = MutableStateFlow(goalDays)
+    private val depositRows = MutableStateFlow(deposits)
+    private val seenRows = MutableStateFlow(seenAccounts)
 
     override val days: StateFlow<List<PlayDay>> = dayRows
     override val weeks: StateFlow<List<PlayWeek>> = weekRows
@@ -29,6 +33,8 @@ class FakePlayBook(
     override val stamps: StateFlow<List<Stamp>> = stampRows
     override val goals: StateFlow<List<Goal>> = goalRows
     override val goalDays: StateFlow<List<GoalDay>> = goalDayRows
+    override val deposits: StateFlow<List<GoalDeposit>> = depositRows
+    override val seenAccounts: StateFlow<List<SeenAccount>> = seenRows
 
     override suspend fun markCleared(day: LocalDate, atEpochMillis: Long, stamp: StampKind): Boolean {
         val row = dayRows.value.firstOrNull { it.date == day }
@@ -102,5 +108,26 @@ class FakePlayBook(
 
     override suspend fun answerDay(day: GoalDay) {
         goalDayRows.update { rows -> if (rows.any { it.goalId == day.goalId && it.day == day.day }) rows else rows + day }
+    }
+
+    override suspend fun deposit(deposit: GoalDeposit): Boolean {
+        if (depositRows.value.any { it.id == deposit.id }) return false
+        depositRows.update { it + deposit }
+        return true
+    }
+
+    override suspend fun removeSaidDeposit(id: String) {
+        depositRows.update { rows -> rows.filterNot { it.id == id && it.source == DepositSource.Said } }
+    }
+
+    override suspend fun chooseAccount(goalId: String, account: String) {
+        goalRows.update { rows -> rows.map { if (it.id == goalId) it.copy(savingsAccount = account) else it } }
+    }
+
+    override suspend fun seeAccount(mask: String, holder: String, atEpochMillis: Long) {
+        seenRows.update { rows ->
+            val seen = rows.firstOrNull { it.mask == mask }
+            rows.filterNot { it.mask == mask } + SeenAccount(mask, holder, (seen?.count ?: 0) + 1, atEpochMillis)
+        }
     }
 }

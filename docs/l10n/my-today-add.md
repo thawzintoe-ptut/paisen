@@ -2,8 +2,6 @@ Burmese for Today, the Add sheet and the day receipt that the Sky MY design does
 
 | English | Burmese | Where |
 | --- | --- | --- |
-| Spent this week | ဒီအပတ် သုံးငွေ | locale/HomeCopy.kt:61 |
-| Spent this month | ဒီလ သုံးငွေ | locale/HomeCopy.kt:62 |
 | Imported {since} ago · {count} filed {span} | လွန်ခဲ့တဲ့ {since}က စလစ် {count} ခု ကိုတွေ့ထားတယ် (corrected by a native reader, 15 Oct; count in ၀–၉) | locale/HomeCopy.kt:66 |
 | No slips imported yet | စလစ် တစ်ခုမှ မထည့်ရသေးဘူး | locale/HomeCopy.kt:67 |
 | New slips can't be read | စလစ် ဖတ်လို့ မရဘူး | locale/HomeCopy.kt:77 |
@@ -17,8 +15,6 @@ Burmese for Today, the Add sheet and the day receipt that the Sky MY design does
 | New slips stay hidden until you pick them or allow all photos. | စလစ်အသစ်တွေကို ရွေးပေးမှ ဒါမှမဟုတ် ဓာတ်ပုံအားလုံး ခွင့်ပြုမှ မြင်ရမယ်။ | locale/HomeCopy.kt:82 |
 | Pick photos | ပုံရွေးမယ် | locale/HomeCopy.kt:83 |
 | Net | အသားတင် | locale/HomeCopy.kt:71 |
-| A quiet week so far. | ဒီအပတ် ဘာမှ မသုံးရသေးဘူး။ | locale/HomeCopy.kt:73 |
-| A quiet month so far. | ဒီလ ဘာမှ မသုံးရသေးဘူး။ | locale/HomeCopy.kt:74 |
 | Add a cash expense | ငွေသား အသုံး ထည့်မယ် | locale/HomeCopy.kt:76 |
 | Saved today | ဒီနေ့ သိမ်းထားတာ | locale/HomeCopy.kt:79 |
 | Each one counts on the day printed on its slip, not the day you saved it. | တစ်ခုချင်းစီကို သင် သိမ်းတဲ့နေ့မှာ မဟုတ်ဘဲ စလစ်ပေါ်က နေ့မှာ တွက်တယ်။ | locale/HomeCopy.kt:80 |
@@ -118,3 +114,11 @@ Burmese for Today, the Add sheet and the day receipt that the Sky MY design does
 | The photo library didn't answer. The next scan tries again. | ဓာတ်ပုံတွေဆီက အဖြေ မရဘူး။ နောက်တစ်ခါ စစ်ရင် ထပ်ကြိုးစားမယ်။ | `HomeCopy` stopNoAnswer |
 | Purchases already here still count. | ဒီမှာ ရှိပြီးသား အသုံးတွေကို ဆက်တွက်ထားတယ်။ | `HomeCopy` stillCounts |
 | Reading new slips | စလစ်အသစ်တွေ ဖတ်နေတယ် | `HomeCopy` readingSlips |
+
+## Today has one job (Hick's law pass, 22 Nov), not reviewed yet
+
+| English | Burmese | Where |
+|---|---|---|
+| Today by category: {parts}. Open Reports. | ဒီနေ့ အမျိုးအစားအလိုက်: {parts}။ အစီရင်ခံစာ ဖွင့်မယ်။ | `HomeCopy` byCategory (spoken only) |
+
+Gone from `HomeCopy`: the Week and Month tabs and their "Spent this week / month", "this week / month" and "A quiet week / month so far." lines, and the "Compared" card title. Reports owns the week and the month now.

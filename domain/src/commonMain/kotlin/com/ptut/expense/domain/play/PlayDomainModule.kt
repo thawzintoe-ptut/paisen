@@ -28,7 +28,10 @@ val playUseCases: Module = module {
     factory { ObserveGoalJarUseCase(get(), get(), get()) }
     factory { SaveGoalUseCase(get(), get()) }
     factory { ArchiveGoalUseCase(get()) }
-    factory { AnswerGoalDayUseCase(get(), get(), get()) }
+    factory { PutMoneyInUseCase(get(), get()) }
+    factory { ChooseSavingsAccountUseCase(get()) }
+    factory { RemoveSaidDepositUseCase(get()) }
+    factory { ObserveOwnAccountsUseCase(get()) }
     factory { GetMonthStoryUseCase(get(), get(), get()) }
     factory { MarkStorySeenUseCase(get()) }
     factory { GetMonthCloseUseCase(get(), get(), get()) }

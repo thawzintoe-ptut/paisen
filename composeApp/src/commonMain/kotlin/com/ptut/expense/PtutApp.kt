@@ -253,6 +253,8 @@ private fun LedgerShell() {
             )
         },
         frosted = frosted,
+        // #107: with Play off the bar moves as it does under reduce motion.
+        lively = choices.play.on,
     ) { padding ->
         PtutNavHost(
             navController = navController,

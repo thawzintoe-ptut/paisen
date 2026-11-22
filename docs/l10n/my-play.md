@@ -159,17 +159,53 @@ Burmese for play (#82), for a native reader to check. None of it is native-corre
 | How much? | ဘယ်လောက်လဲ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarTarget` |
 | Save the jar | ဘူး သိမ်းမယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarSave` |
 | of {target} · {percent}% | {target} ထဲက {percent}% | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarOf` |
-| Kept each week | တစ်ပတ်ကို စုမိတာ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarKept` |
-| Income less spending, last 4 weeks | လွန်ခဲ့တဲ့ ၄ ပတ်က ဝင်ငွေထဲက သုံးစွဲမှု နုတ်ထားတာ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarKeptLine` |
-| At this pace | ဒီနှုန်းနဲ့ဆို | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarPaceTitle` |
-| Full by {date} | {date} မှာ ပြည့်မယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarPace` |
-| Keep a little more than you spend and a date shows here. | သုံးတာထက် နည်းနည်း ပိုစုရင် ရက်စွဲ ပြမယ်။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarNoPace` |
-| The jar fills from income less spending. Add your income to see it fill. | ဘူးက ဝင်ငွေထဲက သုံးစွဲမှု နုတ်ပြီး ပြည့်တာပါ။ ပြည့်လာတာ မြင်ဖို့ ဝင်ငွေ ထည့်ပါ။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarNeedsIncome` |
+| {percent}% | {percent}% | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarPercent` |
+| {saved} saved of {target} | {target} ထဲက {saved} စုမိပြီ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarSavedOf` |
+| {left} to go. | {left} လိုသေးတယ်။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarToGo` |
+| Save {perWeek} a week and you're there by {month}. | တစ်ပတ် {perWeek} စုရင် {month} မှာ ရောက်မယ်။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarPlan` |
+| {perWeek} a week so far. A little more each week brings the date in. | အခုထိ တစ်ပတ် {perWeek}။ တစ်ပတ်ကို နည်းနည်း ပိုစုရင် ရက်စွဲ နီးလာမယ်။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarPlanFar` |
+| Put the first money in and PaiSeN works out a weekly pace. | ပထမဆုံး ငွေ ထည့်လိုက်ပါ။ PaiSeN က တစ်ပတ်စာ နှုန်း တွက်ပေးမယ်။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarPlanNone` |
+| Put money in | ငွေ ထည့်မယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarPutIn` |
+| Put {amount} in the jar | {amount} ဘူးထဲ ထည့်မယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarPutInAmount` |
+| Money in the jar | ဘူးထဲက ငွေ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarMoneyIn` |
+| Moved to Savings {account} | Savings {account} ဆီ ရွှေ့ထားတယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarDepositSlip` |
+| You said you moved it | ရွှေ့ပြီးပြီလို့ သင် ပြောခဲ့တယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarDepositSaid` |
+| {date} · from a K PLUS slip | {date} · K PLUS စလစ်က | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarDepositFromSlip` |
+| {date} · you moved it yourself | {date} · ကိုယ်တိုင် ရွှေ့ခဲ့တယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarDepositByHand` |
+| {date} · cash | {date} · ငွေသား | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarDepositCash` |
+| Take out | ပြန်ထုတ်မယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarRemove` |
+| Take {amount} out of the jar | {amount} ကို ဘူးထဲက ပြန်ထုတ်မယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarRemoveLabel` |
+| Nothing in the jar yet. | ဘူးထဲမှာ ဘာမှ မရှိသေးဘူး။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarEmpty` |
+| The jar only counts money that really left your spending account, so it always matches your bank. | ဘူးက သုံးစွဲအကောင့်ထဲက တကယ် ထွက်သွားတဲ့ ငွေကိုပဲ ရေတယ်။ ဒါကြောင့် ဘဏ်နဲ့ အမြဲ ကိုက်တယ်။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarFooter` |
+| Saves to Savings {account} | Savings {account} ဆီ စုတယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarSavesTo` |
+| Saved as cash | ငွေသားနဲ့ စုတယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarSavesCash` |
+| Change | ပြောင်းမယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarChange` |
+| Edit goal | ပန်းတိုင် ပြင်မယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarEdit` |
+| {amount} · today's leftover | {amount} · ဒီနေ့ ပိုတာ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.putInChoiceLeftover` |
+| {amount} · this week | {amount} · ဒီအပတ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.putInChoiceWeek` |
+| Move {amount} to Savings {account} in K PLUS. | K PLUS ထဲမှာ {amount} ကို Savings {account} ဆီ ရွှေ့ပါ။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.putInStepMove` |
+| That's it. PaiSeN reads the slip and fills your jar. | ဒါပါပဲ။ PaiSeN က စလစ်ကို ဖတ်ပြီး ဘူးထဲ ထည့်ပေးမယ်။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.putInStepDone` |
+| Put {amount} aside as cash. | {amount} ကို ငွေသားနဲ့ ဖယ်ထားပါ။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.putInStepCash` |
+| Then tap I moved it, and the jar fills. | ပြီးရင် “ရွှေ့ပြီးပြီ” ကို နှိပ်ပါ။ ဘူး ပြည့်လာမယ်။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.putInStepCashDone` |
+| Open K PLUS | K PLUS ဖွင့်မယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.putInOpenBank` |
+| I already moved it | ရွှေ့ပြီးသားပါ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.putInAlreadyMoved` |
+| I moved it | ရွှေ့ပြီးပြီ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.putInMovedCash` |
+| Where do you save? | ဘယ်မှာ စုလဲ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.whereTitle` |
+| Asked once. Money you move to this account fills the jar by itself. | တစ်ခါပဲ မေးမယ်။ ဒီအကောင့်ဆီ ရွှေ့တဲ့ ငွေက ဘူးထဲ အလိုလို ဝင်မယ်။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.whereIntro` |
+| Savings {account} | Savings {account} | locale/PlayExtrasCopy.kt `PlayExtrasCopy.whereAccount` |
+| you moved money here once / {times} times | ဒီကို တစ်ခါ / {times} ခါ ရွှေ့ခဲ့တယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.whereSeen` |
+| I keep it as cash | ငွေသားနဲ့ ထားတယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.whereCash` |
+| Tap I moved it each time instead | အစား ရွှေ့တိုင်း “ရွှေ့ပြီးပြီ” ကို နှိပ်ပါ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.whereCashLine` |
+| No transfer to an account of your own has come through your slips yet. | ကိုယ်ပိုင် အကောင့်ဆီ ရွှေ့တဲ့ စလစ် မရောက်သေးဘူး။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.whereNone` |
+| Found in your K PLUS slips. Nothing leaves this phone. | သင့် K PLUS စလစ်တွေထဲက တွေ့တာပါ။ ဒီဖုန်းထဲမှာ လုံခြုံပါတယ်။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.whereFooter` |
+| Use this account | ဒီအကောင့် သုံးမယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.whereUse` |
+| This week: {saved} of {perWeek}. | ဒီအပတ်: {perWeek} ထဲက {saved}။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarThisWeek` |
+| {amount} went into your {name} jar | {amount} သင့် {name} ဘူးထဲ ဝင်သွားပြီ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarFilled` |
+| See | ကြည့်မယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarSee` |
+| You spent {amount} less than a usual {weekday}. | ပုံမှန် {weekday} ထက် {amount} နည်းနည်း သုံးခဲ့တယ်။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarNudge` |
+| {name} · by {month} | {name} · {month} အမီ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarGoalBy` |
 | The jar is full. | ဘူး ပြည့်ပြီ။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarFull` |
 | No money moves. Your bank stays as it is. | ငွေ ဘာမှ မရွှေ့ဘူး။ ဘဏ်ထဲမှာ ဒီအတိုင်း ရှိနေမယ်။ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarNoMoney` |
-| Skip {category} | {category} မသုံးရင် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarWhatIf` |
-| Without {category}: full by {date} | {category} မပါရင်: {date} မှာ ပြည့်မယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarWhatIfDate` |
-| Without {category}: still no date | {category} မပါရင်လည်း ရက်စွဲ မရှိသေးဘူး | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarWhatIfNone` |
 | Put the jar away | ဘူးကို သိမ်းထားမယ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarArchive` |
 | Goal jar, {percent} percent full | ပန်းတိုင်ဘူး၊ {percent} ရာခိုင်နှုန်း ပြည့်ပြီ | locale/PlayExtrasCopy.kt `PlayExtrasCopy.jarLabel` |
 | {month} in five cards | {month} ကတ် ငါးချပ် | locale/PlayExtrasCopy.kt `PlayExtrasCopy.storyTitle` |

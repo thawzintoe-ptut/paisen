@@ -5,8 +5,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -45,7 +43,6 @@ import com.ptut.expense.design.Sizes
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
-import com.ptut.expense.design.ptutIcon
 import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.Category
@@ -61,12 +58,12 @@ import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.KeyboardAmountField
 import com.ptut.expense.ui.MemoSheet
+import com.ptut.expense.ui.sky.CategoryChipRow
 import com.ptut.expense.ui.sky.SkyAskField
 import com.ptut.expense.ui.sky.SkyBarIconAction
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
-import com.ptut.expense.ui.sky.SkyChip
 import com.ptut.expense.ui.sky.SkyChoice
 import com.ptut.expense.ui.sky.SkyChoiceRow
 import com.ptut.expense.ui.sky.SkyChoiceSheet
@@ -131,7 +128,6 @@ data class AddRateActions(
  * Stateless: [AddViewModel] holds what is typed, so the sheet can be closed and reopened, rotated
  * or recomposed without the amount going with it.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AddSheet(
     uiState: AddUiState,
@@ -202,18 +198,15 @@ fun AddSheet(
             // Anything but baht counts as baht at a rate: one line says what it comes to, and a tap changes the rate.
             uiState.rateLine?.let { line -> RateLine(line = line, asking = uiState.needsRate, onClick = rateActions.onOpenRate) }
 
-            // Wraps rather than scrolls: a category has to be chosen before SAVE lights up.
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                uiState.categories.forEach { category ->
-                    SkyChip(
-                        label = category.name,
-                        selected = uiState.category == category,
-                        onClick = { actions.onCategory(category) },
-                        height = SkySizes.sheetChip,
-                        icon = ptutIcon(category.icon),
-                    )
-                }
-            }
+            // Three chips and More, so a category is chosen before SAVE lights up without a long row.
+            CategoryChipRow(
+                chips = uiState.chips,
+                all = uiState.categories,
+                selectedId = uiState.category?.id,
+                onPick = actions.onCategory,
+                height = SkySizes.sheetChip,
+                icons = true,
+            )
 
             // Only once a parent with sub-categories is chosen, so the common path is unchanged (#111).
             if (uiState.subCategories.isNotEmpty()) {

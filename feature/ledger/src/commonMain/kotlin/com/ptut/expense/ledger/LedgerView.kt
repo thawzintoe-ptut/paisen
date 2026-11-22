@@ -61,6 +61,7 @@ import com.ptut.expense.ui.sky.SkyChip
 import com.ptut.expense.ui.sky.SkyEmptyState
 import com.ptut.expense.ui.sky.SkyHairline
 import com.ptut.expense.ui.sky.SkySearchField
+import com.ptut.expense.ui.sky.SkyTextAction
 import com.ptut.expense.ui.sky.SkyTopBar
 import com.ptut.expense.ui.sky.SkyTransactionRow
 import kotlinx.coroutines.launch
@@ -264,11 +265,14 @@ private fun FiltersButton(filter: LedgerFilter, onClick: () -> Unit) {
     }
 }
 
-/** FR-21's five filters (#146, K6), behind the sliders button on a sheet. */
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * FR-21's filters (#146, K6), behind the sliders button on a sheet. Three chips first; "More
+ * filters" reveals the rest, and opens already revealed while one of them is on.
+ */
 @Composable
 private fun FilterSheet(chosen: LedgerFilter, onFilter: (LedgerFilter) -> Unit, onDismiss: () -> Unit) {
     val text = LocalCopy.current.history
+    var more by rememberSaveable { mutableStateOf(chosen.opensMoreFilters()) }
     SkyBottomSheet(onDismissRequest = onDismiss) {
         Text(
             text = text.show,
@@ -276,10 +280,21 @@ private fun FilterSheet(chosen: LedgerFilter, onFilter: (LedgerFilter) -> Unit, 
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = Spacing.md, bottom = Spacing.s12),
         )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            LedgerFilter.entries.forEach { filter ->
-                SkyChip(label = filter.label, selected = filter == chosen, onClick = { onFilter(filter) })
-            }
+        FilterChips(PrimaryLedgerFilters, chosen, onFilter)
+        if (more) {
+            FilterChips(MoreLedgerFilters, chosen, onFilter, modifier = Modifier.padding(top = Spacing.xs))
+        } else {
+            SkyTextAction(label = text.moreFilters, onClick = { more = true }, enabled = true)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FilterChips(filters: List<LedgerFilter>, chosen: LedgerFilter, onFilter: (LedgerFilter) -> Unit, modifier: Modifier = Modifier) {
+    FlowRow(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        filters.forEach { filter ->
+            SkyChip(label = filter.label, selected = filter == chosen, onClick = { onFilter(filter) })
         }
     }
 }

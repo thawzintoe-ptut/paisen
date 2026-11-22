@@ -4,7 +4,7 @@ const CERTS_URL =
   'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPES =
-  'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging';
+  'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/identitytoolkit';
 const RSA = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' } as const;
 const CLOCK_SKEW_SECONDS = 300;
 const ACCESS_TOKEN_MARGIN_MS = 60_000;

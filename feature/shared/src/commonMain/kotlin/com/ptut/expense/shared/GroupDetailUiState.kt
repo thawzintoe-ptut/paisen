@@ -105,6 +105,22 @@ sealed interface GroupDetailUiState {
     ) : GroupDetailUiState
 }
 
+/** The "···" menu's rows, in order; [GroupMenuEntry.GroupSettings] opens [settingsEntries]. */
+enum class GroupMenuEntry { WhoPaysWhom, RepeatAnExpense, Activity, GroupSettings }
+
+/** The Group settings step: what can change about the group, and the way out last. */
+enum class GroupSettingsEntry { EditGroup, MyPromptPay, AddPeople, RemoveSomeone, LeaveOrDelete }
+
+fun GroupDetailUiState.Loaded.menuEntries(): List<GroupMenuEntry> = GroupMenuEntry.entries
+
+fun GroupDetailUiState.Loaded.settingsEntries(): List<GroupSettingsEntry> = listOfNotNull(
+    GroupSettingsEntry.EditGroup,
+    GroupSettingsEntry.MyPromptPay,
+    GroupSettingsEntry.AddPeople,
+    GroupSettingsEntry.RemoveSomeone.takeIf { canRemovePeople && others.isNotEmpty() },
+    GroupSettingsEntry.LeaveOrDelete,
+)
+
 /** #75: "+9" beside the header's avatars, read out as "9 more people". */
 data class MoreMembersUiModel(val label: String, val description: String)
 

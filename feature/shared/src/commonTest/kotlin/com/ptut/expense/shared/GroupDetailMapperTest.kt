@@ -118,6 +118,25 @@ class GroupDetailMapperTest {
         assertEquals(listOf(LocalDate(2026, 11, 12), LocalDate(2020, 11, 12)), state.days.map { it.date })
     }
 
+    /** Hick's law: five entries in the menu, and what changes the group one step down. */
+    @Test
+    fun `the menu has four rows under Invite and Group settings holds the rest`() {
+        val state = loaded()
+
+        assertEquals(
+            listOf(GroupMenuEntry.WhoPaysWhom, GroupMenuEntry.RepeatAnExpense, GroupMenuEntry.Activity, GroupMenuEntry.GroupSettings),
+            state.menuEntries(),
+        )
+        assertEquals(
+            listOf(GroupSettingsEntry.EditGroup, GroupSettingsEntry.MyPromptPay, GroupSettingsEntry.AddPeople, GroupSettingsEntry.RemoveSomeone, GroupSettingsEntry.LeaveOrDelete),
+            state.settingsEntries(),
+        )
+        assertEquals(
+            listOf(GroupSettingsEntry.EditGroup, GroupSettingsEntry.MyPromptPay, GroupSettingsEntry.AddPeople, GroupSettingsEntry.LeaveOrDelete),
+            state.copy(canRemovePeople = false).settingsEntries(),
+        )
+    }
+
     private fun loaded(vararg expenses: SharedExpense, group: SharedGroup = flatOfThree): GroupDetailUiState.Loaded {
         val snapshot = SharedSnapshot(groups = listOf(group), people = emptyList(), expenseVersions = expenses.toList(), payments = emptyList(), links = emptyMap())
         val detail = requireNotNull(snapshot.groupDetail(group.id, seen = SEEN, today = NOW.dateIn(HomeTime)))

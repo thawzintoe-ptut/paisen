@@ -11,10 +11,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,7 +43,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import com.ptut.expense.design.PlaySizes
+import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
+import com.ptut.expense.design.Sizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.inMillis
 import com.ptut.expense.design.orStill
@@ -48,12 +54,18 @@ import com.ptut.expense.design.ptutMotion
 import com.ptut.expense.design.ptutReduceMotion
 import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
+import com.ptut.expense.domain.Satang
+import com.ptut.expense.ui.sky.SkyBarIconAction
+import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
+import com.ptut.expense.ui.sky.SkyChip
+import com.ptut.expense.ui.sky.SkyChoiceRow
 import com.ptut.expense.ui.sky.SkyEditableKeyValueRow
 import com.ptut.expense.ui.sky.SkyGroupedCard
 import com.ptut.expense.ui.sky.SkyListScreen
 import com.ptut.expense.ui.sky.SkyRollingAmount
+import com.ptut.expense.ui.sky.SkyTextAction
 import kotlinx.coroutines.launch
 import kotlin.math.sin
 
@@ -82,16 +94,20 @@ private const val ROCK_SWINGS = 3f
 /** Points along the water's surface. */
 private const val WAVE_STEPS = 32
 
-/** #92 (p06): name and amount first; then the jar, its pace, and what skipping a habit would do. */
+/** J02: the jar, its pace and plan, Put money in, and every baht that went in; J03 and J04 open as sheets. */
 @Composable
 fun GoalJarView(
     uiState: GoalJarUiState?,
     onName: (String) -> Unit,
     onTarget: (String) -> Unit,
     onSave: () -> Unit,
-    onWhatIf: (String) -> Unit,
+    onEdit: () -> Unit,
+    onPutIn: () -> Unit,
+    onChangeAccount: () -> Unit,
+    onRemoveDeposit: (String) -> Unit,
     onArchive: () -> Unit,
     onBack: () -> Unit,
+    sheet: JarSheetActions,
     /** A just-in-time tip shown above the feature, or null when none is due. */
     tip: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -101,7 +117,12 @@ fun GoalJarView(
         is GoalJarUiState.Jar -> uiState.title
         GoalJarUiState.Missing, null -> ""
     }
-    SkyListScreen(title = title, onBack = onBack, modifier = modifier) {
+    SkyListScreen(
+        title = title,
+        onBack = onBack,
+        modifier = modifier,
+        trailing = (uiState as? GoalJarUiState.Jar)?.let { jar -> { SkyBarIconAction(icon = PtutIcon.Edit, label = jar.edit, onClick = onEdit) } },
+    ) {
         when (uiState) {
             null, GoalJarUiState.Missing -> Unit
 
@@ -118,66 +139,171 @@ fun GoalJarView(
 
             is GoalJarUiState.Jar -> {
                 tip?.let { slot -> item { slot() } }
+                item { JarHero(uiState) }
                 item {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.md), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(uiState.name.uppercase(), style = MaterialTheme.ptutType.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-                        GoalJarFill(uiState.fraction, uiState.label, Modifier.padding(top = Spacing.md))
-                        SkyRollingAmount(
-                            symbol = uiState.saved.symbol,
-                            whole = uiState.saved.whole,
-                            fraction = uiState.saved.fraction,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(top = Spacing.md).clearAndSetSemantics { contentDescription = "${uiState.saved.symbol}${uiState.saved.whole}${uiState.saved.fraction} ${uiState.ofTarget}" },
-                        )
-                        Text(uiState.ofTarget, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
+                    Column(Modifier.padding(horizontal = Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        PlanCard(uiState.plan)
+                        SkyButton(uiState.putIn, onClick = onPutIn, modifier = Modifier.fillMaxWidth())
+                        uiState.savesTo?.let { SavesToLine(it, uiState.change, onChangeAccount) }
                     }
                 }
+                item { Text(uiState.depositsTitle, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(start = Spacing.md, end = Spacing.md, top = Spacing.sm)) }
                 item {
-                    SkyGroupedCard(
-                        rows = listOf(
-                            { JarRow(uiState.keptTitle, uiState.keptLine, uiState.kept) },
-                            { JarRow(uiState.paceTitle, uiState.pace, null) },
-                        ),
-                        modifier = Modifier.padding(horizontal = Spacing.sm),
-                    )
-                }
-                uiState.whatIf.forEach { what ->
-                    item(key = what.categoryId) {
-                        val chosen = what.categoryId == uiState.chosen
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = Spacing.sm)
-                                .tappable(PtutRadii.r18, Role.Button) { onWhatIf(what.categoryId) }
-                                .clip(PtutRadii.r18)
-                                .background(if (chosen) MaterialTheme.ptut.accent else MaterialTheme.colorScheme.tertiaryContainer)
-                                .padding(horizontal = Spacing.sm, vertical = Spacing.s12),
-                        ) {
-                            Text(what.label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                            if (chosen) Text(what.line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
-                        }
+                    if (uiState.deposits.isEmpty()) {
+                        PlayLine(uiState.empty, Modifier.padding(horizontal = Spacing.md))
+                    } else {
+                        SkyGroupedCard(rows = uiState.deposits.map { row -> { DepositRow(row, onRemoveDeposit) } }, modifier = Modifier.padding(horizontal = Spacing.sm))
                     }
                 }
-                item { PlayLine(uiState.noMoney, Modifier.padding(horizontal = Spacing.md)) }
+                item { PlayLine(uiState.footer, Modifier.padding(horizontal = Spacing.md)) }
                 item { SkyButton(uiState.archive, onClick = onArchive, kind = SkyButtonKind.Outline, modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md)) }
+            }
+        }
+    }
+    (uiState as? GoalJarUiState.Jar)?.sheet?.let { open -> JarSheet(open, sheet) }
+}
+
+/** What the sheets over the jar can do (J03, J04). */
+data class JarSheetActions(
+    val onDismiss: () -> Unit,
+    val onPick: (Satang) -> Unit,
+    val onOpenBank: () -> Unit,
+    val onMoved: () -> Unit,
+    val onPickAccount: (String) -> Unit,
+    val onUseAccount: () -> Unit,
+)
+
+/** The jar, its percent and "฿7,400 saved of ฿12,000" (J02). */
+@Composable
+private fun JarHero(jar: GoalJarUiState.Jar) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.md), horizontalAlignment = Alignment.CenterHorizontally) {
+        GoalJarFill(jar.fraction, jar.label, Modifier.padding(top = Spacing.xs))
+        Text(jar.percent, style = MaterialTheme.ptutType.hero, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, modifier = Modifier.padding(top = Spacing.s12))
+        SkyRollingAmount(
+            symbol = jar.saved.symbol,
+            whole = jar.saved.whole,
+            fraction = jar.saved.fraction,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Spacing.xs).clearAndSetSemantics { contentDescription = jar.savedOf },
+        )
+        Text(jar.savedOf, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
+    }
+}
+
+@Composable
+private fun PlanCard(plan: String) {
+    Text(
+        plan,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(PtutRadii.r20)
+            .background(MaterialTheme.colorScheme.tertiaryContainer)
+            .padding(horizontal = Spacing.md, vertical = Spacing.s14),
+    )
+}
+
+/** "Saves to Savings ••4821 · Change": J04 asked once, changed here. */
+@Composable
+private fun SavesToLine(savesTo: String, change: String, onChange: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+        Text(savesTo, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        SkyTextAction(label = change, onClick = onChange, enabled = true)
+    }
+}
+
+/** One row of Money in the jar: a slip or the reader's word, when, and the amount. */
+@Composable
+private fun DepositRow(row: DepositRowUiModel, onRemove: (String) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}.padding(horizontal = Spacing.sm, vertical = Spacing.s12),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(Sizes.medallionGlyph).clip(CircleShape).background(MaterialTheme.ptut.infoBg),
+        ) {
+            Icon((if (row.fromSlip) PtutIcon.AccountBalance else PtutIcon.Check).image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(Sizes.toastIcon))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(row.name, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+            Text(row.meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(row.amount, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+        if (row.remove != null) {
+            SkyTextAction(
+                label = row.remove,
+                onClick = { onRemove(row.id) },
+                enabled = true,
+                modifier = Modifier.semantics { contentDescription = row.removeLabel.orEmpty() },
+            )
+        }
+    }
+}
+
+/** J03's Put money in, or J04's Where do you save, over the jar. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun JarSheet(sheet: JarSheetUiModel, actions: JarSheetActions) {
+    SkyBottomSheet(onDismissRequest = actions.onDismiss) {
+        when (sheet) {
+            is JarSheetUiModel.PutMoneyIn -> {
+                Text(sheet.title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.sm))
+                SkyRollingAmount(
+                    symbol = sheet.amount.symbol,
+                    whole = sheet.amount.whole,
+                    fraction = sheet.amount.fraction,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.fillMaxWidth().padding(top = Spacing.s14),
+                )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(top = Spacing.s14),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+                ) {
+                    sheet.choices.forEach { choice -> SkyChip(label = choice.label, selected = choice.selected, onClick = { actions.onPick(choice.amount) }) }
+                }
+                Column(Modifier.padding(top = Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.s12)) {
+                    sheet.steps.forEachIndexed { index, step -> StepLine(index + 1, step) }
+                }
+                sheet.openBank?.let { SkyButton(it, onClick = actions.onOpenBank, modifier = Modifier.fillMaxWidth().padding(top = Spacing.md)) }
+                SkyButton(
+                    sheet.moved,
+                    onClick = actions.onMoved,
+                    kind = if (sheet.openBank == null) SkyButtonKind.Ink else SkyButtonKind.Outline,
+                    modifier = Modifier.fillMaxWidth().padding(top = if (sheet.openBank == null) Spacing.md else Spacing.xs),
+                )
+            }
+
+            is JarSheetUiModel.WhereDoYouSave -> {
+                Text(sheet.title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.sm))
+                Text(sheet.intro, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
+                sheet.none?.let { PlayLine(it, Modifier.padding(top = Spacing.sm)) }
+                Column(Modifier.padding(top = Spacing.sm)) {
+                    sheet.options.forEach { option ->
+                        SkyChoiceRow(label = option.name, selected = option.selected, onClick = { actions.onPickAccount(option.id) }, detail = option.line)
+                    }
+                }
+                PlayLine(sheet.footer, Modifier.padding(top = Spacing.sm))
+                SkyButton(sheet.use, onClick = actions.onUseAccount, enabled = sheet.canUse, modifier = Modifier.fillMaxWidth().padding(top = Spacing.md))
             }
         }
     }
 }
 
-/** A row on the jar's card (p06): what it is, a line under it, and its value on the right. */
+/** A numbered step on Put money in: a small ink disc and the line. */
 @Composable
-private fun JarRow(title: String, line: String, value: String?) {
-    Row(
-        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}.padding(horizontal = Spacing.sm, vertical = Spacing.s12),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            Text(line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun StepLine(number: Int, text: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s12), verticalAlignment = Alignment.Top) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(Sizes.toastIcon).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+        ) {
+            Text(number.toString(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimary)
         }
-        if (value != null) Text(value, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
     }
 }
 

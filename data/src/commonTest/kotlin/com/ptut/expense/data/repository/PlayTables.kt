@@ -3,10 +3,12 @@ package com.ptut.expense.data.repository
 import com.ptut.expense.data.local.dao.PlayDao
 import com.ptut.expense.data.local.entity.PlayDayEntity
 import com.ptut.expense.data.local.entity.PlayGoalDayEntity
+import com.ptut.expense.data.local.entity.PlayGoalDepositEntity
 import com.ptut.expense.data.local.entity.PlayGoalEntity
 import com.ptut.expense.data.local.entity.PlayMonthEntity
 import com.ptut.expense.data.local.entity.PlayStampEntity
 import com.ptut.expense.data.local.entity.PlayWeekEntity
+import com.ptut.expense.data.local.entity.SeenAccountEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -24,6 +26,30 @@ internal class PlayTables : PlayDao() {
     val stampRows = MutableStateFlow(mapOf<String, PlayStampEntity>())
     val goalRows = MutableStateFlow(mapOf<String, PlayGoalEntity>())
     val goalDayRows = MutableStateFlow(mapOf<Pair<String, String>, PlayGoalDayEntity>())
+    val depositRows = MutableStateFlow(mapOf<String, PlayGoalDepositEntity>())
+    val seenRows = MutableStateFlow(mapOf<String, SeenAccountEntity>())
+
+    override fun observeDeposits(): Flow<List<PlayGoalDepositEntity>> = depositRows.map { rows -> rows.values.sortedWith(compareBy({ it.atEpochMillis }, { it.id })) }
+
+    override fun observeSeenAccounts(): Flow<List<SeenAccountEntity>> = seenRows.map { rows -> rows.values.sortedWith(compareByDescending<SeenAccountEntity> { it.seenCount }.thenByDescending { it.lastSeenEpochMillis }) }
+
+    override suspend fun seenAccount(mask: String): SeenAccountEntity? = seenRows.value[mask]
+
+    override suspend fun writeSeenAccount(row: SeenAccountEntity) = seenRows.update { it + (row.mask to row) }
+
+    override suspend fun deposit(row: PlayGoalDepositEntity): Long = if (row.id in depositRows.value) -1L else 1L.also { depositRows.update { it + (row.id to row) } }
+
+    override suspend fun removeSaidDeposit(id: String) = depositRows.update { rows ->
+        if (rows[id]?.source == "Said") rows - id else rows
+    }
+
+    override suspend fun chooseAccount(id: String, account: String) = goalRows.update { rows ->
+        rows[id]?.let { rows + (id to it.copy(savingsAccount = account)) } ?: rows
+    }
+
+    override suspend fun allDeposits(): List<PlayGoalDepositEntity> = depositRows.value.values.toList()
+
+    override suspend fun restoreDeposits(rows: List<PlayGoalDepositEntity>) = depositRows.update { held -> held + rows.filterNot { it.id in held }.associateBy { it.id } }
 
     override fun observeDays(): Flow<List<PlayDayEntity>> = dayRows.map { it.values.sortedBy(PlayDayEntity::date) }
 

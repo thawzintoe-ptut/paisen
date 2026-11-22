@@ -2,6 +2,8 @@ package com.ptut.expense.edit
 
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.SubCategory
+import com.ptut.expense.domain.categories.CategoryChips
+import com.ptut.expense.domain.categories.chips
 import com.ptut.expense.ui.AmountEntry
 import com.ptut.expense.ui.TransactionMetaRow
 
@@ -34,6 +36,8 @@ sealed interface EditTransactionUiState {
         val slipRead: String?,
         val categories: List<Category>,
         val categoryId: String?,
+        /** How often each category was filed, so the three chips drawn are the ones most likely wanted. */
+        val categoryUsage: Map<String, Int> = emptyMap(),
         /** [categoryId]'s own sub-categories, the second chip row (#111). */
         val subCategories: List<SubCategory> = emptyList(),
         val subCategoryId: String? = null,
@@ -60,5 +64,8 @@ sealed interface EditTransactionUiState {
         val isIncome: Boolean = false,
         /** #186: "This also changes Hanoi & Saigon" when the purchase is shared in a group. */
         val alsoChanges: String? = null,
-    ) : EditTransactionUiState
+    ) : EditTransactionUiState {
+        /** The row's category first, then the most used, with the rest behind More. */
+        val chips: CategoryChips get() = categories.chips(categories.firstOrNull { it.id == categoryId }, categoryUsage)
+    }
 }

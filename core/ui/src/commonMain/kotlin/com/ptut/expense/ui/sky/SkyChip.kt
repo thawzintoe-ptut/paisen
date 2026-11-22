@@ -164,7 +164,7 @@ fun <T> SkySubChipBox(
  * modifier, so it takes the pill's shape rather than the taller tap area's.
  */
 @Composable
-private fun SkyChipTarget(
+internal fun SkyChipTarget(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier,
@@ -189,7 +189,7 @@ private fun SkyChipTarget(
 }
 
 @Composable
-private fun <T> chipFade() = tween<T>(
+internal fun <T> chipFade() = tween<T>(
     durationMillis = MaterialTheme.ptutMotion.chip.orStill(),
     easing = MaterialTheme.ptutMotion.standard,
 )

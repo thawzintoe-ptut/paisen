@@ -59,7 +59,6 @@ class LicencesViewModel(
         listOfNotNull(
             LicenceUiModel("Geist", "SIL Open Font License 1.1", text.coversTypeface, "files/geist_ofl.txt"),
             LicenceUiModel("Geist Mono", "SIL Open Font License 1.1", text.coversFigures, "files/geist_mono_ofl.txt"),
-            LicenceUiModel("Heroicons", "MIT License", text.coversIcons, "files/heroicons_mit.txt"),
             LicenceUiModel("myanmar-tools", "Apache License 2.0", text.coversZawgyi, "files/myanmar_tools_apache.txt"),
             LicenceUiModel(
                 name = "Gemma",

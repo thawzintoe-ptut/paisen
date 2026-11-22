@@ -253,9 +253,9 @@ sealed interface PtutRoute {
     @Serializable
     data class TripRecap(val groupId: String) : PtutRoute
 
-    /** #92: a goal jar (p06): an existing one by [goalId], or a new one named and filled from a trip's estimate. */
+    /** #92: a goal jar (J02): an existing one by [goalId], or a new one named and filled from a trip's estimate; [putIn] opens on Put money in (J01). */
     @Serializable
-    data class GoalJar(val goalId: String? = null, val name: String? = null, val target: String? = null) : PtutRoute
+    data class GoalJar(val goalId: String? = null, val name: String? = null, val target: String? = null, val putIn: Boolean = false) : PtutRoute
 
     /** #91: this week's challenge (p05). */
     @Serializable

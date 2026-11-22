@@ -62,6 +62,7 @@ import com.ptut.expense.ui.KeyboardAmountField
 import com.ptut.expense.ui.SlipPicture
 import com.ptut.expense.ui.SlipPictureViewer
 import com.ptut.expense.ui.SlipPlaceholder
+import com.ptut.expense.ui.sky.CategoryChipRow
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyChip
@@ -233,14 +234,14 @@ fun ConfirmSlipView(
             }
 
             Text(common.category, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                uiState.categories.forEach { category ->
-                    SkyChip(
-                        label = category.name,
-                        selected = category == uiState.category,
-                        onClick = { onCategory(category) },
-                    )
-                }
+            CategoryChipRow(
+                chips = uiState.chips,
+                all = uiState.categories,
+                selectedId = uiState.category?.id,
+                onPick = onCategory,
+            )
+            uiState.suggestionNote?.let { note ->
+                Text(note, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
             // Between the chips and the rule note: the note stays about the parent (R5 in #147).

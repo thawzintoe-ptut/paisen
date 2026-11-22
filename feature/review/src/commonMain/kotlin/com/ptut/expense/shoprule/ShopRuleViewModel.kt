@@ -14,11 +14,13 @@ import com.ptut.expense.domain.slip.RenameShopUseCase
 import com.ptut.expense.domain.slip.isReaderNoise
 import com.ptut.expense.domain.slip.shownShop
 import com.ptut.expense.locale.AppText
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -40,6 +42,8 @@ class ShopRuleViewModel(
     private val renameShop: RenameShopUseCase,
     private val forgetShop: ForgetShopUseCase,
     private val categories: List<Category> = Category.seed(),
+    /** Rows filed per category id, counted once for the app; none offers the categories in their own order. */
+    private val categoryUsage: Flow<Map<String, Int>> = flowOf(emptyMap()),
 ) : ViewModel() {
 
     private val forgotten = MutableStateFlow(false)
@@ -48,7 +52,7 @@ class ShopRuleViewModel(
     val isForgotten: StateFlow<Boolean> = forgotten.asStateFlow()
 
     val uiState: StateFlow<ShopRuleUiState> = observeRule(shop)
-        .map { rule -> rule.state() }
+        .combine(categoryUsage) { rule, usage -> rule.state(usage) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
@@ -74,12 +78,13 @@ class ShopRuleViewModel(
      * No rule is [ShopRuleUiState.Missing] whether it was forgotten from here or never existed.
      * The screen leaves on [isForgotten] rather than on this, so the two do not need telling apart.
      */
-    private fun RememberedMerchant?.state(): ShopRuleUiState = this?.let {
+    private fun RememberedMerchant?.state(usage: Map<String, Int>): ShopRuleUiState = this?.let {
         ShopRuleUiState.Loaded(
             shop = shownShop(it.counterparty, AppText.copy.slips.unknownShop),
             chosenCategoryId = it.categoryId,
             // C-2: a slip is money sent, so a shop rule can only ever point at spending.
             categories = categories.forDirection(Direction.Expense),
+            categoryUsage = usage,
             filedSoFar = AppText.copy.slips.filedSoFar(it.slipCount),
             nameable = it.counterparty.isReaderNoise(),
             name = it.displayName.orEmpty(),

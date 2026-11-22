@@ -15,7 +15,9 @@ import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.PromptPay
-import com.ptut.expense.domain.shared.firstLastAdded
+import com.ptut.expense.domain.shared.entryIdPrefix
+import com.ptut.expense.domain.shared.restoredLastAdded
+import com.ptut.expense.domain.shared.toLocalDateOrNull
 import com.ptut.expense.locale.AppText
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
@@ -223,7 +225,8 @@ internal class GroupPuller(
         val today = clock.now().toLocalDateTime(BangkokTime).date
         // Checked last, right before the write, so an edit saved during this pull is not undone.
         if (dao.queued("$KIND_REPEAT:${doc.id}") > 0) return
-        dao.upsertRepeat(rule.copy(lastAdded = local?.lastAdded ?: domain.firstLastAdded(today)?.toString()))
+        val lastAdded = local?.lastAdded ?: domain.restoredLastAdded(dao.newestDateAfter(domain.entryIdPrefix)?.toLocalDateOrNull(), today)?.toString()
+        dao.upsertRepeat(rule.copy(lastAdded = lastAdded))
     }
 
     /** Outbox ids ("repeat:<id>", "member:<id>"…) for [groupId]: local changes not uploaded yet. */

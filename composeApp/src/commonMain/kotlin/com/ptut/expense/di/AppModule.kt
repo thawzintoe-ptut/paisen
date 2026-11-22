@@ -29,6 +29,7 @@ import com.ptut.expense.domain.home.HomeBook
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.play.PlanPlayReminderUseCase
 import com.ptut.expense.domain.play.PlayBook
+import com.ptut.expense.domain.play.PlayBookJarInbox
 import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.settings.AppSettingsStore
@@ -175,6 +176,7 @@ val ledgerModule: Module = module {
                 override fun learnFrom(sender: String) = settings.learnSlipOwner(sender)
             },
             readsWallets = isDebug(),
+            jar = PlayBookJarInbox(get()),
         )
     }
 

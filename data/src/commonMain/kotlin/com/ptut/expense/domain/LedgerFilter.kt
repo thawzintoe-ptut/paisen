@@ -1,7 +1,8 @@
 package com.ptut.expense.domain
 
 /**
- * FR-21. The five the Ledger offers, in the order the design draws them.
+ * FR-21. The six the Ledger offers, in the order the design draws them. Spending and Income read
+ * the direction; the three behind "More filters" read how a row got there.
  *
  * Auto and By hand read [TransactionSource]; Edited reads [Transaction.editedAt]. They are three
  * facts and not three values of one enum, because a slip that was filed automatically and later
@@ -10,6 +11,7 @@ package com.ptut.expense.domain
  */
 enum class LedgerFilter {
     All,
+    Spending,
     Auto,
     ByHand,
     Income,
@@ -18,6 +20,7 @@ enum class LedgerFilter {
 
 fun LedgerFilter.accepts(transaction: Transaction): Boolean = when (this) {
     LedgerFilter.All -> true
+    LedgerFilter.Spending -> transaction.direction == Direction.Expense
     LedgerFilter.Auto -> transaction.source.isAutomatic
     LedgerFilter.ByHand -> !transaction.source.isAutomatic
     LedgerFilter.Income -> transaction.direction == Direction.Income

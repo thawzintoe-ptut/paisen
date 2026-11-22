@@ -175,3 +175,12 @@ Choices to check first:
 | The {15th} of each month | ทุก{วันที่ 15} ของเดือน | PhrasesCopy.kt `monthlyOn` |
 | {day} {month} each year | ทุกปี วันที่ {day} {month} | PhrasesCopy.kt `yearlyOn` |
 | 15th | วันที่ 15 | PhrasesCopy.kt `ordinal` |
+
+## Fewer choices at each step (22 Nov, not yet checked)
+
+The category row shows three chips and a More chip; the sheet it opens lists every category.
+
+| English | Thai | Where |
+|---|---|---|
+| More | เพิ่มเติม | CommonCopy.kt `more` |
+| {n} more categories (VoiceOver, the More chip) | อีก {n} หมวดหมู่ | CommonCopy.kt `moreCategories` |

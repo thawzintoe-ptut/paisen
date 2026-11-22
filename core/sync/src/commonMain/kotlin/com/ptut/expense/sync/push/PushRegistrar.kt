@@ -71,6 +71,19 @@ class PushRegistrar internal constructor(
     }
 
     /**
+     * One phone per account: the account's documents for other phones go, so the phone this sign-in
+     * replaced stops getting its pushes. Best effort; kept while this phone's own ID is not known yet.
+     */
+    suspend fun forgetOtherDevices() {
+        if (!enabled) return
+        val uid = (auth.account.value as? Account.SignedIn)?.uid ?: return
+        val mine = registered.value ?: tokens.token.value ?: return
+        runSuspendCatching {
+            firestore.whereEquals("devices", "uid", uid).filter { it.id != mine }.forEach { firestore.delete("devices/${it.id}") }
+        }
+    }
+
+    /**
      * L3: the same account deletes its old document, or registers this one over it. Signed out or
      * as another account, the rules allow no delete, so the platform retires the installation ID.
      */

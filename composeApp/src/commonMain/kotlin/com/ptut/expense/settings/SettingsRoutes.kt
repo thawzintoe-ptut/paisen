@@ -57,4 +57,7 @@ fun SettingsAction.destination(): PtutRoute? = when (this) {
     SettingsAction.Licences -> PtutRoute.Licences
 
     SettingsAction.Play -> PtutRoute.PlaySettings
+
+    // Sheets over Settings, not screens: the sign-in sheet, and the small help list.
+    SettingsAction.SharedAccount, SettingsAction.Help -> null
 }

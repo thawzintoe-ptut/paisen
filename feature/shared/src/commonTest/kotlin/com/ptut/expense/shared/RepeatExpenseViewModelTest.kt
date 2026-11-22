@@ -35,6 +35,7 @@ class RepeatExpenseViewModelTest : ViewModelTest() {
         )
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
+        viewModel.setDescription("Rent")
         viewModel.setAmount("18000")
         runCurrent()
 
@@ -81,6 +82,7 @@ class RepeatExpenseViewModelTest : ViewModelTest() {
         val viewModel = repeatExpenseViewModel(groupId = "g1", ruleId = null, repository = repository, categories = Category.seed(), toasts = toasts)
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
+        viewModel.setDescription("Rent")
         viewModel.setAmount("18000")
         runCurrent()
         repository.failNextRepeat = true
@@ -104,18 +106,38 @@ class RepeatExpenseViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `a new rent files under bills and a subscription under other`() = runTest {
+    fun `a new repeat named Netflix is not filed under bills`() = runTest {
         val repository = FakeSharedRepository()
         repository.gate.complete(Unit)
         val viewModel = repeatExpenseViewModel(groupId = "g1", ruleId = null, repository = repository, categories = Category.seed(), toasts = ToastMessages())
         backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
-        viewModel.setAmount("18000")
+        viewModel.setDescription("Netflix")
+        viewModel.setAmount("419")
         runCurrent()
         viewModel.save(allowed = true)
         runCurrent()
 
-        assertEquals("bills", repository.repeats.single().categoryId)
+        assertEquals("other", repository.repeats.single().categoryId)
+        assertEquals("Netflix", repository.repeats.single().description)
+    }
+
+    /** The name is typed, not picked from a kind chip, and Save waits for one. */
+    @Test
+    fun `the typed name titles the repeat and save waits for it`() = runTest {
+        val viewModel = repeatExpenseViewModel(groupId = "g1", ruleId = null, repository = FakeSharedRepository(), categories = Category.seed(), toasts = ToastMessages())
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        viewModel.setAmount("18000")
+        runCurrent()
+        assertFalse(viewModel.ready().canSave)
+        assertEquals("Repeat expense · Flat 12", viewModel.ready().title)
+
+        viewModel.setDescription("Netflix")
+        runCurrent()
+
+        assertTrue(viewModel.ready().canSave)
+        assertEquals("Netflix · Flat 12", viewModel.ready().title)
     }
 
     private fun RepeatExpenseViewModel.ready() = assertIs<RepeatExpenseUiState.Ready>(uiState.value)

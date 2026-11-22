@@ -37,6 +37,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.SharedArt
@@ -46,6 +49,7 @@ import com.ptut.expense.design.ptut
 import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.NewMember
@@ -65,16 +69,17 @@ import com.ptut.expense.ui.sky.SkyChoiceSheet
 import com.ptut.expense.ui.sky.SkyHairline
 import com.ptut.expense.ui.sky.SkyKeyValueRow
 import com.ptut.expense.ui.sky.SkyPageSheet
-import com.ptut.expense.ui.sky.SkySearchField
-import com.ptut.expense.ui.sky.SkySectionHeader
+import com.ptut.expense.ui.sky.SkyStatCard
 import com.ptut.expense.ui.sky.SkySubChip
 import com.ptut.expense.ui.sky.SkyTextAction
 import com.ptut.expense.ui.sky.skyItem
 
 /** #136, with #141's ways of making a group: the + choice, New group, and New person. */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun SharedView(
     uiState: SharedUiState,
+    /** The search field is gone; the shell still passes this. */
     onSearch: (String) -> Unit,
     onCreateGroup: (name: String, type: GroupType, icon: String, members: List<NewMember>, currency: String) -> Unit,
     onAddPerson: (name: String, personId: String?) -> Unit,
@@ -85,9 +90,10 @@ fun SharedView(
     onJoinCode: (String) -> Unit = {},
     /** #141: "People >", everyone you split with. */
     onOpenPeople: () -> Unit = {},
+    /** The next-step card: record the one payment you owe, from you to them in that group. */
+    onPay: (groupId: String, fromMemberId: String, toMemberId: String, amount: String) -> Unit = { _, _, _, _ -> },
 ) {
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
-    var startType by rememberSaveable { mutableStateOf(GroupType.Trip) }
     val people = when (uiState) {
         is SharedUiState.Empty -> uiState.people
         is SharedUiState.Ready -> uiState.knownPeople
@@ -95,23 +101,16 @@ fun SharedView(
 
     when (uiState) {
         is SharedUiState.Empty -> NothingShared(
-            onType = {
-                startType = it
-                sheet = SHEET_GROUP
-            },
-            onAddPerson = { sheet = SHEET_PERSON },
-            onNewGroup = {
-                startType = GroupType.Trip
-                sheet = SHEET_GROUP
-            },
+            // One tap, one group: a trip by default, renamed later in Group settings if it is not one.
+            onStartGroup = { onCreateGroup(GroupType.Trip.label(), GroupType.Trip, GroupType.Trip.defaultIcon(), emptyList(), Home.money.code) },
             onJoinCode = { sheet = SHEET_CODE },
             modifier = modifier,
         )
 
         is SharedUiState.Ready -> Balances(
             state = uiState,
-            onSearch = onSearch,
             onAdd = { sheet = SHEET_CHOICE },
+            onPay = onPay,
             onSignIn = { sheet = SHEET_SIGN_IN },
             onOpenGroup = onOpenGroup,
             onOpenActivity = onOpenActivity,
@@ -129,7 +128,7 @@ fun SharedView(
         )
 
         SHEET_GROUP -> NewGroupSheet(
-            startType = startType,
+            startType = GroupType.Trip,
             people = people,
             onCreate = { name, type, icon, members, currency ->
                 sheet = null
@@ -164,12 +163,12 @@ fun SharedView(
     }
 }
 
-/** p26: the net first, its two halves, then groups on grey and people on a white sheet. */
+/** p26: the net first, its two halves in one line, the payment to make next, then groups and the way to People. */
 @Composable
 private fun Balances(
     state: SharedUiState.Ready,
-    onSearch: (String) -> Unit,
     onAdd: () -> Unit,
+    onPay: (String, String, String, String) -> Unit,
     onSignIn: () -> Unit,
     onOpenGroup: (String) -> Unit,
     onOpenActivity: () -> Unit,
@@ -177,7 +176,6 @@ private fun Balances(
     modifier: Modifier = Modifier,
 ) {
     val text = LocalCopy.current.shared
-    var searching by rememberSaveable { mutableStateOf(state.query.isNotEmpty()) }
     // Painted the sheet's colour, so a short sheet still reaches the bottom; the grey page is drawn
     // only where the group cards and the sheet's rounded top sit.
     LazyColumn(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer)) {
@@ -199,13 +197,9 @@ private fun Balances(
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
                     )
-                    SkyBarIconAction(icon = PtutIcon.Search, label = text.home.search, onClick = { searching = !searching })
                     SkyBarIconAction(icon = PtutIcon.GroupAdd, label = text.home.newGroupOrPerson, onClick = onAdd)
                 }
-                if (searching) {
-                    SkySearchField(query = state.query, onSearch = onSearch, placeholder = text.home.search)
-                }
-                // #48: a second money gets its own figure and halves under the first, never one sum.
+                // #48: a second money gets its own figure and line under the first, never one sum.
                 state.overall.forEachIndexed { index, line ->
                     SharedHero(
                         label = line.label,
@@ -214,13 +208,17 @@ private fun Balances(
                         money = line.money,
                         modifier = Modifier.padding(top = if (index == 0) Spacing.sm else Spacing.md),
                     )
-                    Row(
+                    HalvesLine(line, modifier = Modifier.padding(top = Spacing.xs))
+                }
+                state.payNext?.let { pay ->
+                    SkyStatCard(
+                        title = pay.title,
+                        line = pay.line,
+                        icon = PtutIcon.Payments.image,
+                        onClick = { onPay(pay.groupId, pay.fromMemberId, pay.toMemberId, pay.amount) },
                         modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
-                    ) {
-                        TotalCard(label = text.home.totalOwed, amount = line.owedToYou, tone = BalanceTone.Owed, modifier = Modifier.weight(1f))
-                        TotalCard(label = text.home.totalOwe, amount = line.youOwe, tone = BalanceTone.Owe, filled = true, modifier = Modifier.weight(1f))
-                    }
+                        filled = true,
+                    )
                 }
                 // #196: one quiet line while a change waits; nothing when all is sent.
                 SkyChange(target = state.syncLine) { line ->
@@ -241,10 +239,9 @@ private fun Balances(
         item {
             Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
                 SkyPageSheet(modifier = Modifier.padding(top = Spacing.md)) {
-                    SkySectionHeader(text = text.people, onClick = onOpenPeople)
-                    state.people.forEach { person -> PersonRow(person) }
+                    LinkRow(icon = PtutIcon.Group, label = text.people, line = state.peopleLine, onClick = onOpenPeople)
                     SkyHairline(modifier = Modifier.padding(vertical = Spacing.xs))
-                    ActivityLink(label = text.activity, onClick = onOpenActivity)
+                    LinkRow(icon = PtutIcon.History, label = text.activity, onClick = onOpenActivity)
                     Spacer(Modifier.height(SkySizes.pillClearance))
                 }
             }
@@ -252,27 +249,22 @@ private fun Balances(
     }
 }
 
-/** The two halves of the net (p26): owed to you on a green tint, what you owe filled ruby (15 Oct). */
+/** The two halves of the net in one line; what you owe keeps the ruby of money going out (15 Oct). */
 @Composable
-private fun TotalCard(label: String, amount: String, tone: BalanceTone, modifier: Modifier = Modifier, filled: Boolean = false) {
-    val owed = tone == BalanceTone.Owed
-    val ink = if (filled) MaterialTheme.ptut.onSignature else tone.ink()
-    Column(
-        modifier = modifier
-            .clip(PtutRadii.r20)
-            .background(
-                when {
-                    filled -> MaterialTheme.ptut.signature
-                    owed -> MaterialTheme.ptut.ok.copy(alpha = OWED_TINT)
-                    else -> MaterialTheme.colorScheme.surface
-                },
-            )
-            .semantics(mergeDescendants = true) {}
-            .padding(horizontal = Spacing.sm, vertical = Spacing.s14),
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = ink)
-        Text(amount, style = MaterialTheme.typography.titleLarge, color = ink, modifier = Modifier.padding(top = Spacing.xxs))
-    }
+private fun HalvesLine(line: OverallUiModel, modifier: Modifier = Modifier) {
+    val owe = MaterialTheme.ptut.signatureInk
+    Text(
+        buildAnnotatedString {
+            append(line.owedLine)
+            line.oweLine?.let { oweLine ->
+                append(Separators.DOT)
+                withStyle(SpanStyle(color = owe)) { append(oweLine) }
+            }
+        },
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -304,28 +296,12 @@ private fun GroupCard(group: SharedGroupRowUiModel, onClick: () -> Unit, modifie
     }
 }
 
-@Composable
-private fun PersonRow(person: SharedPersonRowUiModel) {
-    Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = SkySizes.transactionRow).semantics(mergeDescendants = true) {},
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MemberAvatar(label = person.initial, isMe = false)
-        Column(Modifier.weight(1f)) {
-            Text(person.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-            Text(person.word, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Text(person.amount, style = MaterialTheme.typography.titleMedium, color = person.tone.ink())
-    }
-}
-
 /**
- * Activity's way in, drawn as a row people can see is tappable: a glyph tile, the name and a
- * chevron, on the people rows' edge and height. A bare text action read as a heading.
+ * People's and Activity's way in, drawn as a row people can see is tappable: a glyph tile, the
+ * name, its line, and a chevron, on the sheet's row height. A bare text action read as a heading.
  */
 @Composable
-private fun ActivityLink(label: String, onClick: () -> Unit) {
+private fun LinkRow(icon: PtutIcon, label: String, onClick: () -> Unit, line: String? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -339,9 +315,12 @@ private fun ActivityLink(label: String, onClick: () -> Unit) {
             contentAlignment = Alignment.Center,
             modifier = Modifier.size(SkySizes.rowCircle).clip(CircleShape).background(MaterialTheme.colorScheme.surface),
         ) {
-            Icon(PtutIcon.History.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.rowGlyph))
+            Icon(icon.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.rowGlyph))
         }
-        Text(label, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            line?.takeIf { it.isNotEmpty() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) }
+        }
         Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(SkySizes.rowGlyph))
     }
 }
@@ -351,13 +330,7 @@ private fun ActivityLink(label: String, onClick: () -> Unit) {
  * when groups started to sync (13 Oct), so the copy is #136's.
  */
 @Composable
-private fun NothingShared(
-    onType: (GroupType) -> Unit,
-    onAddPerson: () -> Unit,
-    onNewGroup: () -> Unit,
-    onJoinCode: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+private fun NothingShared(onStartGroup: () -> Unit, onJoinCode: () -> Unit, modifier: Modifier = Modifier) {
     val text = LocalCopy.current.shared
     Column(
         modifier = modifier
@@ -392,22 +365,7 @@ private fun NothingShared(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = Spacing.xs),
         )
-        FlowRow(
-            modifier = Modifier.padding(top = Spacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-        ) {
-            listOf(GroupType.Trip, GroupType.Flat, GroupType.Couple).forEach { type ->
-                SkyChip(label = type.label(), selected = false, onClick = { onType(type) })
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = Spacing.lg),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
-        ) {
-            SkyButton(text.addPerson, onClick = onAddPerson, kind = SkyButtonKind.Outline, modifier = Modifier.weight(1f))
-            SkyButton(text.newGroup, onClick = onNewGroup, modifier = Modifier.weight(1.4f))
-        }
+        SkyButton(text.home.startGroup, onClick = onStartGroup, modifier = Modifier.fillMaxWidth().padding(top = Spacing.lg))
         SkyTextAction(
             label = text.home.haveInviteCode,
             onClick = onJoinCode,
@@ -620,6 +578,3 @@ private const val SHEET_GROUP = "group"
 private const val SHEET_PERSON = "person"
 private const val SHEET_CODE = "code"
 private const val SHEET_SIGN_IN = "sign-in"
-
-/** The owed card's green, faint enough that its green text still reads on it. */
-private const val OWED_TINT = 0.1f

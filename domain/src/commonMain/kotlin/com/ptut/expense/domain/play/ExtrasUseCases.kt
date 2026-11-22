@@ -1,6 +1,7 @@
 package com.ptut.expense.domain.play
 
 import com.ptut.expense.domain.Home
+import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.ledger.LedgerSnapshot
@@ -17,6 +18,8 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -88,22 +91,27 @@ class SettleChallengeUseCase(
     }
 }
 
-/** #92 (p06): one jar, how full and when, and how skipping each of the biggest habits moves the date. */
-data class GoalJarState(val goal: Goal, val pace: GoalPace, val whatIf: List<Pair<String, GoalPace>>)
+/**
+ * J02: one jar, what went in and when it fills at this pace. [leftover] is how far today sits under a
+ * usual day, the first amount Put money in offers; [thisWeek] what went in since Monday (J05).
+ */
+data class GoalJarState(val goal: Goal, val pace: GoalPace, val deposits: List<GoalDeposit>, val leftover: Satang?, val thisWeek: Satang)
 
 class ObserveGoalJarUseCase(
     private val book: PlayBook,
     private val transactions: ObserveTransactionsUseCase,
     private val homeToday: GetHomeTodayUseCase,
+    private val clock: Clock = Clock.System,
 ) {
-    operator fun invoke(goalId: String?): Flow<GoalJarState?> = combine(book.goals, book.goalDays, transactions(LedgerSpan.All)) { goals, days, ledger ->
+    operator fun invoke(goalId: String?): Flow<GoalJarState?> = combine(book.goals, book.deposits, transactions(LedgerSpan.All)) { goals, deposits, ledger ->
         val goal = goals.firstOrNull { it.id == goalId && it.archivedAtEpochMillis == null } ?: return@combine null
         val today = homeToday()
-        val rows = ledger.rows()
         GoalJarState(
-            goal,
-            rows.goalPace(goal, days, today),
-            rows.challengeCategories(mondayOfWeekOf(today)).map { it to rows.goalPaceWithout(goal, days, it, today) },
+            goal = goal,
+            pace = deposits.goalPace(goal, today),
+            deposits = deposits.filter { it.goalId == goal.id }.sortedWith(compareByDescending<GoalDeposit> { it.day }.thenByDescending { it.atEpochMillis }),
+            leftover = ledger.rows().leftoverToday(clock.now().toLocalDateTime(HomeTime)),
+            thisWeek = deposits.savedThisWeek(goal, today),
         )
     }
 
@@ -111,28 +119,54 @@ class ObserveGoalJarUseCase(
     fun current(): Flow<Goal?> = book.goals.map { goals -> goals.lastOrNull { it.archivedAtEpochMillis == null } }
 }
 
+/** The day's spending is mostly in by six in the evening; before then a leftover is only a morning with no buys yet. */
+const val LEFTOVER_FROM_HOUR = 18
+
 /**
- * #104: Count it or Not today on Today's card. Count it keeps today's usual as it stands; the jar reads
- * the day's spending again later. False when today is not under its usual, so nothing was counted.
+ * J01: what today kept under a usual day of its weekday, from [LEFTOVER_FROM_HOUR] on. Null earlier, when
+ * the day is not under, or no usual exists yet: real money moves, so a morning never offers the whole day.
  */
-class AnswerGoalDayUseCase(
+fun List<Transaction>.leftoverToday(now: LocalDateTime): Satang? {
+    if (now.hour < LEFTOVER_FROM_HOUR) return null
+    return usualDay(now.date)?.let { if (it.spent < it.usual) it.usual - it.spent else null }
+}
+
+/** J03: the reader moved money themself (or keeps cash); the jar takes their word once per tap. */
+@OptIn(ExperimentalUuidApi::class)
+class PutMoneyInUseCase(
     private val book: PlayBook,
-    private val transactions: ObserveTransactionsUseCase,
     private val homeToday: GetHomeTodayUseCase,
     private val clock: Clock = Clock.System,
 ) {
-    suspend operator fun invoke(goalId: String, count: Boolean): Boolean {
-        val today = homeToday()
-        val usual = if (count) {
-            val day = transactions.rowsNow().usualDay(today) ?: return false
-            if (day.spent >= day.usual) return false
-            day.usual
-        } else {
-            null
-        }
-        book.answerDay(GoalDay(goalId, today, usual, clock.now().toEpochMilliseconds()))
-        return count
+    suspend operator fun invoke(goal: Goal, amount: Satang) {
+        if (amount <= Satang.Zero) return
+        book.deposit(
+            GoalDeposit(
+                id = "said:" + Uuid.random().toString(),
+                goalId = goal.id,
+                amount = amount,
+                day = homeToday(),
+                atEpochMillis = clock.now().toEpochMilliseconds(),
+                source = DepositSource.Said,
+                account = goal.savingsAccount?.takeIf { it != CASH_ACCOUNT },
+            ),
+        )
     }
+}
+
+/** J02: a deposit tapped in by mistake comes back out; money a slip proved moved stays. */
+class RemoveSaidDepositUseCase(private val book: PlayBook) {
+    suspend operator fun invoke(depositId: String) = book.removeSaidDeposit(depositId)
+}
+
+/** J04: where the jar's money goes, asked once; [CASH_ACCOUNT] for a reader who keeps cash. */
+class ChooseSavingsAccountUseCase(private val book: PlayBook) {
+    suspend operator fun invoke(goalId: String, account: String) = book.chooseAccount(goalId, account)
+}
+
+/** J04: the reader's own accounts their slips moved money to, most used first. */
+class ObserveOwnAccountsUseCase(private val book: PlayBook) {
+    operator fun invoke(): Flow<List<SeenAccount>> = book.seenAccounts
 }
 
 /** #92: a new jar starts today, in the home money; saving an existing one keeps its start. */

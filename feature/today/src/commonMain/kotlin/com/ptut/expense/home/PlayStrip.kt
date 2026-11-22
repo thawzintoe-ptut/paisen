@@ -168,15 +168,13 @@ internal fun PlayQuestionCard(card: PlayQuestionCardUiModel, onOpen: () -> Unit,
 @Composable
 internal fun CoachRow(coach: CoachLineUiModel, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
+    // Plain text with the ink disc, not a card: the tap still opens the rows behind it.
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = PlaySizes.step)
             .clearAndSetSemantics { contentDescription = coach.label }
-            .tappable(PtutRadii.r16, Role.Button, onClick = onOpen)
-            .clip(PtutRadii.r16)
-            .background(scheme.surface)
-            .padding(horizontal = Spacing.s12, vertical = Spacing.s10),
+            .tappable(PtutRadii.r12, Role.Button, onClick = onOpen)
+            .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s10),
     ) {
@@ -184,7 +182,6 @@ internal fun CoachRow(coach: CoachLineUiModel, onOpen: () -> Unit, modifier: Mod
             Text(coach.disc, style = MaterialTheme.typography.labelMedium, color = scheme.onPrimary)
         }
         Text(coach.text, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface, modifier = Modifier.weight(1f))
-        Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = scheme.onSurfaceVariant, modifier = Modifier.size(Sizes.settingsTrailing))
     }
 }
 

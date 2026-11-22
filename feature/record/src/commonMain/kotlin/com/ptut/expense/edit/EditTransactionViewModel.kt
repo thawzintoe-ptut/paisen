@@ -9,6 +9,7 @@ import com.ptut.expense.domain.SubCategory
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.asEdit
+import com.ptut.expense.domain.categories.categoryUsage
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.keptAfterPicking
@@ -34,6 +35,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -57,6 +60,11 @@ class EditTransactionViewModel(
 ) : ViewModel() {
 
     private val allRows = observeTransactions(LedgerSpan.All)
+
+    /** Counted when the ledger changes, not on every keypad tap. */
+    private val usage = allRows
+        .map { snapshot -> (snapshot as? LedgerSnapshot.Rows)?.transactions.orEmpty().categoryUsage() }
+        .distinctUntilChanged()
 
     /**
      * What has been typed, or null while nothing has.
@@ -87,8 +95,8 @@ class EditTransactionViewModel(
     val isSaved: StateFlow<Boolean> = stored.asStateFlow()
 
     val uiState: StateFlow<EditTransactionUiState> =
-        combine(allRows, typed, editingMemo, shareOptions(transactionId)) { rows, typed, memo, groups ->
-            when (val state = screenFor(rows, typed, memo)) {
+        combine(allRows, typed, editingMemo, shareOptions(transactionId), usage) { rows, typed, memo, groups, usage ->
+            when (val state = screenFor(rows, typed, memo, usage)) {
                 is EditTransactionUiState.Loaded -> state.copy(
                     alsoChanges = groups?.holding?.let { AppText.copy.record.alsoChanges(it.name) },
                 )
@@ -169,6 +177,7 @@ class EditTransactionViewModel(
         snapshot: LedgerSnapshot,
         typed: EditDraft?,
         editingMemo: Boolean,
+        usage: Map<String, Int>,
     ): EditTransactionUiState {
         val rows = when (snapshot) {
             LedgerSnapshot.Unanswered -> return EditTransactionUiState.Loading
@@ -184,6 +193,7 @@ class EditTransactionViewModel(
             slipRead = record.slipRead(),
             categories = known.forDirection(record.direction),
             categoryId = draft.categoryId,
+            categoryUsage = usage,
             subCategories = subCategories.under(draft.categoryId),
             subCategoryId = draft.subCategoryId,
             memo = draft.memo,

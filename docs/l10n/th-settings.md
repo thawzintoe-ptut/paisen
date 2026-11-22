@@ -47,7 +47,7 @@ Choices to check in this area:
 | Restore from a backup file | กู้คืนจากไฟล์สำรอง | SettingsCopy.kt `importValue` |
 | On-device assistant | ผู้ช่วยในเครื่อง | SettingsCopy.kt `assistant` |
 | Licences | สัญญาอนุญาต | SettingsCopy.kt `licences` |
-| Fonts, icons and Burmese text | ฟอนต์ ไอคอน และข้อความภาษาพม่า | SettingsCopy.kt `licencesValue` |
+| Fonts and Burmese text | ฟอนต์ และข้อความภาษาพม่า | SettingsCopy.kt `licencesValue` |
 | Send feedback | ส่งความคิดเห็น | SettingsCopy.kt `feedback` |
 | PaiSeN feedback ({version}) | ความคิดเห็นเกี่ยวกับ PaiSeN ({version}) | SettingsCopy.kt `feedbackSubject` |
 | What happened? (email body) | เกิดอะไรขึ้น | SettingsCopy.kt `feedbackBody` |
@@ -117,7 +117,6 @@ Choices to check in this area:
 | What ships inside the app, and the terms it ships under. | สิ่งที่มากับแอป และเงื่อนไขที่ใช้ | SettingsCopy.kt `licencesIntro` |
 | The typeface | แบบอักษร | SettingsCopy.kt `coversTypeface` |
 | The figures | ตัวเลข | SettingsCopy.kt `coversFigures` |
-| The icons | ไอคอน | SettingsCopy.kt `coversIcons` |
 | Reading Burmese typed in Zawgyi | การอ่านภาษาพม่าที่พิมพ์ด้วย Zawgyi | SettingsCopy.kt `coversZawgyi` |
 | The on-device assistant's model | โมเดลของผู้ช่วยในเครื่อง | SettingsCopy.kt `coversModel` |
 
@@ -227,3 +226,18 @@ Choices to check in this area:
 | Your ledger is untouched. | ประวัติของคุณไม่ถูกแตะต้อง | `SettingsCopy` ledgerUntouched |
 | Nothing from this file was imported. | ไม่มีอะไรจากไฟล์นี้ถูกนำเข้า | `SettingsCopy` nothingImported |
 | Choose another file | เลือกไฟล์อื่น | `SettingsCopy` chooseAnotherFile |
+
+## Settings regrouped (Hick's law pass, 22 Nov), not reviewed yet
+
+| English | Thai | Where |
+|---|---|---|
+| Look | หน้าตา | `SettingsCopy` groupLook |
+| Account and help | บัญชีและความช่วยเหลือ | `SettingsCopy` groupAccount |
+| Slip reading, folders, rules and more | การอ่านสลิป โฟลเดอร์ กฎ และอื่น ๆ | `SettingsCopy` advancedValue (was "Reading slips, ledger and help") |
+| Most people never need these. They tune how slips are read and kept. | คนส่วนใหญ่ไม่ต้องใช้ส่วนนี้ ใช้ปรับวิธีอ่านและเก็บสลิป | `SettingsCopy` advancedIntro |
+| Backup | สำรองข้อมูล | `SettingsCopy` backupRow |
+| Import log | บันทึกการนำเข้า | `SettingsCopy` importLog |
+| Restore from a backup | กู้คืนจากไฟล์สำรอง | `SettingsCopy` restoreBackup |
+| Help and feedback | ความช่วยเหลือและความคิดเห็น | `SettingsCopy` helpRow |
+| Send feedback, licences | ส่งความคิดเห็น สัญญาอนุญาต | `SettingsCopy` helpValue |
+| Your spending stays on this phone. Only shared groups sync, with the people in them. | การใช้จ่ายของคุณอยู่ในโทรศัพท์เครื่องนี้ มีเพียงกลุ่มที่ซิงก์กับคนในกลุ่ม | `SettingsCopy` footer |

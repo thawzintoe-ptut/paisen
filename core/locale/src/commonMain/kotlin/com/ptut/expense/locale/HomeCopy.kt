@@ -2,14 +2,8 @@ package com.ptut.expense.locale
 
 /** Today: the hero, the Purchases list, the banners and the morning recap. */
 data class HomeCopy(
-    val tabWeek: String = "Week",
-    val tabMonth: String = "Month",
     val spentToday: String = "Spent today",
-    val spentThisWeek: String = "Spent this week",
-    val spentThisMonth: String = "Spent this month",
     val spanToday: String = "today",
-    val spanThisWeek: String = "this week",
-    val spanThisMonth: String = "this month",
     val imported: (since: String, count: Int, span: String) -> String = { since, count, span ->
         "Imported $since ago · $count filed $span"
     },
@@ -33,12 +27,11 @@ data class HomeCopy(
     val fix: String = "Fix",
     val net: String = "Net",
     val quietDay: String = "A quiet day so far.",
-    val quietWeek: String = "A quiet week so far.",
-    val quietMonth: String = "A quiet month so far.",
     val emptyBody: String = "New slips in your chosen folders show up here on their own. Or add one by hand.",
     val addCash: String = "Add a cash expense",
     val searchHistory: String = "Search all purchases in History",
-    val compared: String = "Compared",
+    /** What a screen reader says of the category totals line; [parts] is "Groceries ฿642.50, Transport ฿40". */
+    val byCategory: (parts: String) -> String = { parts -> "Today by category: $parts. Open Reports." },
     val purchases: String = "Purchases",
     val savedToday: String = "Saved today",
     val savedTodayNote: String = "Each one counts on the day printed on its slip, not the day you saved it.",
@@ -83,14 +76,8 @@ private fun Int.homeCounted(): String = HOME_COUNT_WORDS.getOrNull(this) ?: toSt
 private val HOME_COUNT_WORDS = listOf("No", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten")
 
 val BurmeseHome = HomeCopy(
-    tabWeek = "ဒီအပတ်",
-    tabMonth = "ဒီလ",
     spentToday = "ဒီနေ့ သုံးငွေ",
-    spentThisWeek = "ဒီအပတ် သုံးငွေ",
-    spentThisMonth = "ဒီလ သုံးငွေ",
     spanToday = "ဒီနေ့",
-    spanThisWeek = "ဒီအပတ်",
-    spanThisMonth = "ဒီလ",
     imported = { since, count, _ -> "လွန်ခဲ့တဲ့ ${since}က စလစ် ${count.inMyanmarDigits()} ခု ကိုတွေ့ထားတယ်" },
     noSlipsYet = "စလစ် တစ်ခုမှ မထည့်ရသေးဘူး",
     noSlipsFor = { since -> "${since}ရှိပြီ စလစ် မတွေ့ရဘူး" },
@@ -112,12 +99,10 @@ val BurmeseHome = HomeCopy(
     fix = "ပြင်မယ်",
     net = "အသားတင်",
     quietDay = "ဒီနေ့ ဘာမှ မသုံးရသေးဘူး။",
-    quietWeek = "ဒီအပတ် ဘာမှ မသုံးရသေးဘူး။",
-    quietMonth = "ဒီလ ဘာမှ မသုံးရသေးဘူး။",
     emptyBody = "ရွေးထားတဲ့ ဖိုဒါထဲ စလစ်အသစ်ဝင်တာနဲ့ ဒီမှာ အလိုလို ပေါ်လာမယ်။ ကိုယ်တိုင်လည်း ထည့်လို့ရတယ်။",
     addCash = "ငွေသား အသုံး ထည့်မယ်",
     searchHistory = "မှတ်တမ်းထဲမှာ သုံးထားတာ အကုန် ရှာမယ်",
-    compared = "ပုံမှန်နဲ့ယှဉ်ရင်",
+    byCategory = { parts -> "ဒီနေ့ အမျိုးအစားအလိုက်: $parts။ အစီရင်ခံစာ ဖွင့်မယ်။" },
     purchases = "သုံးထားတာတွေ",
     savedToday = "ဒီနေ့ သိမ်းထားတာ",
     savedTodayNote = "တစ်ခုချင်းစီကို သင် သိမ်းတဲ့နေ့မှာ မဟုတ်ဘဲ စလစ်ပေါ်က နေ့မှာ တွက်တယ်။",
@@ -151,14 +136,8 @@ val BurmeseHome = HomeCopy(
 )
 
 val ThaiHome = HomeCopy(
-    tabWeek = "สัปดาห์",
-    tabMonth = "เดือน",
     spentToday = "ใช้ไปวันนี้",
-    spentThisWeek = "ใช้ไปสัปดาห์นี้",
-    spentThisMonth = "ใช้ไปเดือนนี้",
     spanToday = "วันนี้",
-    spanThisWeek = "สัปดาห์นี้",
-    spanThisMonth = "เดือนนี้",
     imported = { since, count, span -> "นำเข้าเมื่อ ${since}ที่แล้ว · ${span}บันทึก $count รายการ" },
     noSlipsYet = "ยังไม่ได้นำเข้าสลิป",
     noSlipsFor = { since -> "ไม่พบสลิปมา ${since}แล้ว" },
@@ -180,12 +159,10 @@ val ThaiHome = HomeCopy(
     fix = "แก้ไข",
     net = "สุทธิ",
     quietDay = "วันนี้ยังไม่ได้ใช้จ่ายอะไร",
-    quietWeek = "สัปดาห์นี้ยังไม่ได้ใช้จ่ายอะไร",
-    quietMonth = "เดือนนี้ยังไม่ได้ใช้จ่ายอะไร",
     emptyBody = "สลิปใหม่ในโฟลเดอร์ที่คุณเลือกจะแสดงที่นี่เอง หรือจะเพิ่มเองก็ได้",
     addCash = "เพิ่มรายจ่ายเงินสด",
     searchHistory = "ค้นหารายการทั้งหมดในประวัติ",
-    compared = "เทียบกับปกติ",
+    byCategory = { parts -> "วันนี้ตามหมวด: $parts เปิดรายงาน" },
     purchases = "รายการใช้จ่าย",
     savedToday = "บันทึกวันนี้",
     savedTodayNote = "แต่ละรายการนับตามวันที่บนสลิป ไม่ใช่วันที่คุณบันทึก",

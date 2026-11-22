@@ -21,7 +21,12 @@ import com.ptut.expense.domain.shared.PollSyncUseCase
 import com.ptut.expense.domain.shared.RepeatFrequency
 import com.ptut.expense.domain.shared.RepeatRule
 import com.ptut.expense.domain.shared.SharedHome
+import com.ptut.expense.domain.shared.SharedSnapshot
+import com.ptut.expense.domain.shared.balanceKey
+import com.ptut.expense.domain.shared.money
 import com.ptut.expense.domain.shared.moneyFormat
+import com.ptut.expense.domain.shared.typedText
+import com.ptut.expense.domain.shared.withMe
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.sync.GroupSyncStatus
 import com.ptut.expense.sync.SyncHealth
@@ -46,10 +51,22 @@ data class SharedGroupRowUiModel(
     val news: String? = null,
 )
 
-data class SharedPersonRowUiModel(val key: String, val name: String, val initial: String, val word: String, val amount: String, val tone: BalanceTone)
+/**
+ * p26's top for one money: the net, what it counts in (#48), and its two halves as one line,
+ * "You're owed ฿1,800 · you owe ฿250". [oweLine] is null while you owe nobody in this money.
+ */
+data class OverallUiModel(val label: String, val amount: Satang, val money: HomeMoney, val tone: BalanceTone, val owedLine: String, val oweLine: String?)
 
-/** p26's top for one money: the net, its two halves, and what they count in (#48). */
-data class OverallUiModel(val label: String, val amount: Satang, val money: HomeMoney, val tone: BalanceTone, val owedToYou: String, val youOwe: String)
+/** The one payment to make next: the largest you owe, and the record-payment screen it opens. */
+data class PayNextUiModel(
+    val title: String,
+    val line: String,
+    val groupId: String,
+    val fromMemberId: String,
+    val toMemberId: String,
+    /** Record payment's prefill, as the routes carry amounts ("350.00"): the same figure as [title]. */
+    val amount: String,
+)
 
 sealed interface SharedUiState {
     /** p34: before any group exists. */
@@ -59,8 +76,11 @@ sealed interface SharedUiState {
         /** One per money the groups count in, the home's first; two moneys are never one figure (#48). */
         val overall: List<OverallUiModel>,
         val groups: List<SharedGroupRowUiModel>,
-        val people: List<SharedPersonRowUiModel>,
+        /** "Aye, Mali": everyone you split with, under the People row that opens them. */
+        val peopleLine: String,
         val knownPeople: List<Person>,
+        /** Null while you owe nobody. */
+        val payNext: PayNextUiModel? = null,
         val query: String,
         /** #196: "2 changes waiting to sync", or null when everything is up to date. */
         val syncLine: String? = null,
@@ -89,7 +109,7 @@ class SharedViewModel(
         if (snapshot.groups.isEmpty()) {
             SharedUiState.Empty(snapshot.people)
         } else {
-            getSharedHome(snapshot, query).ready(query).copy(syncLine = status.line(), signedOut = status.health == SyncHealth.SignedOut)
+            getSharedHome(snapshot, query).ready(snapshot, query).copy(syncLine = status.line(), signedOut = status.health == SyncHealth.SignedOut)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), SharedUiState.Empty(emptyList()))
 
@@ -98,6 +118,7 @@ class SharedViewModel(
         val text = AppText.copy.shared
         return when {
             health == SyncHealth.SignedOut -> text.sync.signedOutHome
+            health == SyncHealth.EndingElsewhere -> text.sync.endingElsewhere(waiting)
             refused > 0 -> text.home.refused(refused)
             health == SyncHealth.Waiting -> text.changesWaiting(waiting)
             health == SyncHealth.Offline -> text.offlineWaiting(waiting)
@@ -111,15 +132,26 @@ class SharedViewModel(
 
     /** #141: a group, then its detail. [onCreated] gets the new group's id. #48: [currency] stays the group's for good. */
     fun createGroup(name: String, type: GroupType, icon: String, members: List<NewMember>, currency: String, onCreated: (String) -> Unit) {
-        viewModelScope.launch { onCreated(createGroupUseCase(name, type, icon, members, currency)) }
+        // A second tap while the first is saving would make a second group.
+        if (creating) return
+        creating = true
+        viewModelScope.launch {
+            try {
+                onCreated(createGroupUseCase(name, type, icon, members, currency))
+            } finally {
+                creating = false
+            }
+        }
     }
+
+    private var creating = false
 
     /** #141: a one-off bill with one person is a group of two behind the scenes, named after them. */
     fun addPerson(name: String, personId: String?, onCreated: (String) -> Unit) {
         viewModelScope.launch { onCreated(createPersonGroup(name, personId, GroupType.Other.defaultIcon())) }
     }
 
-    private fun SharedHome.ready(query: String): SharedUiState.Ready {
+    private fun SharedHome.ready(snapshot: SharedSnapshot, query: String): SharedUiState.Ready {
         val text = AppText.copy.shared
         val groupRows = groups.map { summary ->
             val group = summary.group
@@ -148,22 +180,42 @@ class SharedViewModel(
                 },
             )
         }
-        val peopleRows = people.map { person ->
-            SharedPersonRowUiModel(
-                key = "${person.key}:${person.currency}",
-                name = person.name,
-                initial = initialOf(person.name),
-                word = person.amount.tone().personWord(),
-                amount = person.amount.magnitude().format(Currencies.of(person.currency).toHomeMoney()),
-                tone = person.amount.tone(),
-            )
-        }
         return SharedUiState.Ready(
             overall = overall.map { it.uiModel() },
             groups = groupRows,
-            people = peopleRows,
+            peopleLine = people.map { it.name }.distinct().joinToString(", "),
             knownPeople = knownPeople,
+            payNext = payNext(snapshot),
             query = query,
+        )
+    }
+
+    /**
+     * The largest debt in the home's money, else in the first money you owe in; the line counts
+     * everyone else you owe. Amounts in two moneys are never compared (#48).
+     */
+    private fun SharedHome.payNext(snapshot: SharedSnapshot): PayNextUiModel? {
+        val owed = people.filter { it.amount < Satang.Zero }
+        val homeCode = overall.firstOrNull()?.currency
+        val first = owed.filter { it.currency == homeCode }.minByOrNull { it.amount } ?: owed.minByOrNull { it.amount } ?: return null
+        // The group where this person's balance with you is most negative is where the payment goes.
+        val (group, member, debt) = first.groupIds.mapNotNull { id -> snapshot.group(id)?.takeIf { it.meMemberId != null } }
+            .flatMap { group ->
+                val balances = snapshot.withMe(group.id)
+                group.members.filter { it.balanceKey() == first.key && !group.isMe(it.id) && (balances[it.id] ?: Satang.Zero) < Satang.Zero }
+                    .map { member -> Triple(group, member, balances.getValue(member.id)) }
+            }
+            .minByOrNull { it.third } ?: return null
+        val text = AppText.copy.shared.home
+        // One row per person per money, so count people, not rows.
+        val others = owed.map { it.key }.distinct().count { it != first.key }
+        return PayNextUiModel(
+            title = text.pay(member.name, debt.magnitude().format(group.moneyFormat())),
+            line = if (others == 0) text.onlyPayment else text.andMore(others),
+            groupId = group.id,
+            fromMemberId = checkNotNull(group.meMemberId),
+            toMemberId = member.id,
+            amount = group.money.typedText(debt.magnitude().toMinorUnits()),
         )
     }
 }
@@ -180,8 +232,8 @@ private fun Overall.uiModel(): OverallUiModel {
         amount = net.magnitude(),
         money = money,
         tone = net.tone(),
-        owedToYou = owedToYou.format(money),
-        youOwe = youOwe.format(money),
+        owedLine = text.owedLine(owedToYou.format(money)),
+        oweLine = text.oweLine(youOwe.format(money)).takeIf { youOwe > Satang.Zero },
     )
 }
 

@@ -8,7 +8,10 @@ import com.ptut.expense.domain.ImportFailureKind
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ImportRun
 import com.ptut.expense.domain.ReviewReason
+import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.folders.FolderReadTally
+import com.ptut.expense.domain.play.Goal
+import com.ptut.expense.domain.play.JarInbox
 import com.ptut.expense.domain.rules.MerchantRule
 import com.ptut.expense.domain.rules.RuleEngine
 import com.ptut.expense.domain.runSuspendCatching
@@ -20,6 +23,7 @@ import com.ptut.expense.domain.slip.QueuedSlipEntry
 import com.ptut.expense.domain.slip.SlipParser
 import com.ptut.expense.domain.slip.SlipRead
 import com.ptut.expense.domain.slip.direction
+import com.ptut.expense.domain.slip.ownAccount
 import com.ptut.expense.platform.ocr.SlipTextReader
 import com.ptut.expense.platform.photos.SlipCandidate
 import com.ptut.expense.platform.photos.SlipSource
@@ -98,6 +102,8 @@ class SlipImporter(
     private val retention: () -> Duration = { EvidenceRetention },
     /** #26: whose phone this is, so a slip that names them as recipient reads as money in. */
     private val owner: SlipOwnerBook = SlipOwnerBook.Unknown,
+    /** J05: the jar a transfer to the chosen savings account fills. None where nothing binds it. */
+    private val jar: JarInbox = JarInbox.None,
     /** #33: Myanmar wallet receipts, debug builds only until one real receipt per wallet has read. */
     private val readsWallets: Boolean = true,
     /** Where a run hashes and parses: off the main thread, since Check now starts one from a screen. */
@@ -271,9 +277,14 @@ class SlipImporter(
         if (read is SlipRead.Readable && candidate.isBankFolder()) read.sender?.let(owner::learnFrom)
         // #33: a wallet receipt that shows its own direction (a minus sign, a "To") is believed first.
         val direction = (read as? SlipRead.Readable)?.let { it.knownDirection ?: it.direction(owner.name()) } ?: Direction.Expense
+        // J04: only a transfer to the reader's own account is remembered, and only that one can fill a jar,
+        // so a shop whose account shares the last four digits stays spending.
+        val ownAccount = (read as? SlipRead.Readable)?.ownAccount(owner.name())
+        if (read is SlipRead.Readable && ownAccount != null) jar.noteOwnAccount(ownAccount, read.counterparty, now())
 
         return when (read) {
-            is SlipRead.Complete -> file(candidate, hash, read.seenFrom(direction), rules, direction)
+            is SlipRead.Complete -> ownAccount?.let { account -> jar.goalFor(account)?.let { goal -> fill(candidate, hash, read, goal, account) } }
+                ?: file(candidate, hash, read.seenFrom(direction), rules, direction)
 
             // FR-7: the amount did not read. It is queued with that field still empty.
             is SlipRead.Partial -> queue(candidate, hash, read.seenFrom(direction), ReviewReason.AmountUnclear, direction)
@@ -331,6 +342,19 @@ class SlipImporter(
         // run recognises it by hash. Deleting first and then failing to commit would lose it.
         source.delete(candidate.id)
 
+        land(candidate, if (written) SlipPlace.Filed else SlipPlace.AlreadyRecorded, read.occurredAtEpochMillis)
+        return if (written) Outcome.Filed else Outcome.AlreadySeen
+    }
+
+    /**
+     * J05: a transfer to the jar's savings account is money the reader kept, not spent. It fills the jar
+     * and never reaches the ledger; the picture's hash is kept so it is read once, as for a filed slip.
+     */
+    private suspend fun fill(candidate: SlipCandidate, hash: String, read: SlipRead.Complete, goal: Goal, account: String): Outcome {
+        // Keyed by the slip's reference, as the ledger keys a filed slip: a second picture of one transfer fills nothing.
+        val written = jar.deposit(goal, "slip:${read.reference}", read.amount, read.occurredAtEpochMillis.dateIn(Home.zone), now(), account)
+        store.recordImported(hash, read.occurredAtEpochMillis)
+        source.delete(candidate.id)
         land(candidate, if (written) SlipPlace.Filed else SlipPlace.AlreadyRecorded, read.occurredAtEpochMillis)
         return if (written) Outcome.Filed else Outcome.AlreadySeen
     }
@@ -470,6 +494,7 @@ interface SlipOwnerBook {
 }
 
 /** The K PLUS app saves its slips in a folder or album of its own name. */
+
 private fun SlipCandidate.isBankFolder(): Boolean = folderName?.contains(BANK_FOLDER, ignoreCase = true) == true
 
 private const val BANK_FOLDER = "K PLUS"

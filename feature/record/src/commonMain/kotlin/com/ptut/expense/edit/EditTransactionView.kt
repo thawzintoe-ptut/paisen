@@ -5,8 +5,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,7 +30,6 @@ import androidx.compose.ui.platform.LocalFocusManager
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
-import com.ptut.expense.design.ptutIcon
 import com.ptut.expense.design.ptutType
 import com.ptut.expense.detail.skyLabel
 import com.ptut.expense.domain.Category
@@ -44,7 +41,7 @@ import com.ptut.expense.ui.KeyboardAmountField
 import com.ptut.expense.ui.MemoSheet
 import com.ptut.expense.ui.NoteRow
 import com.ptut.expense.ui.sky.AskBeforeLeaving
-import com.ptut.expense.ui.sky.SkyChip
+import com.ptut.expense.ui.sky.CategoryChipRow
 import com.ptut.expense.ui.sky.SkyConfirmAction
 import com.ptut.expense.ui.sky.SkyDateTimeRow
 import com.ptut.expense.ui.sky.SkyDiscardSheet
@@ -132,7 +129,6 @@ private fun EditBar(title: String, canSave: Boolean, onClose: () -> Unit, onSave
     )
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Form(
     state: EditTransactionUiState.Loaded,
@@ -171,16 +167,13 @@ private fun Form(
             UnderlinedAmount(state = state, onType = onType)
 
             Text(copy.common.category, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                state.categories.forEach { category ->
-                    SkyChip(
-                        label = category.name,
-                        selected = category.id == state.categoryId,
-                        onClick = { onCategory(category) },
-                        icon = ptutIcon(category.icon),
-                    )
-                }
-            }
+            CategoryChipRow(
+                chips = state.chips,
+                all = state.categories,
+                selectedId = state.categoryId,
+                onPick = onCategory,
+                icons = true,
+            )
             if (state.subCategories.isNotEmpty()) {
                 SkySubChipBox(
                     options = state.subCategories,

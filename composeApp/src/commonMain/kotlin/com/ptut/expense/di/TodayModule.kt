@@ -3,6 +3,7 @@ package com.ptut.expense.di
 import com.ptut.expense.activity.ActivityViewModel
 import com.ptut.expense.domain.play.ObservePlayOnUseCase
 import com.ptut.expense.domain.play.ObserveSealedMonthsUseCase
+import com.ptut.expense.domain.play.PlayBook
 import com.ptut.expense.domain.play.PlayPart
 import com.ptut.expense.home.HomeViewModel
 import com.ptut.expense.home.WeeklyNoteSettings
@@ -45,7 +46,8 @@ val todayModule: Module = module {
             getMoodRecap = get(),
             getWeeklyCheckIn = get(),
             observeTodayPlay = get(),
-            answerGoalDay = get(),
+            deposits = get<PlayBook>().deposits,
+            goals = get<PlayBook>().goals,
             // #103: the press and roll are play's motion, so they follow the switch that turns play off.
             playMotion = get<ObservePlayOnUseCase>()(PlayPart.Stamps),
             toasts = get(),

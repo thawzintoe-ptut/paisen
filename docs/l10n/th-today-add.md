@@ -15,14 +15,8 @@ Please check these against a Thai phone:
 
 | English | Thai | Where |
 |---|---|---|
-| Week | สัปดาห์ | HomeCopy.kt `tabWeek` |
-| Month | เดือน | HomeCopy.kt `tabMonth` |
 | Spent today | ใช้ไปวันนี้ | HomeCopy.kt `spentToday` |
-| Spent this week | ใช้ไปสัปดาห์นี้ | HomeCopy.kt `spentThisWeek` |
-| Spent this month | ใช้ไปเดือนนี้ | HomeCopy.kt `spentThisMonth` |
 | today | วันนี้ | HomeCopy.kt `spanToday` |
-| this week | สัปดาห์นี้ | HomeCopy.kt `spanThisWeek` |
-| this month | เดือนนี้ | HomeCopy.kt `spanThisMonth` |
 | Imported {since} ago · {n} filed {span} | นำเข้าเมื่อ {since}ที่แล้ว · {span}บันทึก {n} รายการ | HomeCopy.kt `imported` |
 | No slips imported yet | ยังไม่ได้นำเข้าสลิป | HomeCopy.kt `noSlipsYet` |
 | No slips seen for {since} | ไม่พบสลิปมา {since}แล้ว | HomeCopy.kt `noSlipsFor` |
@@ -40,12 +34,9 @@ Please check these against a Thai phone:
 | Fix | แก้ไข | HomeCopy.kt `fix` |
 | Net | สุทธิ | HomeCopy.kt `net` |
 | A quiet day so far. | วันนี้ยังไม่ได้ใช้จ่ายอะไร | HomeCopy.kt `quietDay` |
-| A quiet week so far. | สัปดาห์นี้ยังไม่ได้ใช้จ่ายอะไร | HomeCopy.kt `quietWeek` |
-| A quiet month so far. | เดือนนี้ยังไม่ได้ใช้จ่ายอะไร | HomeCopy.kt `quietMonth` |
 | New slips in your chosen folders show up here on their own. Or add one by hand. | สลิปใหม่ในโฟลเดอร์ที่คุณเลือกจะแสดงที่นี่เอง หรือจะเพิ่มเองก็ได้ | HomeCopy.kt `emptyBody` |
 | Add a cash expense | เพิ่มรายจ่ายเงินสด | HomeCopy.kt `addCash` |
 | Search all purchases in History | ค้นหารายการทั้งหมดในประวัติ | HomeCopy.kt `searchHistory` |
-| Compared | เทียบกับปกติ | HomeCopy.kt `compared` |
 | Purchases | รายการใช้จ่าย | HomeCopy.kt `purchases` |
 | Saved today | บันทึกวันนี้ | HomeCopy.kt `savedToday` |
 | Each one counts on the day printed on its slip, not the day you saved it. | แต่ละรายการนับตามวันที่บนสลิป ไม่ใช่วันที่คุณบันทึก | HomeCopy.kt `savedTodayNote` |
@@ -156,3 +147,11 @@ Plain amounts only: the target never says "over budget" and is never red.
 | The photo library didn't answer. The next scan tries again. | คลังรูปไม่ตอบสนอง การสแกนครั้งถัดไปจะลองใหม่ | `HomeCopy` stopNoAnswer |
 | Purchases already here still count. | รายการที่มีอยู่แล้วยังนับตามเดิม | `HomeCopy` stillCounts |
 | Reading new slips | กำลังอ่านสลิปใหม่ | `HomeCopy` readingSlips |
+
+## Today has one job (Hick's law pass, 22 Nov), not reviewed yet
+
+| English | Thai | Where |
+|---|---|---|
+| Today by category: {parts}. Open Reports. | วันนี้ตามหมวด: {parts} เปิดรายงาน | `HomeCopy` byCategory (spoken only) |
+
+Gone from `HomeCopy`: the Week and Month tabs and their "Spent this week / month", "this week / month" and "A quiet week / month so far." lines, and the "Compared" card title. Reports owns the week and the month now.

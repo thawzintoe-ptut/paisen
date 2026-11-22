@@ -32,7 +32,13 @@ These Burmese strings for the Shared tab, groups, splits, payments, people, join
 | {name} repeats yearly | {name} နှစ်တိုင်း ထပ်တယ် | `SharedHomeCopy.kt:44` |
 | Search groups and people | အဖွဲ့နဲ့ လူ ရှာမယ် | `SharedHomeCopy.kt:45` |
 | New group or person | အဖွဲ့သစ် ဒါမှမဟုတ် လူ ထည့်မယ် | `SharedHomeCopy.kt:46` |
-| Add a person to split one bill, or make a group for a trip or a flat. They join from a link, and your own spending stays on this phone. | ဘေလ်တစ်ခု ခွဲဖို့ လူထည့်ပါ၊ ဒါမှမဟုတ် ခရီး ဒါမှမဟုတ် အခန်းအတွက် အဖွဲ့ဖွဲ့ပါ။ သူတို့က လင့်ခ်ကနေ ဝင်လာမယ်၊ သင့်ကိုယ်ပိုင် အသုံးစရိတ်တွေက ဒီဖုန်းထဲမှာပဲ ရှိနေမယ်။ | `SharedHomeCopy.kt:50` |
+| Make a group for a trip, a flat or just the two of you. People join from a link, and your own spending stays on this phone. | ခရီး၊ အခန်း ဒါမှမဟုတ် သင်တို့ နှစ်ယောက်တည်းအတွက် အဖွဲ့ဖွဲ့ပါ။ လူတွေက လင့်ခ်ကနေ ဝင်လာမယ်၊ သင့်ကိုယ်ပိုင် အသုံးစရိတ်တွေက ဒီဖုန်းထဲမှာပဲ ရှိနေမယ်။ | `SharedHomeCopy.kt:50` |
+| Start a group | အဖွဲ့ စမယ် | `SharedHomeCopy` startGroup |
+| You're owed {amount} | သင်က ရမယ် {amount} | `SharedHomeCopy` owedLine |
+| you owe {amount} | မင်းက ပေးရမယ် {amount} | `SharedHomeCopy` oweLine |
+| Pay {name} {amount} | {name} ကို {amount} ပေးမယ် | `SharedHomeCopy` pay |
+| The only payment you owe | မင်းက ပေးရမယ့် တစ်ခုတည်း | `SharedHomeCopy` onlyPayment |
+| and {n} more | နောက်ထပ် {n} ခု | `SharedHomeCopy` andMore |
 | I have an invite code | ဖိတ်ကုဒ် ရှိတယ် | `SharedHomeCopy.kt:51` |
 | Add | ထည့်မယ် | `SharedHomeCopy.kt:52` |
 | New person | လူသစ် | `SharedHomeCopy.kt:53` |
@@ -68,6 +74,8 @@ These Burmese strings for the Shared tab, groups, splits, payments, people, join
 | Edit group | အဖွဲ့ နာမည် ပြောင်းမယ် (corrected by a native reader, 15 Oct) | `SharedGroupCopy.kt:63` |
 | My PromptPay | ကိုယ့် PromptPay | `SharedGroupCopy.kt:64` |
 | Repeat an expense | ထပ်ခါထပ်ခါ စရိတ် ထည့်မယ် | `SharedGroupCopy.kt:65` |
+| Group settings | အဖွဲ့ ဆက်တင် | `SharedDetailCopy` groupSettings |
+| Name, PromptPay, people, delete | နာမည်၊ PromptPay၊ လူများ၊ ဖျက်မယ် | `SharedDetailCopy` groupSettingsLine |
 | Delete group | အဖွဲ့ ဖျက်မယ် | `SharedGroupCopy.kt:66` |
 | Delete for everyone | ဖျက်မယ် (corrected by a native reader, 15 Oct) | `SharedGroupCopy.kt:67` |
 | Leave group | အဖွဲ့ကနေ ထွက်မယ် | `SharedGroupCopy.kt:68` |
@@ -199,10 +207,7 @@ These Burmese strings for the Shared tab, groups, splits, payments, people, join
 | 2 weeks | ၂ ပတ် | `SharedExpenseCopy.kt:142` |
 | Monthly | လစဉ် | `SharedExpenseCopy.kt:143` |
 | Yearly | နှစ်စဉ် | `SharedExpenseCopy.kt:144` |
-| Rent | အိမ်လခ | `SharedExpenseCopy.kt:145` |
-| Utilities | မီးဖိုး ရေဖိုး | `SharedExpenseCopy.kt:146` |
-| Internet | အင်တာနက် | `SharedExpenseCopy.kt:147` |
-| Subscription | လစဉ်ကြေး | `SharedExpenseCopy.kt:148` |
+| Name | နာမည် | `SharedRepeatCopy` name |
 | Repeat saved. No reminder: notifications are off for PaiSen in system settings. | သိမ်းပြီးပြီ။ သတိပေးချက် မပါဘူး: စနစ်ဆက်တင်မှာ PaiSen အတွက် အသိပေးချက် ပိတ်ထားတယ်။ | `SharedExpenseCopy.kt:149` |
 | {name} owes you {amount} | {name} က သင့်ကို {amount} ပေးရမယ် | `SharedExpenseCopy.kt:150` |
 | You are owed {amount} | သင် {amount} ရရမယ် | `SharedExpenseCopy.kt:151` |
@@ -243,7 +248,9 @@ These Burmese strings for the Shared tab, groups, splits, payments, people, join
 | Make a new link | လင့်ခ်အသစ် လုပ်မယ် | `SharedAccountCopy.kt:58` |
 | Each person opens the link, signs in and picks their own name in {group}. | လူတိုင်း လင့်ခ်ကို ဖွင့်၊ အကောင့်ဝင်ပြီး {group} ထဲက ကိုယ့်နာမည်ကို ရွေးရမယ်။ | `SharedAccountCopy.kt:59` |
 | QR code for the invite link | ဖိတ်လင့်ခ်ရဲ့ QR ကုဒ် | `SharedAccountCopy.kt:60` |
-| Copy | ကူးမယ် | `SharedAccountCopy.kt:61` |
+| Copy link | လင့်ခ် ကူးမယ် | `SharedAccountCopy.kt:61` |
+| Copy code | ကုဒ် ကူးမယ် | `SharedInviteCopy` copyCode |
+| Link options | လင့်ခ် ရွေးစရာများ | `SharedInviteCopy` linkOptions |
 | Share link | လင့်ခ် မျှဝေမယ် | `SharedAccountCopy.kt:62` |
 | Join {group} on PaiSen: {link} | PaiSen မှာ {group} ထဲ ဝင်ပါ: {link} | `SharedAccountCopy.kt:63` |
 | Switch this link off | ဒီလင့်ခ် ပိတ်မယ် | `SharedAccountCopy.kt:64` |
@@ -271,6 +278,7 @@ These Burmese strings for the Shared tab, groups, splits, payments, people, join
 | Signed out · {n} change(s) not sent | အကောင့်ထွက်နေတယ် · ပြောင်းထားတာ {n} ခု မပို့ရသေးဘူး | `SharedSyncCopy.kt:28` |
 | Signed out. Sign in to keep your shared groups in sync. | အကောင့်ထွက်နေတယ်။ Shared group တွေ ဆက်ချိတ်ထားဖို့ အကောင့် ပြန်ဝင်ပါ။ (corrected by a native reader, 15 Oct) | `SharedSyncCopy.kt:30` |
 | Sign in with the same account, and your shared groups sync again. | အရင်အကောင့်နဲ့ ပြန်ဝင်ရင် Shared group တွေ ပြန်ချိတ်မယ်။ (corrected by a native reader, 15 Oct) | `SharedSyncCopy.kt:31` |
+| Signed in on another phone · {n} change(s) still to send | တခြားဖုန်းမှာ အကောင့်ဝင်ထားတယ် · ပြောင်းထားတာ {n} ခု ပို့ဖို့ ကျန်သေးတယ် | `SharedSyncCopy.kt` `endingElsewhere` |
 | Add people | လူ ထပ်ထည့်မယ် | `SharedGroupCopy.kt:110` |
 | New names join from the invite link and pick their own name. | နာမည်အသစ်တွေက ဖိတ်လင့်ခ်ကနေ ဝင်ပြီး ကိုယ့်နာမည် ကိုယ်ရွေးမယ်။ | `SharedGroupCopy.kt:111` |
 | Remove someone | လူ ဖယ်မယ် | `SharedGroupCopy.kt:112` |

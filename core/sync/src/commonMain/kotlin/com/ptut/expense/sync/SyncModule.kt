@@ -76,6 +76,7 @@ fun syncModule(databaseContext: PtutDatabaseContext): Module = module {
             dao = get<PtutDatabase>().sharedDao(),
             pushes = if (push) PushSender(get(), { auth.idToken() }, FirebaseConfig.PUSH_URL, scope) else null,
             registrar = registrar.takeIf { push },
+            notice = endedHereNotice(databaseContext),
         ).also { it.uploadSoonAfterSaves(scope) }
     }
 }

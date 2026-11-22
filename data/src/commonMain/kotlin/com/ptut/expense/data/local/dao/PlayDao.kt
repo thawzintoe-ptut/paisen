@@ -8,10 +8,12 @@ import androidx.room.Transaction
 import androidx.room.Upsert
 import com.ptut.expense.data.local.entity.PlayDayEntity
 import com.ptut.expense.data.local.entity.PlayGoalDayEntity
+import com.ptut.expense.data.local.entity.PlayGoalDepositEntity
 import com.ptut.expense.data.local.entity.PlayGoalEntity
 import com.ptut.expense.data.local.entity.PlayMonthEntity
 import com.ptut.expense.data.local.entity.PlayStampEntity
 import com.ptut.expense.data.local.entity.PlayWeekEntity
+import com.ptut.expense.data.local.entity.SeenAccountEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -38,6 +40,18 @@ abstract class PlayDao {
 
     @Query("SELECT * FROM play_goal_day ORDER BY date")
     abstract fun observeGoalDays(): Flow<List<PlayGoalDayEntity>>
+
+    @Query("SELECT * FROM play_goal_deposit ORDER BY atEpochMillis, id")
+    abstract fun observeDeposits(): Flow<List<PlayGoalDepositEntity>>
+
+    @Query("SELECT * FROM seen_account ORDER BY seenCount DESC, lastSeenEpochMillis DESC")
+    abstract fun observeSeenAccounts(): Flow<List<SeenAccountEntity>>
+
+    @Query("SELECT * FROM seen_account WHERE mask = :mask")
+    protected abstract suspend fun seenAccount(mask: String): SeenAccountEntity?
+
+    @Upsert
+    protected abstract suspend fun writeSeenAccount(row: SeenAccountEntity)
 
     @Query("SELECT * FROM play_day WHERE date = :date")
     protected abstract suspend fun day(date: String): PlayDayEntity?
@@ -133,6 +147,23 @@ abstract class PlayDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun countDay(day: PlayGoalDayEntity)
 
+    /** J02: -1 when a deposit with this id, the slip's hash, is there already. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    abstract suspend fun deposit(row: PlayGoalDepositEntity): Long
+
+    @Query("DELETE FROM play_goal_deposit WHERE id = :id AND source = 'Said'")
+    abstract suspend fun removeSaidDeposit(id: String)
+
+    @Query("UPDATE play_goal SET savingsAccount = :account WHERE id = :id")
+    abstract suspend fun chooseAccount(id: String, account: String)
+
+    /** J04: one row per account, its count up by one each time a slip moves money there. */
+    @Transaction
+    open suspend fun seeAccount(mask: String, holder: String, atEpochMillis: Long) {
+        val row = seenAccount(mask)
+        writeSeenAccount(SeenAccountEntity(mask, holder, (row?.seenCount ?: 0) + 1, atEpochMillis))
+    }
+
     // Backup: every row out, and back in merged column by column, the phone's own value first.
 
     @Query("SELECT * FROM play_day")
@@ -153,6 +184,9 @@ abstract class PlayDao {
     @Query("SELECT * FROM play_goal_day")
     abstract suspend fun allGoalDays(): List<PlayGoalDayEntity>
 
+    @Query("SELECT * FROM play_goal_deposit")
+    abstract suspend fun allDeposits(): List<PlayGoalDepositEntity>
+
     @Upsert
     protected abstract suspend fun restoreDays(rows: List<PlayDayEntity>)
 
@@ -171,6 +205,9 @@ abstract class PlayDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     protected abstract suspend fun restoreGoalDays(rows: List<PlayGoalDayEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    protected abstract suspend fun restoreDeposits(rows: List<PlayGoalDepositEntity>)
+
     /**
      * A backup's play in one transaction, so a file read halfway leaves nothing half restored. A day,
      * week or month the phone already holds keeps every fact it has and takes the backup's for the rest:
@@ -184,6 +221,7 @@ abstract class PlayDao {
         stamps: List<PlayStampEntity>,
         goals: List<PlayGoalEntity>,
         goalDays: List<PlayGoalDayEntity> = emptyList(),
+        deposits: List<PlayGoalDepositEntity> = emptyList(),
     ) {
         val haveDays = allDays().associateBy { it.date }
         restoreDays(days.map { row -> haveDays[row.date]?.filledFrom(row) ?: row })
@@ -194,6 +232,7 @@ abstract class PlayDao {
         restoreStamps(stamps)
         restoreGoals(goals)
         restoreGoalDays(goalDays)
+        restoreDeposits(deposits)
     }
 }
 

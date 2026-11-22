@@ -44,6 +44,9 @@ sealed interface SlipRead {
 
         /** #33: a wallet receipt that says the direction itself (a minus sign, a "To" block); null leaves it to #26. */
         val knownDirection: Direction?
+
+        /** J04: the recipient's account as [accountMask] names it, or null when the slip printed none. */
+        val recipientAccount: String?
     }
 
     /**
@@ -59,6 +62,7 @@ sealed interface SlipRead {
         override val sender: String? = null,
         override val currency: String = "THB",
         override val knownDirection: Direction? = null,
+        override val recipientAccount: String? = null,
     ) : Readable
 
     /**
@@ -74,6 +78,7 @@ sealed interface SlipRead {
         override val sender: String? = null,
         override val currency: String = "THB",
         override val knownDirection: Direction? = null,
+        override val recipientAccount: String? = null,
     ) : Readable
 
     /**

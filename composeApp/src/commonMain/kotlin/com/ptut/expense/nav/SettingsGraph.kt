@@ -1,7 +1,9 @@
 package com.ptut.expense.nav
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,6 +51,8 @@ import com.ptut.expense.settings.LicencesView
 import com.ptut.expense.settings.LicencesViewModel
 import com.ptut.expense.settings.SettingsAction
 import com.ptut.expense.settings.SettingsAdvancedView
+import com.ptut.expense.settings.SettingsRow
+import com.ptut.expense.settings.SettingsRowUiModel
 import com.ptut.expense.settings.SettingsView
 import com.ptut.expense.settings.SettingsViewModel
 import com.ptut.expense.settings.SlipOwnerDialog
@@ -58,9 +62,14 @@ import com.ptut.expense.settings.destination
 import com.ptut.expense.settings.feedbackMail
 import com.ptut.expense.settings.focusedRow
 import com.ptut.expense.shared.AccountCard
+import com.ptut.expense.shared.AccountUiState
+import com.ptut.expense.shared.AccountViewModel
+import com.ptut.expense.shared.SignInSheet
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
+import com.ptut.expense.ui.sky.SkyBottomSheet
+import com.ptut.expense.ui.sky.SkyGroupedCard
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -257,6 +266,16 @@ private fun SettingsHost(nav: NavHostController, focus: SettingsAction?, advance
     val unlockReason = LocalCopy.current.settings.unlockReason
     // #26: the one row that opens a dialog, not a screen.
     var editingOwner by rememberSaveable { mutableStateOf(false) }
+    // The two rows that open a sheet over Settings: the account, and the small help list.
+    var accountSheet by rememberSaveable { mutableStateOf(AccountSheet.None) }
+    var helpOpen by rememberSaveable { mutableStateOf(false) }
+    val account = koinViewModel<AccountViewModel>()
+    val accountState by account.uiState.collectAsStateWithLifecycle()
+    // Picked once at the tap, so signing out inside the card closes it instead of swapping in the sign-in sheet.
+    val openAccount = { accountSheet = if (accountState is AccountUiState.SignedIn) AccountSheet.Account else AccountSheet.SignIn }
+    LaunchedEffect(accountState) {
+        if (accountSheet == AccountSheet.Account && accountState !is AccountUiState.SignedIn) accountSheet = AccountSheet.None
+    }
     if (editingOwner) {
         SlipOwnerDialog(
             current = koinInject<AppSettings>().choices.value.slipOwner.name,
@@ -285,8 +304,45 @@ private fun SettingsHost(nav: NavHostController, focus: SettingsAction?, advance
 
             SettingsAction.GoalJar -> nav.navigate(PtutRoute.GoalJar(goalId = state.goalId)) { launchSingleTop = true }
 
+            SettingsAction.SharedAccount -> openAccount()
+
+            SettingsAction.Help -> helpOpen = true
+
             else -> action.destination()?.let { nav.navigate(it) }
         }
+    }
+    if (helpOpen) {
+        SkyBottomSheet(onDismissRequest = { helpOpen = false }) {
+            SkyGroupedCard(
+                rows = state.help.map<SettingsRowUiModel, @Composable () -> Unit> { row ->
+                    {
+                        SettingsRow(row = row, onClick = {
+                            helpOpen = false
+                            onAction(row.id)
+                        })
+                    }
+                },
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm),
+            )
+        }
+    }
+    when (accountSheet) {
+        AccountSheet.None -> Unit
+
+        // Signed in: the card with sign out and delete. Signed out: straight to the sign-in sheet.
+        AccountSheet.Account -> SkyBottomSheet(onDismissRequest = { accountSheet = AccountSheet.None }) {
+            AccountCard(Modifier.padding(vertical = Spacing.sm))
+        }
+
+        AccountSheet.SignIn -> SignInSheet(
+            reason = LocalCopy.current.shared.account.signInReason,
+            onSignedIn = {
+                accountSheet = AccountSheet.None
+                account.syncNow()
+            },
+            onDismiss = { accountSheet = AccountSheet.None },
+        )
     }
     val onSwitch: (SettingsAction, Boolean) -> Unit = { action, on ->
         when (action) {
@@ -311,6 +367,7 @@ private fun SettingsHost(nav: NavHostController, focus: SettingsAction?, advance
             SettingsAction.Timezone, SettingsAction.HomeCurrency,
             SettingsAction.Assistant, SettingsAction.Feedback, SettingsAction.Licences,
             SettingsAction.Play, SettingsAction.GoalJar, SettingsAction.Advanced,
+            SettingsAction.SharedAccount, SettingsAction.Help,
             -> Unit
         }
     }
@@ -323,7 +380,7 @@ private fun SettingsHost(nav: NavHostController, focus: SettingsAction?, advance
         onAction = onAction,
         focusRow = focus,
         onSwitch = onSwitch,
-        account = { AccountCard(Modifier.padding(horizontal = Spacing.sm)) },
+        account = accountRow(accountState)?.let { row -> { SettingsRow(row = row, onClick = openAccount) } },
         footer = {
             Column {
                 // Absent from a release build rather than hidden in one: the graph binds nothing
@@ -343,3 +400,18 @@ private fun SettingsHost(nav: NavHostController, focus: SettingsAction?, advance
         },
     )
 }
+
+/** #187: the account as one Settings row; null when the build names no Firebase project. */
+@Composable
+private fun accountRow(state: AccountUiState): SettingsRowUiModel? {
+    val words = LocalCopy.current.shared.account
+    val value = when (state) {
+        AccountUiState.Hidden -> return null
+        is AccountUiState.SignedIn -> state.line
+        AccountUiState.SignedOut -> words.notSignedIn
+    }
+    return SettingsRowUiModel(id = SettingsAction.SharedAccount, name = words.title, value = value, icon = "group")
+}
+
+/** Which account sheet the Account row opened, fixed at the tap. */
+private enum class AccountSheet { None, Account, SignIn }

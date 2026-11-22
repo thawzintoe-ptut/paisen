@@ -17,6 +17,7 @@ import com.ptut.expense.domain.shared.RepeatKind
 import com.ptut.expense.domain.shared.RepeatRule
 import com.ptut.expense.domain.shared.SaveRepeatUseCase
 import com.ptut.expense.domain.shared.SharedGroup
+import com.ptut.expense.domain.shared.SharedTextLimits
 import com.ptut.expense.domain.shared.SplitMode
 import com.ptut.expense.domain.shared.StopRepeatUseCase
 import com.ptut.expense.domain.shared.equalPartOf
@@ -41,10 +42,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 
-/** What is being set up. The split is equal among today's members, as p33's "split 50 / 50" draws it. */
+/**
+ * What is being set up. The split is equal among today's members, as p33's "split 50 / 50" draws it.
+ * [kind] stays stored with the rule, but the typed name says what repeats; nothing on the screen picks it.
+ * A new repeat is a Subscription so it files under Other, not Bills; older apps already read that kind.
+ */
 data class RepeatForm(
-    val kind: RepeatKind = RepeatKind.Rent,
-    val description: String = RepeatKind.Rent.label(),
+    val kind: RepeatKind = RepeatKind.Subscription,
+    val description: String = "",
     val amountText: String = "",
     val frequency: RepeatFrequency = RepeatFrequency.Monthly,
     val start: LocalDate? = null,
@@ -147,7 +152,10 @@ class RepeatExpenseViewModel(
         }
     }
 
-    fun setKind(kind: RepeatKind) = form.update { it.copy(kind = kind, description = kind.label()) }
+    /** Still called by the shell; the kind chips are gone, so the kind no longer names the repeat. */
+    fun setKind(kind: RepeatKind) = form.update { it.copy(kind = kind) }
+
+    fun setDescription(text: String) = form.update { it.copy(description = text.take(SharedTextLimits.DESCRIPTION)) }
 
     fun setAmount(text: String) = form.update { it.copy(amountText = text.filter { c -> c.isDigit() || c == '.' }) }
 
@@ -230,7 +238,7 @@ class RepeatExpenseViewModel(
             form = form,
             isEdit = ruleId != null,
             active = active,
-            title = "${form.description.ifBlank { form.kind.label() }}${Separators.DOT}${group.name}",
+            title = "${form.description.ifBlank { text.repeat.title }}${Separators.DOT}${group.name}",
             symbol = group.money.symbol,
             amountShown = form.amountText.ifEmpty { "0" },
             payLine = buildString {
@@ -274,24 +282,6 @@ class RepeatExpenseViewModel(
             else -> text.youOwe(group.displayName(rule.payerMemberId), mine.formatCompact(money))
         }
     }
-}
-
-fun RepeatKind.label(): String {
-    val text = AppText.copy.shared.repeat
-    return when (this) {
-        RepeatKind.Rent -> text.kindRent
-        RepeatKind.Utilities -> text.kindUtilities
-        RepeatKind.Internet -> text.kindInternet
-        RepeatKind.Subscription -> text.kindSubscription
-    }
-}
-
-/** p33's chips set a name and an icon; the icon is the category's, so each kind files under one. */
-fun RepeatKind.icon(): String = when (this) {
-    RepeatKind.Rent -> "home"
-    RepeatKind.Utilities -> "bolt"
-    RepeatKind.Internet -> "wifi"
-    RepeatKind.Subscription -> "sync"
 }
 
 fun RepeatFrequency.label(): String {

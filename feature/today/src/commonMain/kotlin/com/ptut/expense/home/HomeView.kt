@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,13 +33,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -60,11 +59,10 @@ import com.ptut.expense.design.ptutReduceMotion
 import com.ptut.expense.design.stampScaleAt
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.ImportFix
+import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.formatParts
 import com.ptut.expense.domain.spoken
-import com.ptut.expense.domain.today.HomePeriod
-import com.ptut.expense.locale.CommonCopy
-import com.ptut.expense.locale.HomeCopy
+import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.noteCopy
 import com.ptut.expense.ui.categoryAndProvenance
@@ -75,15 +73,14 @@ import com.ptut.expense.ui.sky.SkyMoodCard
 import com.ptut.expense.ui.sky.SkyPageSheet
 import com.ptut.expense.ui.sky.SkyRollingAmount
 import com.ptut.expense.ui.sky.SkySectionHeader
-import com.ptut.expense.ui.sky.SkyStatCard
 import com.ptut.expense.ui.sky.SkyTextAction
 import com.ptut.expense.ui.sky.SkyTransactionRow
-import com.ptut.expense.ui.sky.SkyUnderlineTabs
 import com.ptut.expense.ui.sky.SkyWarningBanner
 
 /**
- * Home in Sky (p05, p06, p24): Today / Week / Month over the amount and the period's top three
- * categories on white, the review card on the grey page, then the period's rows on a white sheet.
+ * Home in Sky (p05, p06, p24), with one job: today. The status line, the amount with its usual-day
+ * line, the category totals as one line into Reports, PaiSeN's line, one next step, then the rows.
+ * Reports owns the week and the month.
  *
  * It keeps what #146 keeps and the artboards leave out: the freshness line with its pulse, the
  * quiet stale state and "No slips imported yet", Income and Net, Saved today, the span in the
@@ -92,12 +89,13 @@ import com.ptut.expense.ui.sky.SkyWarningBanner
 @Composable
 fun HomeView(
     uiState: HomeUiState,
-    onChoosePeriod: (HomePeriod) -> Unit,
     onOpenReview: () -> Unit,
     onOpenLedger: () -> Unit,
     onAddByHand: () -> Unit,
     onFixImport: (ImportFix) -> Unit,
     onOpenTransaction: (String) -> Unit,
+    /** The category totals line opens Reports. */
+    onOpenReports: () -> Unit = {},
     /** A mood card's day receipt, by its ISO date (#120). */
     onOpenReceipt: (String) -> Unit = {},
     /** The weekly card's slice of History (#20). */
@@ -114,8 +112,8 @@ fun HomeView(
     /** #91 and the shelf's ways into the extras. */
     onOpenChallenge: () -> Unit = {},
     onOpenShelf: (ShelfItemUiModel) -> Unit = {},
-    /** #104: Count it, or Not today when the flag is false, for the goal named. */
-    onAnswerDay: (goalId: String, count: Boolean) -> Unit = { _, _ -> },
+    /** J01: Put money in, for the goal named; the jar opens on its sheet. */
+    onPutIn: (goalId: String) -> Unit = {},
     modifier: Modifier = Modifier,
     /** Just-in-time tips above the run card and the day's question; null when none is due. */
     runTip: (@Composable () -> Unit)? = null,
@@ -127,12 +125,12 @@ fun HomeView(
 
             is HomeUiState.Success -> LoadedHome(
                 state = uiState,
-                onChoosePeriod = onChoosePeriod,
                 onOpenReview = onOpenReview,
                 onOpenLedger = onOpenLedger,
                 onAddByHand = onAddByHand,
                 onFixImport = onFixImport,
                 onOpenTransaction = onOpenTransaction,
+                onOpenReports = onOpenReports,
                 onOpenReceipt = onOpenReceipt,
                 onOpenWeek = onOpenWeek,
                 onHideNoteWeek = onHideNoteWeek,
@@ -143,7 +141,7 @@ fun HomeView(
                 onOpenGuess = onOpenGuess,
                 onOpenChallenge = onOpenChallenge,
                 onOpenShelf = onOpenShelf,
-                onAnswerDay = onAnswerDay,
+                onPutIn = onPutIn,
                 runTip = runTip,
                 questionTip = questionTip,
             )
@@ -154,12 +152,12 @@ fun HomeView(
 @Composable
 private fun LoadedHome(
     state: HomeUiState.Success,
-    onChoosePeriod: (HomePeriod) -> Unit,
     onOpenReview: () -> Unit,
     onOpenLedger: () -> Unit,
     onAddByHand: () -> Unit,
     onFixImport: (ImportFix) -> Unit,
     onOpenTransaction: (String) -> Unit,
+    onOpenReports: () -> Unit,
     onOpenReceipt: (String) -> Unit,
     onOpenWeek: (WeeklyCardUiModel) -> Unit,
     onHideNoteWeek: () -> Unit,
@@ -170,12 +168,11 @@ private fun LoadedHome(
     onOpenGuess: (String) -> Unit,
     onOpenChallenge: () -> Unit,
     onOpenShelf: (ShelfItemUiModel) -> Unit,
-    onAnswerDay: (goalId: String, count: Boolean) -> Unit,
+    onPutIn: (goalId: String) -> Unit,
     runTip: (@Composable () -> Unit)?,
     questionTip: (@Composable () -> Unit)?,
 ) {
     val text = LocalCopy.current.home
-    val common = LocalCopy.current.common
     val empty = state.transactions.isEmpty()
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
@@ -185,15 +182,10 @@ private fun LoadedHome(
                     .background(MaterialTheme.colorScheme.tertiaryContainer)
                     .padding(bottom = Spacing.md),
             ) {
-                SkyUnderlineTabs(
-                    options = HomePeriod.entries.map { it.label(text, common) },
-                    selected = state.period.ordinal,
-                    onSelect = { onChoosePeriod(HomePeriod.entries[it]) },
-                )
                 ImportStatus(
                     state = state,
                     onFixImport = onFixImport,
-                    modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
+                    modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.md),
                 )
                 state.weeklyCard?.let { card ->
                     SkyMoodCard(
@@ -217,16 +209,15 @@ private fun LoadedHome(
                     )
                 }
                 PeriodAmount(state = state, empty = empty, modifier = Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.sm))
-                state.target?.let { TargetLine(it, Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.s12)) }
                 if (state.topCategories.isNotEmpty()) {
-                    TopCategoryTiles(state.topCategories, Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.md))
+                    CategoryTotalsLine(state.topCategories, onOpenReports, Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12))
                 }
                 state.coach?.let { coach ->
-                    CoachRow(coach, onOpen = { onOpenCoach(coach) }, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm))
+                    CoachRow(coach, onOpen = { onOpenCoach(coach) }, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.xs))
                 }
                 if (empty) {
                     SkyEmptyState(
-                        headline = state.period.quiet(text),
+                        headline = text.quietDay,
                         body = text.emptyBody,
                         status = state.watchLine,
                         statusIcon = PtutIcon.Sync.image,
@@ -247,18 +238,29 @@ private fun LoadedHome(
             }
         }
 
-        state.compared?.let { compared ->
-            item {
-                SkyStatCard(
-                    title = text.compared,
-                    line = compared.line,
-                    icon = ptutIcon(compared.glyph),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
-                )
+        // One next step. An import problem is already the banner above, so it adds no card.
+        when (val step = state.nextStep) {
+            null -> Unit
+
+            is NextStepUiModel.Slips -> item {
+                ReviewRow(step.review, onOpenReview, Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm))
             }
-        }
-        state.review?.let { review ->
-            item { ReviewRow(review, onOpenReview, Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm)) }
+
+            is NextStepUiModel.Jar -> item {
+                JarCard(step.jar, onOpen = onOpenShelf, onPutIn = onPutIn, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm))
+            }
+
+            is NextStepUiModel.Play -> {
+                runTip?.let { slot -> item { slot() } }
+                item {
+                    PlayRunCard(
+                        strip = step.strip,
+                        onOpenStamps = onOpenStamps,
+                        onTurnStamp = onTurnStamp,
+                        modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
+                    )
+                }
+            }
         }
 
         if (!empty || state.savedToday.isNotEmpty()) {
@@ -307,29 +309,15 @@ private fun LoadedHome(
             }
         }
 
-        // #85, #87: the play stack waits under the day's list, so the purchases come first.
+        // #87, #91: the rest of play waits under the day's list, so the purchases come first.
         state.question?.let { card ->
             questionTip?.let { slot -> item { slot() } }
             item {
                 PlayQuestionCard(card, onOpen = onOpenQuestion, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm))
             }
         }
-        state.play?.let { strip ->
-            runTip?.let { slot -> item { slot() } }
-            item {
-                PlayRunCard(
-                    strip = strip,
-                    onOpenStamps = onOpenStamps,
-                    onTurnStamp = onTurnStamp,
-                    modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
-                )
-            }
-        }
         state.challenge?.let { row ->
             item { ChallengeRow(row, onOpen = onOpenChallenge, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
-        }
-        state.jar?.let { jar ->
-            item { JarCard(jar, onOpen = onOpenShelf, onAnswer = onAnswerDay, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
         }
         if (state.shelf.isNotEmpty()) {
             item { PlayShelf(state.shelf, onOpen = onOpenShelf, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
@@ -458,7 +446,7 @@ private fun ImportStatus(
             // Page 05's pulse: it moves only while a scan is running.
             PulseDot(live = state.isScanning, size = Spacing.xs)
             Text(
-                text = text.imported(status.since, state.summary.count, state.period.span(text)),
+                text = text.imported(status.since, state.summary.count, text.spanToday),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -531,29 +519,6 @@ private fun PlaceholderRow(contentDescription: String) {
 private const val PLACEHOLDER_NAME_WIDTH = 0.6f
 private const val PLACEHOLDER_META_WIDTH = 0.35f
 
-/** #21: one line and a thin bar in the quiet ink. Past the target the bar is full and still not red. */
-@Composable
-private fun TargetLine(target: TargetUiModel, modifier: Modifier = Modifier) {
-    Column(modifier = modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
-        Text(target.line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Box(
-            modifier = Modifier
-                .padding(top = Spacing.xxs)
-                .fillMaxWidth()
-                .height(Spacing.xxs)
-                .clip(PtutRadii.r12)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth(target.fraction)
-                    .height(Spacing.xxs)
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant),
-            )
-        }
-    }
-}
-
 /**
  * "Spent today" and the amount at 52/300, the baht sign and the satang set smaller (p05). An empty
  * span draws ฿0.00 in grey (#147, R7), which with the status line below reads as "nothing yet".
@@ -564,9 +529,10 @@ private fun PeriodAmount(state: HomeUiState.Success, empty: Boolean, modifier: M
     val common = LocalCopy.current.common
     val ink = if (empty) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
     val parts = state.summary.expense.formatParts()
+    val compared = state.compared?.line
     Column(
         modifier = modifier.semantics(mergeDescendants = true) {
-            contentDescription = "${state.heroLabel}, ${state.summary.expense.spoken()}"
+            contentDescription = listOfNotNull("${state.heroLabel}, ${state.summary.expense.spoken()}", compared).joinToString(". ")
         },
     ) {
         Text(state.heroLabel, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -579,6 +545,15 @@ private fun PeriodAmount(state: HomeUiState.Success, empty: Boolean, modifier: M
                 fraction = parts.fraction,
                 color = ink,
                 fractionColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Spacing.xs),
+            )
+        }
+        // One comparison, today beside a usual one of its weekday (#119).
+        compared?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = Spacing.xs),
             )
         }
@@ -600,60 +575,28 @@ private fun PeriodAmount(state: HomeUiState.Success, empty: Boolean, modifier: M
     }
 }
 
-/** The span's three biggest categories (p05): ink, then sky, then pale sky, biggest first. */
+/** Today's biggest categories as one line, "Groceries ฿642.50 · Transport ฿40", the whole of it Reports' door. */
 @Composable
-private fun TopCategoryTiles(tiles: List<TopCategoryUiModel>, modifier: Modifier = Modifier) {
-    val fills = listOf(
-        MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.onPrimary,
-        MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,
-        MaterialTheme.ptut.infoBg to MaterialTheme.ptut.infoInk,
+private fun CategoryTotalsLine(tiles: List<TopCategoryUiModel>, onOpenReports: () -> Unit, modifier: Modifier = Modifier) {
+    val text = LocalCopy.current.home
+    val spoken = text.byCategory(tiles.joinToString(AppText.copy.phrases.listComma) { "${it.name} ${it.amount}" })
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Text(
+        text = buildAnnotatedString {
+            tiles.forEachIndexed { index, tile ->
+                if (index > 0) withStyle(SpanStyle(color = muted)) { append(Separators.DOT) }
+                withStyle(SpanStyle(color = muted)) { append("${tile.name} ") }
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(tile.amount) }
+            }
+        },
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics { contentDescription = spoken }
+            .tappable(PtutRadii.r12, Role.Button, onClick = onOpenReports)
+            .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
     )
-    FlowRow(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-    ) {
-        tiles.forEachIndexed { rank, tile ->
-            val (fill, ink) = fills[rank.coerceAtMost(fills.lastIndex)]
-            CategoryTile(tile = tile, fill = fill, ink = ink)
-        }
-    }
-}
-
-@Composable
-private fun CategoryTile(tile: TopCategoryUiModel, fill: Color, ink: Color) {
-    Row(
-        modifier = Modifier
-            .heightIn(min = SkySizes.chip)
-            .clip(PtutRadii.r12)
-            .background(fill)
-            .semantics(mergeDescendants = true) {}
-            .padding(horizontal = Spacing.s14),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(ptutIcon(tile.icon), contentDescription = null, tint = ink, modifier = Modifier.size(SkySizes.cardGlyph))
-        Text(tile.name, style = MaterialTheme.typography.labelLarge, color = ink, maxLines = 1)
-    }
-}
-
-private fun HomePeriod.span(text: HomeCopy): String = when (this) {
-    HomePeriod.Today -> text.spanToday
-    HomePeriod.Week -> text.spanThisWeek
-    HomePeriod.Month -> text.spanThisMonth
-}
-
-private fun HomePeriod.label(text: HomeCopy, common: CommonCopy): String = when (this) {
-    HomePeriod.Today -> common.today
-    HomePeriod.Week -> text.tabWeek
-    HomePeriod.Month -> text.tabMonth
-}
-
-/** p24's headline, named for the span the reader chose. */
-private fun HomePeriod.quiet(text: HomeCopy): String = when (this) {
-    HomePeriod.Today -> text.quietDay
-    HomePeriod.Week -> text.quietWeek
-    HomePeriod.Month -> text.quietMonth
 }
 
 /** #22: under the weekly note, a quiet link that opens the three-choice sheet. */

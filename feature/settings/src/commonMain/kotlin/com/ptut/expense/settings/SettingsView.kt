@@ -36,17 +36,17 @@ import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.ui.sky.SkyGroupTitle
 import com.ptut.expense.ui.sky.SkyGroupedCard
+import com.ptut.expense.ui.sky.SkyIntro
 import com.ptut.expense.ui.sky.SkyLargeTitle
 import com.ptut.expense.ui.sky.SkyListScreen
-import com.ptut.expense.ui.sky.SkyNoticeCard
 import com.ptut.expense.ui.sky.SkySwitch
 
 /** What a screen reader says about the row the stale-import notice sent the reader to. */
 val NEEDS_ATTENTION: String get() = AppText.copy.settings.needsAttention
 
 /**
- * Settings in Sky (p21): the large title, the offline promise on pale sky, then three white
- * cards: importing, the ledger's own words, and its file and day. Every row opens a screen. A switch
+ * Settings in Sky (p21): the large title, then four white cards: Saving, You, Keep it safe, and
+ * Account and help, with the offline promise as the footer. Every row opens a screen. A switch
  * row with a screen behind it, Android's background import (C-4), flips only from its switch, so the
  * row the stale notice points at opens that screen instead of turning the import off (#217).
  *
@@ -62,7 +62,7 @@ fun SettingsView(
     /** A switch row's lever, named by its row, so a second switch needs no second callback (#121). */
     onSwitch: (SettingsAction, Boolean) -> Unit = { _, _ -> },
     footer: (@Composable () -> Unit)? = null,
-    /** #187: the shared-groups account, under the promise it narrows. */
+    /** #187: the shared-groups account row, first in the Account and help card; null when the build has none. */
     account: (@Composable () -> Unit)? = null,
 ) {
     val text = LocalCopy.current.settings
@@ -71,19 +71,13 @@ fun SettingsView(
         verticalArrangement = Arrangement.spacedBy(Spacing.s12),
     ) {
         item { SkyLargeTitle(text.title, Modifier.padding(top = Spacing.md)) }
-        item {
-            // NFR-1 as #191 narrowed it, and NFR-5, said at the top rather than in a privacy page.
-            SkyNoticeCard(
-                title = text.privacyTitle,
-                text = text.privacyText,
-                icon = PtutIcon.Lock.image,
-                modifier = Modifier.padding(horizontal = Spacing.sm),
-            )
-        }
-        account?.let { item { it() } }
         // #101: a fix that sits behind Advanced marks the Advanced row, the first of its two taps.
         val focusBehindAdvanced = focusRow != null && uiState.advanced.any { group -> group.rows.any { it.id == focusRow } }
-        settingsCards(uiState.groups, onAction, onSwitch) { row -> row.id == focusRow || (row.id == SettingsAction.Advanced && focusBehindAdvanced) }
+        settingsCards(uiState.groups, onAction, onSwitch, leading = mapOf(SettingsGroup.Account to account)) { row ->
+            row.id == focusRow || (row.id == SettingsAction.Advanced && focusBehindAdvanced)
+        }
+        // NFR-1 as #191 narrowed it, and NFR-5, said once at the end rather than in a privacy page.
+        item { SkyIntro(text.footer, Modifier.padding(top = Spacing.xs)) }
         footer?.let { item { it() } }
         item { Box(Modifier.height(SkySizes.pillClearance)) }
     }
@@ -99,24 +93,30 @@ fun SettingsAdvancedView(
     focusRow: SettingsAction? = null,
     onSwitch: (SettingsAction, Boolean) -> Unit = { _, _ -> },
 ) {
-    SkyListScreen(title = LocalCopy.current.settings.advanced, onBack = onBack, modifier = modifier) {
+    val text = LocalCopy.current.settings
+    SkyListScreen(title = text.advanced, onBack = onBack, modifier = modifier) {
+        item { SkyIntro(text.advancedIntro) }
         settingsCards(uiState.advanced, onAction, onSwitch) { row -> row.id == focusRow }
         item { Box(Modifier.height(SkySizes.pillClearance)) }
     }
 }
 
-/** Each group's title, then its white card. [sentFor] says the reader was sent here for that row. */
+/**
+ * Each group's title, then its white card. [sentFor] says the reader was sent here for that row;
+ * [leading] is a row the shell draws at the top of a card, such as the account row.
+ */
 private fun LazyListScope.settingsCards(
     groups: List<SettingsGroupUiModel>,
     onAction: (SettingsAction) -> Unit,
     onSwitch: (SettingsAction, Boolean) -> Unit,
+    leading: Map<SettingsGroup, (@Composable () -> Unit)?> = emptyMap(),
     sentFor: (SettingsRowUiModel) -> Boolean,
 ) {
     groups.forEach { group ->
         group.title?.let { title -> item(key = "${group.group.name}-title") { SkyGroupTitle(title, Modifier.padding(top = Spacing.xs)) } }
         item(key = group.group.name) {
             SkyGroupedCard(
-                rows = group.rows.map<SettingsRowUiModel, @Composable () -> Unit> { row ->
+                rows = listOfNotNull(leading[group.group]) + group.rows.map<SettingsRowUiModel, @Composable () -> Unit> { row ->
                     {
                         SettingsRow(
                             row = row,
@@ -133,12 +133,13 @@ private fun LazyListScope.settingsCards(
     }
 }
 
+/** One Settings row: glyph, name and value, then a switch or a chevron. Public for the shell's account row. */
 @Composable
-private fun SettingsRow(
+fun SettingsRow(
     row: SettingsRowUiModel,
-    marked: Boolean,
     onClick: () -> Unit,
-    onSwitch: (Boolean) -> Unit,
+    marked: Boolean = false,
+    onSwitch: (Boolean) -> Unit = {},
 ) {
     val switchedOn = row.switchedOn
     // Mood and Transparency have no screen, so their whole row is the switch (#121, #123).

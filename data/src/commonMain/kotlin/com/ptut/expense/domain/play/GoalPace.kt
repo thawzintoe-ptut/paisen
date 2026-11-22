@@ -1,14 +1,10 @@
 package com.ptut.expense.domain.play
 
-import com.ptut.expense.domain.Direction
-import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.Satang
-import com.ptut.expense.domain.Transaction
-import com.ptut.expense.domain.bucketByDay
-import com.ptut.expense.domain.dateIn
+import com.ptut.expense.domain.mondayOfWeekOf
+import com.ptut.expense.domain.sum
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
@@ -19,42 +15,27 @@ private const val PACE_WEEKS = 4
 /** Twenty years: past this the jar says it has no date rather than one nobody can plan for. */
 private const val MAX_PACE_WEEKS = 1_040L
 
+/** The third choice on Put money in: a round amount, in the home money's whole units. */
+private const val ROUND_CHOICE_WHOLE = 500L
+
+/** Put money in offers at most this many amounts (J03). */
+private const val DEPOSIT_CHOICES = 3
+
 /**
- * #104: how full the jar is and when it fills at the recent pace. [saved] is what the counted days kept
- * under their usual, each read against the day's spending now. [hasDays] is false until a day is counted.
+ * J02: how full the jar is and when it fills at the recent pace. [saved] is every deposit, so the jar
+ * always matches the bank. [hasDeposits] is false until the first money goes in.
  */
-data class GoalPace(val saved: Satang, val perWeek: Satang?, val reachOn: LocalDate?, val hasDays: Boolean) {
+data class GoalPace(val saved: Satang, val perWeek: Satang?, val reachOn: LocalDate?, val hasDeposits: Boolean) {
     fun fills(target: Satang): Boolean = saved >= target
 }
 
-/**
- * What one counted day puts in the jar: its usual less its spending now, never below zero. A buy later
- * that evening shrinks it, so the jar keeps the day's final number.
- */
-fun List<Transaction>.keptOn(day: GoalDay, zone: TimeZone = HomeTime): Satang {
-    val usual = day.usual ?: return Satang.Zero
-    val spent = spentOn(day.day, zone)
-    return if (spent >= usual) Satang.Zero else usual - spent
-}
-
-fun List<Transaction>.goalPace(goal: Goal, days: List<GoalDay>, today: LocalDate, zone: TimeZone = HomeTime): GoalPace =
-    pace(goal, days, today, zone, skip = null)
-
-/** FR-92.3: the same jar if [categoryId]'s spending of the last four weeks were kept as well. */
-fun List<Transaction>.goalPaceWithout(goal: Goal, days: List<GoalDay>, categoryId: String, today: LocalDate, zone: TimeZone = HomeTime): GoalPace =
-    pace(goal, days, today, zone, skip = categoryId)
-
-private fun List<Transaction>.pace(goal: Goal, days: List<GoalDay>, today: LocalDate, zone: TimeZone, skip: String?): GoalPace {
-    val counted = days.filter { it.goalId == goal.id && it.counted && it.day <= today }
-    val saved = Satang.ofMinorUnits(counted.sumOf { keptOn(it, zone).toMinorUnits() })
-    if (counted.isEmpty()) return GoalPace(saved, perWeek = null, reachOn = null, hasDays = false)
+fun List<GoalDeposit>.goalPace(goal: Goal, today: LocalDate): GoalPace {
+    val mine = filter { it.goalId == goal.id && it.day <= today }
+    val saved = mine.map { it.amount }.sum()
+    if (mine.isEmpty()) return GoalPace(saved, perWeek = null, reachOn = null, hasDeposits = false)
     val since = today.minus(PACE_DAYS - 1, DateTimeUnit.DAY)
-    val recent = counted.filter { it.day >= since }.sumOf { keptOn(it, zone).toMinorUnits() }
-    val skipped = skip?.let { category ->
-        filter { it.direction == Direction.Expense && it.categoryId == category && it.occurredAtEpochMillis.dateIn(zone) in since..today }
-            .sumOf { it.amount.toMinorUnits() }
-    } ?: 0L
-    val perWeek = Satang.ofMinorUnits((recent + skipped) / PACE_WEEKS)
+    val recent = mine.filter { it.day >= since }.sumOf { it.amount.toMinorUnits() }
+    val perWeek = Satang.ofMinorUnits(recent / PACE_WEEKS)
     val reachOn = when {
         saved >= goal.target -> today
 
@@ -67,9 +48,19 @@ private fun List<Transaction>.pace(goal: Goal, days: List<GoalDay>, today: Local
             if (weeks > MAX_PACE_WEEKS) null else today.plus(weeks.toInt(), DateTimeUnit.WEEK)
         }
     }
-    return GoalPace(saved, perWeek.takeIf { it > Satang.Zero }, reachOn, hasDays = true)
+    return GoalPace(saved, perWeek.takeIf { it > Satang.Zero }, reachOn, hasDeposits = true)
 }
 
-/** Counted as [usualDay] counts a day, so the card and the jar agree. */
-private fun List<Transaction>.spentOn(day: LocalDate, zone: TimeZone): Satang =
-    filter { it.occurredAtEpochMillis.dateIn(zone) == day }.bucketByDay(zone).firstOrNull()?.summary?.expense ?: Satang.Zero
+/** J05: what went into [goal] since Monday, for "This week: ฿220 of ฿330". */
+fun List<GoalDeposit>.savedThisWeek(goal: Goal, today: LocalDate): Satang =
+    filter { it.goalId == goal.id && it.day >= mondayOfWeekOf(today) && it.day <= today }.map { it.amount }.sum()
+
+/**
+ * J03's amounts, in order: today's leftover under a usual day, the weekly pace, then a round amount,
+ * each once and never zero. A jar with no pace yet still gets the leftover and the round amount.
+ */
+fun depositChoices(leftover: Satang?, perWeek: Satang?, minorPerWhole: Long): List<Satang> =
+    listOfNotNull(leftover, perWeek, Satang.ofMinorUnits(ROUND_CHOICE_WHOLE * minorPerWhole))
+        .filter { it > Satang.Zero }
+        .distinct()
+        .take(DEPOSIT_CHOICES)

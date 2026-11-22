@@ -38,6 +38,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlin.io.encoding.Base64
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -71,6 +72,9 @@ internal class FakeFirestore : Firestore {
     override suspend fun list(collection: String): List<FirestoreDoc> = answer("list $collection", collection) { collections[collection].orEmpty() }
 
     override suspend fun whereContains(collection: String, field: String, value: String): List<FirestoreDoc> = answer("query $collection") { memberships }
+
+    override suspend fun whereEquals(collection: String, field: String, value: String): List<FirestoreDoc> =
+        answer("query $collection $field") { collections[collection].orEmpty().filter { it.fields.string(field) == value } }
 
     override suspend fun changedSince(parent: String, collection: String, field: String, since: Long): Pulled =
         answer("since $parent/$collection") { Pulled(collections["$parent/$collection"].orEmpty(), readTime) }
@@ -255,6 +259,9 @@ internal class FakeSharedDao : SharedDao {
     }
 
     override suspend fun repeat(id: String): RepeatRuleEntity? = repeats[id]
+
+    override suspend fun newestDateAfter(prefix: String): String? =
+        versions.values.map { it.expenseId }.filter { it.startsWith(prefix) }.maxOfOrNull { it.removePrefix(prefix) }
 
     override suspend fun upsertRepeat(rule: RepeatRuleEntity) {
         repeats[rule.id] = rule
@@ -475,8 +482,10 @@ internal class FakeAuth(uid: String) : AuthRepository {
     override val available: Boolean = true
     override val account = MutableStateFlow<Account>(signedIn)
 
-    // No auth_time in it, so the session check decides "this phone holds it" without a request.
-    override suspend fun idToken(): String = "token"
+    /** This phone's sign-in, as the token's `auth_time` seconds. */
+    var authTime: Long? = SIGNED_IN_AT
+
+    override suspend fun idToken(): String = authTime?.let(::idTokenAt) ?: "token"
 
     override suspend fun signIn(token: ProviderToken): Account.SignedIn = error("unused")
 
@@ -491,4 +500,15 @@ internal class FakeAuth(uid: String) : AuthRepository {
 
 internal class TestClock(var nowMillis: Long) : Clock {
     override fun now(): Instant = Instant.fromEpochMilliseconds(nowMillis)
+}
+
+/** The `auth_time` [FakeAuth] signs in with. */
+internal const val SIGNED_IN_AT = 1_700_000_000L
+
+/** An unsigned ID token whose payload carries [authTime], as Firebase's does. */
+internal fun idTokenAt(authTime: Long): String {
+    val base64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT)
+    val header = base64.encode("""{"alg":"RS256"}""".encodeToByteArray())
+    val payload = base64.encode("""{"auth_time":$authTime}""".encodeToByteArray())
+    return "$header.$payload.sig"
 }

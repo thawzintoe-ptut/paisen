@@ -10,6 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.time.Instant
 
 /**
@@ -278,6 +279,20 @@ class SlipParserTest {
         val read = complete("LAWSON108_P3793 THE LIVIN", "Transaction ID:", "016200000003BPM00003", "Amount:", "50.00 Baht")
 
         assertEquals("MR. SOMCHAI J", read.sender)
+    }
+
+    @Test
+    fun `the recipient account is kept as its last four digits and the sender account is not`() {
+        val read = assertIs<SlipRead.Complete>(SlipParser.parse(bannerSlip("MR. SOMCHAI JAIDEE", "KBank", "xxx-x-x" + RECIPIENT_LAST_FOUR + "-x")))
+
+        assertEquals("••$RECIPIENT_LAST_FOUR", read.recipientAccount)
+    }
+
+    @Test
+    fun `a slip whose recipient prints no account keeps none`() {
+        val read = complete("LAWSON108_P3793 THE LIVIN", "Transaction ID:", "016200000003BPM00003", "Amount:", "50.00 Baht")
+
+        assertNull(read.recipientAccount)
     }
 
     @Test

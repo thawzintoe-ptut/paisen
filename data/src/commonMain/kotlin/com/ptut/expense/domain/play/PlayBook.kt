@@ -16,6 +16,8 @@ interface PlayBook {
     val stamps: Flow<List<Stamp>>
     val goals: Flow<List<Goal>>
     val goalDays: Flow<List<GoalDay>>
+    val deposits: Flow<List<GoalDeposit>>
+    val seenAccounts: Flow<List<SeenAccount>>
 
     /** #85, #88: the first sighting of an empty tray on [day], and that day's stamp. False when already cleared. */
     suspend fun markCleared(day: LocalDate, atEpochMillis: Long, stamp: StampKind): Boolean
@@ -51,4 +53,16 @@ interface PlayBook {
 
     /** #104: Count it or Not today for [GoalDay.day]. The first answer for a day stands. */
     suspend fun answerDay(day: GoalDay)
+
+    /** J02: money into a jar. False when a deposit with this id is there already. */
+    suspend fun deposit(deposit: GoalDeposit): Boolean
+
+    /** J02: takes back a deposit the reader said they made; one PaiSeN read from a slip stays. */
+    suspend fun removeSaidDeposit(id: String)
+
+    /** J04: where the jar's money goes, asked once. */
+    suspend fun chooseAccount(goalId: String, account: String)
+
+    /** J04: a slip moved money to one of the reader's own accounts; the count grows by one. */
+    suspend fun seeAccount(mask: String, holder: String, atEpochMillis: Long)
 }

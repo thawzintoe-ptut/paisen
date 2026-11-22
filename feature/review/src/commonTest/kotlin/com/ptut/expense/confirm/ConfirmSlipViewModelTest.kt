@@ -48,9 +48,11 @@ import com.ptut.expense.ui.ToastTone
 import com.ptut.expense.ui.press
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDateTime
@@ -80,12 +82,16 @@ private fun ConfirmSlipViewModel(
     offersPlanned: Boolean = false,
     newId: () -> String,
     payDebt: PaySlipDebtUseCase = PaySlipDebtUseCase(),
+    categoryUsage: Flow<Map<String, Int>> = flowOf(emptyMap()),
+    suggestCategory: (String) -> Category? = { null },
 ): ConfirmSlipViewModel = ConfirmSlipViewModel(
     slipId = slipId,
     getSlip = GetQueuedSlipUseCase(ledger),
     observeSlip = ObserveSlipInQueueUseCase(ledger),
     toasts = toasts,
     subCategories = subCategories,
+    categoryUsage = categoryUsage,
+    suggestCategory = suggestCategory,
     findDebts = FindSlipDebtsUseCase(enabled = true, owed = debtsFor),
     clock = clock,
     offersPlanned = offersPlanned,
@@ -144,6 +150,54 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         val corrected = viewModel.uiState.value.entry.press(BACKSPACE).press("9")
 
         assertEquals("485.09", corrected.display)
+    }
+
+    /** Hick's law: the shop's own category leads the three chips and the line under them says why. */
+    @Test
+    fun `a category picked from the shop name leads the chips until the reader changes it`() = runTest {
+        val viewModel = viewModel(
+            slip(amount = Satang(48_500)),
+            categoryUsage = flowOf(mapOf("transport" to 5, "groceries" to 2)),
+            suggestCategory = { shop -> food.takeIf { shop.startsWith("MK") } },
+        )
+        runCurrent()
+
+        val suggested = viewModel.uiState.value
+        assertEquals(food, suggested.category)
+        assertEquals(listOf("food", "transport", "groceries"), suggested.chips.shown.map { it.id })
+        assertEquals(3, suggested.chips.moreCount)
+        assertEquals("Picked from the shop name. Change it if it's wrong.", suggested.suggestionNote)
+
+        viewModel.choose(groceries)
+
+        val changed = viewModel.uiState.value
+        assertEquals(groceries, changed.category)
+        assertNull(changed.suggestionNote)
+        assertEquals("groceries", changed.chips.shown.first().id)
+    }
+
+    @Test
+    fun `with no suggestion nothing is picked and the chips follow use`() = runTest {
+        val viewModel = viewModel(slip(amount = Satang(48_500)), categoryUsage = flowOf(mapOf("bills" to 4)))
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertNull(state.category)
+        assertNull(state.suggestionNote)
+        assertEquals("bills", state.chips.shown.first().id)
+    }
+
+    @Test
+    fun `the chips reorder when the usage arrives after the screen opened`() = runTest {
+        val usage = MutableStateFlow<Map<String, Int>>(emptyMap())
+        val viewModel = viewModel(slip(amount = Satang(48_500)), categoryUsage = usage)
+        val before = viewModel.uiState.value.chips.shown.first().id
+
+        usage.value = mapOf("bills" to 4)
+        runCurrent()
+
+        assertEquals("bills", viewModel.uiState.value.chips.shown.first().id)
+        assertTrue(before != "bills")
     }
 
     @Test
@@ -609,6 +663,8 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         debts: List<SlipDebt> = emptyList(),
         recorded: MutableList<PaymentDraft> = mutableListOf(),
         recordPayment: suspend (PaymentDraft) -> Unit = { recorded += it },
+        categoryUsage: Flow<Map<String, Int>> = flowOf(emptyMap()),
+        suggestCategory: (String) -> Category? = { null },
     ) = ConfirmSlipViewModel(
         slipId = slip.id,
         ledger = FakeLedger(listOf(slip)),
@@ -616,6 +672,8 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         toasts = toasts,
         discards = SlipDiscards(SlipImporter(source, FakeSlipTextReader(), store), toasts, CoroutineScope(Dispatchers.Main)) { Duration.ZERO },
         subCategories = subCategories,
+        categoryUsage = categoryUsage,
+        suggestCategory = suggestCategory,
         debtsFor = { amount, _ -> debts.filter { it.amount == amount } },
         payDebt = PaySlipDebtUseCase(recordPayment),
         clock = object : Clock {

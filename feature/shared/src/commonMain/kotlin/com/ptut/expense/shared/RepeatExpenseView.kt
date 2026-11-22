@@ -3,7 +3,6 @@ package com.ptut.expense.shared
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,7 +50,6 @@ import com.ptut.expense.ui.sky.AskBeforeLeaving
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
-import com.ptut.expense.ui.sky.SkyChip
 import com.ptut.expense.ui.sky.SkyChoiceMark
 import com.ptut.expense.ui.sky.SkyChoiceRow
 import com.ptut.expense.ui.sky.SkyDiscardSheet
@@ -70,7 +68,8 @@ import kotlin.time.Instant
 
 data class RepeatExpenseActions(
     val onBack: () -> Unit,
-    val onKind: (RepeatKind) -> Unit,
+    /** Kept for the shell's wiring; the screen no longer picks a kind. */
+    val onKind: (RepeatKind) -> Unit = {},
     val onAmount: (String) -> Unit,
     val onFrequency: (RepeatFrequency) -> Unit,
     val onStart: (LocalDate) -> Unit,
@@ -80,11 +79,13 @@ data class RepeatExpenseActions(
     /** The notification answer comes with it: a refusal still saves, with the reminder off (#182). */
     val onSave: (allowed: Boolean) -> Unit,
     val onStop: () -> Unit,
+    /** The typed name, "Rent" or "Netflix": the name already says what it is. */
+    val onDescription: (String) -> Unit = {},
 )
 
 /**
- * #185 (p33): "Rent · Ari flat", the amount at hero size, who paid and how it splits, then How
- * often, the type chips, On, Ends, the reminder, NEXT THREE, and SAVE · REPEATS MONTHLY.
+ * #185 (p33): "Rent · Ari flat", the amount at hero size, who paid and how it splits, the name,
+ * then How often, On, Ends, the reminder, NEXT THREE, and SAVE · REPEATS MONTHLY.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -141,6 +142,13 @@ fun RepeatExpenseView(uiState: RepeatExpenseUiState, actions: RepeatExpenseActio
                     .padding(Spacing.xs),
             )
 
+            SharedTextField(
+                value = form.description,
+                onValueChange = actions.onDescription,
+                label = words.name,
+                modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
+            )
+
             Label(words.howOften)
             SkySegmentedToggle(
                 options = frequencies.map { it.label() },
@@ -148,15 +156,6 @@ fun RepeatExpenseView(uiState: RepeatExpenseUiState, actions: RepeatExpenseActio
                 onSelect = { actions.onFrequency(frequencies[it]) },
                 modifier = Modifier.fillMaxWidth(),
             )
-            FlowRow(
-                modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
-            ) {
-                RepeatKind.entries.forEach { kind ->
-                    SkyChip(label = kind.label(), selected = kind == form.kind, onClick = { actions.onKind(kind) })
-                }
-            }
 
             Column(
                 modifier = Modifier
@@ -223,7 +222,7 @@ fun RepeatExpenseView(uiState: RepeatExpenseUiState, actions: RepeatExpenseActio
         // #218: no Undo follows a stop, so it is asked first.
         SHEET_STOP -> SkyBottomSheet(onDismissRequest = { sheet = null }) {
             Text(
-                words.stopAsk(form.description.ifBlank { form.kind.label() }),
+                words.stopAsk(form.description.ifBlank { words.title }),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(top = Spacing.sm),

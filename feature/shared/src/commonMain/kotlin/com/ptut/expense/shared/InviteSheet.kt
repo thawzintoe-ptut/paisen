@@ -11,6 +11,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,14 +29,14 @@ import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.sync.sharedDataRegion
 import com.ptut.expense.ui.sky.SkyBottomSheet
 import com.ptut.expense.ui.sky.SkyButton
-import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyProgress
 import com.ptut.expense.ui.sky.SkyTextAction
 import io.github.alexzhirkevich.qrose.rememberQrCodePainter
 
 /**
- * #190: share the link (mostly to LINE), show its QR for someone beside you, or copy it. The phone
- * camera opens the link, so no scanner is built in. Only the creator renews or switches it off.
+ * #190: share the link (mostly to LINE), show its QR for someone beside you, or copy the code. The
+ * phone camera opens the link, so no scanner is built in. Link options holds the link itself and,
+ * for the creator, renew and switch off.
  */
 @Composable
 fun InviteSheet(
@@ -54,6 +58,7 @@ fun InviteSheet(
 
     @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
+    var options by rememberSaveable { mutableStateOf(false) }
     SkyBottomSheet(onDismissRequest = onDismiss) {
         Text(text.invitePeople, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.sm))
         when {
@@ -130,14 +135,19 @@ fun InviteSheet(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Row(Modifier.fillMaxWidth().padding(top = Spacing.md), horizontalArrangement = Arrangement.spacedBy(Spacing.s12)) {
-                    SkyButton(words.copyLink, onClick = { clipboard.setText(AnnotatedString(invite.link)) }, kind = SkyButtonKind.Outline, modifier = Modifier.weight(1f))
-                    SkyButton(words.shareLink, onClick = { share(words.message(groupName, invite.link)) }, modifier = Modifier.weight(1.4f))
+                SkyButton(words.shareLink, onClick = { share(words.message(groupName, invite.link)) }, modifier = Modifier.fillMaxWidth().padding(top = Spacing.md))
+                Row(Modifier.fillMaxWidth().padding(top = Spacing.xs), horizontalArrangement = Arrangement.SpaceBetween) {
+                    SkyTextAction(label = words.copyCode, onClick = { clipboard.setText(AnnotatedString(invite.code)) }, enabled = true)
+                    SkyTextAction(label = words.linkOptions, onClick = { options = !options }, enabled = true)
                 }
-                if (isCreator) {
-                    Row(Modifier.fillMaxWidth().padding(top = Spacing.sm), horizontalArrangement = Arrangement.SpaceBetween) {
-                        SkyTextAction(label = words.newLink, onClick = onNewLink, enabled = !action.working)
-                        SkyTextAction(label = words.switchOff, onClick = onSwitchOff, enabled = !action.working)
+                if (options) {
+                    // The rarer controls, one step down: the link itself, and the creator's renew and switch off.
+                    SkyTextAction(label = words.copyLink, onClick = { clipboard.setText(AnnotatedString(invite.link)) }, enabled = true)
+                    if (isCreator) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            SkyTextAction(label = words.newLink, onClick = onNewLink, enabled = !action.working)
+                            SkyTextAction(label = words.switchOff, onClick = onSwitchOff, enabled = !action.working)
+                        }
                     }
                 }
                 action.error?.let {

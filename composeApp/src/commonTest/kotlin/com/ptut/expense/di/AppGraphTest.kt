@@ -167,6 +167,8 @@ private val PARAMETER_SHAPES: List<Array<Any>> = listOf(
     arrayOf(ANY_ID, false),
     arrayOf(ANY_ID, ANY_ID),
     arrayOf(ANY_ID, ANY_ID, ANY_ID),
+    // The goal jar: its id, a trip's name and amount, and whether it opens on Put money in.
+    arrayOf(ANY_ID, ANY_ID, ANY_ID, false),
     arrayOf(ANY_ID, ANY_ID, ANY_ID, ANY_ID, ANY_ID),
     // A tip screen takes which tip it shows.
     arrayOf(PlayTip.entries.first()),

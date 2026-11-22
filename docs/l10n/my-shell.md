@@ -45,3 +45,12 @@ The design's own words used here: သိမ်းမယ်, ဖျက်မယ�
 | This is not a file this app can read | ဒီဖိုင်ကို ဒီအက်ပ်က ဖတ်လို့ မရဘူး | PhrasesCopy.kt `backupNotReadable` |
 | This file was written by a different version of the app (format N) | ဒီဖိုင်ကို တခြား ဗားရှင်းက ရေးထားတာ (format N) | PhrasesCopy.kt `backupOtherVersion` |
 | The file holds an unknown FIELD: VALUE | ဖိုင်ထဲမှာ မသိတဲ့ FIELD ပါတယ်: VALUE | PhrasesCopy.kt `backupUnknownValue` |
+
+## Fewer choices at each step (22 Nov, not yet checked)
+
+The category row shows three chips and a More chip; the sheet it opens lists every category.
+
+| English | Burmese | Where |
+|---|---|---|
+| More | နောက်ထပ် | CommonCopy.kt `more` |
+| {n} more categories (TalkBack, the More chip) | နောက်ထပ် အမျိုးအစား {n} ခု | CommonCopy.kt `moreCategories` |

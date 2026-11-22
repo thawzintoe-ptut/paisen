@@ -34,5 +34,8 @@ fun SettingsAction.opensScreen(): Boolean = when (this) {
     SettingsAction.Play,
     SettingsAction.GoalJar,
     SettingsAction.Advanced,
+    // Sheets over Settings, with no switch on the row, so the row's tap opens them.
+    SettingsAction.SharedAccount,
+    SettingsAction.Help,
     -> true
 }

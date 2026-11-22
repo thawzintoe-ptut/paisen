@@ -6,6 +6,12 @@ import com.ptut.expense.domain.ImportFailureKind
 import com.ptut.expense.domain.ImportOutcome
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.play.DepositSource
+import com.ptut.expense.domain.play.FakePlayBook
+import com.ptut.expense.domain.play.Goal
+import com.ptut.expense.domain.play.JarInbox
+import com.ptut.expense.domain.play.PlayBookJarInbox
+import com.ptut.expense.domain.play.SeenAccount
 import com.ptut.expense.domain.rules.MerchantRule
 import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.QueuedSlipEntry
@@ -21,6 +27,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
+import kotlinx.datetime.LocalDate
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
@@ -36,6 +43,14 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 class SlipImporterTest {
+
+    private companion object {
+        /** Split so no fixture line reads as an account number (NFR-5). */
+        const val SAVINGS_LAST_FOUR = "48" + "21"
+        const val OTHER_LAST_FOUR = "09" + "17"
+
+        fun maskedAccount(lastFour: String) = "xxx-x-x" + lastFour + "-x"
+    }
 
     private val lawson = MerchantRule("LAWSON108_P3793 THE LIVIN", "groceries")
     private val now = Instant.fromEpochMilliseconds(1_755_000_000_000)
@@ -65,12 +80,14 @@ class SlipImporterTest {
         store: InMemoryImportStore,
         clock: Clock = FixedClock(now),
         owner: SlipOwnerBook = SlipOwnerBook.Unknown,
+        jar: JarInbox = JarInbox.None,
     ) = SlipImporter(
         source = source,
         reader = FakeSlipTextReader(),
         store = store,
         clock = clock,
         owner = owner,
+        jar = jar,
         // The test's own dispatcher, so the scanning flag and the journal are read in step.
         work = EmptyCoroutineContext,
         newId = { "id-${store.filed.size}-${store.runs.size}" },
@@ -221,6 +238,91 @@ class SlipImporterTest {
         val filed = store.filed.single()
         assertEquals(Direction.Income, filed.direction)
         assertEquals("income", filed.categoryId)
+    }
+
+    @Test
+    fun `a transfer to the savings account of the jar fills the jar and never reaches the ledger`() = runTest {
+        val source = FakeSlipSource()
+        val store = InMemoryImportStore(listOf(lawson))
+        val owner = OwnerInMemory(SlipOwner(name = "MR. SOMCHAI J"))
+        val goal = Goal("jar", "Trip", Satang.ofMinorUnits(1_200_000), "THB", LocalDate(2026, 8, 1), createdAtEpochMillis = 0, savingsAccount = "••4821")
+        val book = FakePlayBook(goals = listOf(goal))
+        source.add("save.jpg", received("MR. SOMCHAI J", "MR. SOMCHAI JAIDEE", "016200000012TRF00012", toAccount = maskedAccount(SAVINGS_LAST_FOUR)), capturedAt())
+
+        val summary = importer(source, store, owner = owner, jar = PlayBookJarInbox(book)).run()
+
+        val deposit = book.deposits.value.single()
+        assertEquals(Satang.ofMinorUnits(50_000), deposit.amount)
+        assertEquals(DepositSource.Slip, deposit.source)
+        assertEquals("••4821", deposit.account)
+        assertEquals(1, summary.filed)
+        assertTrue(store.filed.isEmpty())
+        assertTrue(store.queued.isEmpty())
+        assertEquals("slip:016200000012TRF00012", deposit.id)
+        assertEquals(SeenAccount("••4821", "MR. SOMCHAI JAIDEE", 1, now.toEpochMilliseconds()), book.seenAccounts.value.single())
+        assertNull(source.bytesOf("save.jpg"))
+    }
+
+    @Test
+    fun `before your name is learned a transfer from you to you still fills the jar`() = runTest {
+        val source = FakeSlipSource()
+        val store = InMemoryImportStore(listOf(lawson))
+        val goal = Goal("jar", "Trip", Satang.ofMinorUnits(1_200_000), "THB", LocalDate(2026, 8, 1), createdAtEpochMillis = 0, savingsAccount = "••4821")
+        val book = FakePlayBook(goals = listOf(goal))
+        source.add("save.jpg", received("MR. SOMCHAI J", "MR. SOMCHAI JAIDEE", "016200000016TRF00016", toAccount = maskedAccount(SAVINGS_LAST_FOUR)), capturedAt())
+
+        importer(source, store, jar = PlayBookJarInbox(book)).run()
+
+        assertEquals(1, book.deposits.value.size)
+        assertEquals("••4821", book.seenAccounts.value.single().mask)
+    }
+
+    @Test
+    fun `a second picture of one transfer fills the jar once`() = runTest {
+        val source = FakeSlipSource()
+        val store = InMemoryImportStore(listOf(lawson))
+        val owner = OwnerInMemory(SlipOwner(name = "MR. SOMCHAI J"))
+        val goal = Goal("jar", "Trip", Satang.ofMinorUnits(1_200_000), "THB", LocalDate(2026, 8, 1), createdAtEpochMillis = 0, savingsAccount = "••4821")
+        val book = FakePlayBook(goals = listOf(goal))
+        val transfer = received("MR. SOMCHAI J", "MR. SOMCHAI JAIDEE", "016200000014TRF00014", toAccount = maskedAccount(SAVINGS_LAST_FOUR))
+        source.add("save.jpg", transfer, capturedAt())
+        source.add("save-again.jpg", transfer + "\nVerify Slip", capturedAt())
+
+        importer(source, store, owner = owner, jar = PlayBookJarInbox(book)).run()
+
+        assertEquals(1, book.deposits.value.size)
+        assertTrue(store.filed.isEmpty())
+    }
+
+    @Test
+    fun `paying a shop whose account ends in the same four digits stays spending`() = runTest {
+        val source = FakeSlipSource()
+        val store = InMemoryImportStore(listOf(lawson, MerchantRule("FOODLAND RAMA IV", "groceries")))
+        val owner = OwnerInMemory(SlipOwner(name = "MR. SOMCHAI J"))
+        val goal = Goal("jar", "Trip", Satang.ofMinorUnits(1_200_000), "THB", LocalDate(2026, 8, 1), createdAtEpochMillis = 0, savingsAccount = "••4821")
+        val book = FakePlayBook(goals = listOf(goal))
+        source.add("shop.jpg", received("MR. SOMCHAI J", "FOODLAND RAMA IV", "016200000015TRF00015", toAccount = maskedAccount(SAVINGS_LAST_FOUR)), capturedAt())
+
+        importer(source, store, owner = owner, jar = PlayBookJarInbox(book)).run()
+
+        assertTrue(book.deposits.value.isEmpty())
+        assertTrue(book.seenAccounts.value.isEmpty())
+        assertEquals("groceries", store.filed.single().categoryId)
+    }
+
+    @Test
+    fun `a transfer to your own account that is not the jar one is noted and still asked about`() = runTest {
+        val source = FakeSlipSource()
+        val store = InMemoryImportStore(listOf(lawson))
+        val owner = OwnerInMemory(SlipOwner(name = "MR. SOMCHAI J"))
+        val book = FakePlayBook()
+        source.add("save.jpg", received("MR. SOMCHAI J", "MR. SOMCHAI JAIDEE", "016200000013TRF00013", toAccount = maskedAccount(OTHER_LAST_FOUR)), capturedAt())
+
+        importer(source, store, owner = owner, jar = PlayBookJarInbox(book)).run()
+
+        assertEquals("••0917", book.seenAccounts.value.single().mask)
+        assertTrue(book.deposits.value.isEmpty())
+        assertEquals(1, store.queued.size)
     }
 
     @Test
@@ -482,7 +584,7 @@ class SlipImporterTest {
     }
 
     /** #26: a slip someone else's K PLUS saved, sent to you as a picture. */
-    private fun received(from: String, to: String, reference: String, amount: String = "500.00") = """
+    private fun received(from: String, to: String, reference: String, amount: String = "500.00", toAccount: String = "xxx-x-xxxxx-x") = """
         Transfer Completed
         15 Aug 26  9:25 AM
         $from
@@ -490,7 +592,7 @@ class SlipImporterTest {
         xxx-x-xxxxx-x
         $to
         KBank
-        xxx-x-xxxxx-x
+        $toAccount
         Transaction ID:
         $reference
         Amount:

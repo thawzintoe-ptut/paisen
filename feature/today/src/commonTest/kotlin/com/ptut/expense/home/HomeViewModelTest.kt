@@ -28,10 +28,11 @@ import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.ledger.ObserveImportRunsUseCase
 import com.ptut.expense.domain.ledger.ObserveLastImportUseCase
 import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
-import com.ptut.expense.domain.play.AnswerGoalDayUseCase
 import com.ptut.expense.domain.play.DayMark
+import com.ptut.expense.domain.play.DepositSource
 import com.ptut.expense.domain.play.FakePlayBook
 import com.ptut.expense.domain.play.Goal
+import com.ptut.expense.domain.play.GoalDeposit
 import com.ptut.expense.domain.play.ObservePlayOnUseCase
 import com.ptut.expense.domain.play.ObserveTodayPlayUseCase
 import com.ptut.expense.domain.play.PlayDay
@@ -44,7 +45,6 @@ import com.ptut.expense.domain.settings.appSettings
 import com.ptut.expense.domain.slip.ObserveQueuedSlipsUseCase
 import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.domain.today.GetImportHealthUseCase
-import com.ptut.expense.domain.today.HomePeriod
 import com.ptut.expense.domain.today.ObserveScanningUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.BurmeseCopy
@@ -483,26 +483,6 @@ class HomeViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun theWeekTabShowsTheTargetLineInPlainWords() = runTest {
-        val wednesday = LocalDateTime(2026, 11, 18, 12, 0).toInstant(BangkokTime)
-        val viewModel = viewModel(
-            transactions = emptyList(),
-            saved = listOf(saved("t1", at(2026, 11, 16, 12, 0), filed = 0L).copy(amount = Satang(190_000))),
-            now = wednesday,
-            target = WeeklyTarget("food", Satang(250_000)),
-        )
-        viewModel.show(HomePeriod.Week)
-
-        viewModel.uiState.test {
-            var state = awaitItem()
-            while (state !is HomeUiState.Success || state.period != HomePeriod.Week) state = awaitItem()
-            val target = state.target
-            assertEquals("Food & drink: ฿1,900 of ฿2,500 this week", target?.line)
-            assertEquals(0.76f, target?.fraction)
-        }
-    }
-
-    @Test
     fun mondaysCardSaysWhetherLastWeekStayedUnderTheTarget() = runTest {
         val viewModel = viewModel(
             transactions = emptyList(),
@@ -910,7 +890,7 @@ class HomeViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun theComparedCardRisesOverAUsualFriday() = runTest {
+    fun theComparedLineRisesOverAUsualFriday() = runTest {
         val fridays = listOf(
             spent("f1", at(2026, 7, 24, 12, 0), Satang(10_000)),
             spent("f2", at(2026, 7, 31, 12, 0), Satang(10_000)),
@@ -921,6 +901,7 @@ class HomeViewModelTest : ViewModelTest() {
 
         viewModel.uiState.test {
             val compared = assertNotNull(awaitSuccess().compared)
+            assertEquals("฿55 more than a usual Friday", compared.line)
             assertEquals("trending_up", compared.glyph)
         }
     }
@@ -935,26 +916,67 @@ class HomeViewModelTest : ViewModelTest() {
         val viewModel = viewModel(transactions = today)
 
         viewModel.uiState.test {
-            assertEquals(listOf("Food & drink", "Groceries", "Transport"), awaitSuccess().topCategories.map { it.name })
+            val top = awaitSuccess().topCategories
+            assertEquals(listOf("Food & drink", "Groceries", "Transport"), top.map { it.name })
+            assertEquals(listOf("฿500", "฿200", "฿50"), top.map { it.amount })
         }
     }
 
     @Test
-    fun theMonthTabCountsTheBangkokMonthToTodayOnly() = runTest {
-        val rows = listOf(
-            spent("m1", at(2026, 8, 1, 0, 30), Satang(10_000)),
-            spent("m2", at(2026, 8, 14, 9, 0), Satang(20_000)),
-            spent("m3", at(2026, 7, 31, 23, 30), Satang(40_000)),
-            spent("m4", at(2026, 8, 20, 9, 0), Satang(80_000)),
+    fun theJarShowsWhileTheImportIsStaleAndSlipsWait() = runTest {
+        val book = FakePlayBook(days = listOf(cleared(2026, 8, 12), cleared(2026, 8, 13)), goals = listOf(jar))
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            sinceLastImportMillis = 4L * 24 * 60 * 60 * 1000,
+            queued = listOf(slip("q1", "Cafe", ReviewReason.NewMerchant)),
+            play = PlayFixture(book),
         )
-        val viewModel = viewModel(transactions = emptyList(), saved = rows)
-        viewModel.show(HomePeriod.Month)
 
         viewModel.uiState.test {
-            var state = awaitSuccess()
-            while (state.period != HomePeriod.Month) state = awaitSuccess()
-            assertEquals(Satang(30_000), state.summary.expense)
-            assertTrue(state.heroLabel.startsWith(EnglishCopy.home.spentThisMonth), state.heroLabel)
+            val state = awaitSuccess()
+            assertNotNull(state.review)
+            assertNotNull(state.jar)
+            assertNotNull(state.play)
+            assertEquals("A trip", (state.nextStep as NextStepUiModel.Jar).jar.name)
+        }
+    }
+
+    @Test
+    fun slipsToCheckComeBeforeTheJar() = runTest {
+        val book = FakePlayBook(days = listOf(cleared(2026, 8, 12), cleared(2026, 8, 13)), goals = listOf(jar))
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            queued = listOf(slip("q1", "Cafe", ReviewReason.NewMerchant)),
+            play = PlayFixture(book),
+        )
+
+        viewModel.uiState.test {
+            val state = awaitSuccess()
+            assertNotNull(state.jar)
+            assertEquals("1 slip to check", (state.nextStep as NextStepUiModel.Slips).review.title)
+        }
+    }
+
+    @Test
+    fun theJarComesBeforeTheRun() = runTest {
+        val book = FakePlayBook(days = listOf(cleared(2026, 8, 12), cleared(2026, 8, 13)), goals = listOf(jar))
+        val viewModel = viewModel(transactions = emptyList(), play = PlayFixture(book))
+
+        viewModel.uiState.test {
+            val state = awaitSuccess()
+            assertNotNull(state.play)
+            assertEquals("A trip", (state.nextStep as NextStepUiModel.Jar).jar.name)
+        }
+    }
+
+    @Test
+    fun theRunIsTheLastNextStepAndNothingShowsWithoutOne() = runTest {
+        val book = FakePlayBook(days = listOf(cleared(2026, 8, 12), cleared(2026, 8, 13)))
+        viewModel(transactions = emptyList(), play = PlayFixture(book)).uiState.test {
+            assertEquals("2 days", (awaitSuccess().nextStep as NextStepUiModel.Play).strip.runTitle)
+        }
+        viewModel(transactions = emptyList()).uiState.test {
+            assertNull(awaitSuccess().nextStep)
         }
     }
 
@@ -1017,21 +1039,14 @@ class HomeViewModelTest : ViewModelTest() {
                         },
                     ),
                     transactions = ObserveTransactionsUseCase(ledger),
-                    work = Dispatchers.Unconfined,
-                )
-            },
-            answerGoalDay = play?.let { fixture ->
-                AnswerGoalDayUseCase(
-                    fixture.book,
-                    ObserveTransactionsUseCase(ledger),
-                    GetHomeTodayUseCase(object : Clock {
-                        override fun now(): Instant = now
-                    }),
                     clock = object : Clock {
                         override fun now(): Instant = now
                     },
+                    work = Dispatchers.Unconfined,
                 )
             },
+            deposits = play?.book?.deposits ?: flowOf(emptyList()),
+            goals = play?.book?.goals ?: flowOf(emptyList()),
         )
     }
 
@@ -1068,57 +1083,55 @@ class HomeViewModelTest : ViewModelTest() {
         spent("f2", at(2026, 7, 31, 12, 0), Satang(10_000)),
         spent("f3", at(2026, 8, 7, 12, 0), Satang(10_000)),
     )
+    private val AFTER_NOON = LocalDateTime(2026, 8, 14, 12, 5).toInstant(BangkokTime).toEpochMilliseconds()
+    private val FRIDAY_EVENING = LocalDateTime(2026, 8, 14, 20, 0).toInstant(BangkokTime)
     private val lightFriday = listOf(spent("f4", at(2026, 8, 14, 10, 0), Satang(2_000)))
 
     @Test
-    fun aDayUnderItsUsualOffersCountItAndCountingFillsTheJarWithAPress() = runTest {
+    fun aDayUnderItsUsualOffersTheLeftoverOnOneButtonInTheEvening() = runTest {
         val book = FakePlayBook(goals = listOf(jar))
-        val viewModel = viewModel(transactions = lightFriday, saved = usualFridays, play = PlayFixture(book), playMotion = true)
+        val viewModel = viewModel(transactions = lightFriday, saved = usualFridays, play = PlayFixture(book), now = FRIDAY_EVENING)
 
         viewModel.uiState.test {
             val card = assertNotNull(awaitSuccess().jar)
-            assertEquals("฿80 under a usual Friday", card.under?.title)
-            assertEquals(false, card.pressed)
-
-            viewModel.answerDay("g1", count = true)
-            var state = awaitSuccess()
-            while (state.jar?.under != null || state.jar?.pressed != true) state = awaitSuccess()
-            val counted = assertNotNull(state.jar)
-            assertEquals("฿80", "${counted.saved.symbol}${counted.saved.whole}")
-            assertEquals(Satang(10_000), book.goalDays.value.single().usual)
-            cancelAndIgnoreRemainingEvents()
+            assertEquals("You spent ฿80 less than a usual Friday.", card.nudge)
+            assertEquals("Put ฿80 in the jar", card.putIn)
+            assertEquals("g1", card.goalId)
+            assertNull(card.plan)
         }
     }
 
     @Test
-    fun notTodayHidesTheCardAndCountsNothing() = runTest {
+    fun aMorningUnderItsUsualOffersNoLeftoverYet() = runTest {
         val book = FakePlayBook(goals = listOf(jar))
-        val viewModel = viewModel(transactions = lightFriday, saved = usualFridays, play = PlayFixture(book), playMotion = true)
-
-        viewModel.uiState.test {
-            assertNotNull(awaitSuccess().jar?.under)
-
-            viewModel.answerDay("g1", count = false)
-            var state = awaitSuccess()
-            while (state.jar?.under != null) state = awaitSuccess()
-            assertEquals(false, state.jar?.pressed)
-            assertNull(book.goalDays.value.single().usual)
-            cancelAndIgnoreRemainingEvents()
+        viewModel(transactions = lightFriday, saved = usualFridays, play = PlayFixture(book)).uiState.test {
+            val card = assertNotNull(awaitSuccess().jar)
+            assertNull(card.putIn)
+            assertNull(card.nudge)
         }
     }
 
     @Test
-    fun withPlayMotionOffCountingDoesNotPress() = runTest {
+    fun onlyASlipDepositThatLandsWhileTodayIsUpRaisesTheJarToastAndSeeOpensTheJar() = runTest {
         val book = FakePlayBook(goals = listOf(jar))
-        val viewModel = viewModel(transactions = lightFriday, saved = usualFridays, play = PlayFixture(book), playMotion = false)
+        val toasts = ToastMessages()
+        val viewModel = viewModel(transactions = lightFriday, saved = usualFridays, play = PlayFixture(book), toasts = toasts)
 
         viewModel.uiState.test {
             awaitSuccess()
-            viewModel.answerDay("g1", count = true)
+            book.deposit(GoalDeposit("said", "g1", Satang(5_000), LocalDate(2026, 8, 14), atEpochMillis = AFTER_NOON, source = DepositSource.Said))
+            book.deposit(GoalDeposit("restored", "g1", Satang(7_000), LocalDate(2026, 8, 1), atEpochMillis = 1L, source = DepositSource.Slip, account = "••4821"))
+            book.deposit(GoalDeposit("slip:ref", "g1", Satang(22_000), LocalDate(2026, 8, 14), atEpochMillis = AFTER_NOON, source = DepositSource.Slip, account = "••4821"))
             var state = awaitSuccess()
-            while (state.jar?.under != null) state = awaitSuccess()
-            assertEquals(false, state.jar?.pressed)
+            while (state.jar?.saved?.whole != "340") state = awaitSuccess()
             cancelAndIgnoreRemainingEvents()
+        }
+        toasts.messages.test {
+            val toast = awaitItem()
+            assertEquals("฿220 went into your A trip jar", toast.text)
+            toast.action?.onAction?.invoke()
+            assertEquals("g1", viewModel.jarRequests.value)
+            expectNoEvents()
         }
     }
 
@@ -1127,7 +1140,7 @@ class HomeViewModelTest : ViewModelTest() {
         val heavy = listOf(spent("f4", at(2026, 8, 14, 10, 0), Satang(30_000)))
         viewModel(transactions = heavy, saved = usualFridays, play = PlayFixture(FakePlayBook(goals = listOf(jar)))).uiState.test {
             val card = assertNotNull(awaitSuccess().jar)
-            assertNull(card.under)
+            assertNull(card.putIn)
         }
     }
 
@@ -1189,7 +1202,7 @@ class HomeViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun theCoachLineTakesComparedsPlaceAndPlayOffGivesComparedBack() = runTest {
+    fun theCoachLineAndTheComparedLineBothShowAndPlayOffKeepsCompared() = runTest {
         val fridays = listOf(
             spent("f1", at(2026, 7, 24, 12, 0), Satang(10_000)),
             spent("f2", at(2026, 7, 31, 12, 0), Satang(10_000)),
@@ -1201,7 +1214,7 @@ class HomeViewModelTest : ViewModelTest() {
             val state = awaitSuccess()
             assertEquals("Food & drink: ฿400 more than a usual Friday", state.coach?.text)
             assertEquals("food", state.coach?.categoryId)
-            assertNull(state.compared)
+            assertEquals("฿400 more than a usual Friday", state.compared?.line)
         }
         viewModel(transactions = today, saved = fridays, play = PlayFixture(choices = PlayChoices(on = false))).uiState.test {
             val state = awaitSuccess()
@@ -1248,7 +1261,7 @@ class HomeViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun todayShowsOneInsightWhenTheWeeklyNoteCoachAndComparedAllHaveOne() = runTest {
+    fun mondaysWeeklyNoteStandsInForTheCoachLine() = runTest {
         val mondays = listOf(
             spent("m1", at(2026, 10, 26, 12, 0), Satang(10_000)),
             spent("m2", at(2026, 11, 2, 12, 0), Satang(10_000)),
@@ -1260,7 +1273,7 @@ class HomeViewModelTest : ViewModelTest() {
             val state = awaitSuccess()
             assertNotNull(state.weeklyCard)
             assertNull(state.coach)
-            assertNull(state.compared)
+            assertNotNull(state.compared)
         }
         viewModel(transactions = today, saved = weekOfSpending() + mondays, now = MONDAY_NOON, play = PlayFixture()).uiState.test {
             assertNotNull(awaitSuccess().coach)

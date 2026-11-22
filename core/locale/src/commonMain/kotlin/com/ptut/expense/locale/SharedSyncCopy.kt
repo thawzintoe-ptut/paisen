@@ -15,6 +15,7 @@ data class SharedSyncCopy(
     },
     val signedOutHome: String = "Signed out. Sign in to keep your shared groups in sync.",
     val signInAgainReason: String = "Sign in with the same account, and your shared groups sync again.",
+    val endingElsewhere: (Int) -> String = { n -> "Signed in on another phone · $n ${if (n == 1) "change" else "changes"} still to send" },
 )
 
 val BurmeseSharedSync = SharedSyncCopy(
@@ -31,6 +32,7 @@ val BurmeseSharedSync = SharedSyncCopy(
     },
     signedOutHome = "အကောင့်ထွက်နေတယ်။ Shared group တွေ ဆက်ချိတ်ထားဖို့ အကောင့် ပြန်ဝင်ပါ။",
     signInAgainReason = "အရင်အကောင့်နဲ့ ပြန်ဝင်ရင် Shared group တွေ ပြန်ချိတ်မယ်။",
+    endingElsewhere = { n -> "တခြားဖုန်းမှာ အကောင့်ဝင်ထားတယ် · ပြောင်းထားတာ ${n.inMyanmarDigits()} ခု ပို့ဖို့ ကျန်သေးတယ်" },
 )
 
 val ThaiSharedSync = SharedSyncCopy(
@@ -47,4 +49,5 @@ val ThaiSharedSync = SharedSyncCopy(
     },
     signedOutHome = "ออกจากระบบแล้ว ลงชื่อเข้าใช้เพื่อซิงก์กลุ่มของคุณต่อ",
     signInAgainReason = "ลงชื่อเข้าใช้ด้วยบัญชีเดิม แล้วกลุ่มของคุณจะซิงก์อีกครั้ง",
+    endingElsewhere = { n -> "ลงชื่อเข้าใช้ในโทรศัพท์อีกเครื่องแล้ว · ยังต้องส่งอีก $n รายการ" },
 )

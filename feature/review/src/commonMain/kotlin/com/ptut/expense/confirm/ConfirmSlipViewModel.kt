@@ -42,10 +42,12 @@ import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.toLocalDateTime
@@ -68,6 +70,10 @@ class ConfirmSlipViewModel(
     // #26: every category; the slip's own direction picks which are offered, so money in offers income.
     private val categories: List<Category> = Category.seed(),
     private val subCategories: List<SubCategory> = emptyList(),
+    /** Rows filed per category id, counted once for the app; none offers the categories in their own order. */
+    private val categoryUsage: Flow<Map<String, Int>> = flowOf(emptyMap()),
+    /** The category a shop rule or a known shop name points at, or null to leave the pick to the reader. */
+    private val suggestCategory: (shop: String) -> Category? = { null },
     /** The shared-group debts a slip could have paid. None in a build with no shared groups. */
     private val findDebts: FindSlipDebtsUseCase = FindSlipDebtsUseCase(),
     private val clock: Clock = Clock.System,
@@ -85,6 +91,8 @@ class ConfirmSlipViewModel(
     private val discardWithUndo: DiscardSlipWithUndoUseCase,
 ) : ViewModel() {
 
+    private var usage: Map<String, Int> = emptyMap()
+
     private var slip: QueuedSlip? = getSlip(slipId)
 
     private var debts: List<SlipDebt> = slip?.let(findDebts::invoke).orEmpty()
@@ -99,6 +107,13 @@ class ConfirmSlipViewModel(
         slip?.takeIf { it.isForeign }?.let { found -> viewModelScope.launch { loadRate(found.currency) } }
         viewModelScope.launch {
             observeSlip(slipId).collectLatest { found -> if (found != null) arrive(found) else leave() }
+        }
+        // A cold start can open this before the ledger answered, so the chips reorder when it does.
+        viewModelScope.launch {
+            categoryUsage.collect { counted ->
+                usage = counted
+                state.update { it.copy(categoryUsage = counted) }
+            }
         }
     }
 
@@ -153,12 +168,13 @@ class ConfirmSlipViewModel(
      * clears the sub-category: it belongs to one parent (p34).
      */
     fun choose(category: Category) = state.update {
-        val chosen = if (it.category == category) null else category
+        val chosen = if (it.category?.id == category.id) null else category
         it.copy(
             category = chosen,
             subCategories = subCategories.under(chosen?.id),
             subCategory = null,
             askForCategory = it.askForCategory && chosen == null,
+            suggestedFromShop = false,
         )
     }
 
@@ -290,31 +306,38 @@ class ConfirmSlipViewModel(
         )
     }
 
-    private fun QueuedSlip?.toUiState() = ConfirmSlipUiState(
-        // Saving still hands the shop rule `slip.merchant`, noise and all; only the screen says "Unknown shop".
-        merchant = this?.merchant?.let { shownShop(it, AppText.copy.slips.unknownShop) }.orEmpty(),
-        date = this?.occurredAtEpochMillis?.slipDate().orEmpty(),
-        reference = this?.note.orEmpty(),
-        // An amount the parser lifted off the slip is what the reader is here to check. One it
-        // could not read arrives null, and the pad stays empty rather than offering a figure.
-        entry = this?.amount?.let { if (isForeign) AmountEntry.of(it, Currencies.of(currency).digits) else AmountEntry.of(it) } ?: AmountEntry(),
-        currencySymbol = this?.let { Currencies.of(it.currency).symbol } ?: Home.money.symbol,
-        asksRate = this?.isForeign == true,
-        rateUnit = this?.let { Currencies.of(it.currency).rateUnitLabel() }.orEmpty(),
-        lowConfidence = this?.lowConfidence.orEmpty(),
-        amountUnread = this != null && amount == null,
-        category = null,
-        categories = categories.forDirection(this?.direction ?: Direction.Expense),
-        moneyIn = this?.direction == Direction.Income,
-        offersPlanned = offersPlanned && this?.direction != Direction.Income,
-        shopRead = this?.reason != ReviewReason.Unreadable,
-        nameable = this?.merchant?.isReaderNoise() == true,
-        shopName = this?.merchant?.takeUnless { it.isReaderNoise() }?.let { ShopNames.of(it) ?: it }.orEmpty(),
-        slipId = this?.id.orEmpty(),
-        pictureCaption = this?.let {
-            listOfNotNull(it.sourceFolder, it.occurredAtEpochMillis.dateIn(HomeTime).dayAndMonth()).joinToString(Separators.DOT)
-        }.orEmpty(),
-    )
+    private fun QueuedSlip?.toUiState(): ConfirmSlipUiState {
+        val offered = categories.forDirection(this?.direction ?: Direction.Expense)
+        val suggested = this?.merchant?.takeUnless { it.isReaderNoise() }?.let(suggestCategory)?.takeIf { it in offered }
+        return ConfirmSlipUiState(
+            // Saving still hands the shop rule `slip.merchant`, noise and all; only the screen says "Unknown shop".
+            merchant = this?.merchant?.let { shownShop(it, AppText.copy.slips.unknownShop) }.orEmpty(),
+            date = this?.occurredAtEpochMillis?.slipDate().orEmpty(),
+            reference = this?.note.orEmpty(),
+            // An amount the parser lifted off the slip is what the reader is here to check. One it
+            // could not read arrives null, and the pad stays empty rather than offering a figure.
+            entry = this?.amount?.let { if (isForeign) AmountEntry.of(it, Currencies.of(currency).digits) else AmountEntry.of(it) } ?: AmountEntry(),
+            currencySymbol = this?.let { Currencies.of(it.currency).symbol } ?: Home.money.symbol,
+            asksRate = this?.isForeign == true,
+            rateUnit = this?.let { Currencies.of(it.currency).rateUnitLabel() }.orEmpty(),
+            lowConfidence = this?.lowConfidence.orEmpty(),
+            amountUnread = this != null && amount == null,
+            category = suggested,
+            categories = offered,
+            categoryUsage = usage,
+            suggestedFromShop = suggested != null,
+            subCategories = subCategories.under(suggested?.id),
+            moneyIn = this?.direction == Direction.Income,
+            offersPlanned = offersPlanned && this?.direction != Direction.Income,
+            shopRead = this?.reason != ReviewReason.Unreadable,
+            nameable = this?.merchant?.isReaderNoise() == true,
+            shopName = this?.merchant?.takeUnless { it.isReaderNoise() }?.let { ShopNames.of(it) ?: it }.orEmpty(),
+            slipId = this?.id.orEmpty(),
+            pictureCaption = this?.let {
+                listOfNotNull(it.sourceFolder, it.occurredAtEpochMillis.dateIn(HomeTime).dayAndMonth()).joinToString(Separators.DOT)
+            }.orEmpty(),
+        )
+    }
 
     /** FR-19: the slip's own Bangkok day and time, never the device's: "Fri 14 Aug, 18:30" (p13). */
     private fun Long.slipDate(): String {

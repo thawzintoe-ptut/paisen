@@ -178,3 +178,18 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 | Your ledger is untouched. | သင့်မှတ်တမ်းကို ဘာမှ မထိဘူး။ | `SettingsCopy` ledgerUntouched |
 | Nothing from this file was imported. | ဒီဖိုင်ထဲက ဘာမှ မထည့်ဘူး။ | `SettingsCopy` nothingImported |
 | Choose another file | နောက်ဖိုင် ရွေးမယ် | `SettingsCopy` chooseAnotherFile |
+
+## Settings regrouped (Hick's law pass, 22 Nov), not reviewed yet
+
+| English | Burmese | Where |
+|---|---|---|
+| Look | အသွင်အပြင် | `SettingsCopy` groupLook |
+| Account and help | အကောင့်နဲ့ အကူအညီ | `SettingsCopy` groupAccount |
+| Slip reading, folders, rules and more | စလစ် ဖတ်တာ၊ ဖိုဒါ၊ စည်းမျဉ်းနဲ့ အခြား | `SettingsCopy` advancedValue (was "Reading slips, ledger and help") |
+| Most people never need these. They tune how slips are read and kept. | လူအများစု ဒါတွေ မလိုပါဘူး။ စလစ်ကို ဘယ်လိုဖတ်ပြီး ဘယ်လိုသိမ်းမလဲ ချိန်တာပါ။ | `SettingsCopy` advancedIntro |
+| Backup | Backup | `SettingsCopy` backupRow |
+| Import log | ထည့်သွင်း မှတ်တမ်း | `SettingsCopy` importLog |
+| Restore from a backup | Backup ကနေ ပြန်ယူမယ် | `SettingsCopy` restoreBackup |
+| Help and feedback | အကူအညီနဲ့ အကြံပြုချက် | `SettingsCopy` helpRow |
+| Send feedback, licences | အကြံပြုချက် ပို့မယ်၊ လိုင်စင်များ | `SettingsCopy` helpValue |
+| Your spending stays on this phone. Only shared groups sync, with the people in them. | သင့်အသုံးစရိတ်တွေ ဒီဖုန်းထဲမှာပဲ ရှိတယ်။ Shared group တွေကိုပဲ အဖွဲ့ထဲက လူတွေနဲ့ sync လုပ်တယ်။ | `SettingsCopy` footer (two reviewed sentences joined) |

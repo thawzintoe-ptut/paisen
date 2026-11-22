@@ -39,7 +39,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** Which row. It is the row's identity as well as the destination it opens. */
-enum class SettingsAction { GoalJar, Advanced, SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, HomeCurrency, Assistant, Feedback, Licences, Play }
+enum class SettingsAction { GoalJar, Advanced, SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, HomeCurrency, Assistant, Feedback, Licences, Play, SharedAccount, Help }
 
 /** Where Send feedback writes to. The same address PRIVACY.md and SECURITY.md give. */
 const val FEEDBACK_ADDRESS = "developer.ptut@gmail.com"
@@ -68,10 +68,11 @@ data class SettingsRowUiModel(
 )
 
 /**
- * #101: Settings keeps what people change in a normal week, then one Advanced row ([More]).
- * [Slips], [Ledger] and [Help] are the Advanced screen's cards.
+ * #101: Settings keeps what people change in a normal week; Advanced sits in [Safe], and [Account]
+ * holds the shared-groups account and the way to help. [Slips], [Ledger] and [Look] are the
+ * Advanced screen's cards; [Help] is the small list behind the Help and feedback row.
  */
-enum class SettingsGroup { Saving, You, Safe, More, Slips, Ledger, Help }
+enum class SettingsGroup { Saving, You, Safe, Account, Slips, Ledger, Look, Help }
 
 /** [title] sits above the card; null for the lone Advanced row. */
 data class SettingsGroupUiModel(val group: SettingsGroup, val rows: List<SettingsRowUiModel>, val title: String? = null)
@@ -80,11 +81,13 @@ data class SettingsUiState(
     val groups: List<SettingsGroupUiModel>,
     /** The Advanced screen's cards, one tap behind [SettingsAction.Advanced]. */
     val advanced: List<SettingsGroupUiModel> = emptyList(),
+    /** The rows behind Help and feedback: every help destination stays reachable, one tap further. */
+    val help: List<SettingsRowUiModel> = emptyList(),
     /** The open goal the Goal jar row opens, or null to start one. */
     val goalId: String? = null,
 ) {
-    /** Every row on both screens in screen order, for a reader that does not care which card holds it. */
-    val rows: List<SettingsRowUiModel> get() = (groups + advanced).flatMap { it.rows }
+    /** Every row on all three in screen order, for a reader that does not care which card holds it. */
+    val rows: List<SettingsRowUiModel> get() = (groups + advanced).flatMap { it.rows } + help
 }
 
 /**
@@ -178,28 +181,29 @@ class SettingsViewModel(
         val (since, choices, watched, counts, model) = inputs
         val advanced = listOf(
             SettingsGroupUiModel(SettingsGroup.Slips, slipRows(since, choices, watched, text), text.groupSlips),
-            SettingsGroupUiModel(SettingsGroup.Ledger, ledgerRows(choices, counts, model, text), text.groupLedger),
-            SettingsGroupUiModel(SettingsGroup.Help, helpRows(text), text.groupHelp),
+            SettingsGroupUiModel(SettingsGroup.Ledger, ledgerRows(since, choices, counts, model, text), text.groupLedger),
+            SettingsGroupUiModel(SettingsGroup.Look, lookRows(choices, text), text.groupLook),
         ).filter { it.rows.isNotEmpty() }
+        val advancedRow = SettingsRowUiModel(
+            id = SettingsAction.Advanced,
+            name = text.advanced,
+            value = text.advancedValue,
+            icon = "tune",
+            // A stale import's fix sits behind this row, so the row says so too.
+            needsAttention = advanced.any { group -> group.rows.any { it.needsAttention } },
+        )
         val main = listOf(
             SettingsGroupUiModel(SettingsGroup.Saving, savingRows(choices, goal, text), text.groupSaving),
-            SettingsGroupUiModel(SettingsGroup.You, youRows(choices, text), text.groupYou),
-            SettingsGroupUiModel(SettingsGroup.Safe, safeRows(choices, text), text.groupSafe),
+            SettingsGroupUiModel(SettingsGroup.You, youRows(text), text.groupYou),
+            SettingsGroupUiModel(SettingsGroup.Safe, safeRows(choices, text) + advancedRow, text.groupSafe),
+            // The account row joins this card in the shell, which is the layer that knows the account.
             SettingsGroupUiModel(
-                SettingsGroup.More,
-                listOf(
-                    SettingsRowUiModel(
-                        id = SettingsAction.Advanced,
-                        name = text.advanced,
-                        value = text.advancedValue,
-                        icon = "tune",
-                        // A stale import's fix sits behind this row, so the row says so too.
-                        needsAttention = advanced.any { group -> group.rows.any { it.needsAttention } },
-                    ),
-                ),
+                SettingsGroup.Account,
+                listOf(SettingsRowUiModel(id = SettingsAction.Help, name = text.helpRow, value = text.helpValue, icon = "help")),
+                text.groupAccount,
             ),
         ).filter { it.rows.isNotEmpty() }
-        return SettingsUiState(groups = main, advanced = advanced, goalId = goal?.id)
+        return SettingsUiState(groups = main, advanced = advanced, help = helpRows(text), goalId = goal?.id)
     }
 
     private fun savingRows(choices: AppChoices, goal: Goal?, text: SettingsCopy) = listOfNotNull(
@@ -221,20 +225,12 @@ class SettingsViewModel(
         },
     )
 
-    private fun youRows(choices: AppChoices, text: SettingsCopy) = listOf(
+    private fun youRows(text: SettingsCopy) = listOf(
         SettingsRowUiModel(
             id = SettingsAction.Language,
             name = AppText.copy.language.title,
             value = AppText.language.value.label,
             icon = "translate",
-        ),
-        // p21's second group: the morning recap and evening receipt, off with one switch (#121).
-        SettingsRowUiModel(
-            id = SettingsAction.MoodByTimeOfDay,
-            name = text.moodByTimeOfDay,
-            value = text.moodValue,
-            icon = "wb_twilight",
-            switchedOn = choices.moodByTimeOfDay,
         ),
     )
 
@@ -242,7 +238,7 @@ class SettingsViewModel(
         // "Backup file", not "CSV or backup file": export is JSON only in v1 (#147, S7).
         SettingsRowUiModel(
             id = SettingsAction.ExportLedger,
-            name = text.exportLedger,
+            name = text.backupRow,
             value = text.exportValue,
             icon = "download",
         ),
@@ -287,16 +283,9 @@ class SettingsViewModel(
             value = choices.slipOwner.name ?: incomeSlipCopy().ownerUnknown,
             icon = "call_received",
         ),
-        // Activity's way in, now Home has no bell (#144, N2).
-        SettingsRowUiModel(
-            id = SettingsAction.Activity,
-            name = text.activity,
-            value = since?.let { text.lastImport(elapsedPhrase(it)) } ?: text.noImportYet,
-            icon = "notifications",
-        ),
     )
 
-    private fun ledgerRows(choices: AppChoices, counts: CategoryCounts, model: ModelState, text: SettingsCopy) = listOfNotNull(
+    private fun ledgerRows(since: Long?, choices: AppChoices, counts: CategoryCounts, model: ModelState, text: SettingsCopy) = listOfNotNull(
         SettingsRowUiModel(
             id = SettingsAction.Categories,
             name = AppText.copy.categories.title,
@@ -315,9 +304,16 @@ class SettingsViewModel(
             value = text.timezoneValue(Home.choice.value.zoneId),
             icon = "schedule",
         ),
+        // Activity's way in, now Home has no bell (#144, N2).
+        SettingsRowUiModel(
+            id = SettingsAction.Activity,
+            name = text.importLog,
+            value = since?.let { text.lastImport(elapsedPhrase(it)) } ?: text.noImportYet,
+            icon = "notifications",
+        ),
         SettingsRowUiModel(
             id = SettingsAction.ImportLedger,
-            name = text.importLedger,
+            name = text.restoreBackup,
             value = text.importValue,
             icon = "upload",
         ),
@@ -335,6 +331,16 @@ class SettingsViewModel(
             value = if (choices.noteTone == NoteTone.Playful) noteCopy().tonePlayful else noteCopy().tonePlain,
             icon = "tune",
         ).takeIf { showNoteTone },
+        // #207: absent until a build can offer the model, so the screen is unchanged without one.
+        SettingsRowUiModel(
+            id = SettingsAction.Assistant,
+            name = text.assistant,
+            value = model.statusLine(),
+            icon = "auto_awesome",
+        ).takeIf { showAssistant || model != ModelState.NotOffered },
+    )
+
+    private fun lookRows(choices: AppChoices, text: SettingsCopy) = listOf(
         // Off draws the pill solid. iOS Reduce Transparency does the same without asking (#123).
         SettingsRowUiModel(
             id = SettingsAction.Transparency,
@@ -343,13 +349,14 @@ class SettingsViewModel(
             icon = "tune",
             switchedOn = choices.transparency,
         ),
-        // #207: absent until a build can offer the model, so the screen is unchanged without one.
+        // The morning recap and evening receipt, off with one switch (#121).
         SettingsRowUiModel(
-            id = SettingsAction.Assistant,
-            name = text.assistant,
-            value = model.statusLine(),
-            icon = "auto_awesome",
-        ).takeIf { showAssistant || model != ModelState.NotOffered },
+            id = SettingsAction.MoodByTimeOfDay,
+            name = text.moodByTimeOfDay,
+            value = text.moodValue,
+            icon = "wb_twilight",
+            switchedOn = choices.moodByTimeOfDay,
+        ),
     )
 
     private fun helpRows(text: SettingsCopy) = listOf(

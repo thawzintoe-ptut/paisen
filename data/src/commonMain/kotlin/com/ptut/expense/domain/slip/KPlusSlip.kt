@@ -41,10 +41,12 @@ object KPlusSlip : SlipFormat {
         val reference = trimmed.referenceAfterLabel()
         val unsure = unsureFields(name, amount)
 
+        val account = trimmed.recipientAccount()
+
         return if (amount != null && occurredAt != null && reference != null) {
-            SlipRead.Complete(name.value, amount, occurredAt, reference, unsure, sender = trimmed.sender())
+            SlipRead.Complete(name.value, amount, occurredAt, reference, unsure, sender = trimmed.sender(), recipientAccount = account)
         } else {
-            SlipRead.Partial(name.value, amount, occurredAt, reference, unsure, sender = trimmed.sender())
+            SlipRead.Partial(name.value, amount, occurredAt, reference, unsure, sender = trimmed.sender(), recipientAccount = account)
         }
     }
 
@@ -141,6 +143,20 @@ object KPlusSlip : SlipFormat {
 
         val name = block.joinWrappedName(candidate)
         return if (name.value.isReaderNoise()) block.accountHolder() ?: name else name
+    }
+
+    /**
+     * J04: the recipient's masked account, the second account-shaped line, above the amount. A shop
+     * paid by QR prints a PromptPay id there instead, which the mask keeps as well; only a transfer
+     * to one of the reader's own accounts is ever matched against it.
+     */
+    private fun List<String>.recipientAccount(): String? {
+        val senderAccount = indexOfFirst { MASKED_ID_SHAPE.matches(it) }
+        if (senderAccount == -1) return null
+        return subList(senderAccount + 1, size)
+            .takeWhile { !it.equals(AMOUNT_LABEL, ignoreCase = true) }
+            .firstOrNull { MASKED_ID_SHAPE.matches(it) }
+            ?.let(::accountMask)
     }
 
     /**

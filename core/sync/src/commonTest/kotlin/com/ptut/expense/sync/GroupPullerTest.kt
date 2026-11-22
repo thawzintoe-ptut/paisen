@@ -6,10 +6,14 @@ import com.ptut.expense.data.repository.KIND_MEMBER
 import com.ptut.expense.data.repository.KIND_REACTION
 import com.ptut.expense.data.repository.KIND_TRIP_END
 import com.ptut.expense.data.repository.REACTION_GONE
+import com.ptut.expense.data.repository.toDomain
+import com.ptut.expense.domain.shared.due
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -118,6 +122,32 @@ class GroupPullerTest {
 
         assertTrue(dao.versions.isEmpty())
         assertEquals(setOf("p2"), dao.payments.keys)
+    }
+
+    @Test
+    fun `a repeat brought back adds the date the phone that left missed exactly once`() = runTest {
+        holds("g1")
+        clock.nowMillis = NOV_22
+        firestore.collections["groups/g1/repeats"] = listOf(repeatDoc("r1"))
+
+        puller.pull("g1")
+
+        val rule = assertNotNull(dao.repeats.getValue("r1").toDomain())
+        assertEquals(listOf(LocalDate(2026, 11, 1)), rule.due(LocalDate(2026, 11, 22)))
+    }
+
+    @Test
+    fun `a repeat brought back catches up after the newest date already in the log`() = runTest {
+        holds("g1")
+        clock.nowMillis = NOV_22
+        val added = versionDoc("v1", 100, listOf(100))
+        firestore.collections["groups/g1/entries"] = listOf(added.copy(fields = added.fields + ("expenseId" to "repeat:r1:2026-09-01")))
+        firestore.collections["groups/g1/repeats"] = listOf(repeatDoc("r1"))
+
+        puller.pull("g1")
+
+        val rule = assertNotNull(dao.repeats.getValue("r1").toDomain())
+        assertEquals(listOf(LocalDate(2026, 10, 1), LocalDate(2026, 11, 1)), rule.due(LocalDate(2026, 11, 22)))
     }
 
     @Test
@@ -313,3 +343,6 @@ class GroupPullerTest {
 
     private fun holds(vararg ids: String) = holdGroups(dao, firestore, *ids)
 }
+
+/** 2026-11-22, midday in Bangkok. */
+private const val NOV_22 = 1_795_323_600_000L

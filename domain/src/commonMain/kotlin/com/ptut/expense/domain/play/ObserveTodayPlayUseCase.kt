@@ -22,9 +22,12 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 
@@ -56,10 +59,10 @@ data class TodayPlay(
 }
 
 /**
- * #104: Today's jar card. [under] is how far today sits under a usual day of its weekday while it can
- * still be counted: null once answered, or when today is not under its usual.
+ * J01: Today's jar card. [under] is how far today sits under a usual day of its weekday, the amount
+ * Put money in offers first; null when today is not under its usual, or no usual exists yet.
  */
-data class TodayJar(val goal: Goal, val saved: Satang, val under: Satang?, val weekday: DayOfWeek)
+data class TodayJar(val goal: Goal, val pace: GoalPace, val under: Satang?, val weekday: DayOfWeek, val thisWeek: Satang)
 
 /**
  * Today's ways into the extras. [storyMonth] is last month during the first week of a month, until its
@@ -91,15 +94,15 @@ class ObserveTodayPlayUseCase(
     operator fun invoke(): Flow<TodayPlay> = combine(
         combine(playOn(PlayPart.Run), playOn(PlayPart.Stamps), playOn(PlayPart.Question), playOn(PlayPart.Coach), playOn(PlayPart.Guess), ::Parts),
         combine(playOn(PlayPart.Challenge), playOn(PlayPart.GoalJar), playOn(PlayPart.Story), playOn(PlayPart.CloseMonth), playOn(PlayPart.Score), ::Extras),
-        combine(book.days, book.stamps, book.weeks, book.months, combine(book.goals, book.goalDays, ::Pair), ::Facts),
+        combine(book.days, book.stamps, book.weeks, book.months, combine(book.goals, book.deposits, ::Pair), ::Facts),
         transactions?.invoke(LedgerSpan.All) ?: flowOf(LedgerSnapshot.Rows(emptyList())),
-        combine(homeDays(clock), playOn.welcomedOn(), ::Pair),
+        combine(homeMoments(clock), playOn.welcomedOn(), ::Pair),
     ) { parts, extras, facts, ledger, (_, welcomedOn) ->
         val (days, stamps, weeks, months, jarFacts) = facts
-        val (goals, goalDays) = jarFacts
+        val (goals, deposits) = jarFacts
         val today = homeToday()
         val rows = (ledger as? LedgerSnapshot.Rows)?.transactions.orEmpty()
-        val jar = goals.lastOrNull { it.archivedAtEpochMillis == null }?.takeIf { extras.jar }?.let { rows.todayJar(it, goalDays, today) }
+        val jar = goals.lastOrNull { it.archivedAtEpochMillis == null }?.takeIf { extras.jar }?.let { rows.todayJar(it, deposits, clock.now().toLocalDateTime(HomeTime)) }
         val firstWeek = welcomedOn != null && today < welcomedOn.plus(FIRST_WEEK_DAYS, DateTimeUnit.DAY) && (parts.any || extras.anyButJar)
         if (firstWeek) {
             val goalId = goals.lastOrNull { it.archivedAtEpochMillis == null }?.id.takeIf { extras.jar }
@@ -145,16 +148,24 @@ class ObserveTodayPlayUseCase(
         val stamps: List<Stamp>,
         val weeks: List<PlayWeek>,
         val months: List<PlayMonth>,
-        val jar: Pair<List<Goal>, List<GoalDay>>,
+        val jar: Pair<List<Goal>, List<GoalDeposit>>,
     )
 }
 
-/** #104: the jar's fill, and today's card while today sits under its usual and has no answer yet. */
-internal fun List<Transaction>.todayJar(goal: Goal, days: List<GoalDay>, today: LocalDate): TodayJar {
-    val answered = days.any { it.goalId == goal.id && it.day == today }
-    val usual = if (answered) null else usualDay(today)
-    val under = usual?.let { if (it.spent < it.usual) it.usual - it.spent else null }
-    return TodayJar(goal, goalPace(goal, days, today).saved, under, today.dayOfWeek)
+/** J01: the jar's fill from its deposits, and today's leftover under a usual day while there is one. */
+internal fun List<Transaction>.todayJar(goal: Goal, deposits: List<GoalDeposit>, now: LocalDateTime): TodayJar =
+    TodayJar(goal, deposits.goalPace(goal, now.date), leftoverToday(now), now.date.dayOfWeek, deposits.savedThisWeek(goal, now.date))
+
+/** [homeDays], and once more at [LEFTOVER_FROM_HOUR], so the jar offers the leftover on a screen left open all day. */
+internal fun homeMoments(clock: Clock): Flow<LocalDate> = flow {
+    while (true) {
+        val now = clock.now()
+        val today = now.toLocalDateTime(HomeTime).date
+        emit(today)
+        val evening = LocalDateTime(today, LocalTime(LEFTOVER_FROM_HOUR, 0)).toInstant(HomeTime)
+        val next = if (now < evening) evening else today.plus(1, DateTimeUnit.DAY).atStartOfDayIn(HomeTime)
+        delay(next - now)
+    }
 }
 
 /** Today in the home zone, and again at each midnight, for folds that otherwise only follow the data. */

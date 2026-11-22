@@ -173,3 +173,9 @@ Next steps on errors, Thai shop names, new rows in groups and Undo. Dates now us
 |---|---|---|
 | Reading the slip… | စလစ်ကို ဖတ်နေတယ်… | `SlipsCopy` readingSlip |
 | Reading… | ဖတ်နေတယ်… | `SlipsCopy` reading |
+
+## Fewer choices at each step (22 Nov, not yet checked)
+
+| English | Burmese | Where |
+|---|---|---|
+| Picked from the shop name. Change it if it's wrong. | ဆိုင်နာမည်ကို ကြည့်ပြီး ရွေးထားတာ။ မှားနေရင် ပြောင်းပါ။ | `SlipsCopy` pickedFromShop |

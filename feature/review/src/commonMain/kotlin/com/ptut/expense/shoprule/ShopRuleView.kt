@@ -1,9 +1,6 @@
 package com.ptut.expense.shoprule
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -18,9 +15,9 @@ import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptutType
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.shared.SharedTextField
+import com.ptut.expense.ui.sky.CategoryChipRow
 import com.ptut.expense.ui.sky.SkyButton
 import com.ptut.expense.ui.sky.SkyButtonKind
-import com.ptut.expense.ui.sky.SkyChip
 import com.ptut.expense.ui.sky.SkyIntro
 import com.ptut.expense.ui.sky.SkyListScreen
 
@@ -31,7 +28,6 @@ import com.ptut.expense.ui.sky.SkyListScreen
  * gives it a whole screen so the reader reads it before the one action it leads to. This is the
  * separate, deliberate act screen 11c says changing a shop's filing has to be.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ShopRuleView(
     uiState: ShopRuleUiState,
@@ -65,18 +61,13 @@ fun ShopRuleView(
                 item { SkyIntro(uiState.filedSoFar) }
                 item { SkyIntro(text.shopFilesHere) }
                 item {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    CategoryChipRow(
+                        chips = uiState.chips,
+                        all = uiState.categories,
+                        selectedId = uiState.chosenCategoryId,
+                        onPick = { onCategory(it.id) },
                         modifier = Modifier.padding(horizontal = Spacing.sm),
-                    ) {
-                        uiState.categories.forEach { category ->
-                            SkyChip(
-                                label = category.name,
-                                selected = category.id == uiState.chosenCategoryId,
-                                onClick = { onCategory(category.id) },
-                            )
-                        }
-                    }
+                    )
                 }
                 item {
                     // Outlined in red and never filled, as the record's delete is.

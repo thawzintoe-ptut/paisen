@@ -101,6 +101,9 @@ class LedgerViewModelTest : ViewModelTest() {
             viewModel.filter(LedgerFilter.Income)
             assertEquals(listOf("Payroll"), awaitSuccess().merchants())
 
+            viewModel.filter(LedgerFilter.Spending)
+            assertEquals(listOf("Foodland", "Café Amazon", "Grab"), awaitSuccess().merchants())
+
             viewModel.filter(LedgerFilter.All)
             assertEquals(
                 listOf("Foodland", "Café Amazon", "Grab", "Payroll"),

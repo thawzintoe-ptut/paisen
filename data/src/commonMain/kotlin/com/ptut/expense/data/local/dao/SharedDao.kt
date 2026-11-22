@@ -371,6 +371,18 @@ interface SharedDao {
         deleteGroup(groupId)
     }
 
+    /**
+     * Every shared group leaves this phone, unless a change to one still waits to be sent. In one
+     * transaction, so a save landing meanwhile is never forgotten unsent. Returns how many wait.
+     */
+    @Transaction
+    suspend fun forgetSharedGroupsUnlessWaiting(): Int {
+        val remote = remoteGroupIds()
+        val waiting = outbox().count { it.groupId in remote }
+        if (waiting == 0) remote.forEach { forgetGroup(it) }
+        return waiting
+    }
+
     // #133: backup format 2. Only groups that live on this phone alone; synced ones come back from Firestore.
 
     @Query("SELECT * FROM person")
@@ -460,6 +472,10 @@ interface SharedDao {
 
     @Query("SELECT * FROM repeat_rule WHERE active = 1")
     suspend fun activeRepeats(): List<RepeatRuleEntity>
+
+    /** The newest date among the expenses whose ids start with [prefix], a repeat's "repeat:<id>:". */
+    @Query("SELECT MAX(substr(expenseId, length(:prefix) + 1)) FROM expense_version WHERE substr(expenseId, 1, length(:prefix)) = :prefix")
+    suspend fun newestDateAfter(prefix: String): String?
 
     @Upsert
     suspend fun upsertRepeat(rule: RepeatRuleEntity)

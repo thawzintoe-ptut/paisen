@@ -49,7 +49,7 @@ class SharedSyncTest {
     @Test
     fun `syncGroup leaves a group this phone does not hold`() = runTest {
         assertFalse(sync.syncGroup("elsewhere"))
-        assertTrue(firestore.calls.isEmpty())
+        assertTrue(firestore.calls.none { "groups" in it })
     }
 
     @Test

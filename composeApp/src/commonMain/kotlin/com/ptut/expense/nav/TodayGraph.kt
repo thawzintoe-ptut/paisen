@@ -51,12 +51,21 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
                 nav.editTransaction(it)
             }
         }
+        // J05: the jar toast's See.
+        val jarAsked by viewModel.jarRequests.collectAsStateWithLifecycle()
+        LaunchedEffect(jarAsked) {
+            jarAsked?.let {
+                viewModel.jarOpened()
+                nav.navigate(PtutRoute.GoalJar(goalId = it)) { launchSingleTop = true }
+            }
+        }
         HomeView(
             runTip = playTip(PlayTip.Run),
             questionTip = playTip(PlayTip.Question),
             uiState = state,
-            onChoosePeriod = viewModel::show,
             onOpenReview = { nav.navigate(PtutRoute.Review) },
+            // Reports owns the week and the month; the category totals line is Today's door to it.
+            onOpenReports = { nav.openTabAt(PtutRoute.Reports) },
             // History is pushed since Shared took its pill slot (#33), and lights Today.
             onOpenLedger = { nav.navigate(PtutRoute.Ledger) { launchSingleTop = true } },
             onAddByHand = openAddSheet,
@@ -88,7 +97,7 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
                     },
                 )
             },
-            onAnswerDay = viewModel::answerDay,
+            onPutIn = { nav.navigate(PtutRoute.GoalJar(goalId = it, putIn = true)) { launchSingleTop = true } },
         )
         if (askingAllowAll) {
             // Asked for only under "Select photos", the one case that offers Android's picker.

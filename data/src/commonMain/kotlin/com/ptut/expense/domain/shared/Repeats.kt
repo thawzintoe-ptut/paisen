@@ -95,13 +95,6 @@ fun RepeatRule.due(today: LocalDate): List<LocalDate> {
     return datesBetween(from, today).take(MAX_CATCH_UP)
 }
 
-/**
- * Where a phone starts on a repeat it receives (#189): never before yesterday. Dates already gone
- * are the adding phone's to write, and arrive by sync with their fixed ids, so a repeat synced
- * with a start far back cannot make every other phone write years of entries.
- */
-fun RepeatRule.firstLastAdded(today: LocalDate): LocalDate? = today.minus(DatePeriod(days = 1)).takeIf { it >= start }
-
 /** Still adding entries on [today]: active, with a date left to add or still to come. One that ran out of dates is done. */
 fun RepeatRule.running(today: LocalDate): Boolean = active && (due(today).isNotEmpty() || next(today, count = 1).isNotEmpty())
 
@@ -125,7 +118,18 @@ fun RepeatRule.next(today: LocalDate, count: Int = NEXT_SHOWN): List<LocalDate> 
 fun LocalDate.dayBefore(): LocalDate = minus(DatePeriod(days = 1))
 
 /** #189: an added date has a fixed id, so phones that add it at once write one entry. */
-fun RepeatRule.entryId(date: LocalDate): String = "repeat:$id:$date"
+fun RepeatRule.entryId(date: LocalDate): String = "$entryIdPrefix$date"
+
+/** What every [entryId] of this repeat starts with; the date follows it. */
+val RepeatRule.entryIdPrefix: String get() = "repeat:$id:"
+
+/**
+ * Where a phone starts on a repeat it did not hold (#187): after [newestInLog], the newest date the
+ * group's log has, or else just before the latest date due by [today]. A date the phone that left
+ * missed is then added once; its fixed id keeps another phone's copy from making it twice.
+ */
+fun RepeatRule.restoredLastAdded(newestInLog: LocalDate?, today: LocalDate): LocalDate? =
+    newestInLog ?: datesBetween(start, today).lastOrNull()?.dayBefore()
 
 /** [index] months on, with the day held back to the month's last when the month is shorter. */
 private fun LocalDate.monthsLater(index: Int): LocalDate {

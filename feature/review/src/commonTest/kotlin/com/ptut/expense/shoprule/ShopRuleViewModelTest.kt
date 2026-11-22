@@ -9,8 +9,10 @@ import com.ptut.expense.domain.slip.ObserveShopRuleUseCase
 import com.ptut.expense.domain.slip.RecategoriseShopUseCase
 import com.ptut.expense.domain.slip.RenameShopUseCase
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -61,6 +63,18 @@ class ShopRuleViewModelTest {
         val offered = assertIs<ShopRuleUiState.Loaded>(model.uiState.value).categories
         assertTrue(offered.all { it.direction == Direction.Expense })
         assertTrue(offered.none { it.id == "income" })
+    }
+
+    /** Hick's law: the rule's own category first, the two most filed next, the rest behind More. */
+    @Test
+    fun `the chips lead with the rule's category and then the most used`() = runTest {
+        val rules = FakeRules(listOf(sevenEleven))
+        val model = watching(ShopRuleViewModel("7-Eleven", rules, categoryUsage = flowOf(mapOf("food" to 9, "transport" to 4))))
+        runCurrent()
+
+        val chips = assertIs<ShopRuleUiState.Loaded>(model.uiState.value).chips
+        assertEquals(listOf("shopping", "food", "transport"), chips.shown.map { it.id })
+        assertEquals(3, chips.moreCount)
     }
 
     @Test
@@ -150,10 +164,15 @@ class ShopRuleViewModelTest {
 }
 
 /** Builds the screen over this file's fakes, as Koin builds it over the app's graph. */
-private fun ShopRuleViewModel(shop: String, rules: RuleRepository): ShopRuleViewModel = ShopRuleViewModel(
+private fun ShopRuleViewModel(
+    shop: String,
+    rules: RuleRepository,
+    categoryUsage: Flow<Map<String, Int>> = flowOf(emptyMap()),
+): ShopRuleViewModel = ShopRuleViewModel(
     shop = shop,
     observeRule = ObserveShopRuleUseCase(rules),
     recategoriseShop = RecategoriseShopUseCase(rules),
     renameShop = RenameShopUseCase(rules),
     forgetShop = ForgetShopUseCase(rules),
+    categoryUsage = categoryUsage,
 )

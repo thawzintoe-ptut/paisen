@@ -133,3 +133,12 @@ Choices to check in this area:
 | {n} transactions over {months} months | {n} รายการใน {months} เดือน | `HistoryCopy` monthsTotal |
 | {n} newer transactions above, from {months} months | รายการใหม่กว่า {n} รายการด้านบน จาก {months} เดือน | `HistoryCopy` monthsAbove |
 | Go to {month} | ไปที่ {month} | `HistoryCopy` goToMonth |
+
+## Fewer choices at each step (22 Nov, not yet checked)
+
+History's Show sheet opens on All, Spending and Income; "More filters" reveals Auto-filed, By hand and Edited.
+
+| English | Thai | Where |
+|---|---|---|
+| Spending | รายจ่าย | `HistoryCopy` filterSpending |
+| More filters | ตัวกรองเพิ่มเติม | `HistoryCopy` moreFilters |

@@ -77,7 +77,7 @@ class PtutIconTest {
     }
 
     /**
-     * Several names share a Heroicon — `label` and `sell` are both the tag, `delete` and
+     * Several names share a glyph — `label` and `sell` are both the tag, `delete` and
      * `auto_delete` both the bin. Two identical pictures side by side in a picker read as a bug,
      * and choosing between them is a choice with no difference.
      */
@@ -121,9 +121,8 @@ class PtutIconTest {
     }
 
     /**
-     * The spec's rule for the set: 24px outline, stroke 1.6, round caps and joins, and no colour
-     * of its own. Checked on the artwork rather than by eye, because a glyph pasted at Heroicons'
-     * own 1.5 looks right until it sits beside one at 1.6.
+     * N06's rule for the set: 24 grid, 1.6 outline, round caps and joins, no colour of its own.
+     * Detail dots are the one exception, drawn at 2.4 so they read at 20dp (#108).
      */
     @Test
     fun everyGlyphIsAnOutlineAtTheSpecsWeight() {
@@ -135,12 +134,21 @@ class PtutIconTest {
             assertEquals(24f, icon.image.viewportHeight, "${icon.designName} is not a 24 viewport")
 
             paths.forEach { path ->
-                assertEquals(1.6f, path.strokeLineWidth, "${icon.designName} is not stroke 1.6")
+                assertTrue(path.strokeLineWidth in setOf(1.6f, 2.4f), "${icon.designName} is not stroke 1.6 (or 2.4 for a dot)")
                 assertEquals(StrokeCap.Round, path.strokeLineCap, "${icon.designName} has square caps")
                 assertEquals(StrokeJoin.Round, path.strokeLineJoin, "${icon.designName} has hard joins")
                 assertEquals(null, path.fill, "${icon.designName} is filled, not an outline")
                 assertNotNull(path.stroke, "${icon.designName} has no stroke to tint")
             }
+        }
+    }
+
+    /** A selected tab swaps outline for solid; colour alone never marks it (N06). */
+    @Test
+    fun everyNavTabIsAnOutlineUntilSelectedAndSolidWhenItIs() {
+        NavGlyph.entries.forEach { glyph ->
+            assertTrue(glyph.outline.root.paths().none { it.fill != null }, "${glyph.name}'s outline is filled")
+            assertTrue(glyph.solid.root.paths().any { it.fill != null }, "${glyph.name}'s selected glyph is not solid")
         }
     }
 

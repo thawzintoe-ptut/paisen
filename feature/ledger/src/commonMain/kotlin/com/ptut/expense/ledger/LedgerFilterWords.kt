@@ -7,6 +7,7 @@ import com.ptut.expense.locale.AppText
 val LedgerFilter.label: String
     get() = when (this) {
         LedgerFilter.All -> AppText.copy.history.filterAll
+        LedgerFilter.Spending -> AppText.copy.history.filterSpending
         LedgerFilter.Auto -> AppText.copy.history.filterAuto
         LedgerFilter.ByHand -> AppText.copy.history.filterByHand
         LedgerFilter.Income -> AppText.copy.common.income

@@ -34,6 +34,7 @@ import com.ptut.expense.data.local.entity.PaymentRemovalEntity
 import com.ptut.expense.data.local.entity.PersonEntity
 import com.ptut.expense.data.local.entity.PlayDayEntity
 import com.ptut.expense.data.local.entity.PlayGoalDayEntity
+import com.ptut.expense.data.local.entity.PlayGoalDepositEntity
 import com.ptut.expense.data.local.entity.PlayGoalEntity
 import com.ptut.expense.data.local.entity.PlayMonthEntity
 import com.ptut.expense.data.local.entity.PlayStampEntity
@@ -41,6 +42,7 @@ import com.ptut.expense.data.local.entity.PlayWeekEntity
 import com.ptut.expense.data.local.entity.QueuedSlipEntity
 import com.ptut.expense.data.local.entity.RepeatRuleEntity
 import com.ptut.expense.data.local.entity.RuleEntity
+import com.ptut.expense.data.local.entity.SeenAccountEntity
 import com.ptut.expense.data.local.entity.SharedGroupEntity
 import com.ptut.expense.data.local.entity.SharedPaymentEntity
 import com.ptut.expense.data.local.entity.SubCategoryEntity
@@ -85,6 +87,8 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         PlayGoalEntity::class,
         PlayGoalDayEntity::class,
         PaymentReactionEntity::class,
+        PlayGoalDepositEntity::class,
+        SeenAccountEntity::class,
     ],
     version = PTUT_SCHEMA_VERSION,
     // Schema 2 adds the nullable transactions.editedAt, and schema 4 the nullable memo and
@@ -132,6 +136,8 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         AutoMigration(from = 24, to = 25, spec = ReactionKeepsItsTime::class),
         // #104 adds play_goal_day whole.
         AutoMigration(from = 25, to = 26),
+        // J02 and J04 add play_goal_deposit and seen_account whole, and the nullable play_goal.savingsAccount.
+        AutoMigration(from = 26, to = 27),
     ],
     exportSchema = true,
 )
@@ -173,4 +179,4 @@ expect object PtutDatabaseConstructor : RoomDatabaseConstructor<PtutDatabase> {
 }
 
 /** Read by `verifySchemaFrozen` and written into each crash report. Bump it with a new N.json, never edit an old one. */
-const val PTUT_SCHEMA_VERSION = 26
+const val PTUT_SCHEMA_VERSION = 27
