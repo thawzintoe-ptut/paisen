@@ -98,7 +98,7 @@ fun GroupDetailView(
     /** #185: set up a repeat, or open one to change or stop it. */
     /** Null leaves "Repeat an expense" out of the menu (#116). */
     onRepeat: (() -> Unit)? = {},
-    onOpenRepeat: (String) -> Unit = {},
+    onOpenRepeat: ((String) -> Unit)? = null,
     /** Edit group, and Delete or Leave from the "···" menu. */
     manage: GroupManage = GroupManage(),
     /** Pull down on a shared group to sync now, not at the next tick. */
@@ -140,7 +140,7 @@ private fun Loaded(
     onOpenExpense: (String) -> Unit,
     invite: GroupInvite,
     onRepeat: (() -> Unit)?,
-    onOpenRepeat: (String) -> Unit,
+    onOpenRepeat: ((String) -> Unit)?,
     manage: GroupManage,
     refreshing: Boolean,
     onRefresh: () -> Unit,

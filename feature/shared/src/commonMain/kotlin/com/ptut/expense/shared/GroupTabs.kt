@@ -225,7 +225,8 @@ private fun CountBadge(count: Int) {
 /** #65: a group with nothing in it says what an expense does here, then the two ways forward. */
 internal fun LazyListScope.expensesTab(
     state: GroupDetailUiState.Loaded,
-    onOpenRepeat: (String) -> Unit,
+    /** Null shows a repeat without opening it: its screen is switched off (#116). */
+    onOpenRepeat: ((String) -> Unit)?,
     onOpenExpense: (String) -> Unit,
     onOpenPayment: (String) -> Unit,
     onAddExpense: () -> Unit,
@@ -239,7 +240,7 @@ internal fun LazyListScope.expensesTab(
                     SkyKeyValueRow(
                         label = repeat.name,
                         value = repeat.line,
-                        modifier = Modifier.tappable(PtutRadii.r12, Role.Button) { onOpenRepeat(repeat.id) },
+                        modifier = onOpenRepeat?.let { open -> Modifier.tappable(PtutRadii.r12, Role.Button) { open(repeat.id) } } ?: Modifier,
                     )
                 }
             }

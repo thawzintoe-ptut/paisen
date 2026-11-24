@@ -164,7 +164,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
             onAddExpense = { nav.navigate(PtutRoute.AddSharedExpense(groupId)) { launchSingleTop = true } },
             onOpenExpense = { nav.navigate(PtutRoute.AddSharedExpense(groupId, it)) { launchSingleTop = true } },
             onRepeat = { nav.navigate(PtutRoute.RepeatExpense(groupId)) { launchSingleTop = true } }.takeIf { switches.v2 },
-            onOpenRepeat = { nav.navigate(PtutRoute.RepeatExpense(groupId, it)) { launchSingleTop = true } },
+            onOpenRepeat = { id: String -> nav.navigate(PtutRoute.RepeatExpense(groupId, id)) { launchSingleTop = true } }.takeIf { switches.v2 },
             manage = GroupManage(
                 action = groupAction,
                 onSetPromptPay = group::setPromptPay,

@@ -78,6 +78,6 @@ private fun countLaunch(koin: Koin, crashes: CrashJournal) {
     val usage = koin.getOrNull<UsageLog>() ?: return
     val settings = koin.getOrNull<AppSettings>() ?: return
     repeat(crashes.countSince(settings.choices.value.usageSessionAt)) { usage.log(UsageEvent.AppCrashed) }
-    usage.log(UsageEvent.SessionStart)
+    usage.log(UsageEvent.AppStarted)
     settings.setUsageSessionAt(Clock.System.now().toEpochMilliseconds())
 }

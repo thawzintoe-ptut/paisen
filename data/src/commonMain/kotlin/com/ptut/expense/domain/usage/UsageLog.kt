@@ -14,7 +14,8 @@ enum class UsageEvent(val wire: String) {
 
     /** Sent at most once a day, however often Today opens. */
     TodayOpened("today_opened"),
-    SessionStart("session_start"),
+    /** Not `session_start`: GA4 keeps that name for itself and drops an event sent under it. */
+    AppStarted("app_started"),
 
     /** One per crash report written since the last launch; the report itself stays on the phone. */
     AppCrashed("app_crashed"),
