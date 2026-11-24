@@ -22,6 +22,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import com.ptut.expense.di.AppBuild
+import com.ptut.expense.di.ReleaseSwitches
 import com.ptut.expense.di.viewModelModule
 import com.ptut.expense.domain.backup.LedgerArchive
 import com.ptut.expense.domain.backup.MergeReport
@@ -49,6 +50,8 @@ import com.ptut.expense.platform.lock.DeviceAuth
 import com.ptut.expense.platform.photos.PhotoAccessRequest
 import com.ptut.expense.platform.photos.PhotoSettings
 import com.ptut.expense.settings.NEEDS_ATTENTION
+import com.ptut.expense.sync.flags.FeatureFlags
+import com.ptut.expense.sync.flags.Flag
 import com.ptut.expense.ui.ScreenReader
 import org.koin.compose.KoinApplication
 import org.koin.dsl.koinConfiguration
@@ -85,6 +88,7 @@ class PtutAppTest {
         sinceLastImport: Long? = HEALTHY,
         firstRunAnswered: Boolean = true,
         debug: Boolean = false,
+        v2: Boolean = debug,
     ) = KoinApplication(
         configuration = koinConfiguration {
             modules(
@@ -96,6 +100,8 @@ class PtutAppTest {
                     // Settings resolves all three to draw its rows, and the release build is
                     // the one under test: a debug graph would add the slip panel below them.
                     single { AppBuild(debug = debug) }
+                    single { FeatureFlags(mapOf(Flag.V2.key to v2.toString())) }
+                    single { ReleaseSwitches(v2 = v2, later = debug) }
                     single<LedgerArchive> { UnusedArchive() }
                     single<LedgerFileStore> { UnusedFileStore() }
                     // Every screen but one is behind first run, so the graph answers by
@@ -355,7 +361,8 @@ class PtutAppTest {
      */
     @Test
     fun theScheduleRowOpensTheScreenThatOwnsIt() = runComposeUiTest {
-        setContent { TestApp(sinceLastImport = null) }
+        // #116: Background import is a v2 row.
+        setContent { TestApp(sinceLastImport = null, v2 = true) }
 
         openSettings()
         openAdvanced()

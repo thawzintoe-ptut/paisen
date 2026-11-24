@@ -32,6 +32,7 @@ import com.ptut.expense.confirm.ConfirmSlipUiState
 import com.ptut.expense.confirm.ConfirmSlipView
 import com.ptut.expense.debug.SkyKit
 import com.ptut.expense.di.AppBuild
+import com.ptut.expense.di.ReleaseSwitches
 import com.ptut.expense.di.viewModelModule
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.Direction
@@ -389,6 +390,7 @@ class TouchTargetFloorTest {
                     // Settings resolves this to decide whether the debug slip panel is drawn.
                     // Unbound, the sweep never reaches the screen it is sweeping.
                     single { AppBuild(debug = false) }
+                    single { ReleaseSwitches(v2 = false, later = false) }
                     single<LedgerArchive> { UnusedArchive }
                     single<LedgerFileStore> { UnusedFiles }
                     // Every screen but one is behind first run, so the graph answers by
