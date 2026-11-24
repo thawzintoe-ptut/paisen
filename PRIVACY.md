@@ -142,5 +142,7 @@ top. You can see every past version in the repository's history.
 
 Questions about your data, or a request to delete it: developer.ptut@gmail.com
 
-**Settings › Send feedback** opens your own email app with the app version and your phone model
-filled in. Nothing is sent unless you send that email.
+**Settings › Send feedback** opens a feedback form on Tally (tally.so) in your browser, with the
+app version, your phone model and the app language filled in. Nothing is sent unless you submit
+the form. Tally keeps what you submit; see its privacy policy at https://tally.so/help/privacy-policy.
+If the phone has no browser, the row opens your own email app instead.

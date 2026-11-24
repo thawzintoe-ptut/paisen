@@ -2,6 +2,7 @@ package com.ptut.expense.settings
 
 import com.ptut.expense.di.AppBuild
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.locale.Language
 import com.ptut.expense.locale.SettingsCopy
 
 /**
@@ -13,6 +14,16 @@ fun feedbackMail(build: AppBuild, text: SettingsCopy = AppText.copy.settings): S
     val body = text.feedbackBody(build.version, build.device).percentEncoded()
     return "mailto:$FEEDBACK_ADDRESS?subject=$subject&body=$body"
 }
+
+/**
+ * The Tally form the Send feedback row opens first. The version and phone go in as hidden fields;
+ * Tally gets them only when the person submits the form.
+ */
+fun feedbackForm(build: AppBuild, language: Language = AppText.language.value): String =
+    "$FEEDBACK_FORM?version=${build.version.percentEncoded()}" +
+        "&device=${build.device.percentEncoded()}&lang=${language.tag.percentEncoded()}"
+
+const val FEEDBACK_FORM = "https://tally.so/r/1W95VQ"
 
 /** RFC 3986: everything but letters, digits and `-._~` goes as UTF-8 percent bytes. */
 internal fun String.percentEncoded(): String = encodeToByteArray().joinToString("") { byte ->

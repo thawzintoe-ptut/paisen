@@ -1,6 +1,7 @@
 package com.ptut.expense.settings
 
 import com.ptut.expense.di.AppBuild
+import com.ptut.expense.locale.Language
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -14,6 +15,13 @@ class FeedbackMailTest {
         assertTrue(mail.startsWith("mailto:$FEEDBACK_ADDRESS?subject="), mail)
         assertTrue("0.1.0-rc.10%20%2810010%29" in mail, mail)
         assertTrue("Google%20Pixel%209a%2C%20Android%2015" in mail, mail)
+    }
+
+    @Test
+    fun `the form link carries the version, the phone and the app language`() {
+        val form = feedbackForm(AppBuild(debug = false, version = "0.8.0 (800)", device = "Pixel 7, Android 16"), Language.Burmese)
+
+        assertEquals("$FEEDBACK_FORM?version=0.8.0%20%28800%29&device=Pixel%207%2C%20Android%2016&lang=my", form)
     }
 
     /** A mail app reads a raw space, line break or Burmese letter in a link in its own way, or not at all. */

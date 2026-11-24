@@ -59,6 +59,7 @@ import com.ptut.expense.settings.SlipOwnerDialog
 import com.ptut.expense.settings.TimezoneView
 import com.ptut.expense.settings.TimezoneViewModel
 import com.ptut.expense.settings.destination
+import com.ptut.expense.settings.feedbackForm
 import com.ptut.expense.settings.feedbackMail
 import com.ptut.expense.settings.focusedRow
 import com.ptut.expense.shared.AccountCard
@@ -291,8 +292,9 @@ private fun SettingsHost(nav: NavHostController, focus: SettingsAction?, advance
     // had moved on to.
     val onAction: (SettingsAction) -> Unit = { action ->
         when (action) {
-            // The phone's own mail app writes and sends it. Android throws when it has none.
-            SettingsAction.Feedback -> runCatching { uriHandler.openUri(feedbackMail(build)) }
+            // The form in the browser, else the phone's own mail app. Android throws when it has neither.
+            SettingsAction.Feedback -> runCatching { uriHandler.openUri(feedbackForm(build)) }
+                .recoverCatching { uriHandler.openUri(feedbackMail(build)) }
                 .onFailure { scope.launch { toasts.show(ToastMessage(noEmailApp, ToastTone.Error)) } }
 
             SettingsAction.SlipOwner -> editingOwner = true
