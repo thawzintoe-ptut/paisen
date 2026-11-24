@@ -21,10 +21,17 @@ class BackupWordsTest {
     }
 
     @Test
-    fun aNewerFormatIsNamedByItsNumber() {
+    fun aNewerFormatSaysToUpdateTheApp() {
         val phrase = BackupProblem.OtherVersion(99).phrase()
 
-        assertTrue(phrase.contains("format 99"), phrase)
+        assertTrue(phrase.contains("Update the app"), phrase)
+    }
+
+    @Test
+    fun aFormatBelowOneIsNamedByItsNumber() {
+        val phrase = BackupProblem.OtherVersion(0).phrase()
+
+        assertTrue(phrase.contains("format 0"), phrase)
     }
 
     @Test

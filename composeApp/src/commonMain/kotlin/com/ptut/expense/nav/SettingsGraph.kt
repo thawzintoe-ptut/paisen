@@ -116,6 +116,8 @@ internal fun NavGraphBuilder.settingsRoutes(nav: NavHostController) {
             uiState = state,
             onBack = { nav.popBackStack() },
             onExport = backup::export,
+            // #112: a restore is two taps from Settings, Backup then Import a backup.
+            onImport = { nav.navigate(PtutRoute.ImportData) { launchSingleTop = true } },
         )
     }
 

@@ -5,6 +5,7 @@ import com.ptut.expense.domain.HomeChoice
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.backup.BackupPreview
 import com.ptut.expense.domain.backup.BackupProblem
+import com.ptut.expense.domain.backup.LedgerBackup
 import com.ptut.expense.domain.backup.MergeReport
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.dayAndMonth
@@ -61,8 +62,12 @@ fun BackupProblem.phrase(): String {
     val text = AppText.copy.phrases
     return when (this) {
         BackupProblem.NotReadable -> text.backupNotReadable
-        is BackupProblem.OtherVersion -> text.backupOtherVersion(format)
+
+        // 27c: a newer app's file says what to do about it; an older or broken format keeps its number.
+        is BackupProblem.OtherVersion -> if (format > LedgerBackup.FORMAT) text.backupNewerVersion else text.backupOtherVersion(format)
+
         is BackupProblem.OtherHome -> text.backupOtherHome(file, here)
+
         is BackupProblem.UnknownValue -> text.backupUnknownValue(field, value)
     }
 }

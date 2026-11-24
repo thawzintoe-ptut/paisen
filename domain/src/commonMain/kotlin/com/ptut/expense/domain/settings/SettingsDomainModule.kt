@@ -29,6 +29,7 @@ val settingsUseCases: Module = module {
     factory { SetMoodByTimeOfDayUseCase(get()) }
     factory { SetTransparencyUseCase(get()) }
     factory { SetWeeklyCheckInUseCase(get()) }
+    factory { MarkExportedUseCase(get()) }
     factory { SetSlipOwnerUseCase(get()) }
     factory { EnableAppLockUseCase(get()) }
     factory { DisableAppLockUseCase(get()) }

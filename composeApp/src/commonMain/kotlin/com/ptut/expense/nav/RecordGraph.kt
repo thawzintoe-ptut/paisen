@@ -11,12 +11,14 @@ import com.ptut.expense.confirm.ConfirmSlipView
 import com.ptut.expense.confirm.ConfirmSlipViewModel
 import com.ptut.expense.detail.TransactionDetailView
 import com.ptut.expense.detail.TransactionDetailViewModel
+import com.ptut.expense.di.ReleaseSwitches
 import com.ptut.expense.edit.EditTransactionView
 import com.ptut.expense.edit.EditTransactionViewModel
 import com.ptut.expense.review.ReviewView
 import com.ptut.expense.review.ReviewViewModel
 import com.ptut.expense.shoprule.ShopRuleView
 import com.ptut.expense.shoprule.ShopRuleViewModel
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -85,7 +87,8 @@ internal fun NavGraphBuilder.recordRoutes(nav: NavHostController) {
             onAskToDelete = detail::askToDelete,
             onKeepIt = detail::keepIt,
             onConfirmDelete = detail::confirmDelete,
-            onOpenShopRule = { nav.navigate(PtutRoute.ShopRule(it)) },
+            // #116: the shop rule screen is v2, so the Why card is text alone without it.
+            onOpenShopRule = { shop: String -> nav.navigate(PtutRoute.ShopRule(shop)) }.takeIf { koinInject<ReleaseSwitches>().v2 },
             onShare = { groupId -> nav.navigate(PtutRoute.AddSharedExpense(groupId, transactionId = id)) { launchSingleTop = true } },
             onOpenSharedGroup = { nav.navigate(PtutRoute.SharedGroup(it)) { launchSingleTop = true } },
             onSetAlsoRemove = detail::setAlsoRemove,

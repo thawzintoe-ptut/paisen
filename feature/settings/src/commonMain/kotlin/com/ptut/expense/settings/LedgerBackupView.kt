@@ -30,6 +30,8 @@ fun ExportDataView(
     onBack: () -> Unit,
     onExport: () -> Unit,
     modifier: Modifier = Modifier,
+    /** #112: the way to Import from the Backup row. Null draws no second button. */
+    onImport: (() -> Unit)? = null,
 ) {
     val text = LocalCopy.current.settings
     BackupScreen(
@@ -46,6 +48,8 @@ fun ExportDataView(
         footnote = text.exportFootnote,
         onBack = onBack,
         modifier = modifier,
+        secondary = onImport?.let { text.importInstead },
+        onSecondary = onImport ?: {},
     )
 }
 
@@ -75,16 +79,17 @@ fun ImportDataView(
             title = text.importLedger,
             intro = text.importIntro,
             cardTitle = text.fileRefused,
-            cardText = refused,
+            // 27c: why, then that nothing changed, in one card.
+            cardText = "$refused ${text.ledgerUntouched}",
             cardIcon = PtutIcon.Error,
-            noteTitle = text.ledgerUntouched,
-            noteText = text.nothingImported,
             action = text.chooseAnotherFile,
             onAction = onChooseFile,
             enabled = !uiState.busy,
             footnote = text.importFootnote,
             onBack = onBack,
             modifier = modifier,
+            secondary = copy.common.cancel,
+            onSecondary = onBack,
         )
         return
     }

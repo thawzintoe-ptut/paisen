@@ -7,6 +7,7 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.categories.CategoryCounts
 import com.ptut.expense.domain.categories.ObserveCategoryCountsUseCase
+import com.ptut.expense.domain.dayLabel
 import com.ptut.expense.domain.folders.ObserveWatchedFoldersUseCase
 import com.ptut.expense.domain.folders.WatchedFolder
 import com.ptut.expense.domain.folders.watched
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDate
 
 /** Which row. It is the row's identity as well as the destination it opens. */
 enum class SettingsAction { GoalJar, Advanced, SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, HomeCurrency, Assistant, Feedback, Licences, Play, SharedAccount, Help }
@@ -242,7 +244,7 @@ class SettingsViewModel(
         SettingsRowUiModel(
             id = SettingsAction.ExportLedger,
             name = text.backupRow,
-            value = text.exportValue,
+            value = choices.lastExportOn?.let { day -> text.lastCopy(LocalDate.parse(day).dayLabel()) } ?: text.exportValue,
             icon = "download",
         ),
         // #25: turning it on asks for the fingerprint, face or PIN first, so a failed check cannot lock anyone out.

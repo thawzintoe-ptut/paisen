@@ -79,6 +79,7 @@ val settingsModule: Module = module {
             toasts = get(),
             homeToday = get(),
             buildExport = get(),
+            markExported = getOrNull(),
         )
     }
     viewModel { TimezoneViewModel() }

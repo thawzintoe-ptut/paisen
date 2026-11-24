@@ -11,6 +11,12 @@ class SetTransparencyUseCase(private val settings: AppSettings) {
 }
 
 /** #20: Monday's look back at last week on Today. */
+
+/** #112: the Backup row's "Last copy" day, written when a backup file lands. */
+class MarkExportedUseCase(private val settings: AppSettings) {
+    operator fun invoke(day: String) = settings.markExported(day)
+}
+
 class SetWeeklyCheckInUseCase(private val settings: AppSettings) {
     operator fun invoke(on: Boolean) = settings.setWeeklyCheckIn(on)
 }

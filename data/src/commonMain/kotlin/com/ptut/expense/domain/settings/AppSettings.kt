@@ -37,6 +37,8 @@ data class AppChoices(
     val noteTone: NoteTone = NoteTone.Plain,
     /** #22: the Monday (ISO date) whose note the reader hid; that week shows none. */
     val hiddenNoteWeek: String? = null,
+    /** #112: the day (ISO date) a backup file was last saved, for the Backup row; null before the first. */
+    val lastExportOn: String? = null,
     /**
      * #41: a copy of the ledger's home currency and zone, read at launch before the database is
      * open. Null on every phone set up before #41, which is baht and Bangkok.
@@ -132,6 +134,9 @@ class AppSettings(private val store: AppSettingsStore) {
 
     /** #22: hides the note for the week starting [monday]; a new week shows its own. */
     fun hideNoteWeek(monday: String) = update { it.copy(hiddenNoteWeek = monday) }
+
+    /** #112: a backup file was saved on [day]. */
+    fun markExported(day: String) = update { it.copy(lastExportOn = day) }
 
     /**
      * #41: the weekly target was typed in the old home's money, so a new home clears it, unless

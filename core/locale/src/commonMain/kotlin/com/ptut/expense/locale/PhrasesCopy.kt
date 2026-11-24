@@ -35,6 +35,7 @@ data class PhrasesCopy(
     val restoreLostCategory: (Int) -> String = { lost -> if (lost == 1) "1 lost its category" else "$lost lost their category" },
     val backupNotReadable: String = "This is not a file this app can read",
     val backupOtherVersion: (Int) -> String = { format -> "This file was written by a different version of the app (format $format)" },
+    val backupNewerVersion: String = "It was made by a newer version of PaiSeN. Update the app, then try again.",
     /** #46: a ledger with rows takes no file counted in other money. */
     val backupOtherHome: (file: String, here: String) -> String = { file, here -> "This file counts in $file. This phone counts in $here." },
     /** #46: in the preview of a file an empty ledger would take its home from: "counts in MMK, Yangon days". */
@@ -91,6 +92,7 @@ val BurmesePhrases = PhrasesCopy(
     restoreLostCategory = { lost -> "${lost.inMyanmarDigits()} ခုက အမျိုးအစား ပျောက်သွားတယ်" },
     backupNotReadable = "ဒီဖိုင်ကို ဒီအက်ပ်က ဖတ်လို့ မရဘူး",
     backupOtherVersion = { format -> "ဒီဖိုင်ကို တခြား ဗားရှင်းက ရေးထားတာ (format $format)" },
+    backupNewerVersion = "PaiSeN ဗားရှင်းအသစ်က လုပ်ထားတာ။ အက်ပ်ကို update လုပ်ပြီး ထပ်ကြိုးစားပါ။",
     backupOtherHome = { file, here -> "ဒီဖိုင်က $file နဲ့ တွက်ထားတယ်။ ဒီဖုန်းက $here နဲ့ တွက်တယ်။" },
     backupCountsIn = { code, place -> "$code နဲ့ တွက်ထားတယ်၊ $place နေ့စွဲ" },
     backupUnknownValue = { field, value -> "ဖိုင်ထဲမှာ မသိတဲ့ $field ပါတယ်: $value" },
@@ -134,6 +136,7 @@ val ThaiPhrases = PhrasesCopy(
     restoreLostCategory = { lost -> "$lost รายการไม่มีหมวดหมู่แล้ว" },
     backupNotReadable = "แอปนี้อ่านไฟล์นี้ไม่ได้",
     backupOtherVersion = { format -> "ไฟล์นี้มาจากแอปเวอร์ชันอื่น (รูปแบบ $format)" },
+    backupNewerVersion = "ไฟล์นี้สร้างจาก PaiSeN เวอร์ชันใหม่กว่า อัปเดตแอปแล้วลองอีกครั้ง",
     backupOtherHome = { file, here -> "ไฟล์นี้นับเป็น $file แต่โทรศัพท์นี้นับเป็น $here" },
     backupCountsIn = { code, place -> "นับเป็น $code วันตามเวลา$place" },
     backupUnknownValue = { field, value -> "ในไฟล์มี $field ที่ไม่รู้จัก: $value" },

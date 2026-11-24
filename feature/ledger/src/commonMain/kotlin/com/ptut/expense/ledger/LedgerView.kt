@@ -153,7 +153,7 @@ private fun LoadedLedger(
                         placeholder = text.search,
                         modifier = Modifier.weight(1f),
                     )
-                    FiltersButton(filter = state.filter, onClick = { filtering = true })
+                    FiltersButton(filter = state.filter, searching = state.query.isNotBlank(), onClick = { filtering = true })
                 }
             }
 
@@ -235,9 +235,9 @@ private fun LoadedLedger(
     }
 }
 
-/** The sliders button (p15), with a dot while a filter other than All is on, so a short list explains itself. */
+/** The sliders button (p15), with a dot while a search or a filter other than All narrows the list (11), so a short list explains itself. */
 @Composable
-private fun FiltersButton(filter: LedgerFilter, onClick: () -> Unit) {
+private fun FiltersButton(filter: LedgerFilter, searching: Boolean, onClick: () -> Unit) {
     val text = LocalCopy.current.history
     Box(
         contentAlignment = Alignment.Center,
@@ -252,7 +252,7 @@ private fun FiltersButton(filter: LedgerFilter, onClick: () -> Unit) {
             .tappable(CircleShape, Role.Button, onClick = onClick),
     ) {
         Icon(PtutIcon.RuleSettings.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(SkySizes.searchGlyph))
-        if (filter != LedgerFilter.All) {
+        if (filter != LedgerFilter.All || searching) {
             Box(
                 Modifier
                     .align(Alignment.TopEnd)

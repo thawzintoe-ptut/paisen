@@ -97,6 +97,15 @@ class SettingsViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun `the backup row says the day of the last copy once there is one`() = runTest {
+        assertEquals("Backup file", rowsFor().row(SettingsAction.ExportLedger).value)
+
+        val rows = rowsFor(settings = appSettings(AppChoices(lastExportOn = "2026-11-01")))
+
+        assertEquals("Last copy Sun 1 Nov", rows.row(SettingsAction.ExportLedger).value)
+    }
+
+    @Test
     fun `the goal jar row stays while play is off`() = runTest {
         val settings = appSettings(AppChoices(play = PlayChoices(on = false)))
 

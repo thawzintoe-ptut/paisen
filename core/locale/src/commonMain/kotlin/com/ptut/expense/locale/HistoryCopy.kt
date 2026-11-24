@@ -15,9 +15,9 @@ data class HistoryCopy(
     val emptyHeadline: String = "Nothing recorded yet",
     val emptyBody: String = "Slips file themselves as they arrive, and anything you add by hand lands here too.",
     val emptyStatus: String = "Your history fills itself as slips arrive",
-    val noMatchHeadline: String = "No transactions match",
+    val noMatchHeadline: String = "No purchases match",
     val noMatchBody: String = "Nothing here matches what you are looking for. Clear the filters, or search for less.",
-    val hiddenByFilter: (Int) -> String = { n -> "$n transactions outside this filter" },
+    val hiddenByFilter: (Int) -> String = { n -> "$n ${if (n == 1) "purchase" else "purchases"} outside this filter" },
     val clearFilters: String = "Clear filters",
     val clearSearch: String = "Clear search",
     /** #70: the top line while the newest month is at the top, and the month index's spoken name. */

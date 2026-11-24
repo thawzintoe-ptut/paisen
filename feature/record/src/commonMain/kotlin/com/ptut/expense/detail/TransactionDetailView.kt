@@ -79,7 +79,7 @@ fun TransactionDetailView(
     onAskToDelete: () -> Unit,
     onKeepIt: () -> Unit,
     onConfirmDelete: () -> Unit,
-    onOpenShopRule: (String) -> Unit,
+    onOpenShopRule: ((String) -> Unit)?,
     modifier: Modifier = Modifier,
     /** #186: share into the picked group, open the group it is shared in, and the delete box. */
     onShare: (groupId: String) -> Unit = {},
@@ -130,7 +130,7 @@ private fun Record(
     onBack: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onOpenShopRule: (String) -> Unit,
+    onOpenShopRule: ((String) -> Unit)?,
     onShare: () -> Unit,
     onOpenSharedGroup: (String) -> Unit,
     onSetPlanned: (Boolean) -> Unit = {},
@@ -185,14 +185,14 @@ private fun Record(
                 state.canShare -> ShareRow(label = text.shareThisCost, onClick = onShare)
             }
 
-            // The Why card (p16), and the only way to the shop-rule screen (#146, K15).
+            // The Why card (p16), and the only way to the shop-rule screen (#146, K15). Text alone without it (#116).
             state.shopRule?.let { rule ->
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = Spacing.md)
                         .clip(PtutRadii.r16)
-                        .tappable(PtutRadii.r16, Role.Button) { onOpenShopRule(rule.shop) },
+                        .then(onOpenShopRule?.let { open -> Modifier.tappable(PtutRadii.r16, Role.Button) { open(rule.shop) } } ?: Modifier),
                 ) {
                     SkyNoticeCard(
                         title = text.whyFiled(rule.filesUnder),

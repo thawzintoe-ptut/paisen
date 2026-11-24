@@ -143,7 +143,8 @@ class ReportsViewModel(
     weeklyTarget: Flow<WeeklyTarget?> = flowOf(null),
 ) : ViewModel() {
 
-    private val period = MutableStateFlow(ReportPeriod.Week)
+    // Board 14: Reports opens on the month, where Today's category line points.
+    private val period = MutableStateFlow(ReportPeriod.Month)
 
     /** The bar the reader tapped, or null for the one today falls in. */
     private val selected = MutableStateFlow<Int?>(null)

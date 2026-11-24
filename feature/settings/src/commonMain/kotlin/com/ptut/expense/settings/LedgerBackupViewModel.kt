@@ -11,6 +11,7 @@ import com.ptut.expense.domain.backup.RestoreDriver
 import com.ptut.expense.domain.backup.RestoreStep
 import com.ptut.expense.domain.backup.ledgerFileName
 import com.ptut.expense.domain.dayAndMonth
+import com.ptut.expense.domain.settings.MarkExportedUseCase
 import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.files.LedgerFileStore
@@ -68,6 +69,8 @@ class LedgerBackupViewModel(
     private val toasts: ToastMessages,
     private val homeToday: GetHomeTodayUseCase,
     private val buildExport: BuildLedgerExportUseCase,
+    /** #112: the Backup row says when the last copy was saved. Null where no settings are bound. */
+    private val markExported: MarkExportedUseCase? = null,
 ) : ViewModel() {
 
     /**
@@ -95,7 +98,10 @@ class LedgerBackupViewModel(
     fun export() = whileFree {
         val export = buildExport()
         val landedAt = files.write(export.fileName, export.contents)
-        landedAt?.let { toasts.show(ToastMessage(AppText.copy.settings.savedTo(it))) }
+        landedAt?.let {
+            markExported?.invoke(homeToday().toString())
+            toasts.show(ToastMessage(AppText.copy.settings.savedTo(it)))
+        }
     }
 
     /**

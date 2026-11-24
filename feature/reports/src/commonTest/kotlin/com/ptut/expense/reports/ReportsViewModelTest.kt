@@ -272,6 +272,8 @@ class ReportsViewModelTest : ViewModelTest() {
         subCategories: Flow<List<SubCategory>> = flowOf(emptyList()),
         target: WeeklyTarget? = null,
         now: Instant = at(day = 14, hour = 12),
+        // Most cases here read a week; the screen itself opens on the month (board 14).
+        period: ReportPeriod? = ReportPeriod.Week,
     ) = ReportsViewModel(
         getPeriodReport = GetPeriodReportUseCase(
             FakeLedger(transactions),
@@ -285,7 +287,16 @@ class ReportsViewModelTest : ViewModelTest() {
         categoryUpdates = categories,
         subCategoryUpdates = subCategories,
         weeklyTarget = flowOf(target),
-    )
+    ).also { model -> period?.let(model::show) }
+
+    @Test
+    fun reportsOpenOnTheMonth() = runTest {
+        viewModel(emptyList(), period = null).uiState.test {
+            awaitItem()
+            assertEquals(ReportPeriod.Month, (awaitItem() as ReportsUiState.Success).period)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 
     /** Reports only reads recent history; the rest of the seam is not its business. */
     private class FakeLedger(transactions: List<Transaction>) : LedgerRepository {

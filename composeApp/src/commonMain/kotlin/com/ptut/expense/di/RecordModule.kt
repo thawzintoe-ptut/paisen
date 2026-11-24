@@ -10,7 +10,6 @@ import com.ptut.expense.domain.categories.categoryUsage
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
-import com.ptut.expense.domain.record.ObserveFilingRulesUseCase
 import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.domain.rules.forShop
 import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
@@ -93,8 +92,7 @@ val recordModule: Module = module {
             toasts = get(),
             categories = storedCategories(),
             subCategories = storedSubCategories(),
-            // #116: the Why card leads to the shop rule screen, which is v2.
-            filingRules = if (v2On()) get() else ObserveFilingRulesUseCase(),
+            filingRules = get(),
             haptics = get(),
             shareOptions = get(),
             offersPlanned = flagOn(Flag.Planned),

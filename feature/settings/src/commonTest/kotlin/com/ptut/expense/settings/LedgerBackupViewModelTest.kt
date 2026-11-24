@@ -16,6 +16,9 @@ import com.ptut.expense.domain.backup.ObserveLedgerHoldingUseCase
 import com.ptut.expense.domain.backup.RestoreDriver
 import com.ptut.expense.domain.ledger.FakeLedger
 import com.ptut.expense.domain.ledger.LedgerRepository
+import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.settings.MarkExportedUseCase
+import com.ptut.expense.domain.settings.appSettings
 import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.files.LedgerFileStore
@@ -85,6 +88,20 @@ class LedgerBackupViewModelTest : ViewModelTest() {
     @Test
     fun `one row is counted in the singular`() = runTest {
         assertEquals("1 transaction, back to 3 Aug", state(FakeLedger(listOf(row("a", day = 3)))).holding)
+    }
+
+    @Test
+    fun `a saved copy records its day and a cancelled picker records none`() = runTest {
+        val settings = appSettings()
+        val saved = viewModel(files = RecordingFiles(writeLandsAt = "Downloads/ptut-ledger.json"), settings = settings)
+        saved.export()
+        runCurrent()
+        assertEquals("2026-08-24", settings.choices.value.lastExportOn)
+
+        val untouched = appSettings()
+        viewModel(files = RecordingFiles(writeLandsAt = null), settings = untouched).export()
+        runCurrent()
+        assertNull(untouched.choices.value.lastExportOn)
     }
 
     @Test
@@ -277,6 +294,7 @@ class LedgerBackupViewModelTest : ViewModelTest() {
         ledger: LedgerRepository = FakeLedger(),
         files: LedgerFileStore = RecordingFiles(),
         archive: LedgerArchive = FakeArchive(),
+        settings: AppSettings? = null,
     ): LedgerBackupViewModel {
         val homeToday = GetHomeTodayUseCase(FixedClock(now))
         return LedgerBackupViewModel(
@@ -286,6 +304,7 @@ class LedgerBackupViewModelTest : ViewModelTest() {
             toasts = toasts,
             homeToday = homeToday,
             buildExport = BuildLedgerExportUseCase(archive, homeToday),
+            markExported = settings?.let(::MarkExportedUseCase),
         )
     }
 
@@ -294,7 +313,7 @@ class LedgerBackupViewModelTest : ViewModelTest() {
     }
 
     private companion object {
-        const val NEWER_FORMAT = "This file was written by a different version of the app (format 9)"
+        const val NEWER_FORMAT = "It was made by a newer version of PaiSeN. Update the app, then try again."
     }
 }
 

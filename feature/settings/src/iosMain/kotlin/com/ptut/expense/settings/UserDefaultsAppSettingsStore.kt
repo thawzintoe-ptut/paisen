@@ -35,6 +35,7 @@ private const val OWNER_CANDIDATE = "ptut-slip-owner-candidate"
 private const val OWNER_SEEN = "ptut-slip-owner-seen"
 private const val NOTE_TONE = "ptut-note-tone"
 private const val HIDDEN_NOTE_WEEK = "ptut-hidden-note-week"
+private const val LAST_EXPORT_ON = "ptut-last-export-on"
 
 // "Add starts in" was dropped; the next write clears what older builds saved.
 private const val ADD_CURRENCY = "ptut-add-currency"
@@ -96,6 +97,7 @@ class UserDefaultsAppSettingsStore(
             slipOwner = owner.copy(seen = defaults.integerForKey(OWNER_SEEN).toInt()),
             noteTone = NoteTone.entries.firstOrNull { it.name == defaults.stringForKey(NOTE_TONE) } ?: shipped.noteTone,
             hiddenNoteWeek = defaults.stringForKey(HIDDEN_NOTE_WEEK),
+            lastExportOn = defaults.stringForKey(LAST_EXPORT_ON),
             homeCurrency = defaults.stringForKey(HOME_CURRENCY),
             homeZone = defaults.stringForKey(HOME_ZONE),
             play = shipped.play.let { play ->
@@ -138,6 +140,7 @@ class UserDefaultsAppSettingsStore(
         defaults.setInteger(choices.slipOwner.seen.toLong(), OWNER_SEEN)
         defaults.setObject(choices.noteTone.name, NOTE_TONE)
         writeOptional(choices.hiddenNoteWeek, HIDDEN_NOTE_WEEK)
+        writeOptional(choices.lastExportOn, LAST_EXPORT_ON)
         defaults.removeObjectForKey(ADD_CURRENCY)
         writeOptional(choices.homeCurrency, HOME_CURRENCY)
         writeOptional(choices.homeZone, HOME_ZONE)
