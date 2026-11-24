@@ -25,7 +25,8 @@ class SettingsDestinationTest {
                 null,
                 PtutRoute.Activity,
                 PtutRoute.Categories,
-                // #121, #20, #22, #123 and #25: rows with no screen behind them; the row's tap changes it.
+                // #121, #20, #22, #123, #25 and #115: rows with no screen behind them; the row's tap changes it.
+                null,
                 null,
                 null,
                 null,

@@ -39,6 +39,14 @@ data class AppChoices(
     val hiddenNoteWeek: String? = null,
     /** #112: the day (ISO date) a backup file was last saved, for the Backup row; null before the first. */
     val lastExportOn: String? = null,
+    /** #115: launch counts go out unless the reader turns them off. */
+    val shareUsage: Boolean = true,
+    /** #115: a random id for this install's counts, made on the first send; never tied to a person. */
+    val usageId: String? = null,
+    /** #115: the day (ISO date) today_opened was last sent, so it goes once a day. */
+    val usageDay: String? = null,
+    /** #115: when the last session started, so crashes since then are counted once. */
+    val usageSessionAt: Long = 0L,
     /**
      * #41: a copy of the ledger's home currency and zone, read at launch before the database is
      * open. Null on every phone set up before #41, which is baht and Bangkok.
@@ -137,6 +145,15 @@ class AppSettings(private val store: AppSettingsStore) {
 
     /** #112: a backup file was saved on [day]. */
     fun markExported(day: String) = update { it.copy(lastExportOn = day) }
+
+    /** #115 */
+    fun setShareUsage(on: Boolean) = update { it.copy(shareUsage = on) }
+
+    fun setUsageId(id: String) = update { it.copy(usageId = id) }
+
+    fun setUsageDay(day: String) = update { it.copy(usageDay = day) }
+
+    fun setUsageSessionAt(epochMillis: Long) = update { it.copy(usageSessionAt = epochMillis) }
 
     /**
      * #41: the weekly target was typed in the old home's money, so a new home clears it, unless

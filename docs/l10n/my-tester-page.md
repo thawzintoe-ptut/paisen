@@ -55,7 +55,7 @@ The Burmese on `firebase/hosting/index.html` (the `MY` table in its script). A n
 | What stays on your phone | ဖုန်းထဲမှာပဲ ရှိနေမယ့်အရာတွေ | `promTitle` |
 | Slips are read on the phone | စလစ်တွေကို ဖုန်းထဲမှာပဲ ဖတ်တယ် | `p1t` |
 | ML Kit on Android and Apple Vision on iPhone read them. Nothing is uploaded. | Android မှာ ML Kit၊ iPhone မှာ Apple Vision က ဖတ်ပေးတယ်။ ဘယ်ကိုမှ မပို့ပါဘူး။ | `p1b` |
-| No account, no ads, no analytics | အကောင့်၊ ကြော်ငြာ၊ analytics မရှိဘူး | `p2t` |
+| No account, no ads | အကောင့်၊ ကြော်ငြာ မရှိဘူး | `p2t` |
 | Your own spending needs no sign-in. | ကိုယ်ပိုင် အသုံးစရိတ်အတွက် sign in ဝင်စရာ မလိုပါဘူး။ | `p2b` |
 | Shared groups only when you share | Shared group ကို သင်ဝေမျှမှသာသုံးလို့ရမယ် (corrected by a native reader, 13 Nov) | `p3t` |
 | Only a group you share is sent, and only after you sign in. | မျှသုံးတဲ့ group ကိုပဲ ပို့ပြီး sign in ဝင်ပြီးမှ ပို့တာပါ။ | `p3b` |

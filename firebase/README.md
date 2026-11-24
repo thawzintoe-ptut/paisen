@@ -12,7 +12,7 @@ Create the project **only under developer.ptut@gmail.com**. Do not use another G
 
 ## 1. Project and Firestore
 
-1. Firebase console → Add project. Turn Google Analytics **off** (the app sends no analytics).
+1. Firebase console → Add project. Turn Google Analytics **on**: #115 sends usage counts to it (section 7).
 2. Build → Firestore Database → Create database → production mode.
    Pick the region once; it cannot change later. `asia-southeast1` (Singapore) is closest to Thailand.
 3. Put that region's plain name in `region=` (the privacy notice shows it, for example `Singapore`).
@@ -98,6 +98,11 @@ Copy `firebase.properties.example` to `firebase.properties` at the repo root and
 It is gitignored. Gradle turns it into `FirebaseConfig` at build time; Android's App Link host comes
 from `linkDomain` too.
 
+`gaMeasurementId` and `gaApiSecret` turn on the #115 usage counts: in Google Analytics, open the
+property linked to this Firebase project, then Admin › Data streams › the stream, copy the
+Measurement ID (G-…), and under Measurement Protocol API secrets create one. Leave both empty and no
+count is sent. The secret only allows sending events, but keep it out of the repo all the same.
+
 The API key and client IDs are public identifiers, not secrets. Firestore rules
 (`firestore.rules`) are what keep each group readable only by its members.
 
@@ -142,5 +147,7 @@ Only shared groups: the group's name and type, member names, shared expenses and
 added each one. Your own transactions, slips, reports and the links between them never sync.
 With push set up, the phone also stores its push token and app language in `devices/`, so it can be
 told when someone changes a group.
+With `gaMeasurementId` set, usage counts go to Google Analytics: an event name, 0/1 flags and a
+random install ID (`Ga4UsageLog`). The reader can turn them off in Settings.
 The source rules (`verifySourceRules`) keep every network import under `sync/`, and
 `:androidApp:verifyNoTelemetryUpload` fails the build if an SDK's telemetry backend comes back.

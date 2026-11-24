@@ -37,6 +37,7 @@ import com.ptut.expense.domain.shared.RunDueRepeatsUseCase
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.slip.ImportStore
 import com.ptut.expense.domain.slip.SlipPictures
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.importer.FakeSlipTextReader
 import com.ptut.expense.importer.SlipDiscards
 import com.ptut.expense.importer.SlipImporter
@@ -177,6 +178,7 @@ val ledgerModule: Module = module {
             },
             readsWallets = isDebug(),
             jar = PlayBookJarInbox(get()),
+            usage = getOrNull() ?: UsageLog.None,
         )
     }
 

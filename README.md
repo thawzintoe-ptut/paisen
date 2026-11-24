@@ -45,7 +45,7 @@ In Thailand, a QR payment or a transfer usually ends with a slip saved to your p
 those slips and turns them into a record of where your money went.
 
 <p align="center">
-  <img src="docs/readme/promises.svg" width="100%" alt="1. On the phone: slips are read by ML Kit and Apple Vision, and nothing is uploaded. 2. No account: your own spending needs no sign-in, ads or analytics. 3. Nothing lost: a slip it cannot read waits in To check with its picture.">
+  <img src="docs/readme/promises.svg" width="100%" alt="1. On the phone: slips are read by ML Kit and Apple Vision, and nothing is uploaded. 2. No account: your own spending needs no sign-in or ads. 3. Nothing lost: a slip it cannot read waits in To check with its picture.">
 </p>
 
 ## Features
@@ -65,18 +65,20 @@ those slips and turns them into a record of where your money went.
 ## Privacy
 
 > [!NOTE]
-> Your own spending, slips and reports stay on the phone. No ads, no analytics, no crash
-> reporting — and Android and iCloud backups of the app's data are turned off. The one exception
+> Your own spending, slips and reports stay on the phone. No ads, and Android and iCloud backups
+> of the app's data are turned off. The app sends a few usage counts with no amounts or names, and
+> you can turn them off in Settings. The one exception
 > you choose: on Android, saying an expense in a language your phone cannot recognise offline sends
 > your voice to Google, and Quick add says so first.
 
-PaiSeN itself uses the network for shared groups, after you sign in to share, and to check with
-Firebase Remote Config which features are on, which sends nothing about your spending. Everything
+PaiSeN itself uses the network for shared groups, after you sign in to share, to check with
+Firebase Remote Config which features are on, and to send usage counts (#115). None of these
+sends anything about your spending. Everything
 that is sent, and where, is in [PRIVACY.md](PRIVACY.md).
 
 #### CI checks these promises on every push
 
-- [x] No analytics or crash-reporting SDK, and no HTTP client except the one shared groups and the feature check use
+- [x] No analytics or crash-reporting SDK, and no HTTP client except the one shared groups, the feature check and the usage counts use
 - [x] Network code only inside the sync module
 - [x] No telemetry upload service in the merged Android manifest
 - [x] No account number in the slip test data

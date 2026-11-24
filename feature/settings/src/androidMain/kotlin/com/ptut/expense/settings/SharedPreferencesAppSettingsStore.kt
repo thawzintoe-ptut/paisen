@@ -27,6 +27,10 @@ private const val OWNER_SEEN = "slip-owner-seen"
 private const val NOTE_TONE = "note-tone"
 private const val HIDDEN_NOTE_WEEK = "hidden-note-week"
 private const val LAST_EXPORT_ON = "last-export-on"
+private const val SHARE_USAGE = "share-usage"
+private const val USAGE_ID = "usage-id"
+private const val USAGE_DAY = "usage-day"
+private const val USAGE_SESSION_AT = "usage-session-at"
 
 // "Add starts in" was dropped; the next write clears what older builds saved.
 private const val ADD_CURRENCY = "add-currency"
@@ -79,6 +83,10 @@ class SharedPreferencesAppSettingsStore(
             noteTone = NoteTone.entries.firstOrNull { it.name == choices.getString(NOTE_TONE, null) } ?: shipped.noteTone,
             hiddenNoteWeek = choices.getString(HIDDEN_NOTE_WEEK, null),
             lastExportOn = choices.getString(LAST_EXPORT_ON, null),
+            shareUsage = choices.getBoolean(SHARE_USAGE, shipped.shareUsage),
+            usageId = choices.getString(USAGE_ID, null),
+            usageDay = choices.getString(USAGE_DAY, null),
+            usageSessionAt = choices.getLong(USAGE_SESSION_AT, 0L),
             homeCurrency = choices.getString(HOME_CURRENCY, null),
             homeZone = choices.getString(HOME_ZONE, null),
             play = shipped.play.let { play ->
@@ -121,6 +129,10 @@ class SharedPreferencesAppSettingsStore(
             .putString(NOTE_TONE, choices.noteTone.name)
             .putString(HIDDEN_NOTE_WEEK, choices.hiddenNoteWeek)
             .putString(LAST_EXPORT_ON, choices.lastExportOn)
+            .putBoolean(SHARE_USAGE, choices.shareUsage)
+            .putString(USAGE_ID, choices.usageId)
+            .putString(USAGE_DAY, choices.usageDay)
+            .putLong(USAGE_SESSION_AT, choices.usageSessionAt)
             .remove(ADD_CURRENCY)
             .putString(HOME_CURRENCY, choices.homeCurrency)
             .putString(HOME_ZONE, choices.homeZone)

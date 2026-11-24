@@ -354,6 +354,8 @@ private fun SettingsHost(nav: NavHostController, focus: SettingsAction?, advance
 
             SettingsAction.WeeklyCheckIn -> settings.setWeeklyCheckIn(on)
 
+            SettingsAction.ShareUsage -> settings.setShareUsage(on)
+
             SettingsAction.Transparency -> settings.setTransparency(on)
 
             SettingsAction.AppLock -> settings.setAppLock(

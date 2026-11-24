@@ -34,6 +34,9 @@ import com.ptut.expense.domain.slip.SlipConfirmation
 import com.ptut.expense.domain.slip.isReaderNoise
 import com.ptut.expense.domain.slip.shownShop
 import com.ptut.expense.domain.under
+import com.ptut.expense.domain.usage.UsageEvent
+import com.ptut.expense.domain.usage.UsageFlag
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.AmountEntry
@@ -89,6 +92,8 @@ class ConfirmSlipViewModel(
     private val discardSlip: DiscardSlipUseCase,
     /** Not mine: the slip goes once its Undo has left the screen (#219). */
     private val discardWithUndo: DiscardSlipWithUndoUseCase,
+    /** #115: a count per slip confirmed, and whether its amount or shop was changed. */
+    private val usageLog: UsageLog = UsageLog.None,
 ) : ViewModel() {
 
     private var usage: Map<String, Int> = emptyMap()
@@ -234,6 +239,9 @@ class ConfirmSlipViewModel(
                 return@launch
             }
             haptics.saved()
+            val edited = (slip.amount != null && slip.amount != amount) || (typed.isNotEmpty() && typed != slip.merchant)
+            usageLog.log(UsageEvent.SlipChecked, mapOf(UsageFlag.Edited to edited))
+            usageLog.log(UsageEvent.SlipFiled, mapOf(UsageFlag.Checked to true))
             val shown = typed.ifEmpty { null } ?: filed.getOrNull()?.counterparty?.let { shownShop(it, AppText.copy.slips.unknownShop) }
             val saved = AppText.copy.slips.saved(amount.formatCompact(), slip.occurredAtEpochMillis.filedDay(), category.name, shown)
             toasts.show(ToastMessage(saved))

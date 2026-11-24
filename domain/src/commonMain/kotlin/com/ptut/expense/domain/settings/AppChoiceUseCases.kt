@@ -17,6 +17,11 @@ class MarkExportedUseCase(private val settings: AppSettings) {
     operator fun invoke(day: String) = settings.markExported(day)
 }
 
+/** #115: the Share usage counts switch. */
+class SetShareUsageUseCase(private val settings: AppSettings) {
+    operator fun invoke(on: Boolean) = settings.setShareUsage(on)
+}
+
 class SetWeeklyCheckInUseCase(private val settings: AppSettings) {
     operator fun invoke(on: Boolean) = settings.setWeeklyCheckIn(on)
 }

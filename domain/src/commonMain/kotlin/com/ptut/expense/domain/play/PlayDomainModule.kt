@@ -1,5 +1,6 @@
 package com.ptut.expense.domain.play
 
+import com.ptut.expense.domain.usage.UsageLog
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -28,7 +29,7 @@ val playUseCases: Module = module {
     factory { ObserveGoalJarUseCase(get(), get(), get()) }
     factory { SaveGoalUseCase(get(), get()) }
     factory { ArchiveGoalUseCase(get()) }
-    factory { PutMoneyInUseCase(get(), get()) }
+    factory { PutMoneyInUseCase(get(), get(), usage = getOrNull() ?: UsageLog.None) }
     factory { ChooseSavingsAccountUseCase(get()) }
     factory { RemoveSaidDepositUseCase(get()) }
     factory { PutBackDepositUseCase(get()) }

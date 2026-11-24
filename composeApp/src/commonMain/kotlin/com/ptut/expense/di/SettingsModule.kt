@@ -6,6 +6,7 @@ import com.ptut.expense.categories.EditCategoryViewModel
 import com.ptut.expense.domain.play.PlayBook
 import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.settings.ObserveAssistantModelUseCase
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.folders.PhotoFoldersViewModel
 import com.ptut.expense.locale.Language
 import com.ptut.expense.platform.lock.DeviceAuth
@@ -42,6 +43,7 @@ val settingsModule: Module = module {
             saveMoodByTimeOfDay = get(),
             saveTransparency = get(),
             saveWeeklyCheckIn = get(),
+            saveShareUsage = get(),
             saveSlipOwner = get(),
             enableAppLock = get(),
             disableAppLock = get(),
@@ -55,6 +57,7 @@ val settingsModule: Module = module {
             showHomeCurrency = currenciesOn(),
             showPlay = flagOn(Flag.Play) && laterOn(),
             showJar = flagOn(Flag.Play),
+            showUsage = getOrNull<UsageLog>()?.sends == true,
             showV2 = v2On(),
             observeGoals = get<PlayBook>().goals,
         )

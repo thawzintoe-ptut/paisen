@@ -49,6 +49,8 @@ import com.ptut.expense.domain.today.HomePeriod
 import com.ptut.expense.domain.today.MoodRecap
 import com.ptut.expense.domain.today.ObserveScanningUseCase
 import com.ptut.expense.domain.today.ReviewCounts
+import com.ptut.expense.domain.usage.UsageEvent
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.SpendWords
@@ -247,6 +249,8 @@ class HomeViewModel(
     playMotion: Flow<Boolean> = flowOf(false),
     /** #103: the app's one toast, where "Caught a K PLUS slip" goes. None where nothing binds it. */
     private val toasts: ToastMessages? = null,
+    /** #115: today_opened, which the sender keeps to once a day. */
+    private val usage: UsageLog = UsageLog.None,
 ) : ViewModel() {
 
     /** Bumped when the screen comes back, so a card that belongs to the morning goes at noon. */
@@ -265,6 +269,7 @@ class HomeViewModel(
     val editRequests: StateFlow<String?> = edits
 
     init {
+        usage.log(UsageEvent.TodayOpened)
         watchDeposits(deposits, goals)
         // The first read only learns what is there, so a cold start or a new holder never replays a toast.
         viewModelScope.launch {

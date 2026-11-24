@@ -39,6 +39,8 @@ import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.Rate
 import com.ptut.expense.domain.shared.rateUnitLabel
 import com.ptut.expense.domain.under
+import com.ptut.expense.domain.usage.UsageEvent
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.currencyCopy
 import com.ptut.expense.ui.AmountEntry
@@ -243,6 +245,8 @@ class AddViewModel(
     private val recordTransaction: RecordTransactionUseCase,
     /** The half-typed sheet, kept through Android killing the process. */
     private val savedState: SavedStateHandle = SavedStateHandle(),
+    /** #115: a count per row added by hand. */
+    private val usageLog: UsageLog = UsageLog.None,
 ) : ViewModel() {
 
     private var usage: Map<String, Int> = emptyMap()
@@ -632,6 +636,7 @@ class AddViewModel(
             // formatCompact, not format: the design's line is `Saved ฿485 · Food & drink`, and
             // `฿485.00` in a sentence reads as a machine reporting rather than a receipt.
             haptics.saved()
+            usageLog.log(UsageEvent.ExpenseAdded)
             toasts.show(ToastMessage(AppText.copy.add.saved(amount.formatCompact(), category.name)))
             state.update { it.copy(saving = false, saved = true) }
         }

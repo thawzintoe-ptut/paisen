@@ -200,6 +200,7 @@ private fun PromiseStep() {
     )
     PromiseRow(PtutIcon.ReceiptLong, text.promise, Modifier.padding(top = Spacing.lg))
     PromiseRow(PtutIcon.Lock, text.privacy, Modifier.padding(top = Spacing.sm))
+    Text(text.usageNote, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.md))
 }
 
 @Composable

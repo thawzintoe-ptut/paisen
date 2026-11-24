@@ -4,6 +4,7 @@ import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.play.ObservePlayOnUseCase
 import com.ptut.expense.domain.play.PlayPart
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.shared.AccountViewModel
 import com.ptut.expense.shared.AddExpenseViewModel
 import com.ptut.expense.shared.GroupAwardsViewModel
@@ -35,6 +36,7 @@ val sharedModule: Module = module {
             createGroupUseCase = get(),
             createPersonGroup = get(),
             toasts = get(),
+            usage = getOrNull() ?: UsageLog.None,
         )
     }
     viewModel { PeopleViewModel(observeSnapshot = get(), getPeopleBalances = get(), setPersonArchived = get(), createPersonGroup = get(), toasts = get()) }
@@ -136,6 +138,7 @@ val sharedModule: Module = module {
             haptics = get(),
             prefillAmount = amount.ifEmpty { null },
             savedState = get(),
+            usage = getOrNull() ?: UsageLog.None,
         )
     }
     viewModel { (groupId: String) -> WhoPaysWheelViewModel(groupId = groupId, observeSnapshot = get(), getWheel = get()) }

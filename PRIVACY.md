@@ -1,6 +1,6 @@
 # PaiSeN privacy policy
 
-Last updated: 19 November 2026
+Last updated: 24 November 2026
 
 PaiSeN is an expense tracker made by Thaw Zin Toe. This policy explains what the app does with
 your data. The short version: your own spending stays on your phone. Shared groups use the
@@ -22,8 +22,18 @@ These are stored in the app's private storage and are never sent anywhere:
 On iPhone, if you ask Siri or a Shortcut for your spending, the app gives the total to Siri or
 that Shortcut on your phone, after the phone is unlocked.
 
-The app has no ads, no analytics and no crash reporting. It does not sell or share your data.
-If the app crashes, it writes a short report that stays on your phone unless you choose Share.
+The app has no ads. It does not sell or share your data.
+
+**Usage counts.** To learn whether the app works for people, it sends Google Analytics a few counts:
+that a slip was filed or checked (and whether you changed its amount or shop), that you added an
+expense by hand, put money in your goal jar, made a group or recorded a payment, that you opened
+Today (once a day), that the app started, and that it crashed. Each count holds only its name, a
+yes or no, and a random number made for this install. It never holds an amount, a shop name, a slip
+reference, a person's name, your account or your email. Turn it off in **Settings › Share usage
+counts**; nothing more is sent after that.
+
+If the app crashes, it writes a short report that stays on your phone unless you choose Share. Only
+the fact that it crashed is counted.
 
 The app also turns off Android cloud backup, Android phone-to-phone transfer and iCloud backup for
 its ledger. To move your ledger to a new phone, use **Settings › Export** and **Import**. The export

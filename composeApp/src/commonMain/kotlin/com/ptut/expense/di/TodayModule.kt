@@ -5,6 +5,7 @@ import com.ptut.expense.domain.play.ObservePlayOnUseCase
 import com.ptut.expense.domain.play.ObserveSealedMonthsUseCase
 import com.ptut.expense.domain.play.PlayBook
 import com.ptut.expense.domain.play.PlayPart
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.home.HomeViewModel
 import com.ptut.expense.home.WeeklyNoteSettings
 import com.ptut.expense.ledger.LedgerScope
@@ -52,6 +53,7 @@ val todayModule: Module = module {
             // #116: with play held back, a caught slip and a filled jar still press and roll (M01, J05).
             playMotion = get<ObservePlayOnUseCase>()(if (laterOn()) PlayPart.Stamps else PlayPart.GoalJar),
             toasts = get(),
+            usage = getOrNull() ?: UsageLog.None,
         )
     }
     // #220: Reports passes the slice it opened; Home's History passes nothing and gets the whole table.

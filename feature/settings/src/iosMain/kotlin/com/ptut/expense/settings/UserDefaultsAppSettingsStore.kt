@@ -36,6 +36,10 @@ private const val OWNER_SEEN = "ptut-slip-owner-seen"
 private const val NOTE_TONE = "ptut-note-tone"
 private const val HIDDEN_NOTE_WEEK = "ptut-hidden-note-week"
 private const val LAST_EXPORT_ON = "ptut-last-export-on"
+private const val SHARE_USAGE = "ptut-share-usage"
+private const val USAGE_ID = "ptut-usage-id"
+private const val USAGE_DAY = "ptut-usage-day"
+private const val USAGE_SESSION_AT = "ptut-usage-session-at"
 
 // "Add starts in" was dropped; the next write clears what older builds saved.
 private const val ADD_CURRENCY = "ptut-add-currency"
@@ -98,6 +102,10 @@ class UserDefaultsAppSettingsStore(
             noteTone = NoteTone.entries.firstOrNull { it.name == defaults.stringForKey(NOTE_TONE) } ?: shipped.noteTone,
             hiddenNoteWeek = defaults.stringForKey(HIDDEN_NOTE_WEEK),
             lastExportOn = defaults.stringForKey(LAST_EXPORT_ON),
+            shareUsage = defaults.objectForKey(SHARE_USAGE)?.let { defaults.boolForKey(SHARE_USAGE) } ?: shipped.shareUsage,
+            usageId = defaults.stringForKey(USAGE_ID),
+            usageDay = defaults.stringForKey(USAGE_DAY),
+            usageSessionAt = defaults.integerForKey(USAGE_SESSION_AT),
             homeCurrency = defaults.stringForKey(HOME_CURRENCY),
             homeZone = defaults.stringForKey(HOME_ZONE),
             play = shipped.play.let { play ->
@@ -141,6 +149,10 @@ class UserDefaultsAppSettingsStore(
         defaults.setObject(choices.noteTone.name, NOTE_TONE)
         writeOptional(choices.hiddenNoteWeek, HIDDEN_NOTE_WEEK)
         writeOptional(choices.lastExportOn, LAST_EXPORT_ON)
+        defaults.setBool(choices.shareUsage, SHARE_USAGE)
+        writeOptional(choices.usageId, USAGE_ID)
+        writeOptional(choices.usageDay, USAGE_DAY)
+        defaults.setInteger(choices.usageSessionAt, USAGE_SESSION_AT)
         defaults.removeObjectForKey(ADD_CURRENCY)
         writeOptional(choices.homeCurrency, HOME_CURRENCY)
         writeOptional(choices.homeZone, HOME_ZONE)

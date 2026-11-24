@@ -18,3 +18,7 @@ senderId=
 # true once the APNs key is in Firebase (firebase/README.md, iOS). Until then iPhones fall back to a
 # background refresh that iOS runs when it chooses, minutes or hours apart.
 iosPushReady=false
+# #115: launch counts. Google Analytics → Admin → Data streams → your stream: the Measurement ID
+# (G-…), and Measurement Protocol API secrets → Create. Empty: no counts are sent.
+gaMeasurementId=
+gaApiSecret=

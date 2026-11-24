@@ -30,6 +30,7 @@ val settingsUseCases: Module = module {
     factory { SetTransparencyUseCase(get()) }
     factory { SetWeeklyCheckInUseCase(get()) }
     factory { MarkExportedUseCase(get()) }
+    factory { SetShareUsageUseCase(get()) }
     factory { SetSlipOwnerUseCase(get()) }
     factory { EnableAppLockUseCase(get()) }
     factory { DisableAppLockUseCase(get()) }

@@ -21,6 +21,8 @@ import com.ptut.expense.domain.shared.money
 import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.parseMinor
 import com.ptut.expense.domain.shared.typedText
+import com.ptut.expense.domain.usage.UsageEvent
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastAction
@@ -99,6 +101,8 @@ class RecordPaymentViewModel(
     /** #197: a word, a haptic and Undo, as a v1 save gives. Null in a screen test's graph. */
     private val toasts: ToastMessages? = null,
     private val haptics: Haptics? = null,
+    /** #115: a count per payment recorded. */
+    private val usage: UsageLog = UsageLog.None,
     /** #93: the settle plan's amount ("350.00"); it wins over what is owed. */
     private val prefillAmount: String? = null,
     /** The half-typed payment, kept through Android killing the process. */
@@ -207,6 +211,7 @@ class RecordPaymentViewModel(
                 return@launch
             }
             haptics?.saved()
+            usage.log(UsageEvent.PaymentRecorded)
             toasts?.show(
                 ToastMessage(
                     text = AppText.copy.shared.payment.recorded,

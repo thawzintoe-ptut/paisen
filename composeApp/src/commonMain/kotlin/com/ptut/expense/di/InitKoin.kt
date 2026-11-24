@@ -9,6 +9,9 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.home.HomeBook
 import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.domain.runSuspendCatching
+import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.usage.UsageEvent
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.Language
 import com.ptut.expense.locale.LanguageStore
@@ -64,7 +67,17 @@ fun initKoin(databaseContext: PtutDatabaseContext, build: AppBuild) {
     }
     // Made now rather than when a rules screen first asks: it fills ShopNames, which every row title reads.
     koin.getOrNull<RuleRepository>()
+    countLaunch(koin, crashes)
 }
 
 /** Opens the ledger now, at launch, and says whether it opened. */
 fun Koin.ledgerOpened(): Boolean = get<LedgerGate<PtutDatabase>>().state.value is LedgerOpen.Ready
+
+/** #115: one session, and one app_crashed per crash report written since the last session. */
+private fun countLaunch(koin: Koin, crashes: CrashJournal) {
+    val usage = koin.getOrNull<UsageLog>() ?: return
+    val settings = koin.getOrNull<AppSettings>() ?: return
+    repeat(crashes.countSince(settings.choices.value.usageSessionAt)) { usage.log(UsageEvent.AppCrashed) }
+    usage.log(UsageEvent.SessionStart)
+    settings.setUsageSessionAt(Clock.System.now().toEpochMilliseconds())
+}

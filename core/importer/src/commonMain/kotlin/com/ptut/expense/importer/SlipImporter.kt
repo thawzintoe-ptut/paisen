@@ -24,6 +24,9 @@ import com.ptut.expense.domain.slip.SlipParser
 import com.ptut.expense.domain.slip.SlipRead
 import com.ptut.expense.domain.slip.direction
 import com.ptut.expense.domain.slip.ownAccount
+import com.ptut.expense.domain.usage.UsageEvent
+import com.ptut.expense.domain.usage.UsageFlag
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.platform.ocr.SlipTextReader
 import com.ptut.expense.platform.photos.SlipCandidate
 import com.ptut.expense.platform.photos.SlipSource
@@ -104,6 +107,8 @@ class SlipImporter(
     private val owner: SlipOwnerBook = SlipOwnerBook.Unknown,
     /** J05: the jar a transfer to the chosen savings account fills. None where nothing binds it. */
     private val jar: JarInbox = JarInbox.None,
+    /** #115: a count per slip filed by itself and per jar transfer; never what the slip said. */
+    private val usage: UsageLog = UsageLog.None,
     /** #33: Myanmar wallet receipts, debug builds only until one real receipt per wallet has read. */
     private val readsWallets: Boolean = true,
     /** Where a run hashes and parses: off the main thread, since Check now starts one from a screen. */
@@ -343,6 +348,7 @@ class SlipImporter(
         source.delete(candidate.id)
 
         land(candidate, if (written) SlipPlace.Filed else SlipPlace.AlreadyRecorded, read.occurredAtEpochMillis)
+        if (written) usage.log(UsageEvent.SlipFiled, mapOf(UsageFlag.Checked to false))
         return if (written) Outcome.Filed else Outcome.AlreadySeen
     }
 
@@ -356,6 +362,7 @@ class SlipImporter(
         store.recordImported(hash, read.occurredAtEpochMillis)
         source.delete(candidate.id)
         land(candidate, if (written) SlipPlace.Filed else SlipPlace.AlreadyRecorded, read.occurredAtEpochMillis)
+        if (written) usage.log(UsageEvent.JarMoneyIn, mapOf(UsageFlag.FromSlip to true))
         return if (written) Outcome.Filed else Outcome.AlreadySeen
     }
 

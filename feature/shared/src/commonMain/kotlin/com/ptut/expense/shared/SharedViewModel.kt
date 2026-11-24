@@ -28,6 +28,8 @@ import com.ptut.expense.domain.shared.money
 import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.typedText
 import com.ptut.expense.domain.shared.withMe
+import com.ptut.expense.domain.usage.UsageEvent
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.sync.GroupSyncStatus
 import com.ptut.expense.sync.SyncHealth
@@ -106,6 +108,8 @@ class SharedViewModel(
     private val createGroupUseCase: CreateGroupUseCase,
     private val createPersonGroup: CreatePersonGroupUseCase,
     private val toasts: ToastMessages? = null,
+    /** #115: a count per group made here. */
+    private val usage: UsageLog = UsageLog.None,
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
@@ -143,6 +147,7 @@ class SharedViewModel(
         viewModelScope.launch {
             try {
                 runSuspendCatching { createGroupUseCase(name, type, icon, members, currency) }
+                    .onSuccess { usage.log(UsageEvent.GroupCreated) }
                     .onSuccess(onCreated)
                     .onFailure { toasts?.show(ToastMessage(AppText.copy.common.notDone, tone = ToastTone.Error)) }
             } finally {
@@ -160,6 +165,7 @@ class SharedViewModel(
         viewModelScope.launch {
             try {
                 runSuspendCatching { createPersonGroup(name, personId, GroupType.Other.defaultIcon()) }
+                    .onSuccess { usage.log(UsageEvent.GroupCreated) }
                     .onSuccess(onCreated)
                     .onFailure { toasts?.show(ToastMessage(AppText.copy.common.notDone, tone = ToastTone.Error)) }
             } finally {

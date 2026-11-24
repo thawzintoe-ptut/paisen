@@ -39,6 +39,9 @@ class CrashJournal(
         prune()
     }
 
+    /** #115: how many crashes were written after [epochMillis], seen or not. Only the count leaves the phone. */
+    fun countSince(epochMillis: Long): Int = reports().count { (it.substringBefore('.').toLongOrNull() ?: 0L) > epochMillis }
+
     /** The newest report not yet answered, for the one-time prompt. */
     fun unseen(): String? = reports().lastOrNull(::isWaiting)?.let(files::read)
 

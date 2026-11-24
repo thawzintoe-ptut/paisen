@@ -4,7 +4,9 @@ package com.ptut.expense.locale
 data class OnboardingCopy(
     val headline: String = "Spending,\nfinally\nsimple.",
     val promise: String = "Bank slips in your photos become a tidy record of every baht.",
-    val privacy: String = "Everything stays on this phone. No account needed.",
+    val privacy: String = "Your spending stays on this phone. No account needed.",
+    /** #115: said once, before anything is counted. */
+    val usageNote: String = "PaiSeN counts a few taps to learn what works, never amounts or names. Turn it off in Settings.",
     val next: String = "Continue",
     val slipsTitle: String = "Find your slips",
     val slipsText: String = "Allow photos so PaiSeN can read the slips your bank app saves.",
@@ -53,7 +55,8 @@ data class OnboardingCopy(
 val BurmeseOnboarding = OnboardingCopy(
     headline = "ငွေသုံးစာရင်း\nလွယ်လွယ်လေး\nဖြစ်သွားပြီ။",
     promise = "ဓာတ်ပုံထဲက ဘဏ်စလစ်တွေကို ငွေသုံးစာရင်း သေသေသပ်သပ် ဖြစ်အောင် မှတ်ပေးတယ်။",
-    privacy = "အားလုံး ဒီဖုန်းထဲမှာပဲ ရှိတယ်။ အကောင့် မလိုဘူး။",
+    privacy = "သင့် အသုံးစာရင်းက ဒီဖုန်းထဲမှာပဲ ရှိတယ်။ အကောင့် မလိုဘူး။",
+    usageNote = "ဘာက အလုပ်ဖြစ်လဲ သိဖို့ PaiSeN က နှိပ်တာ အနည်းငယ်ကို ရေတွက်တယ်၊ ငွေပမာဏ နာမည် မပါဘူး။ ဆက်တင်မှာ ပိတ်လို့ရတယ်။",
     next = "ရှေ့ဆက်မယ်",
     slipsTitle = "စလစ်တွေ ရှာမယ်",
     slipsText = "ဘဏ်အက်ပ်က သိမ်းတဲ့ စလစ်တွေကို PaiSeN ဖတ်နိုင်အောင် ဓာတ်ပုံ ခွင့်ပြုပေးပါ။",
@@ -99,7 +102,8 @@ val BurmeseOnboarding = OnboardingCopy(
 val ThaiOnboarding = OnboardingCopy(
     headline = "รายจ่าย\nง่ายขึ้น\nเสียที",
     promise = "สลิปธนาคารในรูปของคุณ กลายเป็นบันทึกรายจ่ายที่เป็นระเบียบทุกบาท",
-    privacy = "ทุกอย่างอยู่ในโทรศัพท์เครื่องนี้ ไม่ต้องมีบัญชี",
+    privacy = "รายจ่ายของคุณอยู่ในโทรศัพท์เครื่องนี้ ไม่ต้องมีบัญชี",
+    usageNote = "PaiSeN นับการแตะบางอย่างเพื่อดูว่าอะไรใช้ได้ดี ไม่มีจำนวนเงินหรือชื่อ ปิดได้ในการตั้งค่า",
     next = "ต่อไป",
     slipsTitle = "หาสลิปของคุณ",
     slipsText = "อนุญาตการเข้าถึงรูป เพื่อให้ PaiSeN อ่านสลิปที่แอปธนาคารบันทึกไว้",

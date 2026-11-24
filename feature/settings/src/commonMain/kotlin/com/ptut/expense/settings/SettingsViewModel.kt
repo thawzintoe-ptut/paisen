@@ -20,6 +20,7 @@ import com.ptut.expense.domain.settings.EnableAppLockUseCase
 import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
 import com.ptut.expense.domain.settings.ObserveAssistantModelUseCase
 import com.ptut.expense.domain.settings.SetMoodByTimeOfDayUseCase
+import com.ptut.expense.domain.settings.SetShareUsageUseCase
 import com.ptut.expense.domain.settings.SetSlipOwnerUseCase
 import com.ptut.expense.domain.settings.SetTransparencyUseCase
 import com.ptut.expense.domain.settings.SetWeeklyCheckInUseCase
@@ -41,7 +42,7 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 
 /** Which row. It is the row's identity as well as the destination it opens. */
-enum class SettingsAction { GoalJar, Advanced, SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, Language, ExportLedger, ImportLedger, Timezone, HomeCurrency, Assistant, Feedback, Licences, Play, SharedAccount, Help }
+enum class SettingsAction { GoalJar, Advanced, SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, ShareUsage, Language, ExportLedger, ImportLedger, Timezone, HomeCurrency, Assistant, Feedback, Licences, Play, SharedAccount, Help }
 
 /** Where Send feedback writes to. The same address PRIVACY.md and SECURITY.md give. */
 const val FEEDBACK_ADDRESS = "developer.ptut@gmail.com"
@@ -110,6 +111,8 @@ class SettingsViewModel(
     private val saveMoodByTimeOfDay: SetMoodByTimeOfDayUseCase,
     private val saveTransparency: SetTransparencyUseCase,
     private val saveWeeklyCheckIn: SetWeeklyCheckInUseCase,
+    /** #115: the Share usage counts switch; null where no settings write is bound. */
+    private val saveShareUsage: SetShareUsageUseCase? = null,
     private val saveSlipOwner: SetSlipOwnerUseCase,
     private val enableAppLock: EnableAppLockUseCase,
     private val disableAppLock: DisableAppLockUseCase,
@@ -132,6 +135,8 @@ class SettingsViewModel(
     private val showPlay: Boolean = false,
     /** #116: the Goal jar row. The jar is v1, so it shows without the play row beside it. */
     private val showJar: Boolean = false,
+    /** #115: the switch shows only in a build that sends counts. */
+    private val showUsage: Boolean = false,
     /** #116: photo folders, background import, kept slips, categories and the import log. */
     private val showV2: Boolean = false,
     /** #101: the goals behind the Goal jar row. None where play binds no book. */
@@ -157,6 +162,10 @@ class SettingsViewModel(
     }
 
     fun setWeeklyCheckIn(on: Boolean) = saveWeeklyCheckIn(on)
+
+    fun setShareUsage(on: Boolean) {
+        saveShareUsage?.invoke(on)
+    }
 
     /** #22: Plain and Playful, one tap each way. */
     fun switchNoteTone() = switchNoteToneUseCase()
@@ -255,6 +264,14 @@ class SettingsViewModel(
             icon = "lock",
             switchedOn = choices.appLock,
         ).takeIf { canLock },
+        // #115: counts like slips filed, never amounts or names; on until the reader turns it off.
+        SettingsRowUiModel(
+            id = SettingsAction.ShareUsage,
+            name = text.shareUsage,
+            value = text.shareUsageValue,
+            icon = "insights",
+            switchedOn = choices.shareUsage,
+        ).takeIf { showUsage },
     )
 
     private fun slipRows(since: Long?, choices: AppChoices, watched: List<WatchedFolder>, text: SettingsCopy) = listOfNotNull(

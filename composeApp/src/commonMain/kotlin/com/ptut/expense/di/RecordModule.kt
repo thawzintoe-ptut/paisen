@@ -14,6 +14,7 @@ import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.domain.rules.forShop
 import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
 import com.ptut.expense.domain.slip.FindSlipDebtsUseCase
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.edit.EditTransactionViewModel
 import com.ptut.expense.review.ReviewViewModel
 import com.ptut.expense.shoprule.ShopRuleViewModel
@@ -81,6 +82,7 @@ val recordModule: Module = module {
             paySlipDebt = get(),
             discardSlip = get(),
             discardWithUndo = get(),
+            usageLog = getOrNull() ?: UsageLog.None,
         )
     }
     // Takes its row as a parameter for the same reason the confirm screen does: one screen per
@@ -136,6 +138,7 @@ val recordModule: Module = module {
             getLastRate = get(),
             recordTransaction = get(),
             savedState = get(),
+            usageLog = getOrNull() ?: UsageLog.None,
         )
     }
 

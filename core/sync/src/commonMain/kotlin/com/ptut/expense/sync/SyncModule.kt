@@ -2,6 +2,8 @@ package com.ptut.expense.sync
 
 import com.ptut.expense.data.local.PtutDatabase
 import com.ptut.expense.data.local.PtutDatabaseContext
+import com.ptut.expense.domain.settings.AppSettings
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.sync.auth.AuthRepository
 import com.ptut.expense.sync.auth.FirebaseAuthApi
 import com.ptut.expense.sync.auth.FirebaseAuthRepository
@@ -16,6 +18,7 @@ import com.ptut.expense.sync.flags.installationSource
 import com.ptut.expense.sync.push.PushRegistrar
 import com.ptut.expense.sync.push.PushSender
 import com.ptut.expense.sync.push.PushTokenHolder
+import com.ptut.expense.sync.usage.Ga4UsageLog
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import kotlinx.coroutines.CoroutineScope
@@ -60,6 +63,15 @@ fun syncModule(databaseContext: PtutDatabaseContext): Module = module {
             installation = installationSource(databaseContext),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
+    }
+    // #115: launch counts, only where a GA4 stream is configured and settings are bound.
+    single<UsageLog> {
+        val settings = getOrNull<AppSettings>()
+        if (FirebaseConfig.usageEnabled && settings != null) {
+            Ga4UsageLog(get(), FirebaseConfig.GA_MEASUREMENT_ID, FirebaseConfig.GA_API_SECRET, settings, CoroutineScope(SupervisorJob() + Dispatchers.Default))
+        } else {
+            UsageLog.None
+        }
     }
     // The platform's push service hands its token here; registering waits for a signed-in account.
     single { PushTokenHolder() }

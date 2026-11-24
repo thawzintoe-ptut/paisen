@@ -10,6 +10,9 @@ import com.ptut.expense.domain.ledger.ObserveTransactionsUseCase
 import com.ptut.expense.domain.mondayOfWeekOf
 import com.ptut.expense.domain.slip.ObserveQueuedSlipsUseCase
 import com.ptut.expense.domain.today.GetHomeTodayUseCase
+import com.ptut.expense.domain.usage.UsageEvent
+import com.ptut.expense.domain.usage.UsageFlag
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.domain.usualDay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -137,10 +140,12 @@ class PutMoneyInUseCase(
     private val book: PlayBook,
     private val homeToday: GetHomeTodayUseCase,
     private val clock: Clock = Clock.System,
+    /** #115: one count per tap that put money in. */
+    private val usage: UsageLog = UsageLog.None,
 ) {
     suspend operator fun invoke(goal: Goal, amount: Satang) {
         if (amount <= Satang.Zero) return
-        book.deposit(
+        val written = book.deposit(
             GoalDeposit(
                 id = "said:" + Uuid.random().toString(),
                 goalId = goal.id,
@@ -151,6 +156,7 @@ class PutMoneyInUseCase(
                 account = goal.savingsAccount?.takeIf { it != CASH_ACCOUNT },
             ),
         )
+        if (written) usage.log(UsageEvent.JarMoneyIn, mapOf(UsageFlag.FromSlip to false))
     }
 }
 
