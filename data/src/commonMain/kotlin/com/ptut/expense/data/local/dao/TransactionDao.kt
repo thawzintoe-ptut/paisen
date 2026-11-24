@@ -49,6 +49,10 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions ORDER BY occurredAtEpochMillis DESC")
     fun observeAll(): Flow<List<TransactionEntity>>
 
+    /** One row by id, for the record and its edit; null once it is gone. */
+    @Query("SELECT * FROM transactions WHERE id = :id")
+    fun observeById(id: String): Flow<TransactionEntity?>
+
     /** FR-22. Read once to write the export file rather than held open like [observeAll]. */
     @Query("SELECT * FROM transactions ORDER BY occurredAtEpochMillis DESC")
     suspend fun all(): List<TransactionEntity>

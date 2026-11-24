@@ -1,5 +1,6 @@
 package com.ptut.expense.platform.ocr
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.google.android.gms.tasks.Task
 import com.google.mlkit.vision.common.InputImage
@@ -35,17 +36,34 @@ class MlKitSlipTextReader : SlipTextReader {
     }
 
     override suspend fun read(bytes: ByteArray): List<String> = withContext(Dispatchers.Default) {
-        val slip = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        val slip = decodeForReading(bytes)
             ?: throw IllegalArgumentException("Those bytes are not a picture this phone can decode")
 
-        val reading = recognizer.process(InputImage.fromBitmap(slip, UPRIGHT))
+        val reading = try {
+            recognizer.process(InputImage.fromBitmap(slip, UPRIGHT))
+        } catch (failed: Throwable) {
+            slip.recycle()
+            throw failed
+        }
         try {
             reading.await().linesTopToBottom()
         } finally {
-            // A run holds up to 200 full-size slips. A cancelled read may still be in ML Kit, so only a finished one frees.
-            if (reading.isComplete) slip.recycle()
+            // A cancelled read may still be in ML Kit, so the bitmap is freed once the task settles.
+            if (reading.isComplete) slip.recycle() else reading.addOnCompleteListener { slip.recycle() }
         }
     }
+}
+
+/** Below this long side small slip digits stop reading, so sampling never goes under it. */
+private const val MIN_READ_SIDE = 2000
+
+private fun decodeForReading(bytes: ByteArray): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    val longer = maxOf(bounds.outWidth, bounds.outHeight)
+    var sample = 1
+    while (longer / (sample * 2) >= MIN_READ_SIDE) sample *= 2
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
 }
 
 /**

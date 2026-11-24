@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,7 +21,6 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import com.ptut.expense.design.PlaySizes
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
@@ -131,9 +128,7 @@ private fun NextTripCard(state: TripRecapUiState.Loaded, onStartJar: (name: Stri
         verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            Box(Modifier.size(PlaySizes.aiDisc).clip(CircleShape).background(scheme.primary), contentAlignment = Alignment.Center) {
-                Text("P", style = MaterialTheme.typography.labelMedium, color = scheme.onPrimary)
-            }
+            PayerBadge()
             Text(state.nextTripTitle, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface, modifier = Modifier.weight(1f))
             Text(state.nextTripAmount, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
         }

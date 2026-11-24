@@ -32,6 +32,8 @@ data class CommonCopy(
     val more: String = "More",
     /** What a screen reader hears on the More chip under a category row. */
     val moreCategories: (Int) -> String = { n -> "$n more categories" },
+    val notDone: String = "That did not go through. Try again.",
+    val removedName: (String) -> String = { name -> "Removed $name" },
 )
 
 val BurmeseCommon = CommonCopy(
@@ -64,6 +66,8 @@ val BurmeseCommon = CommonCopy(
     discard = "ပယ်မယ်",
     more = "နောက်ထပ်",
     moreCategories = { n -> "နောက်ထပ် အမျိုးအစား ${n.inMyanmarDigits()} ခု" },
+    notDone = "မလုပ်နိုင်ခဲ့ဘူး။ ထပ်ကြိုးစားပါ။",
+    removedName = { name -> "$name ကို ဖယ်ပြီးပြီ" },
 )
 
 val ThaiCommon = CommonCopy(
@@ -96,4 +100,6 @@ val ThaiCommon = CommonCopy(
     discard = "ทิ้ง",
     more = "เพิ่มเติม",
     moreCategories = { n -> "อีก $n หมวดหมู่" },
+    notDone = "ทำไม่สำเร็จ ลองอีกครั้ง",
+    removedName = { name -> "นำ $name ออกแล้ว" },
 )

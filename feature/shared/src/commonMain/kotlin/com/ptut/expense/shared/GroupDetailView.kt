@@ -397,7 +397,7 @@ data class GroupManage(
     val onRemove: (anyway: Boolean) -> Unit = {},
     val onDismissError: () -> Unit = {},
     val onAddPeople: (List<NewMember>) -> Unit = {},
-    val onRemoveMember: (memberId: String) -> Unit = {},
+    val onRemoveMember: (memberId: String, name: String) -> Unit = { _, _ -> },
     /** #218: takes a recorded payment out of the balances, with Undo. */
     val onRemovePayment: (paymentId: String) -> Unit = {},
 )
@@ -568,7 +568,7 @@ private fun AddPeopleSheet(people: List<Person>, onAdd: (List<NewMember>) -> Uni
 
 /** #218: the creator archives a name; past splits keep it. Each removal is asked once more. */
 @Composable
-private fun RemovePeopleSheet(others: List<GroupPersonUiModel>, onRemove: (String) -> Unit, onDismiss: () -> Unit) {
+private fun RemovePeopleSheet(others: List<GroupPersonUiModel>, onRemove: (id: String, name: String) -> Unit, onDismiss: () -> Unit) {
     val text = LocalCopy.current
     val words = text.shared.detail
     var asking by rememberSaveable { mutableStateOf<String?>(null) }
@@ -598,7 +598,7 @@ private fun RemovePeopleSheet(others: List<GroupPersonUiModel>, onRemove: (Strin
                 SkyButton(
                     text.shared.expense.remove,
                     onClick = {
-                        onRemove(person.id)
+                        onRemove(person.id, person.name)
                         onDismiss()
                     },
                     kind = SkyButtonKind.Danger,

@@ -42,8 +42,9 @@ import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.slip.SlipPictures
 import com.ptut.expense.locale.LocalCopy
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import org.jetbrains.compose.resources.decodeToImageBitmap
 
 /** Provided by the shell. Null in tests and previews, which then draw the plain placeholder. */
 val LocalSlipPictures = staticCompositionLocalOf<SlipPictures?> { null }
@@ -144,9 +145,36 @@ fun SlipPictureViewer(id: String, onClose: () -> Unit) {
     }
 }
 
-private suspend fun SlipPictures.load(id: String, maxSide: Int): ImageBitmap? = withContext(Dispatchers.Default) {
-    val bytes = bytesOf(id) ?: return@withContext null
-    runCatching { bytes.decodeToImageBitmap().fitWithin(maxSide) }.getOrNull()
+/** Decodes [bytes] no smaller than [maxSide] on the long side where the platform can sample. Null when unreadable. */
+internal expect fun decodeSlipBitmap(bytes: ByteArray, maxSide: Int): ImageBitmap?
+
+private const val CACHED_PICTURES = 16
+
+/** Recently shown pictures, so scrolling a list back does not decode them again. */
+private object SlipPictureCache {
+    private val lock = Mutex()
+    private val entries = LinkedHashMap<Pair<String, Int>, ImageBitmap>()
+
+    suspend fun get(key: Pair<String, Int>): ImageBitmap? = lock.withLock {
+        entries.remove(key)?.also { entries[key] = it }
+    }
+
+    suspend fun put(key: Pair<String, Int>, image: ImageBitmap) = lock.withLock {
+        entries.remove(key)
+        entries[key] = image
+        if (entries.size > CACHED_PICTURES) entries.remove(entries.keys.first())
+    }
+}
+
+private suspend fun SlipPictures.load(id: String, maxSide: Int): ImageBitmap? {
+    val key = id to maxSide
+    SlipPictureCache.get(key)?.let { return it }
+    val image = withContext(Dispatchers.Default) {
+        val bytes = bytesOf(id) ?: return@withContext null
+        runCatching { decodeSlipBitmap(bytes, maxSide)?.fitWithin(maxSide) }.getOrNull()
+    } ?: return null
+    SlipPictureCache.put(key, image)
+    return image
 }
 
 /** Only the downscaled copy is kept, so a list of cards never holds a full-size slip. */

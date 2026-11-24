@@ -1,5 +1,6 @@
 package com.ptut.expense.edit
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
@@ -30,6 +31,7 @@ import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.TransactionMetaRow
 import com.ptut.expense.ui.displayName
 import com.ptut.expense.ui.inTableLanguage
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -57,12 +59,16 @@ class EditTransactionViewModel(
     /** #216: "Updated …" once the save lands, as Add says "Saved …". Null in a screen test's graph. */
     private val toasts: ToastMessages? = null,
     private val editTransaction: EditTransactionUseCase,
+    /** The app's shared count; null counts here from the whole ledger, as a screen test does. */
+    sharedUsage: Flow<Map<String, Int>>? = null,
+    /** The half-typed correction, kept through Android killing the process. */
+    private val savedState: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
-    private val allRows = observeTransactions(LedgerSpan.All)
+    private val allRows = observeTransactions.one(transactionId, viewModelScope)
 
     /** Counted when the ledger changes, not on every keypad tap. */
-    private val usage = allRows
+    private val usage = sharedUsage ?: observeTransactions(LedgerSpan.All)
         .map { snapshot -> (snapshot as? LedgerSnapshot.Rows)?.transactions.orEmpty().categoryUsage() }
         .distinctUntilChanged()
 
@@ -74,7 +80,7 @@ class EditTransactionViewModel(
      * anything is typed this takes over, and a later ledger emission can no longer move the digits
      * under the reader's thumb.
      */
-    private val typed = MutableStateFlow<EditDraft?>(null)
+    private val typed = MutableStateFlow(restoredDraft())
 
     /**
      * The note is typed away from the keypad, because a soft keyboard opening under the amount
@@ -93,6 +99,41 @@ class EditTransactionViewModel(
      * with it.
      */
     val isSaved: StateFlow<Boolean> = stored.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            combine(typed, stored) { draft, done -> draft.takeUnless { done } }.collect(::keepDraft)
+        }
+    }
+
+    private fun key(field: String) = "edit.$transactionId.$field"
+
+    private fun restoredDraft(): EditDraft? {
+        val typed = savedState.get<String>(key(AMOUNT)) ?: return null
+        val time = savedState.get<Long>(key(TIME)) ?: return null
+        return EditDraft(
+            entry = AmountEntry(typed, pending = savedState.get<Boolean>(key(PENDING)) ?: false),
+            categoryId = savedState.get<String>(key(CATEGORY)),
+            memo = savedState.get<String>(key(MEMO)),
+            subCategoryId = savedState.get<String>(key(SUB)),
+            occurredAtEpochMillis = time,
+        )
+    }
+
+    /** A draft that matches the row, or one already saved, leaves nothing behind. */
+    private fun keepDraft(draft: EditDraft?) {
+        val record = record()
+        if (draft == null || (record != null && draft.toEdit() == record.asEdit())) {
+            FIELDS.forEach { savedState.remove<Any>(key(it)) }
+            return
+        }
+        savedState[key(AMOUNT)] = draft.entry.typed
+        savedState[key(PENDING)] = draft.entry.pending
+        savedState[key(CATEGORY)] = draft.categoryId
+        savedState[key(MEMO)] = draft.memo
+        savedState[key(SUB)] = draft.subCategoryId
+        savedState[key(TIME)] = draft.occurredAtEpochMillis
+    }
 
     val uiState: StateFlow<EditTransactionUiState> =
         combine(allRows, typed, editingMemo, shareOptions(transactionId), usage) { rows, typed, memo, groups, usage ->
@@ -259,6 +300,16 @@ class EditTransactionViewModel(
     /** Spec page 11c's line under the amount. The figure is the slip's, never the one being typed. */
     private fun Transaction.slipRead(): String? =
         slipAmount?.let { AppText.copy.record.readFromSlip(it.format()) }
+
+    private companion object {
+        const val AMOUNT = "amount"
+        const val PENDING = "pending"
+        const val CATEGORY = "category"
+        const val MEMO = "memo"
+        const val SUB = "sub"
+        const val TIME = "time"
+        val FIELDS = listOf(AMOUNT, PENDING, CATEGORY, MEMO, SUB, TIME)
+    }
 
     private fun Transaction.asDraft() = EditDraft(
         entry = AmountEntry.of(amount),

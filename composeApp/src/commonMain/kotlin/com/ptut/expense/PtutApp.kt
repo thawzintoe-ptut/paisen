@@ -9,6 +9,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -177,7 +178,7 @@ private fun LedgerShell() {
 
     // The add flow is a sheet over whatever is on screen, not a place you can navigate
     // back to, so it stays local state rather than becoming a route.
-    var addOpen by remember { mutableStateOf(false) }
+    var addOpen by rememberSaveable { mutableStateOf(false) }
     // Resolved here rather than inside the sheet: the write outlives the sheet that started
     // it, so closing on save cannot cancel the row half-written.
     val addViewModel = koinViewModel<AddViewModel>()

@@ -105,7 +105,7 @@ class TransactionDetailViewModel(
     private val undoDelete: UndoDeleteTransactionUseCase,
 ) : ViewModel() {
 
-    private val allRows = observeTransactions(LedgerSpan.All)
+    private val allRows = observeTransactions.one(transactionId, viewModelScope)
 
     private val deleteAsk = MutableStateFlow(DeleteAsk())
 

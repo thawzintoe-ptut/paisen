@@ -7,6 +7,7 @@ import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.format
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.CreateGroupUseCase
 import com.ptut.expense.domain.shared.CreatePersonGroupUseCase
 import com.ptut.expense.domain.shared.Currencies
@@ -30,6 +31,9 @@ import com.ptut.expense.domain.shared.withMe
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.sync.GroupSyncStatus
 import com.ptut.expense.sync.SyncHealth
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -101,6 +105,7 @@ class SharedViewModel(
     private val getSharedHome: GetSharedHomeUseCase,
     private val createGroupUseCase: CreateGroupUseCase,
     private val createPersonGroup: CreatePersonGroupUseCase,
+    private val toasts: ToastMessages? = null,
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
@@ -137,7 +142,9 @@ class SharedViewModel(
         creating = true
         viewModelScope.launch {
             try {
-                onCreated(createGroupUseCase(name, type, icon, members, currency))
+                runSuspendCatching { createGroupUseCase(name, type, icon, members, currency) }
+                    .onSuccess(onCreated)
+                    .onFailure { toasts?.show(ToastMessage(AppText.copy.common.notDone, tone = ToastTone.Error)) }
             } finally {
                 creating = false
             }
@@ -148,8 +155,20 @@ class SharedViewModel(
 
     /** #141: a one-off bill with one person is a group of two behind the scenes, named after them. */
     fun addPerson(name: String, personId: String?, onCreated: (String) -> Unit) {
-        viewModelScope.launch { onCreated(createPersonGroup(name, personId, GroupType.Other.defaultIcon())) }
+        if (adding) return
+        adding = true
+        viewModelScope.launch {
+            try {
+                runSuspendCatching { createPersonGroup(name, personId, GroupType.Other.defaultIcon()) }
+                    .onSuccess(onCreated)
+                    .onFailure { toasts?.show(ToastMessage(AppText.copy.common.notDone, tone = ToastTone.Error)) }
+            } finally {
+                adding = false
+            }
+        }
     }
+
+    private var adding = false
 
     private fun SharedHome.ready(snapshot: SharedSnapshot, query: String): SharedUiState.Ready {
         val text = AppText.copy.shared

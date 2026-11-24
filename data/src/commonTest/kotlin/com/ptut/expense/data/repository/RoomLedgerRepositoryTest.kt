@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -191,6 +192,7 @@ class RoomLedgerRepositoryTest : LedgerRepositoryContract() {
         scope = backgroundScope,
         clock = clock,
         newId = { "written-row" },
+        work = StandardTestDispatcher(testScheduler),
     )
 }
 
@@ -301,6 +303,8 @@ private class FakeTransactionDao(
 
     override fun observeAll(): Flow<List<TransactionEntity>> =
         all.map { rows -> rows.sortedByDescending { it.occurredAtEpochMillis } }
+
+    override fun observeById(id: String): Flow<TransactionEntity?> = all.map { rows -> rows.firstOrNull { it.id == id } }
 
     override suspend fun all(): List<TransactionEntity> =
         rows.sortedByDescending { it.occurredAtEpochMillis }

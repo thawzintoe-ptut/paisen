@@ -34,9 +34,10 @@ val sharedModule: Module = module {
             getSharedHome = get(),
             createGroupUseCase = get(),
             createPersonGroup = get(),
+            toasts = get(),
         )
     }
-    viewModel { PeopleViewModel(observeSnapshot = get(), getPeopleBalances = get(), setPersonArchived = get(), createPersonGroup = get()) }
+    viewModel { PeopleViewModel(observeSnapshot = get(), getPeopleBalances = get(), setPersonArchived = get(), createPersonGroup = get(), toasts = get()) }
     // Koin's parameters do not carry a null, so a new repeat travels as "".
     viewModel { (groupId: String, ruleId: String) ->
         RepeatExpenseViewModel(
@@ -85,6 +86,8 @@ val sharedModule: Module = module {
             shareGroup = get(),
             renewInvite = get(),
             switchOffInvite = get(),
+            toasts = get(),
+            haptics = get(),
         )
     }
     viewModel { params ->
@@ -106,6 +109,7 @@ val sharedModule: Module = module {
             prefillDescription = description.ifEmpty { null },
             // #94: the sixth parameter, past what Koin's destructuring reaches.
             prefillPayer = (params.values.getOrNull(PAYER_PARAMETER) as? String)?.ifEmpty { null },
+            savedState = get(),
         )
     }
     viewModel { (groupId: String) ->
@@ -131,6 +135,7 @@ val sharedModule: Module = module {
             toasts = get(),
             haptics = get(),
             prefillAmount = amount.ifEmpty { null },
+            savedState = get(),
         )
     }
     viewModel { (groupId: String) -> WhoPaysWheelViewModel(groupId = groupId, observeSnapshot = get(), getWheel = get()) }

@@ -13,6 +13,7 @@ import com.ptut.expense.importer.ScanStopped
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.FileNotFoundException
 import java.io.IOException
 import kotlin.time.Clock
@@ -122,7 +123,11 @@ class MediaStoreSlipSource(
     override suspend fun bytesOf(id: String): ByteArray? = withContext(Dispatchers.IO) {
         val picture = pictureAt(id) ?: return@withContext null
         try {
-            context.contentResolver.openInputStream(picture)?.use { it.readBytes() }
+            context.contentResolver.openInputStream(picture)?.use { stream ->
+                val whole = ByteArrayOutputStream()
+                // Too large to be a slip, and a retry will not shrink it, so the floor is not held.
+                if (stream.copyUpTo(MAX_PICTURE_BYTES, whole)) whole.toByteArray() else null
+            }
         } catch (gone: FileNotFoundException) {
             // The reader deleted it between the scan and now. The row goes with it, so there is
             // nothing to come back for.

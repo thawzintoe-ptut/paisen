@@ -458,6 +458,8 @@ private class TransactionsOnDisk(
 
     override fun observeAll(): Flow<List<TransactionEntity>> = never()
 
+    override fun observeById(id: String): Flow<TransactionEntity?> = never()
+
     override suspend fun insert(row: TransactionEntity) = never<Unit>()
 
     override suspend fun insertIfNew(row: TransactionEntity): Long = never()

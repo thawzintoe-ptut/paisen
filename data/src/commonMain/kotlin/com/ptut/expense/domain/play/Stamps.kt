@@ -9,7 +9,6 @@ import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.YearMonth
 import kotlinx.datetime.plus
 
 /** From this hour on, a cleared tray is a Night owl. */
@@ -63,7 +62,7 @@ fun List<Stamp>.setProgress(): List<SetProgress> = StampSet.entries.map { set ->
  */
 fun List<Transaction>.noSpendDays(month: String, today: LocalDate, zone: TimeZone = HomeTime): List<LocalDate> {
     val first = minOfOrNull { it.occurredAtEpochMillis }?.dateIn(zone) ?: return emptyList()
-    val yearMonth = runCatching { YearMonth.parse(month) }.getOrNull() ?: return emptyList()
+    val yearMonth = month.toYearMonthOrNull() ?: return emptyList()
     val spent = filter { it.direction == Direction.Expense }.map { it.occurredAtEpochMillis.dateIn(zone) }.toSet()
     val days = generateSequence(yearMonth.firstDay) { it.plus(1, DateTimeUnit.DAY) }.takeWhile { it <= yearMonth.lastDay }
     return days.filter { it in first..today && it !in spent }.toList()

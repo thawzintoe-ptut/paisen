@@ -40,7 +40,7 @@ sealed interface StoryCard {
  * for it. The shift is whichever category was most unusual; ties go to the lower category id.
  */
 fun List<Transaction>.monthStory(month: String, zone: TimeZone = HomeTime, today: LocalDate? = null): List<StoryCard> {
-    val yearMonth = runCatching { YearMonth.parse(month) }.getOrNull() ?: return emptyList()
+    val yearMonth = month.toYearMonthOrNull() ?: return emptyList()
     val expenses = filter { it.direction == Direction.Expense }
     val inMonth = expenses.inMonth(yearMonth, zone)
     if (inMonth.isEmpty()) return emptyList()

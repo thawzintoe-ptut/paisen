@@ -1,5 +1,6 @@
 package com.ptut.expense.di
 
+import androidx.lifecycle.SavedStateHandle
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.agent.agentModule
 import com.ptut.expense.data.local.PtutDatabase
@@ -180,6 +181,8 @@ private val PARAMETER_SHAPES: List<Array<Any>> = listOf(
  * makes swapping them here honest. Everything above them is the shipped wiring.
  */
 private val platformStandIns = module {
+    // A screen's ViewModelStore hands this over through CreationExtras, so no module binds it.
+    factory { SavedStateHandle() }
     // Room's own constructor, which makes the object without opening a file. Nothing below runs
     // a query through it, and no definition here would be found any better if one could.
     single<PtutDatabase> { PtutDatabaseConstructor.initialize() }

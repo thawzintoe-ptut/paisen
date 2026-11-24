@@ -23,8 +23,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -112,6 +115,7 @@ fun GoalJarView(
     tip: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
+    var askArchive by rememberSaveable { mutableStateOf(false) }
     val title = when (uiState) {
         is GoalJarUiState.Editing -> uiState.title
         is GoalJarUiState.Jar -> uiState.title
@@ -156,11 +160,34 @@ fun GoalJarView(
                     }
                 }
                 item { PlayLine(uiState.footer, Modifier.padding(horizontal = Spacing.md)) }
-                item { SkyButton(uiState.archive, onClick = onArchive, kind = SkyButtonKind.Outline, modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md)) }
+                item { SkyButton(uiState.archive, onClick = { askArchive = true }, kind = SkyButtonKind.Outline, modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md)) }
             }
         }
     }
     (uiState as? GoalJarUiState.Jar)?.sheet?.let { open -> JarSheet(open, sheet) }
+    (uiState as? GoalJarUiState.Jar)?.takeIf { askArchive }?.let { jar ->
+        ArchiveJarSheet(
+            jar = jar,
+            onConfirm = {
+                askArchive = false
+                onArchive()
+            },
+            onDismiss = { askArchive = false },
+        )
+    }
+}
+
+/** Asked first: putting the jar away takes it off Play. */
+@Composable
+private fun ArchiveJarSheet(jar: GoalJarUiState.Jar, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    SkyBottomSheet(onDismissRequest = onDismiss) {
+        Text(jar.archiveAsk, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.sm))
+        Text(jar.archiveBody, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
+        Row(Modifier.fillMaxWidth().padding(top = Spacing.lg), horizontalArrangement = Arrangement.spacedBy(Spacing.s12)) {
+            SkyButton(jar.keep, onClick = onDismiss, kind = SkyButtonKind.Outline, modifier = Modifier.weight(1f))
+            SkyButton(jar.archive, onClick = onConfirm, kind = SkyButtonKind.Danger, modifier = Modifier.weight(1f))
+        }
+    }
 }
 
 /** What the sheets over the jar can do (J03, J04). */

@@ -9,7 +9,11 @@ import com.ptut.expense.domain.play.ChallengeChoices
 import com.ptut.expense.domain.play.ChallengeLevel
 import com.ptut.expense.domain.play.GetChallengeChoicesUseCase
 import com.ptut.expense.domain.play.PickChallengeUseCase
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,13 +45,21 @@ class ChallengeViewModel(
     getChoices: GetChallengeChoicesUseCase,
     private val pickChallenge: PickChallengeUseCase,
     categories: Flow<List<Category>>,
+    private val toasts: ToastMessages? = null,
 ) : ViewModel() {
+
+    private var picking = false
 
     val uiState: StateFlow<ChallengeUiState?> = combine(getChoices(), categories) { choices, named -> choices.asUiState(named) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), null)
 
     fun pick(categoryId: String, level: ChallengeLevel) {
-        viewModelScope.launch { pickChallenge(categoryId, level) }
+        if (picking) return
+        picking = true
+        viewModelScope.launch {
+            runSuspendCatching { pickChallenge(categoryId, level) }.onFailure { toasts?.show(ToastMessage(AppText.copy.common.notDone, tone = ToastTone.Error)) }
+            picking = false
+        }
     }
 }
 

@@ -18,7 +18,7 @@ class FeedbackMailTest {
     }
 
     @Test
-    fun `the form link carries the version, the phone and the app language`() {
+    fun `the form link carries the version and the phone and the app language`() {
         val form = feedbackForm(AppBuild(debug = false, version = "0.8.0 (800)", device = "Pixel 7, Android 16"), Language.Burmese)
 
         assertEquals("$FEEDBACK_FORM?version=0.8.0%20%28800%29&device=Pixel%207%2C%20Android%2016&lang=my", form)

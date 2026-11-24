@@ -1,10 +1,12 @@
 package com.ptut.expense.shared
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Separators
+import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.ExpenseStart
 import com.ptut.expense.domain.shared.GetLastGroupRateUseCase
@@ -63,6 +65,8 @@ class AddExpenseViewModel(
     private val prefillDescription: String? = null,
     /** #94: the wheel's pick pays; a member no longer in the group falls back to you. */
     private val prefillPayer: String? = null,
+    /** The half-typed expense, kept through Android killing the process. */
+    private val savedState: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
     private val snapshot = observeSnapshot()
@@ -86,7 +90,56 @@ class AddExpenseViewModel(
         viewModelScope.launch {
             load()
             opened.value = form.value.content
+            restoreDraft()
+            combine(form, saved) { form, done -> form.content.takeUnless { done || it == opened.value } }.collect(::keepDraft)
         }
+    }
+
+    private fun key(field: String) = "expense.$groupId.${expenseId ?: transactionId ?: "new"}.$field"
+
+    /** After [load], so the loaded expense or prefill never overwrites what was typed. */
+    private fun restoreDraft() {
+        val description = savedState.get<String>(key(DESCRIPTION)) ?: return
+        form.update { current ->
+            val restored = current.copy(
+                description = description,
+                note = savedState.get<String>(key(NOTE)).orEmpty(),
+                categoryId = if (current.categoryLocked) current.categoryId else savedState.get<String>(key(CATEGORY)),
+                subCategoryId = if (current.categoryLocked) current.subCategoryId else savedState.get<String>(key(SUB)),
+                rateText = savedState.get<String>(key(RATE)).orEmpty(),
+                splitMode = SplitMode.entries.firstOrNull { it.name == savedState.get<String>(key(MODE)) } ?: current.splitMode,
+                weightTexts = savedState.get<String>(key(WEIGHTS)).orEmpty().split(';').filter { '=' in it }
+                    .associate { it.substringBefore('=') to it.substringAfter('=') },
+            )
+            if (current.locked) {
+                restored
+            } else {
+                restored.copy(
+                    amountText = savedState.get<String>(key(AMOUNT)).orEmpty(),
+                    currency = savedState.get<String>(key(CURRENCY))?.let(Currencies::of) ?: current.currency,
+                    occurredAtEpochMillis = savedState.get<Long>(key(TIME)),
+                    payerMemberId = savedState.get<String>(key(PAYER)) ?: current.payerMemberId,
+                )
+            }
+        }
+    }
+
+    private fun keepDraft(form: ExpenseForm?) {
+        if (form == null) {
+            FIELDS.forEach { savedState.remove<Any>(key(it)) }
+            return
+        }
+        savedState[key(DESCRIPTION)] = form.description
+        savedState[key(NOTE)] = form.note
+        savedState[key(CATEGORY)] = form.categoryId
+        savedState[key(SUB)] = form.subCategoryId
+        savedState[key(RATE)] = form.rateText
+        savedState[key(MODE)] = form.splitMode.name
+        savedState[key(WEIGHTS)] = form.weightTexts.entries.joinToString(";") { "${it.key}=${it.value}" }
+        savedState[key(AMOUNT)] = form.amountText
+        savedState[key(CURRENCY)] = form.currency.code
+        savedState[key(TIME)] = form.occurredAtEpochMillis
+        savedState[key(PAYER)] = form.payerMemberId
     }
 
     val uiState: StateFlow<AddExpenseUiState> = combine(snapshot, form, opened) { snapshot, form, opened ->
@@ -288,6 +341,21 @@ class AddExpenseViewModel(
     }
 
     private fun membersOf(snapshot: SharedSnapshot, group: SharedGroup, mode: SplitMode): List<SplitMember> = snapshot.splitMembersFor(group, mode, expenseId)
+
+    private companion object {
+        const val DESCRIPTION = "description"
+        const val NOTE = "note"
+        const val CATEGORY = "category"
+        const val SUB = "sub"
+        const val RATE = "rate"
+        const val MODE = "mode"
+        const val WEIGHTS = "weights"
+        const val AMOUNT = "amount"
+        const val CURRENCY = "currency"
+        const val TIME = "time"
+        const val PAYER = "payer"
+        val FIELDS = listOf(DESCRIPTION, NOTE, CATEGORY, SUB, RATE, MODE, WEIGHTS, AMOUNT, CURRENCY, TIME, PAYER)
+    }
 }
 
 /** "1234567890123.45": the longest amount an Exact field takes, and plenty of shares. */

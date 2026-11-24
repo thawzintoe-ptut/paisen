@@ -20,6 +20,7 @@ import com.ptut.expense.sync.flags.Flag
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -38,8 +39,9 @@ val recordModule: Module = module {
     single(CATEGORY_USAGE) {
         get<LedgerRepository>().allTransactions
             .map { snapshot -> (snapshot as? LedgerSnapshot.Rows)?.transactions.orEmpty().categoryUsage() }
+            .distinctUntilChanged()
             .flowOn(Dispatchers.Default)
-            .stateIn(appScope(), SharingStarted.Eagerly, emptyMap())
+            .stateIn(appScope(), SharingStarted.WhileSubscribed(5_000), emptyMap())
     }
 
     // "A slip closes the debt", behind its own switch until it has been tried with real groups.
@@ -109,6 +111,8 @@ val recordModule: Module = module {
             shareOptions = get(),
             toasts = get(),
             editTransaction = get(),
+            sharedUsage = categoryUsage(),
+            savedState = get(),
         )
     }
 
@@ -129,6 +133,7 @@ val recordModule: Module = module {
             offersCurrencies = currenciesOn(),
             getLastRate = get(),
             recordTransaction = get(),
+            savedState = get(),
         )
     }
 

@@ -8,6 +8,9 @@ import com.ptut.expense.domain.play.RevealStampUseCase
 import com.ptut.expense.domain.play.StampReveal
 import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -37,6 +40,7 @@ class StampRevealViewModel(
     private val stampId: String,
     observeStamp: ObserveStampUseCase,
     private val revealStamp: RevealStampUseCase,
+    private val toasts: ToastMessages? = null,
 ) : ViewModel() {
 
     val uiState: StateFlow<RevealUiState> = observeStamp(stampId)
@@ -45,7 +49,7 @@ class StampRevealViewModel(
 
     /** The book keeps only the first turn, so a second tap changes nothing. */
     fun turn() {
-        viewModelScope.launch { runSuspendCatching { revealStamp(stampId) } }
+        viewModelScope.launch { runSuspendCatching { revealStamp(stampId) }.onFailure { toasts?.show(ToastMessage(AppText.copy.common.notDone, tone = ToastTone.Error)) } }
     }
 
     private fun StampReveal.loaded(): RevealUiState.Loaded {

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -307,6 +308,8 @@ private fun LoadedHome(
                     }
                 }
             }
+            // The sheet closes as it opened, so the play pills below read as their own group.
+            item { SheetFoot() }
         }
 
         // #87, #91: the rest of play waits under the day's list, so the purchases come first.
@@ -317,10 +320,10 @@ private fun LoadedHome(
             }
         }
         state.challenge?.let { row ->
-            item { ChallengeRow(row, onOpen = onOpenChallenge, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
+            item { ChallengeRow(row, onOpen = onOpenChallenge, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.md)) }
         }
         if (state.shelf.isNotEmpty()) {
-            item { PlayShelf(state.shelf, onOpen = onOpenShelf, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12)) }
+            item { PlayShelf(state.shelf, onOpen = onOpenShelf, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.md)) }
         }
         state.firstWeekLine?.let { line ->
             item {
@@ -370,6 +373,18 @@ private fun SheetRow(caught: Boolean = false, content: @Composable BoxScope.() -
             .background(if (caught) MaterialTheme.ptut.infoBg else MaterialTheme.colorScheme.tertiaryContainer)
             .padding(horizontal = Spacing.s20),
         content = content,
+    )
+}
+
+/** The [SkyPageSheet]'s round bottom, under its last row. */
+@Composable
+private fun SheetFoot() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(Spacing.s20)
+            .clip(RoundedCornerShape(bottomStart = SkySizes.sheetCorner, bottomEnd = SkySizes.sheetCorner))
+            .background(MaterialTheme.colorScheme.tertiaryContainer),
     )
 }
 

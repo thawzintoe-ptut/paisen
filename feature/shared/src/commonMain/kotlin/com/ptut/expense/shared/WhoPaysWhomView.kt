@@ -2,7 +2,6 @@ package com.ptut.expense.shared
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,7 +33,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
-import com.ptut.expense.design.PlaySizes
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.SkySizes
@@ -162,9 +160,7 @@ private fun SettlePlan(plan: SettlePlanUiModel, onSettleMine: (from: String, to:
         verticalArrangement = Arrangement.spacedBy(Spacing.xxs),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            Box(Modifier.size(PlaySizes.aiDisc).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
-                Text("P", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary)
-            }
+            PayerBadge()
             Text(plan.headline, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
         }
         Text(plan.savesLine, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

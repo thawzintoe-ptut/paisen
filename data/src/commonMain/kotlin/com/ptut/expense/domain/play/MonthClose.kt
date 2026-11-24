@@ -8,7 +8,6 @@ import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.dateIn
 import com.ptut.expense.domain.total
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.YearMonth
 
 /** A cost this many times the month's median row is called large. */
 private const val LARGE_TIMES = 3L
@@ -37,12 +36,12 @@ data class BigCost(val id: String, val risen: Boolean, val large: Boolean)
 
 /** Queued slips dated inside [month]; a slip from another month neither blocks the seal nor counts. */
 fun List<QueuedSlip>.waitingIn(month: String, zone: TimeZone = HomeTime): Int {
-    val yearMonth = runCatching { YearMonth.parse(month) }.getOrNull() ?: return 0
+    val yearMonth = month.toYearMonthOrNull() ?: return 0
     return count { it.occurredAtEpochMillis.dateIn(zone).let { day -> day.year == yearMonth.year && day.month == yearMonth.month } }
 }
 
 fun List<Transaction>.monthClose(month: String, zone: TimeZone = HomeTime): MonthClose {
-    val yearMonth = runCatching { YearMonth.parse(month) }.getOrNull() ?: return MonthClose(emptyList(), emptyList(), emptyList(), null)
+    val yearMonth = month.toYearMonthOrNull() ?: return MonthClose(emptyList(), emptyList(), emptyList(), null)
     val expenses = filter { it.direction == Direction.Expense }
     val rows = expenses.inMonth(yearMonth, zone).sortedBy { it.id }
     val last = expenses.inMonth(yearMonth.minusMonths(1), zone)

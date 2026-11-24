@@ -6,6 +6,7 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.format
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.CreatePersonGroupUseCase
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GetPeopleBalancesUseCase
@@ -15,6 +16,9 @@ import com.ptut.expense.domain.shared.Person
 import com.ptut.expense.domain.shared.PersonSummary
 import com.ptut.expense.domain.shared.SetPersonArchivedUseCase
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -53,6 +57,7 @@ class PeopleViewModel(
     private val getPeopleBalances: GetPeopleBalancesUseCase,
     private val setPersonArchived: SetPersonArchivedUseCase,
     private val createPersonGroup: CreatePersonGroupUseCase,
+    private val toasts: ToastMessages? = null,
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
@@ -72,8 +77,21 @@ class PeopleViewModel(
 
     /** The dashed ADD PERSON row: a one-off bill, a group of two named after them, like Shared's. */
     fun addPerson(name: String, personId: String?, onCreated: (String) -> Unit) {
-        viewModelScope.launch { onCreated(createPersonGroup(name, personId, GroupType.Other.defaultIcon())) }
+        // A second tap while the first is saving would make a second group.
+        if (adding) return
+        adding = true
+        viewModelScope.launch {
+            try {
+                runSuspendCatching { createPersonGroup(name, personId, GroupType.Other.defaultIcon()) }
+                    .onSuccess(onCreated)
+                    .onFailure { toasts?.show(ToastMessage(AppText.copy.common.notDone, tone = ToastTone.Error)) }
+            } finally {
+                adding = false
+            }
+        }
     }
+
+    private var adding = false
 
     private fun PersonSummary.row(): PeopleRowUiModel {
         val text = AppText.copy.shared

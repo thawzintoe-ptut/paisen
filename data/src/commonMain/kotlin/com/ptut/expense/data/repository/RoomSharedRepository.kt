@@ -54,9 +54,12 @@ import com.ptut.expense.domain.shared.splitMembers
 import com.ptut.expense.domain.shared.toLocalDateOrNull
 import com.ptut.expense.domain.startOfDayEpochMillis
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.atTime
@@ -80,17 +83,17 @@ class RoomSharedRepository(
 ) : SharedRepository {
 
     override val snapshot: StateFlow<SharedSnapshot> = combine(
-        combine(dao.observeGroups(), dao.observeMembers(), dao.observePeople()) { groups, members, people ->
+        combine(dao.observeGroups().distinctUntilChanged(), dao.observeMembers().distinctUntilChanged(), dao.observePeople().distinctUntilChanged()) { groups, members, people ->
             val byGroup = members.groupBy { it.groupId }
             groups.map { it.toDomain(byGroup[it.id].orEmpty()) } to people.map { Person(it.id, it.name, it.archived) }
         },
-        combine(dao.observeVersions(), dao.observeShares()) { versions, shares ->
+        combine(dao.observeVersions().distinctUntilChanged(), dao.observeShares().distinctUntilChanged()) { versions, shares ->
             val byVersion = shares.groupBy { it.versionId }
             versions.mapNotNull { it.toDomain(byVersion[it.versionId].orEmpty()) }
         },
-        combine(dao.observePayments(), dao.observePaymentRemovals(), dao.observeReactions(), ::Triple),
-        dao.observeLinks(),
-        dao.observeRepeats(),
+        combine(dao.observePayments().distinctUntilChanged(), dao.observePaymentRemovals().distinctUntilChanged(), dao.observeReactions().distinctUntilChanged(), ::Triple),
+        dao.observeLinks().distinctUntilChanged(),
+        dao.observeRepeats().distinctUntilChanged(),
     ) { (groups, people), versions, (payments, removals, reactions), links, repeats ->
         SharedSnapshot(
             groups = groups,
@@ -102,7 +105,7 @@ class RoomSharedRepository(
             paymentRemovals = removals.map { it.toDomain() },
             reactions = reactions.mapNotNull { it.toDomain() },
         )
-    }.stateIn(scope, SharingStarted.Eagerly, SharedSnapshot.Empty)
+    }.flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.Eagerly, SharedSnapshot.Empty)
 
     override suspend fun createGroup(name: String, type: GroupType, icon: String, members: List<NewMember>, currency: String): String {
         val now = clock.now().toEpochMilliseconds()

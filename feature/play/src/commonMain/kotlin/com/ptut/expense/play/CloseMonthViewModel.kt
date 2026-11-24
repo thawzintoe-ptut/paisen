@@ -12,6 +12,9 @@ import com.ptut.expense.domain.play.MonthCloseState
 import com.ptut.expense.domain.play.SealMonthUseCase
 import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -49,6 +52,7 @@ class CloseMonthViewModel(
     getClose: GetMonthCloseUseCase,
     private val sealMonth: SealMonthUseCase,
     categories: Flow<List<Category>> = flowOf(emptyList()),
+    private val toasts: ToastMessages? = null,
 ) : ViewModel() {
 
     private val step = MutableStateFlow(0)
@@ -61,7 +65,8 @@ class CloseMonthViewModel(
     }
 
     fun seal() {
-        viewModelScope.launch { runSuspendCatching { sealMonth(month) } }
+        // The seal is read back from the book, so a failed write leaves it unsealed on screen.
+        viewModelScope.launch { runSuspendCatching { sealMonth(month) }.onFailure { toasts?.show(ToastMessage(AppText.copy.common.notDone, tone = ToastTone.Error)) } }
     }
 
     private fun MonthCloseState.asUiState(at: Int, categories: List<Category>): CloseMonthUiState {

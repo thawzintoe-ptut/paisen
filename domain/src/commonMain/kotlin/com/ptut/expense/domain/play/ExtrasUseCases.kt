@@ -159,6 +159,11 @@ class RemoveSaidDepositUseCase(private val book: PlayBook) {
     suspend operator fun invoke(depositId: String) = book.removeSaidDeposit(depositId)
 }
 
+/** J02's Undo: the same deposit, id and day, goes back in. */
+class PutBackDepositUseCase(private val book: PlayBook) {
+    suspend operator fun invoke(deposit: GoalDeposit) = book.deposit(deposit)
+}
+
 /** J04: where the jar's money goes, asked once; [CASH_ACCOUNT] for a reader who keeps cash. */
 class ChooseSavingsAccountUseCase(private val book: PlayBook) {
     suspend operator fun invoke(goalId: String, account: String) = book.chooseAccount(goalId, account)

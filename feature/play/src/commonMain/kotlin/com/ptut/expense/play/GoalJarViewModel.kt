@@ -1,5 +1,6 @@
 package com.ptut.expense.play
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Home
@@ -20,6 +21,7 @@ import com.ptut.expense.domain.play.GoalJarState
 import com.ptut.expense.domain.play.ObserveGoalJarUseCase
 import com.ptut.expense.domain.play.ObserveOwnAccountsUseCase
 import com.ptut.expense.domain.play.PERCENT
+import com.ptut.expense.domain.play.PutBackDepositUseCase
 import com.ptut.expense.domain.play.PutMoneyInUseCase
 import com.ptut.expense.domain.play.RemoveSaidDepositUseCase
 import com.ptut.expense.domain.play.SaveGoalUseCase
@@ -30,6 +32,11 @@ import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.typedText
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.AmountEntry
+import com.ptut.expense.ui.Haptics
+import com.ptut.expense.ui.ToastAction
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -100,6 +107,9 @@ sealed interface GoalJarUiState {
         val footer: String,
         val archive: String,
         val sheet: JarSheetUiModel?,
+        val archiveAsk: String = AppText.copy.play.extras.jarArchiveAsk,
+        val archiveBody: String = AppText.copy.play.extras.jarArchiveBody,
+        val keep: String = AppText.copy.common.keepIt,
     ) : GoalJarUiState
 
     /** Put away, or never there. */
@@ -124,15 +134,25 @@ class GoalJarViewModel(
     ownAccounts: ObserveOwnAccountsUseCase? = null,
     /** Opened with Put money in showing, from Today's button (J01). */
     openPutIn: Boolean = false,
+    private val putBackDeposit: PutBackDepositUseCase? = null,
+    private val toasts: ToastMessages? = null,
+    private val haptics: Haptics? = null,
+    /** The half-typed name and target, kept through Android killing the process. */
+    private val savedState: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
+    private val draftKey = "jar.${goalId ?: "new"}"
+    private val opened = JarForm(name.orEmpty(), target.orEmpty())
+    private val restored = savedState.get<String>("$draftKey.name")?.let { JarForm(it, savedState.get<String>("$draftKey.target").orEmpty()) }
+
     private val id = MutableStateFlow(goalId)
-    private val form = MutableStateFlow(JarForm(name.orEmpty(), target.orEmpty()))
-    private val editing = MutableStateFlow(goalId == null)
+    private val form = MutableStateFlow(restored ?: opened)
+    private val editing = MutableStateFlow(goalId == null || restored != null)
     private val sheet = MutableStateFlow(if (openPutIn) Sheet.PutIn else Sheet.None)
     private val picked = MutableStateFlow<Satang?>(null)
     private val accountPick = MutableStateFlow<String?>(null)
     private var saving = false
+    private var choosing = false
 
     val uiState: StateFlow<GoalJarUiState?> = combine(
         id.flatMapLatest { current -> current?.let { observeJar(it) } ?: flowOf(null) },
@@ -147,6 +167,20 @@ class GoalJarViewModel(
             else -> jar.asUiState(open, amount, account, accounts)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), null)
+
+    init {
+        viewModelScope.launch {
+            combine(form, editing) { typed, open -> typed.takeIf { open && it != opened } }.collect { typed ->
+                if (typed == null) {
+                    savedState.remove<String>("$draftKey.name")
+                    savedState.remove<String>("$draftKey.target")
+                } else {
+                    savedState["$draftKey.name"] = typed.name
+                    savedState["$draftKey.target"] = typed.target
+                }
+            }
+        }
+    }
 
     fun setName(text: String) = form.update { it.copy(name = text) }
 
@@ -165,10 +199,12 @@ class GoalJarViewModel(
         if (typedName.isBlank() || saving) return
         saving = true
         viewModelScope.launch {
-            runSuspendCatching { saveGoal(id.value, typedName, target) }.onSuccess {
-                id.value = it
-                editing.value = false
-            }
+            runSuspendCatching { saveGoal(id.value, typedName, target) }
+                .onSuccess {
+                    id.value = it
+                    editing.value = false
+                }
+                .onFailure { failed() }
             saving = false
         }
     }
@@ -176,7 +212,9 @@ class GoalJarViewModel(
     fun archive(onDone: () -> Unit) {
         val current = id.value ?: return
         viewModelScope.launch {
-            runSuspendCatching { archiveGoal(current) }.onSuccess { onDone() }
+            runSuspendCatching { archiveGoal(current) }
+                .onSuccess { onDone() }
+                .onFailure { failed() }
         }
     }
 
@@ -209,18 +247,38 @@ class GoalJarViewModel(
         val goal = id.value ?: return
         val account = accountPick.value ?: return
         val choose = chooseAccount ?: return
+        if (choosing) return
+        choosing = true
         viewModelScope.launch {
-            runSuspendCatching { choose(goal, account) }.onSuccess {
-                accountPick.value = null
-                sheet.value = Sheet.PutIn
-            }
+            runSuspendCatching { choose(goal, account) }
+                .onSuccess {
+                    accountPick.value = null
+                    sheet.value = Sheet.PutIn
+                }
+                .onFailure { failed() }
+            choosing = false
         }
     }
 
     /** J02: takes back a deposit tapped in by mistake. */
     fun remove(depositId: String) {
         val take = removeSaidDeposit ?: return
-        viewModelScope.launch { runSuspendCatching { take(depositId) } }
+        val deposit = current?.deposits?.firstOrNull { it.id == depositId }
+        val putBack = putBackDeposit
+        viewModelScope.launch {
+            runSuspendCatching { take(depositId) }
+                .onSuccess {
+                    haptics?.deleted()
+                    // The shell runs the Undo, so it holds the deposit, not this screen.
+                    val undo = if (deposit != null && putBack != null) ToastAction(AppText.copy.common.undo) { putBack(deposit) } else null
+                    toasts?.show(ToastMessage(AppText.copy.play.extras.jarDepositRemoved, tone = ToastTone.Deleted, action = undo))
+                }
+                .onFailure { failed() }
+        }
+    }
+
+    private suspend fun failed() {
+        toasts?.show(ToastMessage(AppText.copy.common.notDone, tone = ToastTone.Error))
     }
 
     /** Open K PLUS: the sheet goes; the slip fills the jar when it comes (J05). */
@@ -233,7 +291,8 @@ class GoalJarViewModel(
         val amount = picked.value ?: depositChoices(jar.leftover, jar.pace.perWeek, minorPerWhole(Home.money)).firstOrNull() ?: return
         viewModelScope.launch {
             runSuspendCatching { put(jar.goal, amount) }
-            dismissSheet()
+                .onSuccess { dismissSheet() }
+                .onFailure { failed() }
         }
     }
 

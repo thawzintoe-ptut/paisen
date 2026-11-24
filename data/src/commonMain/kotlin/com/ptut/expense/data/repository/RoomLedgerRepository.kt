@@ -20,12 +20,16 @@ import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
 import com.ptut.expense.domain.startOfDayEpochMillis
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.datetime.DateTimeUnit
@@ -56,6 +60,8 @@ class RoomLedgerRepository(
     private val clock: Clock = Clock.System,
     /** Injected so a test can name the row it wrote. Random everywhere else. */
     private val newId: () -> String = { Uuid.random().toString() },
+    /** Maps rows off the main thread; a test hands in its own scheduler. */
+    private val work: CoroutineDispatcher = Dispatchers.Default,
 ) : LedgerRepository {
 
     private val today: LocalDate = clock.now().toLocalDateTime(HomeTime).date
@@ -74,8 +80,15 @@ class RoomLedgerRepository(
     override val allTransactions: StateFlow<LedgerSnapshot> =
         transactionDao.observeAll().asTransactions(scope)
 
+    override fun observeTransaction(transactionId: String): Flow<Transaction?> =
+        transactionDao.observeById(transactionId)
+            .distinctUntilChanged()
+            .map { row -> row?.toDomain() }
+            .flowOn(work)
+
     override val sinceLastImportMillis: StateFlow<Long?> =
         importRunDao.observeLastSuccessfulFinishedAt(ImportRunEntity.OUTCOME_SUCCESS)
+            .distinctUntilChanged()
             .map { lastSuccess ->
                 // Never negative: a clock that has moved backwards must not read as a future
                 // import, which would render as a healthy ledger.
@@ -85,12 +98,16 @@ class RoomLedgerRepository(
 
     override val importRuns: StateFlow<List<ImportRun>> =
         importRunDao.observeRecent(JOURNAL_DEPTH)
+            .distinctUntilChanged()
             .map { rows -> rows.map(ImportRunEntity::toDomain) }
+            .flowOn(work)
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     override val queuedSlips: StateFlow<List<QueuedSlip>> =
         queuedSlipDao.observeAll()
+            .distinctUntilChanged()
             .map { rows -> rows.map(QueuedSlipEntity::toDomain) }
+            .flowOn(work)
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     override suspend fun delete(transactionId: String) {
@@ -161,7 +178,9 @@ class RoomLedgerRepository(
     private fun Flow<List<TransactionEntity>>.asTransactions(
         scope: CoroutineScope,
     ): StateFlow<LedgerSnapshot> =
-        map { rows -> LedgerSnapshot.Rows(rows.map(TransactionEntity::toDomain)) }
+        distinctUntilChanged()
+            .map { rows -> LedgerSnapshot.Rows(rows.map(TransactionEntity::toDomain)) }
+            .flowOn(work)
             .stateIn(scope, SharingStarted.Eagerly, LedgerSnapshot.Unanswered)
 
     private companion object {

@@ -13,6 +13,7 @@ import com.ptut.expense.domain.folders.RefreshFolderCatalogUseCase
 import com.ptut.expense.domain.home.ChooseHomeUseCase
 import com.ptut.expense.domain.play.MarkWelcomedUseCase
 import com.ptut.expense.domain.play.SaveGoalUseCase
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.platform.files.LedgerFileStore
 import com.ptut.expense.platform.photos.PhotoAccessRequest
@@ -224,10 +225,7 @@ class OnboardingViewModel(
         val preset = now.goal ?: return
         val target = goalTarget(now.goalAmount) ?: return
         val save = saveGoal ?: return finish()
-        whileFinishing {
-            commitHome()
-            save(goalId = null, name = preset.goalName(), target = target)
-        }
+        whileFinishing { save(goalId = null, name = preset.goalName(), target = target) }
     }
 
     /**
@@ -235,26 +233,27 @@ class OnboardingViewModel(
      * skipped goal leaves no jar.
      */
     fun finish() {
-        whileFinishing { commitHome() }
+        whileFinishing()
     }
 
     private var finishing = false
 
     /** The home is written while the ledger is still empty, then first run ends and Today's first week starts. */
-    private fun whileFinishing(work: suspend () -> Unit) {
+    private fun whileFinishing(goal: (suspend () -> Unit)? = null) {
         if (finishing) return
         finishing = true
         viewModelScope.launch {
             try {
-                work()
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (failure: Exception) {
+                // Without its home the ledger would start in the wrong money, so first run stays.
+                if (runSuspendCatching { commitHome() }.isFailure) {
+                    problem.value = AppText.copy.settings.didNotWork
+                    return@launch
+                }
                 // A goal that failed to save is not a reason to keep the reader on first run.
-                toasts?.show(ToastMessage(AppText.copy.settings.didNotWork))
-            } finally {
+                goal?.let { save -> runSuspendCatching { save() }.onFailure { toasts?.show(ToastMessage(AppText.copy.settings.didNotWork)) } }
                 markWelcomed?.invoke()
                 onboarding.finish()
+            } finally {
                 finishing = false
             }
         }

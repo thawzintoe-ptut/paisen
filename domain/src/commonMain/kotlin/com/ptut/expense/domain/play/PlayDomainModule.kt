@@ -31,6 +31,7 @@ val playUseCases: Module = module {
     factory { PutMoneyInUseCase(get(), get()) }
     factory { ChooseSavingsAccountUseCase(get()) }
     factory { RemoveSaidDepositUseCase(get()) }
+    factory { PutBackDepositUseCase(get()) }
     factory { ObserveOwnAccountsUseCase(get()) }
     factory { GetMonthStoryUseCase(get(), get(), get()) }
     factory { MarkStorySeenUseCase(get()) }

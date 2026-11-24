@@ -49,6 +49,8 @@ data class LedgerBackupUiState(
      * to pick again. Null until a file is refused, and again once another file reads.
      */
     val refused: String? = null,
+    /** What the last import added, kept on the import screen until the reader leaves it. */
+    val merged: String? = null,
 )
 
 /**
@@ -75,11 +77,14 @@ class LedgerBackupViewModel(
      */
     private val busy = MutableStateFlow(false)
 
+    private val lastMerge = MutableStateFlow<String?>(null)
+
     val uiState: StateFlow<LedgerBackupUiState> = combine(
         observeHolding(),
         busy,
         restoring.step,
-    ) { holding, working, step -> state(holding, working, step.preview(), step.refusal()) }
+        lastMerge,
+    ) { holding, working, step, merged -> state(holding, working, step.preview(), step.refusal()).copy(merged = merged) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS),
@@ -100,6 +105,7 @@ class LedgerBackupViewModel(
      */
     fun chooseFile() = whileFree {
         val text = files.read() ?: return@whileFree
+        lastMerge.value = null
         restoring.read(text)
     }
 
@@ -110,7 +116,9 @@ class LedgerBackupViewModel(
     fun restore() = whileFree {
         // #73: a file the archive refuses gets the refused state, not a toast; it wrote nothing.
         val merged = restoring.import { merge -> Home.fromSettings { merge() } } ?: return@whileFree
-        toasts.show(ToastMessage(merged.phrase()))
+        val line = merged.phrase()
+        lastMerge.value = line
+        toasts.show(ToastMessage(line))
     }
 
     /** Cancel on the preview: the file is let go and nothing has changed. */

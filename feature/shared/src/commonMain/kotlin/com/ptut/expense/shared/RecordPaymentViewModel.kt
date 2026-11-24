@@ -1,5 +1,6 @@
 package com.ptut.expense.shared
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
@@ -100,6 +101,8 @@ class RecordPaymentViewModel(
     private val haptics: Haptics? = null,
     /** #93: the settle plan's amount ("350.00"); it wins over what is owed. */
     private val prefillAmount: String? = null,
+    /** The half-typed payment, kept through Android killing the process. */
+    private val savedState: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
     private val snapshot = observeSnapshot()
@@ -117,7 +120,33 @@ class RecordPaymentViewModel(
             val owedText = if (owed > Satang.Zero) plain(owed, group) else ""
             form.update { it.copy(amountText = prefillAmount?.filter { c -> c.isDigit() || c == '.' } ?: owedText, loaded = true) }
             opened.value = form.value.content
+            restoreDraft()
+            combine(form, saved) { form, done -> form.content.takeUnless { done || it == opened.value } }.collect(::keepDraft)
         }
+    }
+
+    private fun key(field: String) = "payment.$groupId.$fromMemberId.$toMemberId.$field"
+
+    /** After the owed amount is filled, so it never overwrites what was typed. */
+    private fun restoreDraft() {
+        val amount = savedState.get<String>(key(AMOUNT)) ?: return
+        form.update { current ->
+            current.copy(
+                amountText = amount,
+                method = PaymentMethod.entries.firstOrNull { it.name == savedState.get<String>(key(METHOD)) } ?: current.method,
+                occurredAtEpochMillis = savedState.get<Long>(key(TIME)),
+            )
+        }
+    }
+
+    private fun keepDraft(form: PaymentForm?) {
+        if (form == null) {
+            listOf(AMOUNT, METHOD, TIME).forEach { savedState.remove<Any>(key(it)) }
+            return
+        }
+        savedState[key(AMOUNT)] = form.amountText
+        savedState[key(METHOD)] = form.method.name
+        savedState[key(TIME)] = form.occurredAtEpochMillis
     }
 
     val uiState: StateFlow<RecordPaymentUiState> = combine(snapshot, form, opened) { snapshot, form, opened ->
@@ -202,4 +231,10 @@ class RecordPaymentViewModel(
     private fun amountOf(form: PaymentForm, group: SharedGroup): Satang? = parseMinor(form.amountText, group.money)?.let { Satang.ofMinorUnits(it) }
 
     private fun plain(amount: Satang, group: SharedGroup): String = group.money.typedText(amount.toMinorUnits())
+
+    private companion object {
+        const val AMOUNT = "amount"
+        const val METHOD = "method"
+        const val TIME = "time"
+    }
 }

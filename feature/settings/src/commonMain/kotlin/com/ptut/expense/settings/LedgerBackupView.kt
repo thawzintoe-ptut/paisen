@@ -103,6 +103,8 @@ fun ImportDataView(
         modifier = modifier,
         secondary = if (preview == null) null else copy.common.cancel,
         onSecondary = onCancel,
+        noteTitle = uiState.merged?.let { text.lastMerged },
+        noteText = uiState.merged.orEmpty(),
     )
 }
 

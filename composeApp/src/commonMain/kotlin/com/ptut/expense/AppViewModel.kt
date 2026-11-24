@@ -2,7 +2,6 @@ package com.ptut.expense
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ptut.expense.design.PtutMotion
 import com.ptut.expense.domain.app.RunStartupTasksUseCase
 import com.ptut.expense.ui.ScreenReader
 import com.ptut.expense.ui.ToastMessage
@@ -27,7 +26,7 @@ class AppViewModel(
     toasts: ToastMessages,
     /** NFR-4's sweep and US-1's first-run folders, on every start. */
     runStartupTasks: RunStartupTasksUseCase,
-    private val motion: PtutMotion = PtutMotion.Default,
+    private val motion: ToastTimings = ToastTimings(),
     /** #8: asked each time an Undo shows, because TalkBack or VoiceOver can be switched on at any time. */
     private val screenReader: ScreenReader = ScreenReader { false },
 ) : ViewModel() {

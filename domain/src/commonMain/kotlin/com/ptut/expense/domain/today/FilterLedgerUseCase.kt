@@ -15,8 +15,10 @@ import com.ptut.expense.domain.matches
 import com.ptut.expense.domain.reports.SpendNames
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flowOn
 
 /**
@@ -54,13 +56,19 @@ class FilterLedgerUseCase(
         names: SpendNames,
         slice: LedgerSlice? = null,
     ): Flow<FilteredLedger?> =
-        combine(ledger.allTransactions, query, filter, categories) { snapshot, text, chosen, filing ->
+        combine(ledger.allTransactions, query.settled(), filter, categories) { snapshot, text, chosen, filing ->
             when (snapshot) {
                 LedgerSnapshot.Unanswered -> null
                 is LedgerSnapshot.Rows -> snapshot.transactions.filtered(text, chosen, filing, names, slice)
             }
         }.flowOn(work)
 }
+
+/** Waits for typing to pause before filtering; a cleared box shows the whole list at once. */
+@OptIn(FlowPreview::class)
+private fun Flow<String>.settled(): Flow<String> = debounce { text -> if (text.isEmpty()) 0L else SEARCH_PAUSE_MILLIS }
+
+private const val SEARCH_PAUSE_MILLIS = 150L
 
 private fun List<Transaction>.filtered(
     query: String,

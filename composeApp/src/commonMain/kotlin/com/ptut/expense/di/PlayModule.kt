@@ -27,13 +27,13 @@ val playModule: Module = module {
     // #85: one watcher, so one write marks a day.
     single { WatchTrayUseCase(queued = get(), scanning = get(), playOn = get(), transactions = get(), book = get()) }
 
-    viewModel { PlaySettingsViewModel(observeChoices = get(), setChoices = get(), playOn = get(), setStampsOff = get(), planReminder = getOrNull()) }
-    viewModel { (stampId: String) -> StampRevealViewModel(stampId = stampId, observeStamp = get(), revealStamp = get()) }
+    viewModel { PlaySettingsViewModel(observeChoices = get(), setChoices = get(), playOn = get(), setStampsOff = get(), planReminder = getOrNull(), toasts = get()) }
+    viewModel { (stampId: String) -> StampRevealViewModel(stampId = stampId, observeStamp = get(), revealStamp = get(), toasts = get()) }
     viewModel { StampBookViewModel(observeStampBook = get()) }
     viewModel { (tip: PlayTip) -> PlayTipViewModel(tip = tip, playOn = get(), setChoices = get()) }
     viewModel { DailyQuestionViewModel(getDailyQuestion = get(), answer = get(), categories = liveCategories()) }
     viewModel { (monday: String) -> GuessViewModel(monday = monday, startGuess = get(), revealGuess = get()) }
-    viewModel { ChallengeViewModel(getChoices = get(), pickChallenge = get(), categories = liveCategories()) }
+    viewModel { ChallengeViewModel(getChoices = get(), pickChallenge = get(), categories = liveCategories(), toasts = get()) }
     viewModel { (goalId: String, name: String, target: String, putIn: Boolean) ->
         GoalJarViewModel(
             goalId = goalId.ifEmpty { null },
@@ -47,11 +47,15 @@ val playModule: Module = module {
             removeSaidDeposit = get(),
             ownAccounts = get(),
             openPutIn = putIn,
+            putBackDeposit = get(),
+            toasts = get(),
+            haptics = get(),
+            savedState = get(),
         )
     }
     viewModel { (month: String) ->
         MonthStoryViewModel(month = month, getStory = get(), markSeen = get(), categories = liveCategories(), shareAmounts = choice(false) { it.play.shareAmounts })
     }
-    viewModel { (month: String) -> CloseMonthViewModel(month = month, getClose = get(), sealMonth = get(), categories = liveCategories()) }
+    viewModel { (month: String) -> CloseMonthViewModel(month = month, getClose = get(), sealMonth = get(), categories = liveCategories(), toasts = get()) }
     viewModel { MoneyScoreViewModel(getScore = get()) }
 }

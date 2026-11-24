@@ -5,7 +5,11 @@ import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.Transaction
 import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.map
 
 /**
  * The ledger seam. Room sits behind this; a screen never sees a DAO.
@@ -28,6 +32,13 @@ interface LedgerRepository {
      * a month stops adding up and nobody can see why.
      */
     val allTransactions: StateFlow<LedgerSnapshot>
+
+    /**
+     * One row as it changes, or null once it is gone. The default filters [allTransactions], so a
+     * test double needs nothing; Room overrides it with a one-row query.
+     */
+    fun observeTransaction(transactionId: String): Flow<Transaction?> =
+        allTransactions.filterIsInstance<LedgerSnapshot.Rows>().map { it.rowWithId(transactionId) }.distinctUntilChanged()
 
     /**
      * Time since the last import that finished successfully, or null when none ever has.

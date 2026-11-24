@@ -117,6 +117,7 @@ val settingsModule: Module = module {
             // A graph with no settings draws no target field.
             offersTarget = getOrNull<AppSettings>() != null,
             toasts = get(),
+            savedState = get(),
         )
     }
     viewModel {

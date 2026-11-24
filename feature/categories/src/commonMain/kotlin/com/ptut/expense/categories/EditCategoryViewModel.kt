@@ -1,5 +1,6 @@
 package com.ptut.expense.categories
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
@@ -68,22 +69,24 @@ class EditCategoryViewModel(
     private val offersTarget: Boolean = false,
     /** Where a failed save or delete is said. Null in a graph that binds none. */
     private val toasts: ToastMessages? = null,
+    /** The unsaved edits, kept through Android killing the process. */
+    private val savedState: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
     private val categories = observeCategories()
     private val subCategories = observeSubCategories()
 
     /** Null until the reader types. Absent means "as stored", which is not the same as blank. */
-    private val typedName = MutableStateFlow<String?>(null)
-    private val chosenIcon = MutableStateFlow<String?>(null)
-    private val chosenDirection = MutableStateFlow<Direction?>(null)
-    private val chosenColor = MutableStateFlow<String?>(null)
+    private val typedName = kept<String>("name")
+    private val chosenIcon = kept<String>("icon")
+    private val chosenDirection = MutableStateFlow(savedState.get<String>(key("direction"))?.let { name -> Direction.entries.firstOrNull { it.name == name } })
+    private val chosenColor = kept<String>("color")
     private val subEdits = MutableStateFlow(SubCategoryEdits())
     private val movedCount = MutableStateFlow(0)
     private val rulesMoved = MutableStateFlow(0)
 
     /** Whole home units as typed (baht, kyat), held until Save like the name. Null means "as stored". */
-    private val typedTarget = MutableStateFlow<String?>(null)
+    private val typedTarget = kept<String>("target")
 
     private val closed = MutableStateFlow(false)
 
@@ -110,7 +113,18 @@ class EditCategoryViewModel(
             initialValue = EditCategoryUiState(),
         )
 
+    private fun key(field: String) = "category.$categoryId.$field"
+
+    /** A field held until Save; null, as after a save, drops its key. */
+    private fun <T : Any> kept(field: String): MutableStateFlow<T?> =
+        MutableStateFlow(savedState.get<T>(key(field))).also { flow -> viewModelScope.launch { flow.collect { keep(field, it) } } }
+
+    private fun keep(field: String, value: Any?) {
+        if (value == null) savedState.remove<Any>(key(field)) else savedState[key(field)] = value
+    }
+
     init {
+        viewModelScope.launch { chosenDirection.collect { keep("direction", it?.name) } }
         viewModelScope.launch {
             val moves = getDeleteOptions(categoryId)
             movedCount.value = moves.transactions

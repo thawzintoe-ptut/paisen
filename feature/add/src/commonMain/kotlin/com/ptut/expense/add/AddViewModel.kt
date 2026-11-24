@@ -1,5 +1,6 @@
 package com.ptut.expense.add
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.agent.AgentInbox
@@ -240,6 +241,8 @@ class AddViewModel(
     /** The last rate saved for a currency, shared with slips and groups. */
     private val getLastRate: GetLastRateUseCase = GetLastRateUseCase(),
     private val recordTransaction: RecordTransactionUseCase,
+    /** The half-typed sheet, kept through Android killing the process. */
+    private val savedState: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
     private var usage: Map<String, Int> = emptyMap()
@@ -248,12 +251,50 @@ class AddViewModel(
     val uiState: StateFlow<AddUiState> = state.asStateFlow()
 
     init {
+        restoreDraft()
         viewModelScope.launch {
             categoryUsage.collect { counted ->
                 usage = counted
                 state.update { it.copy(categoryUsage = counted) }
             }
         }
+        viewModelScope.launch { state.collect(::keepDraft) }
+    }
+
+    private fun restoreDraft() {
+        val typed = savedState.get<String>(DRAFT_AMOUNT) ?: return
+        val kind = Direction.entries.firstOrNull { it.name == savedState.get<String>(DRAFT_KIND) } ?: Direction.Expense
+        val currency = savedState.get<String>(DRAFT_CURRENCY)?.let(Currencies::of) ?: home()
+        val category = savedState.get<String>(DRAFT_CATEGORY)?.let { id -> categories(kind).firstOrNull { it.id == id } }
+        val subs = subCategories().under(category?.id)
+        state.value = fresh().copy(
+            entry = AmountEntry(typed, pending = savedState.get<Boolean>(DRAFT_PENDING) ?: false, digits = currency.digits),
+            kind = kind,
+            categories = categories(kind),
+            category = category,
+            subCategories = subs,
+            subCategory = savedState.get<String>(DRAFT_SUB)?.let { id -> subs.firstOrNull { it.id == id } },
+            occurredAtEpochMillis = savedState.get<Long>(DRAFT_TIME),
+            memo = savedState.get<String>(DRAFT_MEMO),
+            currency = currency,
+            rateText = savedState.get<String>(DRAFT_RATE).orEmpty(),
+        ).priced()
+    }
+
+    private fun keepDraft(current: AddUiState) {
+        if (current.saved || !current.changed) {
+            DRAFT_KEYS.forEach { savedState.remove<Any>(it) }
+            return
+        }
+        savedState[DRAFT_AMOUNT] = current.entry.typed
+        savedState[DRAFT_PENDING] = current.entry.pending
+        savedState[DRAFT_KIND] = current.kind.name
+        savedState[DRAFT_CATEGORY] = current.category?.id
+        savedState[DRAFT_SUB] = current.subCategory?.id
+        savedState[DRAFT_TIME] = current.occurredAtEpochMillis
+        savedState[DRAFT_MEMO] = current.memo
+        savedState[DRAFT_CURRENCY] = current.currency.code
+        savedState[DRAFT_RATE] = current.rateText
     }
 
     private var listening: Job? = null
@@ -594,5 +635,18 @@ class AddViewModel(
             toasts.show(ToastMessage(AppText.copy.add.saved(amount.formatCompact(), category.name)))
             state.update { it.copy(saving = false, saved = true) }
         }
+    }
+
+    private companion object {
+        const val DRAFT_AMOUNT = "add.amount"
+        const val DRAFT_PENDING = "add.pending"
+        const val DRAFT_KIND = "add.kind"
+        const val DRAFT_CATEGORY = "add.category"
+        const val DRAFT_SUB = "add.sub"
+        const val DRAFT_TIME = "add.time"
+        const val DRAFT_MEMO = "add.memo"
+        const val DRAFT_CURRENCY = "add.currency"
+        const val DRAFT_RATE = "add.rate"
+        val DRAFT_KEYS = listOf(DRAFT_AMOUNT, DRAFT_PENDING, DRAFT_KIND, DRAFT_CATEGORY, DRAFT_SUB, DRAFT_TIME, DRAFT_MEMO, DRAFT_CURRENCY, DRAFT_RATE)
     }
 }

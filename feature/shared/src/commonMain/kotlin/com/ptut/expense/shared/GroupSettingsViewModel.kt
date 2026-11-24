@@ -2,6 +2,7 @@ package com.ptut.expense.shared
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.AddMembersUseCase
 import com.ptut.expense.domain.shared.EditGroupUseCase
 import com.ptut.expense.domain.shared.GroupType
@@ -12,7 +13,12 @@ import com.ptut.expense.domain.shared.RemoveMemberUseCase
 import com.ptut.expense.domain.shared.RenewInviteUseCase
 import com.ptut.expense.domain.shared.ShareGroupUseCase
 import com.ptut.expense.domain.shared.SwitchOffInviteUseCase
+import com.ptut.expense.locale.AppText
 import com.ptut.expense.sync.syncMessage
+import com.ptut.expense.ui.Haptics
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -30,6 +36,8 @@ class GroupSettingsViewModel(
     private val shareGroup: ShareGroupUseCase,
     private val renewInvite: RenewInviteUseCase,
     private val switchOffInvite: SwitchOffInviteUseCase,
+    private val toasts: ToastMessages? = null,
+    private val haptics: Haptics? = null,
 ) : ViewModel() {
 
     private val action = MutableStateFlow(InviteActionState())
@@ -74,9 +82,17 @@ class GroupSettingsViewModel(
         viewModelScope.launch { addMembers(groupId, members) }
     }
 
-    /** #218: archives one name here; past splits keep it. */
-    fun removeMember(memberId: String) {
-        viewModelScope.launch { removeMemberUseCase(groupId, memberId) }
+    /** #218: archives one name here; past splits keep it. No Undo: nothing puts an archived name back. */
+    fun removeMember(memberId: String, name: String) {
+        viewModelScope.launch {
+            runSuspendCatching { removeMemberUseCase(groupId, memberId) }.fold(
+                onSuccess = {
+                    haptics?.deleted()
+                    toasts?.show(ToastMessage(AppText.copy.common.removedName(name), tone = ToastTone.Deleted))
+                },
+                onFailure = { toasts?.show(ToastMessage(AppText.copy.common.notDone, tone = ToastTone.Error)) },
+            )
+        }
     }
 
     fun dismissGroupError() {

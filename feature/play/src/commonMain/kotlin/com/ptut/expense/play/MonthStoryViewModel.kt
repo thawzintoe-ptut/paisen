@@ -12,6 +12,7 @@ import com.ptut.expense.domain.longName
 import com.ptut.expense.domain.play.GetMonthStoryUseCase
 import com.ptut.expense.domain.play.MarkStorySeenUseCase
 import com.ptut.expense.domain.play.StoryCard
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.locale.AppText
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,7 +76,7 @@ class MonthStoryViewModel(
             index.value += 1
             return true
         }
-        viewModelScope.launch { markSeen(month) }
+        viewModelScope.launch { runSuspendCatching { markSeen(month) } }
         return false
     }
 

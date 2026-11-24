@@ -14,6 +14,9 @@ import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.settings.PlayChoices
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.PlaySettingsCopy
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -52,6 +55,7 @@ class PlaySettingsViewModel(
     private val setStampsOff: SetStampsOffUseCase? = null,
     /** D15: the weekly reminder is planned again whenever a switch it depends on moves. */
     private val planReminder: PlanPlayReminderUseCase? = null,
+    private val toasts: ToastMessages? = null,
 ) : ViewModel() {
 
     val uiState: StateFlow<PlaySettingsUiState> = observeChoices()
@@ -59,6 +63,23 @@ class PlaySettingsViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), state(observeChoices.now()))
 
     fun set(setting: PlaySetting, on: Boolean) {
+        write(setting, on)
+        // The master switch sits above both: off, the groups hear the opt-out and the reminder is dropped.
+        if (setting in STAMP_SETTINGS) setStampsOff?.let { apply -> follow(setting, on) { apply() } }
+        if (setting in REMINDER_SETTINGS) planReminder?.let { plan -> follow(setting, on) { plan() } }
+    }
+
+    /** A switch whose follow-up failed goes back, so it never shows a state the groups or reminder lack. */
+    private fun follow(setting: PlaySetting, on: Boolean, work: suspend () -> Unit) {
+        viewModelScope.launch {
+            runSuspendCatching { work() }.onFailure {
+                write(setting, !on)
+                toasts?.show(ToastMessage(AppText.copy.common.notDone, tone = ToastTone.Error))
+            }
+        }
+    }
+
+    private fun write(setting: PlaySetting, on: Boolean) {
         setChoices { choices ->
             when (setting) {
                 PlaySetting.Master -> choices.copy(on = on)
@@ -71,9 +92,6 @@ class PlaySettingsViewModel(
                 PlaySetting.Tips -> choices.copy(tips = on)
             }
         }
-        // The master switch sits above both: off, the groups hear the opt-out and the reminder is dropped.
-        if (setting in STAMP_SETTINGS) setStampsOff?.let { apply -> viewModelScope.launch { runSuspendCatching { apply() } } }
-        if (setting in REMINDER_SETTINGS) planReminder?.let { plan -> viewModelScope.launch { runSuspendCatching { plan() } } }
     }
 
     /** Every tip shows again, and tips come back on if they were skipped. */
