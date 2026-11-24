@@ -15,7 +15,7 @@ import kotlin.test.assertNull
 import kotlin.time.Clock
 import kotlin.time.Instant
 
-class Ga4UsageLogTest {
+class PostHogUsageLogTest {
 
     // A cancelled scope: the send is never started, so no test reaches the network.
     private val quiet = CoroutineScope(Job().apply { cancel() })
@@ -26,19 +26,20 @@ class Ga4UsageLogTest {
 
     @Test
     fun `the body holds the event name the install id and 0 or 1 flags and nothing else`() {
-        val body = Json.parseToJsonElement(Ga4UsageLog.body("install-1", UsageEvent.SlipChecked, mapOf(UsageFlag.Edited to true))).jsonObject
+        val body = PostHogUsageLog.body("phc_test", "install-1", UsageEvent.SlipChecked, mapOf(UsageFlag.Edited to true))
 
-        assertEquals(setOf("client_id", "events"), body.keys)
+        assertEquals(setOf("api_key", "event", "distinct_id", "properties"), Json.parseToJsonElement(body).jsonObject.keys)
         assertEquals(
-            """{"client_id":"install-1","events":[{"name":"slip_checked","params":{"edited":1}}]}""",
-            Ga4UsageLog.body("install-1", UsageEvent.SlipChecked, mapOf(UsageFlag.Edited to true)),
+            """{"api_key":"phc_test","event":"slip_checked","distinct_id":"install-1",""" +
+                """"properties":{"edited":1,"${'$'}process_person_profile":false,"${'$'}geoip_disable":true}}""",
+            body,
         )
     }
 
     @Test
     fun `with the switch off nothing is counted and no id is made`() {
         val settings = appSettings(AppChoices(shareUsage = false))
-        val log = Ga4UsageLog(HttpClient(), "G-TEST", "secret", settings, quiet, noon) { "new-id" }
+        val log = PostHogUsageLog(HttpClient(), "https://eu.i.posthog.com", "phc_test", settings, quiet, noon) { "new-id" }
 
         log.log(UsageEvent.ExpenseAdded)
 
@@ -49,7 +50,7 @@ class Ga4UsageLogTest {
     fun `the first count makes the install id and keeps it`() {
         val settings = appSettings()
         var made = 0
-        val log = Ga4UsageLog(HttpClient(), "G-TEST", "secret", settings, quiet, noon) { "id-${++made}" }
+        val log = PostHogUsageLog(HttpClient(), "https://eu.i.posthog.com", "phc_test", settings, quiet, noon) { "id-${++made}" }
 
         log.log(UsageEvent.ExpenseAdded)
         log.log(UsageEvent.PaymentRecorded)
@@ -61,7 +62,7 @@ class Ga4UsageLogTest {
     @Test
     fun `today_opened is counted once a day`() {
         val settings = appSettings(AppChoices(usageId = "install-1"))
-        val log = Ga4UsageLog(HttpClient(), "G-TEST", "secret", settings, quiet, noon) { "unused" }
+        val log = PostHogUsageLog(HttpClient(), "https://eu.i.posthog.com", "phc_test", settings, quiet, noon) { "unused" }
 
         log.log(UsageEvent.TodayOpened)
         val first = settings.choices.value.usageDay

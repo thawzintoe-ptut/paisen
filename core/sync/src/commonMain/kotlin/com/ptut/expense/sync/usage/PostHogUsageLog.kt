@@ -14,7 +14,6 @@ import io.ktor.http.contentType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -23,15 +22,15 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 /**
- * #115: launch counts to Google Analytics 4 over its Measurement Protocol, the HTTPS call the SDK
- * makes, with no SDK. A count carries an event name, the install's random id and 0/1 flags; a
- * failed send is dropped rather than kept, since the numbers only need to be close.
+ * #115: launch counts to PostHog over its capture call, with no SDK, so nothing is autocaptured or
+ * recorded. A count carries an event name, the install's random id and 0/1 flags; a failed send is
+ * dropped rather than kept, since the numbers only need to be close.
  */
 @OptIn(ExperimentalUuidApi::class)
-internal class Ga4UsageLog(
+internal class PostHogUsageLog(
     private val http: HttpClient,
-    private val measurementId: String,
-    private val apiSecret: String,
+    private val host: String,
+    private val projectKey: String,
     private val settings: AppSettings,
     private val scope: CoroutineScope,
     private val clock: Clock = Clock.System,
@@ -52,28 +51,25 @@ internal class Ga4UsageLog(
         scope.launch { runSuspendCatching { send(id, event, flags) } }
     }
 
-    private suspend fun send(clientId: String, event: UsageEvent, flags: Map<UsageFlag, Boolean>) {
-        http.post("https://www.google-analytics.com/mp/collect?measurement_id=$measurementId&api_secret=$apiSecret") {
+    private suspend fun send(installId: String, event: UsageEvent, flags: Map<UsageFlag, Boolean>) {
+        http.post("${host.trimEnd('/')}/i/v0/e/") {
             contentType(ContentType.Application.Json)
-            setBody(body(clientId, event, flags))
+            setBody(body(projectKey, installId, event, flags))
         }
     }
 
     companion object {
         /** The request body, alone so a test can read exactly what would leave the phone. */
-        internal fun body(clientId: String, event: UsageEvent, flags: Map<UsageFlag, Boolean>): String = buildJsonObject {
-            put("client_id", clientId)
-            put(
-                "events",
-                buildJsonArray {
-                    add(
-                        buildJsonObject {
-                            put("name", event.wire)
-                            putJsonObject("params") { flags.forEach { (flag, on) -> put(flag.wire, if (on) 1 else 0) } }
-                        },
-                    )
-                },
-            )
+        internal fun body(projectKey: String, installId: String, event: UsageEvent, flags: Map<UsageFlag, Boolean>): String = buildJsonObject {
+            put("api_key", projectKey)
+            put("event", event.wire)
+            put("distinct_id", installId)
+            putJsonObject("properties") {
+                flags.forEach { (flag, on) -> put(flag.wire, if (on) 1 else 0) }
+                // No person profile is kept for the install, and no place is worked out from the request.
+                put("\$process_person_profile", false)
+                put("\$geoip_disable", true)
+            }
         }.toString()
     }
 }

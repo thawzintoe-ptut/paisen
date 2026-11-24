@@ -24,13 +24,15 @@ that Shortcut on your phone, after the phone is unlocked.
 
 The app has no ads. It does not sell or share your data.
 
-**Usage counts.** To learn whether the app works for people, it sends Google Analytics a few counts:
+**Usage counts.** To learn whether the app works for people, it sends PostHog, an analytics service
+with servers in the EU, a few counts:
 that a slip was filed or checked (and whether you changed its amount or shop), that you added an
 expense by hand, put money in your goal jar, made a group or recorded a payment, that you opened
 Today (once a day), that the app started, and that it crashed. Each count holds only its name, a
 yes or no, and a random number made for this install. It never holds an amount, a shop name, a slip
-reference, a person's name, your account or your email. Turn it off in **Settings › Share usage
-counts**; nothing more is sent after that.
+reference, a person's name, your account or your email. The app asks PostHog not to work out where
+you are from the request, and to keep no profile for the install. Turn it off in **Settings › Share
+usage counts**; nothing more is sent after that.
 
 If the app crashes, it writes a short report that stays on your phone unless you choose Share. Only
 the fact that it crashed is counted.

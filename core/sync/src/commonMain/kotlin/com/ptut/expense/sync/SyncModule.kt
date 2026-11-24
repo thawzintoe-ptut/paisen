@@ -18,7 +18,7 @@ import com.ptut.expense.sync.flags.installationSource
 import com.ptut.expense.sync.push.PushRegistrar
 import com.ptut.expense.sync.push.PushSender
 import com.ptut.expense.sync.push.PushTokenHolder
-import com.ptut.expense.sync.usage.Ga4UsageLog
+import com.ptut.expense.sync.usage.PostHogUsageLog
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import kotlinx.coroutines.CoroutineScope
@@ -64,11 +64,11 @@ fun syncModule(databaseContext: PtutDatabaseContext): Module = module {
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
     }
-    // #115: launch counts, only where a GA4 stream is configured and settings are bound.
+    // #115: launch counts, only where a PostHog project is configured and settings are bound.
     single<UsageLog> {
         val settings = getOrNull<AppSettings>()
         if (FirebaseConfig.usageEnabled && settings != null) {
-            Ga4UsageLog(get(), FirebaseConfig.GA_MEASUREMENT_ID, FirebaseConfig.GA_API_SECRET, settings, CoroutineScope(SupervisorJob() + Dispatchers.Default))
+            PostHogUsageLog(get(), FirebaseConfig.POSTHOG_HOST, FirebaseConfig.POSTHOG_KEY, settings, CoroutineScope(SupervisorJob() + Dispatchers.Default))
         } else {
             UsageLog.None
         }
