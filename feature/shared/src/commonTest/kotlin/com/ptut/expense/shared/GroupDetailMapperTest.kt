@@ -127,6 +127,7 @@ class GroupDetailMapperTest {
             listOf(GroupMenuEntry.WhoPaysWhom, GroupMenuEntry.RepeatAnExpense, GroupMenuEntry.Activity, GroupMenuEntry.GroupSettings),
             state.menuEntries(),
         )
+        assertEquals(listOf(GroupMenuEntry.WhoPaysWhom, GroupMenuEntry.Activity, GroupMenuEntry.GroupSettings), state.menuEntries(offersRepeat = false))
         assertEquals(
             listOf(GroupSettingsEntry.EditGroup, GroupSettingsEntry.MyPromptPay, GroupSettingsEntry.AddPeople, GroupSettingsEntry.RemoveSomeone, GroupSettingsEntry.LeaveOrDelete),
             state.settingsEntries(),

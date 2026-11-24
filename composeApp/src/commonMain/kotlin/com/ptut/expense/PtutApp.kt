@@ -26,6 +26,7 @@ import com.ptut.expense.design.PtutTheme
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
 import com.ptut.expense.design.systemAllowsFrost
+import com.ptut.expense.di.ReleaseSwitches
 import com.ptut.expense.domain.DayPart
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.dayPartAt
@@ -167,6 +168,7 @@ private fun LedgerShell() {
     // #114: Confirm for a save, Reject for a delete. Compose plays them through the platform's
     // own haptics (View on Android, UINotificationFeedbackGenerator on iOS) and its system setting.
     val haptics = koinInject<Haptics>()
+    val switches = koinInject<ReleaseSwitches>()
     val hapticFeedback = LocalHapticFeedback.current
     LaunchedEffect(haptics) {
         haptics.events.collect { event ->
@@ -219,7 +221,7 @@ private fun LedgerShell() {
             addOpen = true
         } else {
             addOpen = false
-            navController.openProposed(action)
+            navController.openProposed(action, offersRepeat = switches.v2)
         }
     }
 

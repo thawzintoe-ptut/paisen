@@ -81,6 +81,14 @@ class FeatureFlagsTest {
     }
 
     @Test
+    fun `v2 and later ship off and Remote Config can turn each on`() {
+        assertFalse(FeatureFlags.Defaults.isOn(Flag.V2, debug = false))
+        assertFalse(FeatureFlags.Defaults.isOn(Flag.Later, debug = false))
+        assertTrue(FeatureFlags(mapOf("v2_on" to "true")).isOn(Flag.V2, debug = false))
+        assertFalse(FeatureFlags(mapOf("v2_on" to "true")).isOn(Flag.Later, debug = false))
+    }
+
+    @Test
     fun `the cache survives a round trip and a broken value reads as empty`() {
         val entries = mapOf("planned_on" to "false")
 

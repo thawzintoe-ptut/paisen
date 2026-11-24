@@ -79,7 +79,7 @@ fun NavController.editTransaction(transactionId: String) {
  * saves. The Add sheet is not a route, so the shell opens it itself. A recategorise opens the row's
  * Edit screen, where the category is picked again.
  */
-fun NavController.openProposed(action: ProposedAction) {
+fun NavController.openProposed(action: ProposedAction, offersRepeat: Boolean = true) {
     when (action) {
         is ProposedAction.AddTransaction -> Unit
 
@@ -100,7 +100,9 @@ fun NavController.openProposed(action: ProposedAction) {
             navigate(route) { launchSingleTop = true }
         }
 
-        is ProposedAction.AddRepeat -> navigate(PtutRoute.RepeatExpense(action.groupId)) { launchSingleTop = true }
+        // #116: repeats are v2; until then the assistant's repeat opens the group it named.
+        is ProposedAction.AddRepeat ->
+            navigate(if (offersRepeat) PtutRoute.RepeatExpense(action.groupId) else PtutRoute.SharedGroup(action.groupId)) { launchSingleTop = true }
 
         ProposedAction.ScanSlips -> navigate(PtutRoute.Review) { launchSingleTop = true }
     }

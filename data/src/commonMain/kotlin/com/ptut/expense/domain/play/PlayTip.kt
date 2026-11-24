@@ -22,4 +22,4 @@ enum class PlayTip(val part: PlayPart, val number: Int, val after: PlayTip? = nu
 
 /** Whether [tip] shows now: its part shows, tips are on, it has not been seen, and the tip before it has. */
 fun PlayChoices.shows(tip: PlayTip, gate: PlayGate): Boolean =
-    gate.tipsOn && gate.offers(tip.part) && allows(tip.part) && tips && tip.name !in seenTips && (tip.after == null || tip.after.name in seenTips)
+    on && gate.tipsOn && gate.offers(tip.part) && allows(tip.part) && tips && tip.name !in seenTips && (tip.after == null || tip.after.name in seenTips)

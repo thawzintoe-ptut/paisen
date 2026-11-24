@@ -97,12 +97,35 @@ class SettingsViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `the goal jar row is gone while play is off`() = runTest {
+    fun `the goal jar row stays while play is off`() = runTest {
         val settings = appSettings(AppChoices(play = PlayChoices(on = false)))
 
         val saving = viewModel(settings = settings, showPlay = true).uiState.value.groups.single { it.group == SettingsGroup.Saving }.rows
 
-        assertEquals(listOf(SettingsAction.Play), saving.map { it.id })
+        assertEquals(listOf(SettingsAction.GoalJar, SettingsAction.Play), saving.map { it.id })
+    }
+
+    @Test
+    fun `a build that holds play back keeps the goal jar row alone`() = runTest {
+        val saving = viewModel(showPlay = false, showJar = true).uiState.value.groups.single { it.group == SettingsGroup.Saving }.rows
+
+        assertEquals(listOf(SettingsAction.GoalJar), saving.map { it.id })
+    }
+
+    @Test
+    fun `without v2 Advanced drops import control and categories`() = runTest {
+        val hidden = setOf(SettingsAction.SlipSource, SettingsAction.BackgroundImport, SettingsAction.KeepFailedSlips, SettingsAction.Categories, SettingsAction.Activity)
+
+        val shown = rowsFor(sinceLastImport = TWO_DAYS, showV2 = false).map { it.id }
+
+        assertEquals(emptyList(), shown.filter { it in hidden })
+        assertTrue(SettingsAction.ImportLedger in shown)
+    }
+
+    @Test
+    fun `without v2 the row that owns a stopped import's fix still shows`() = runTest {
+        assertEquals(listOf("Advanced", "Photo folders"), rowsFor(sinceLastImport = null, showV2 = false).filter { it.needsAttention }.map { it.name })
+        assertEquals(listOf("Advanced", "Background import"), rowsFor(sinceLastImport = FOUR_DAYS, showV2 = false).filter { it.needsAttention }.map { it.name })
     }
 
     @Test
@@ -287,8 +310,9 @@ class SettingsViewModelTest : ViewModelTest() {
         sinceLastImport: Long? = null,
         cadence: SlipImportCadence = scheduled(),
         settings: AppSettings = appSettings(),
+        showV2: Boolean = true,
     ): List<SettingsRowUiModel> {
-        val uiState = viewModel(sinceLastImport, cadence, settings).uiState
+        val uiState = viewModel(sinceLastImport, cadence, settings, showV2 = showV2).uiState
         backgroundScope.launch { uiState.collect { } }
         runCurrent()
         return uiState.value.rows
@@ -314,6 +338,8 @@ class SettingsViewModelTest : ViewModelTest() {
         settings: AppSettings = appSettings(),
         canLock: Boolean = false,
         showPlay: Boolean = false,
+        showJar: Boolean = showPlay,
+        showV2: Boolean = true,
         goals: Flow<List<Goal>> = flowOf(emptyList()),
     ) = SettingsViewModel(
         observeLastImport = ObserveLastImportUseCase(FakeLedger(sinceLastImport = sinceLastImport)),
@@ -328,6 +354,8 @@ class SettingsViewModelTest : ViewModelTest() {
         switchNoteToneUseCase = SwitchNoteToneUseCase(settings),
         canLock = canLock,
         showPlay = showPlay,
+        showJar = showJar,
+        showV2 = showV2,
         observeGoals = goals,
     )
 

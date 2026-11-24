@@ -38,6 +38,12 @@ internal fun Koin.featureFlags(): FeatureFlags = getOrNull() ?: FeatureFlags.Def
 /** A Remote Config switch as this launch read it; debug builds have every one on. */
 internal fun Scope.flagOn(flag: Flag): Boolean = getKoin().featureFlags().isOn(flag, debug = isDebug())
 
+/** #116: the Should column, off in a release build until a launch number asks for a part of it. */
+internal fun Scope.v2On(): Boolean = flagOn(Flag.V2)
+
+/** #116: the Nice column, which is play without the goal jar. */
+internal fun Scope.laterOn(): Boolean = flagOn(Flag.Later)
+
 /** Other currencies (#33–#48): on in release since 19 Nov 2026. The one switch for all three places. */
 internal fun Scope.currenciesOn(): Boolean = flagOn(Flag.Currencies)
 

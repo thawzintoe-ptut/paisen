@@ -150,6 +150,8 @@ class LedgerViewModel(
     private val work: CoroutineDispatcher = Dispatchers.Default,
     /** #98: the months closed and sealed, ISO `yyyy-MM`; none where play is off. */
     sealedMonths: Flow<Set<String>> = flowOf(emptySet()),
+    /** #116: the month index on the edge (10b) is v2; without it the list has no months to jump between. */
+    private val offersMonthIndex: Boolean = true,
 ) : ViewModel() {
 
     private val query = MutableStateFlow("")
@@ -193,7 +195,7 @@ class LedgerViewModel(
             },
             hiddenByFilter = filtered.hiddenByFilter,
             scope = scope?.heading(categories),
-            months = filtered.days.monthIndex().map { month -> month.takeUnless { month.isoMonth in sealed } ?: month.sealedCopy() },
+            months = if (offersMonthIndex) filtered.days.monthIndex().map { month -> month.takeUnless { month.isoMonth in sealed } ?: month.sealedCopy() } else emptyList(),
         )
     }
 

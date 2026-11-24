@@ -111,7 +111,8 @@ enum class GroupMenuEntry { WhoPaysWhom, RepeatAnExpense, Activity, GroupSetting
 /** The Group settings step: what can change about the group, and the way out last. */
 enum class GroupSettingsEntry { EditGroup, MyPromptPay, AddPeople, RemoveSomeone, LeaveOrDelete }
 
-fun GroupDetailUiState.Loaded.menuEntries(): List<GroupMenuEntry> = GroupMenuEntry.entries
+fun GroupDetailUiState.Loaded.menuEntries(offersRepeat: Boolean = true): List<GroupMenuEntry> =
+    GroupMenuEntry.entries.filter { offersRepeat || it != GroupMenuEntry.RepeatAnExpense }
 
 fun GroupDetailUiState.Loaded.settingsEntries(): List<GroupSettingsEntry> = listOfNotNull(
     GroupSettingsEntry.EditGroup,

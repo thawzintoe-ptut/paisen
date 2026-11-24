@@ -8,6 +8,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.ptut.expense.di.AppBuild
+import com.ptut.expense.di.ReleaseSwitches
 import com.ptut.expense.domain.play.ObservePlayOnUseCase
 import com.ptut.expense.domain.play.PlayPart
 import com.ptut.expense.domain.play.PlayTip
@@ -54,6 +55,7 @@ import org.koin.core.parameter.parametersOf
 internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
     composable<PtutRoute.Shared> {
         val shared = koinViewModel<SharedViewModel>()
+        val switches = koinInject<ReleaseSwitches>()
         val state by shared.uiState.collectAsStateWithLifecycle()
         SharedView(
             uiState = state,
@@ -68,7 +70,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
             onOpenGroup = { nav.navigate(PtutRoute.SharedGroup(it)) { launchSingleTop = true } },
             onOpenActivity = { nav.navigate(PtutRoute.SharedActivity) { launchSingleTop = true } },
             onJoinCode = { nav.navigate(PtutRoute.Join(it)) { launchSingleTop = true } },
-            onOpenPeople = { nav.navigate(PtutRoute.People) { launchSingleTop = true } },
+            onOpenPeople = { nav.navigate(PtutRoute.People) { launchSingleTop = true } }.takeIf { switches.v2 },
         )
     }
 
@@ -148,6 +150,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
         val activitySince by group.activitySince.collectAsStateWithLifecycle()
         // #94–#97: read when the screen is built, as a flag is.
         val playOn = koinInject<ObservePlayOnUseCase>()
+        val switches = koinInject<ReleaseSwitches>()
         val groupPlay = koinViewModel<GroupPlayViewModel> { parametersOf(groupId) }
         val playState by groupPlay.uiState.collectAsStateWithLifecycle()
         LaunchedEffect(activitySince) { activity.since(activitySince) }
@@ -159,7 +162,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
             onBalances = { nav.navigate(PtutRoute.WhoPaysWhom(groupId)) { launchSingleTop = true } },
             onAddExpense = { nav.navigate(PtutRoute.AddSharedExpense(groupId)) { launchSingleTop = true } },
             onOpenExpense = { nav.navigate(PtutRoute.AddSharedExpense(groupId, it)) { launchSingleTop = true } },
-            onRepeat = { nav.navigate(PtutRoute.RepeatExpense(groupId)) { launchSingleTop = true } },
+            onRepeat = { nav.navigate(PtutRoute.RepeatExpense(groupId)) { launchSingleTop = true } }.takeIf { switches.v2 },
             onOpenRepeat = { nav.navigate(PtutRoute.RepeatExpense(groupId, it)) { launchSingleTop = true } },
             manage = GroupManage(
                 action = groupAction,
@@ -232,6 +235,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
                 onSave = add::save,
                 onRemove = { add.remove(onRemoved = close) },
             ),
+            offerSplitOptions = koinInject<ReleaseSwitches>().v2,
         )
     }
 

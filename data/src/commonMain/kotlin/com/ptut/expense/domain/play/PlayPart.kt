@@ -30,36 +30,53 @@ enum class PlayPart(private val released: Boolean) {
 }
 
 /**
- * Whether the reader's switches let [part] show. The master turns everything off; a part with no
- * sub-switch of its own on p22 follows the master alone (D14).
+ * Whether the reader's switches let [part] show. The master turns everything off but the jar, which
+ * is v1 and has no play switch in front of it (#116); a part with no sub-switch of its own on p22
+ * follows the master alone (D14).
  */
-fun PlayChoices.allows(part: PlayPart): Boolean = on && when (part) {
+fun PlayChoices.allows(part: PlayPart): Boolean = when (part) {
+    PlayPart.GoalJar -> true
+
     // The day's question fills a freeze, so it belongs to the run.
-    PlayPart.Run, PlayPart.Stamps, PlayPart.Question -> run
+    PlayPart.Run, PlayPart.Stamps, PlayPart.Question -> on && run
 
-    PlayPart.Guess -> guess
+    PlayPart.Guess -> on && guess
 
-    PlayPart.Challenge -> challenges
+    PlayPart.Challenge -> on && challenges
 
-    PlayPart.AllSquare, PlayPart.Awards -> groupStamps
+    PlayPart.AllSquare, PlayPart.Awards -> on && groupStamps
 
-    PlayPart.Reminder -> weeklyReminder
+    PlayPart.Reminder -> on && weeklyReminder
 
-    PlayPart.Coach, PlayPart.Story, PlayPart.GoalJar, PlayPart.CloseMonth, PlayPart.Score,
+    PlayPart.Coach, PlayPart.Story, PlayPart.CloseMonth, PlayPart.Score,
     PlayPart.SettlePlan, PlayPart.Wheel, PlayPart.Reactions, PlayPart.TripRecap,
-    -> true
+    -> on
 }
 
 /**
  * What this build offers before the reader's switches: the Remote Config flag and each part's
  * release (D8, D17). Read once at launch, so it never changes under an open screen.
  */
-data class PlayGate(val flagOn: Boolean, val debug: Boolean, val tipsOn: Boolean = true) {
+data class PlayGate(
+    val flagOn: Boolean,
+    val debug: Boolean,
+    val tipsOn: Boolean = true,
+    /** #116: the two release switches. The jar is v1 and waits on neither. */
+    val v2On: Boolean = true,
+    val laterOn: Boolean = true,
+) {
 
-    fun offers(part: PlayPart): Boolean = flagOn && part.offered(debug)
+    fun offers(part: PlayPart): Boolean = flagOn && part.offered(debug) && when (part) {
+        PlayPart.GoalJar -> true
+
+        // M03: thanks for a payment is a Should, not play.
+        PlayPart.Reactions -> v2On
+
+        else -> laterOn
+    }
 
     companion object {
         /** A graph that binds no gate, such as a screen test's, offers no play at all. */
-        val Off = PlayGate(flagOn = false, debug = false)
+        val Off = PlayGate(flagOn = false, debug = false, v2On = false, laterOn = false)
     }
 }

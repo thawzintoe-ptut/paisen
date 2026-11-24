@@ -128,6 +128,10 @@ class SettingsViewModel(
     private val showHomeCurrency: Boolean = false,
     /** #83: Settings › Play, while Remote Config's play switch is on. */
     private val showPlay: Boolean = false,
+    /** #116: the Goal jar row. The jar is v1, so it shows without the play row beside it. */
+    private val showJar: Boolean = false,
+    /** #116: photo folders, background import, kept slips, categories and the import log. */
+    private val showV2: Boolean = false,
     /** #101: the goals behind the Goal jar row. None where play binds no book. */
     observeGoals: Flow<List<Goal>> = flowOf(emptyList()),
 ) : ViewModel() {
@@ -207,13 +211,12 @@ class SettingsViewModel(
     }
 
     private fun savingRows(choices: AppChoices, goal: Goal?, text: SettingsCopy) = listOfNotNull(
-        // #101: the jar is play's, so it shows only while play is on.
         SettingsRowUiModel(
             id = SettingsAction.GoalJar,
             name = AppText.copy.play.extras.jarTitle,
             value = goal?.name ?: text.goalJarNone,
             icon = "cash",
-        ).takeIf { showPlay && choices.play.on },
+        ).takeIf { showJar },
         // #83: a screen of its own (p22), so its master switch sits there and not on this row.
         AppText.copy.play.settings.let { play ->
             SettingsRowUiModel(
@@ -252,7 +255,7 @@ class SettingsViewModel(
         ).takeIf { canLock },
     )
 
-    private fun slipRows(since: Long?, choices: AppChoices, watched: List<WatchedFolder>, text: SettingsCopy) = listOf(
+    private fun slipRows(since: Long?, choices: AppChoices, watched: List<WatchedFolder>, text: SettingsCopy) = listOfNotNull(
         SettingsRowUiModel(
             id = SettingsAction.SlipSource,
             name = text.photoFolders,
@@ -260,7 +263,7 @@ class SettingsViewModel(
             value = watched.watched().joinToString(", ") { it.name }.ifEmpty { cadence.slipSource },
             icon = "folder",
             needsAttention = ownsTheFix(since, SettingsAction.SlipSource),
-        ),
+        ).takeIf { offers(since, SettingsAction.SlipSource) },
         SettingsRowUiModel(
             id = SettingsAction.BackgroundImport,
             name = text.backgroundImport,
@@ -269,13 +272,13 @@ class SettingsViewModel(
             needsAttention = ownsTheFix(since, SettingsAction.BackgroundImport),
             // C-4: only a platform with a schedule draws a switch; iOS keeps its explanation.
             switchedOn = choices.backgroundImport.takeIf { cadence.importIsAdjustable },
-        ),
+        ).takeIf { offers(since, SettingsAction.BackgroundImport) },
         SettingsRowUiModel(
             id = SettingsAction.KeepFailedSlips,
             name = text.keepUnreadSlips,
             value = text.thenDeleted(retentionPhrase(choices.retention)),
             icon = "auto_delete",
-        ),
+        ).takeIf { showV2 },
         // #26: whose name marks a slip as money in. Learned from your own slips, correctable here.
         SettingsRowUiModel(
             id = SettingsAction.SlipOwner,
@@ -291,7 +294,7 @@ class SettingsViewModel(
             name = AppText.copy.categories.title,
             value = text.categoryCounts(counts.categories, counts.subCategories),
             icon = "label",
-        ),
+        ).takeIf { showV2 },
         SettingsRowUiModel(
             id = SettingsAction.HomeCurrency,
             name = currencyCopy().homeTitle,
@@ -310,7 +313,7 @@ class SettingsViewModel(
             name = text.importLog,
             value = since?.let { text.lastImport(elapsedPhrase(it)) } ?: text.noImportYet,
             icon = "notifications",
-        ),
+        ).takeIf { showV2 },
         SettingsRowUiModel(
             id = SettingsAction.ImportLedger,
             name = text.restoreBackup,
@@ -395,4 +398,7 @@ class SettingsViewModel(
      * about it, so a row that can only describe its schedule is still the one the notice points at.
      */
     private fun ownsTheFix(since: Long?, row: SettingsAction) = importFix(since)?.owningRow() == row
+
+    /** #116: a v2 row still shows while it owns a stopped import's fix, or Today's notice would lead nowhere. */
+    private fun offers(since: Long?, row: SettingsAction) = showV2 || ownsTheFix(since, row)
 }

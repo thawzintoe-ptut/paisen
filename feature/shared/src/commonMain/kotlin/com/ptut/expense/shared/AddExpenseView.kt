@@ -97,7 +97,13 @@ data class AddExpenseActions(
 
 /** #183 (p28), with #138's Split options (p29) over it while it is open. */
 @Composable
-fun AddExpenseView(uiState: AddExpenseUiState, actions: AddExpenseActions, modifier: Modifier = Modifier) {
+fun AddExpenseView(
+    uiState: AddExpenseUiState,
+    actions: AddExpenseActions,
+    modifier: Modifier = Modifier,
+    /** #116: Split options (41) is v2; without it the quick sheet ends at its own rows. */
+    offerSplitOptions: Boolean = true,
+) {
     val text = LocalCopy.current
     when (uiState) {
         AddExpenseUiState.Missing -> Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer)) {
@@ -114,13 +120,13 @@ fun AddExpenseView(uiState: AddExpenseUiState, actions: AddExpenseActions, modif
         is AddExpenseUiState.Ready -> if (uiState.form.splitOpen) {
             SplitOptions(uiState, actions, modifier)
         } else {
-            Form(uiState, actions, modifier)
+            Form(uiState, actions, offerSplitOptions, modifier)
         }
     }
 }
 
 @Composable
-private fun Form(state: AddExpenseUiState.Ready, actions: AddExpenseActions, modifier: Modifier = Modifier) {
+private fun Form(state: AddExpenseUiState.Ready, actions: AddExpenseActions, offerSplitOptions: Boolean, modifier: Modifier = Modifier) {
     val text = LocalCopy.current
     val words = text.shared.expense
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
@@ -264,7 +270,7 @@ private fun Form(state: AddExpenseUiState.Ready, actions: AddExpenseActions, mod
                 onMore = {
                     sheet = null
                     actions.onOpenSplit(true)
-                },
+                }.takeIf { offerSplitOptions },
             )
         }
 
@@ -322,7 +328,7 @@ private fun QuickSplitSheet(
     state: AddExpenseUiState.Ready,
     onPayer: (String) -> Unit,
     onChoice: (String, QuickSplit) -> Unit,
-    onMore: () -> Unit,
+    onMore: (() -> Unit)?,
 ) {
     val text = LocalCopy.current.shared
     val quick = state.quick
@@ -342,8 +348,10 @@ private fun QuickSplitSheet(
     quick.rows.forEach { row ->
         TwoLineChoiceRow(title = row.label, detail = row.result, owe = row.owe, selected = row.selected, onClick = { onChoice(row.payerId, row.choice) })
     }
-    SkyHairline()
-    TwoLineChoiceRow(title = text.expense.moreOptions, detail = quick.moreHint, owe = false, selected = quick.moreSelected, onClick = onMore, chevron = true)
+    if (onMore != null) {
+        SkyHairline()
+        TwoLineChoiceRow(title = text.expense.moreOptions, detail = quick.moreHint, owe = false, selected = quick.moreSelected, onClick = onMore, chevron = true)
+    }
 }
 
 @Composable

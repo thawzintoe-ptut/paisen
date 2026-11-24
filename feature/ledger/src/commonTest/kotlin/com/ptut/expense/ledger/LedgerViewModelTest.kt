@@ -320,6 +320,16 @@ class LedgerViewModelTest : ViewModelTest() {
     private fun viewModel(rows: List<Transaction>) = LedgerViewModel(FilterLedgerUseCase(FakeLedger(rows), Dispatchers.Main), work = Dispatchers.Main)
 
     @Test
+    fun `a build without the year view shows no month index`() = runTest {
+        val viewModel = LedgerViewModel(FilterLedgerUseCase(FakeLedger(threeMonths), Dispatchers.Main), work = Dispatchers.Main, offersMonthIndex = false)
+
+        viewModel.uiState.test {
+            assertFalse(awaitSuccess().hasMonthIndex)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `a sealed month carries its mark and says so`() = runTest {
         val viewModel = LedgerViewModel(FilterLedgerUseCase(FakeLedger(threeMonths), Dispatchers.Main), work = Dispatchers.Main, sealedMonths = flowOf(setOf("2026-07")))
 

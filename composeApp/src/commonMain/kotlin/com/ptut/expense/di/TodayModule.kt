@@ -49,7 +49,8 @@ val todayModule: Module = module {
             deposits = get<PlayBook>().deposits,
             goals = get<PlayBook>().goals,
             // #103: the press and roll are play's motion, so they follow the switch that turns play off.
-            playMotion = get<ObservePlayOnUseCase>()(PlayPart.Stamps),
+            // #116: with play held back, a caught slip and a filled jar still press and roll (M01, J05).
+            playMotion = get<ObservePlayOnUseCase>()(if (laterOn()) PlayPart.Stamps else PlayPart.GoalJar),
             toasts = get(),
         )
     }
@@ -63,6 +64,7 @@ val todayModule: Module = module {
             scope = params.getOrNull<LedgerScope>(),
             homeToday = get(),
             sealedMonths = get<ObserveSealedMonthsUseCase>()(),
+            offersMonthIndex = v2On(),
         )
     }
     viewModel {

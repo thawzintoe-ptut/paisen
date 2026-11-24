@@ -12,3 +12,9 @@ package com.ptut.expense.di
  * Send feedback email and nowhere else.
  */
 data class AppBuild(val debug: Boolean, val version: String = "", val device: String = "")
+
+/**
+ * #116: the two release switches as this launch read them, for a graph that has to hide a way in.
+ * [v2] is the Should column and [later] the Nice one; both are on in a debug build.
+ */
+data class ReleaseSwitches(val v2: Boolean, val later: Boolean)

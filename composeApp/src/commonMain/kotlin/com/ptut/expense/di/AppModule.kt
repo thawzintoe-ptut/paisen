@@ -323,6 +323,7 @@ fun appModules(databaseContext: PtutDatabaseContext, build: AppBuild): List<Modu
  */
 fun slipSeamModule(build: AppBuild): Module = module {
     single { build }
+    single { ReleaseSwitches(v2 = v2On(), later = laterOn()) }
 
     /**
      * A debug build takes the platform's real pair *and* the injectable one, because it has to do

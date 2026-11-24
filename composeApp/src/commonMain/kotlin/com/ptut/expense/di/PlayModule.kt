@@ -22,7 +22,7 @@ import org.koin.dsl.module
 /** Play (#82): the gate the flags set at launch, and play's screens. */
 val playModule: Module = module {
     // D8, D17: the Remote Config switch and the build, read once per launch.
-    single { PlayGate(flagOn = flagOn(Flag.Play), debug = isDebug(), tipsOn = flagOn(Flag.Tips)) }
+    single { PlayGate(flagOn = flagOn(Flag.Play), debug = isDebug(), tipsOn = flagOn(Flag.Tips), v2On = v2On(), laterOn = laterOn()) }
 
     // #85: one watcher, so one write marks a day.
     single { WatchTrayUseCase(queued = get(), scanning = get(), playOn = get(), transactions = get(), book = get()) }

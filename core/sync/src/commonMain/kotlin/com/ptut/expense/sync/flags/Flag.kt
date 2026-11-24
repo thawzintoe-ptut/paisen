@@ -14,6 +14,12 @@ enum class Flag(val key: String, val default: Boolean) {
 
     /** Just-in-time play tips, off for everyone without a release. */
     Tips("tips_on", default = true),
+
+    /** #116: the Should column (voice add, categories, import control, more splitting, year view, thanks). */
+    V2("v2_on", default = false),
+
+    /** #116: the Nice column, which is every play screen but the goal jar. */
+    Later("later_on", default = false),
 }
 
 /**

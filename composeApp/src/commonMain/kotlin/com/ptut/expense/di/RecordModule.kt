@@ -2,6 +2,7 @@ package com.ptut.expense.di
 
 import com.ptut.expense.add.AddViewModel
 import com.ptut.expense.agent.AgentLoop
+import com.ptut.expense.agent.SpeechInput
 import com.ptut.expense.confirm.ConfirmSlipViewModel
 import com.ptut.expense.detail.TransactionDetailViewModel
 import com.ptut.expense.domain.agent.InterpretQuickAddUseCase
@@ -9,6 +10,7 @@ import com.ptut.expense.domain.categories.categoryUsage
 import com.ptut.expense.domain.forDirection
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.record.ObserveFilingRulesUseCase
 import com.ptut.expense.domain.rules.RuleRepository
 import com.ptut.expense.domain.rules.forShop
 import com.ptut.expense.domain.settings.ObserveAppChoicesUseCase
@@ -91,7 +93,8 @@ val recordModule: Module = module {
             toasts = get(),
             categories = storedCategories(),
             subCategories = storedSubCategories(),
-            filingRules = get(),
+            // #116: the Why card leads to the shop rule screen, which is v2.
+            filingRules = if (v2On()) get() else ObserveFilingRulesUseCase(),
             haptics = get(),
             shareOptions = get(),
             offersPlanned = flagOn(Flag.Planned),
@@ -129,7 +132,8 @@ val recordModule: Module = module {
             // getOrNull, as before: a graph that binds no agent draws no Quick add.
             interpretQuickAdd = getOrNull<AgentLoop>()?.let(::InterpretQuickAddUseCase),
             answerQuestion = get(),
-            speech = getOrNull(),
+            // #116: voice add is v2; without a speech input the sheet draws no mic.
+            speech = getOrNull<SpeechInput>().takeIf { v2On() },
             offersCurrencies = currenciesOn(),
             getLastRate = get(),
             recordTransaction = get(),

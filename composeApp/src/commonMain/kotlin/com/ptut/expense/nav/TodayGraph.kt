@@ -14,6 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.ptut.expense.activity.ActivityView
 import com.ptut.expense.activity.ActivityViewModel
+import com.ptut.expense.di.ReleaseSwitches
 import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.folders.FolderChooser
 import com.ptut.expense.domain.play.PlayTip
@@ -41,6 +42,7 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
         val viewModel = koinViewModel<HomeViewModel>()
         val state by viewModel.uiState.collectAsStateWithLifecycle()
         val photoSettings = koinInject<PhotoSettings>()
+        val switches = koinInject<ReleaseSwitches>()
         val pickScope = rememberCoroutineScope()
         var askingAllowAll by remember { mutableStateOf(false) }
         // #103: the caught toast's Change.
@@ -77,7 +79,8 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
                 if (fix == ImportFix.AllowAllPhotos) askingAllowAll = true else nav.openTabAt(fix.settingsRoute())
             },
             onOpenTransaction = { nav.openTransaction(it) },
-            onOpenReceipt = { nav.navigate(PtutRoute.DayReceipt(it)) },
+            // #116: the day receipt is v2; until then the card opens that day's purchases.
+            onOpenReceipt = { nav.navigate(if (switches.v2) PtutRoute.DayReceipt(it) else PtutRoute.LedgerSlice(it, it)) { launchSingleTop = true } },
             onOpenWeek = { nav.navigate(PtutRoute.LedgerSlice(it.from, it.to, it.categoryId)) { launchSingleTop = true } },
             onHideNoteWeek = viewModel::hideNoteWeek,
             onOpenStamps = { nav.navigate(PtutRoute.StampBook) },

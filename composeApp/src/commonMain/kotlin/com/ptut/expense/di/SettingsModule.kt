@@ -53,7 +53,9 @@ val settingsModule: Module = module {
             canLock = getOrNull<DeviceAuth>()?.isAvailable() == true,
             showNoteTone = flagOn(Flag.NoteTone),
             showHomeCurrency = currenciesOn(),
-            showPlay = flagOn(Flag.Play),
+            showPlay = flagOn(Flag.Play) && laterOn(),
+            showJar = flagOn(Flag.Play),
+            showV2 = v2On(),
             observeGoals = get<PlayBook>().goals,
         )
     }

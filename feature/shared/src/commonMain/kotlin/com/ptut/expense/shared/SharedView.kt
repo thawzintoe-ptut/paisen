@@ -88,8 +88,8 @@ fun SharedView(
     modifier: Modifier = Modifier,
     /** #190: a code typed by hand, for an invite that came as text rather than a link. */
     onJoinCode: (String) -> Unit = {},
-    /** #141: "People >", everyone you split with. */
-    onOpenPeople: () -> Unit = {},
+    /** #141: "People >", everyone you split with. Null draws no row (#116). */
+    onOpenPeople: (() -> Unit)? = {},
     /** The next-step card: record the one payment you owe, from you to them in that group. */
     onPay: (groupId: String, fromMemberId: String, toMemberId: String, amount: String) -> Unit = { _, _, _, _ -> },
 ) {
@@ -172,7 +172,7 @@ private fun Balances(
     onSignIn: () -> Unit,
     onOpenGroup: (String) -> Unit,
     onOpenActivity: () -> Unit,
-    onOpenPeople: () -> Unit,
+    onOpenPeople: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val text = LocalCopy.current.shared
@@ -239,8 +239,10 @@ private fun Balances(
         item {
             Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
                 SkyPageSheet(modifier = Modifier.padding(top = Spacing.md)) {
-                    LinkRow(icon = PtutIcon.Group, label = text.people, line = state.peopleLine, onClick = onOpenPeople)
-                    SkyHairline(modifier = Modifier.padding(vertical = Spacing.xs))
+                    if (onOpenPeople != null) {
+                        LinkRow(icon = PtutIcon.Group, label = text.people, line = state.peopleLine, onClick = onOpenPeople)
+                        SkyHairline(modifier = Modifier.padding(vertical = Spacing.xs))
+                    }
                     LinkRow(icon = PtutIcon.History, label = text.activity, onClick = onOpenActivity)
                     Spacer(Modifier.height(SkySizes.pillClearance))
                 }

@@ -96,7 +96,8 @@ fun GroupDetailView(
     modifier: Modifier = Modifier,
     invite: GroupInvite = GroupInvite(),
     /** #185: set up a repeat, or open one to change or stop it. */
-    onRepeat: () -> Unit = {},
+    /** Null leaves "Repeat an expense" out of the menu (#116). */
+    onRepeat: (() -> Unit)? = {},
     onOpenRepeat: (String) -> Unit = {},
     /** Edit group, and Delete or Leave from the "···" menu. */
     manage: GroupManage = GroupManage(),
@@ -138,7 +139,7 @@ private fun Loaded(
     onAddExpense: () -> Unit,
     onOpenExpense: (String) -> Unit,
     invite: GroupInvite,
-    onRepeat: () -> Unit,
+    onRepeat: (() -> Unit)?,
     onOpenRepeat: (String) -> Unit,
     manage: GroupManage,
     refreshing: Boolean,
@@ -261,14 +262,14 @@ private fun Loaded(
                 )
             }
             SkyGroupedCard(
-                rows = state.menuEntries().map<GroupMenuEntry, @Composable () -> Unit> { entry ->
+                rows = state.menuEntries(offersRepeat = onRepeat != null).map<GroupMenuEntry, @Composable () -> Unit> { entry ->
                     when (entry) {
                         GroupMenuEntry.WhoPaysWhom -> {
                             { MenuRow(PtutIcon.Payments, text.whoPaysWhom, onClick = pick(onBalances)) }
                         }
 
                         GroupMenuEntry.RepeatAnExpense -> {
-                            { MenuRow(PtutIcon.Sync, text.detail.repeatAnExpense, onClick = pick(onRepeat)) }
+                            { MenuRow(PtutIcon.Sync, text.detail.repeatAnExpense, onClick = pick(onRepeat ?: {})) }
                         }
 
                         GroupMenuEntry.Activity -> {

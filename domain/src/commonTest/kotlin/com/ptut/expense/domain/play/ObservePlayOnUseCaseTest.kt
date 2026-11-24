@@ -24,8 +24,22 @@ class ObservePlayOnUseCaseTest {
     }
 
     @Test
-    fun `the master switch turns every part off`() = runTest {
-        PlayPart.entries.forEach { part -> assertFalse(on(PlayChoices(on = false)).invoke(part).first(), "$part") }
+    fun `the master switch turns every part off but the jar`() = runTest {
+        PlayPart.entries.forEach { part -> assertEquals(part == PlayPart.GoalJar, on(PlayChoices(on = false)).invoke(part).first(), "$part") }
+    }
+
+    @Test
+    fun `with both release switches off only the jar is offered`() = runTest {
+        val v1 = on(gate = PlayGate(flagOn = true, debug = false, v2On = false, laterOn = false))
+
+        assertEquals(listOf(PlayPart.GoalJar), PlayPart.entries.filter(v1::offered))
+    }
+
+    @Test
+    fun `the v2 switch brings back thanks and nothing else of play`() = runTest {
+        val v2 = on(gate = PlayGate(flagOn = true, debug = false, v2On = true, laterOn = false))
+
+        assertEquals(listOf(PlayPart.GoalJar, PlayPart.Reactions), PlayPart.entries.filter(v2::offered))
     }
 
     @Test
