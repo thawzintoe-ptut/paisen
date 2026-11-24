@@ -382,7 +382,7 @@ private fun SheetFoot() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(Spacing.s20)
+            .height(SkySizes.sheetCorner)
             .clip(RoundedCornerShape(bottomStart = SkySizes.sheetCorner, bottomEnd = SkySizes.sheetCorner))
             .background(MaterialTheme.colorScheme.tertiaryContainer),
     )
