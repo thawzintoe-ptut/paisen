@@ -28,6 +28,7 @@ import com.ptut.expense.play.StampBookView
 import com.ptut.expense.play.StampBookViewModel
 import com.ptut.expense.play.StampRevealView
 import com.ptut.expense.play.StampRevealViewModel
+import com.ptut.expense.shared.BankApp
 import com.ptut.expense.shared.rememberBankApps
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -108,7 +109,9 @@ internal fun NavGraphBuilder.playRoutes(nav: NavHostController) {
                 onPick = jar::pick,
                 // J03: K PLUS where the phone can name it; elsewhere the reader opens it, and the sheet goes either way.
                 onOpenBank = {
-                    bankApps.installed().firstOrNull { it.name == K_PLUS }?.let(bankApps::open)
+                    // iOS cannot list apps, so it is handed K PLUS by name and asks by URL (#113).
+                    val kPlus = if (bankApps.canList) bankApps.installed().firstOrNull { it.name == K_PLUS } else BankApp(id = K_PLUS, name = K_PLUS)
+                    kPlus?.let(bankApps::open)
                     jar.bankOpened()
                 },
                 onMoved = jar::moved,

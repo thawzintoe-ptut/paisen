@@ -18,6 +18,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.Sizes
@@ -78,9 +83,21 @@ internal fun JarCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(PtutIcon.AutoAwesome.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(Sizes.settingsTrailing))
-                Text(nudge, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text(nudge.boldening(jar.nudgeAmount), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
             }
         }
         jar.putIn?.let { SkyButton(label = it, onClick = { onPutIn(jar.goalId) }, modifier = Modifier.fillMaxWidth()) }
     }
+}
+
+/** J01: the amount inside the nudge is the part to read, so it is set bold where it appears. */
+private fun String.boldening(part: String?): AnnotatedString = buildAnnotatedString {
+    val at = part?.let { indexOf(it) } ?: -1
+    if (part == null || at < 0) {
+        append(this@boldening)
+        return@buildAnnotatedString
+    }
+    append(substring(0, at))
+    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(part) }
+    append(substring(at + part.length))
 }

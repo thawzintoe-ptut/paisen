@@ -206,13 +206,6 @@ private fun JarHero(jar: GoalJarUiState.Jar) {
     Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.md), horizontalAlignment = Alignment.CenterHorizontally) {
         GoalJarFill(jar.fraction, jar.label, Modifier.padding(top = Spacing.xs))
         Text(jar.percent, style = MaterialTheme.ptutType.hero, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, modifier = Modifier.padding(top = Spacing.s12))
-        SkyRollingAmount(
-            symbol = jar.saved.symbol,
-            whole = jar.saved.whole,
-            fraction = jar.saved.fraction,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = Spacing.xs).clearAndSetSemantics { contentDescription = jar.savedOf },
-        )
         Text(jar.savedOf, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
     }
 }

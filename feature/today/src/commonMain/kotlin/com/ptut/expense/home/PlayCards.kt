@@ -81,6 +81,8 @@ data class JarCardUiModel(
     val plan: String?,
     val thisWeek: String?,
     val nudge: String?,
+    /** The amount inside [nudge], set bold (J01). */
+    val nudgeAmount: String? = null,
     val putIn: String?,
 )
 
@@ -96,7 +98,7 @@ internal fun TodayPlay.jarCard(): JarCardUiModel? {
         goalId = jar.goal.id,
         name = reach?.let { text.jarGoalBy(jar.goal.name, it.month.longName()) } ?: jar.goal.name,
         saved = jar.pace.saved.formatCompactParts(),
-        ofTarget = text.jarOf(jar.goal.target.formatCompact(), percent),
+        ofTarget = text.jarOf(jar.goal.target.formatCompact()),
         fraction = fraction,
         label = text.jarLabel(percent),
         plan = when {
@@ -105,8 +107,10 @@ internal fun TodayPlay.jarCard(): JarCardUiModel? {
             reach == null -> text.jarPlanFar(perWeek.formatCompact())
             else -> text.jarPlan(perWeek.formatCompact(), reach.month.longName())
         },
-        thisWeek = perWeek?.let { text.jarThisWeek(jar.thisWeek.formatCompact(), it.formatCompact()) },
+        // J05: once money went in this week; J01 has no such line.
+        thisWeek = perWeek?.takeIf { jar.thisWeek > Satang.Zero }?.let { text.jarThisWeek(jar.thisWeek.formatCompact(), it.formatCompact(), jar.thisWeek < it) },
         nudge = jar.under?.let { text.jarNudge(it.formatCompact(), jar.weekday.longName()) },
+        nudgeAmount = jar.under?.formatCompact(),
         putIn = jar.under?.let { text.jarPutInAmount(it.formatCompact()) },
     )
 }

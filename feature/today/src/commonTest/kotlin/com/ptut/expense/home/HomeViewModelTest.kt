@@ -1110,6 +1110,25 @@ class HomeViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun theCardNamesOnlyTheTargetAndSaysThisWeekOnceMoneyWentIn() = runTest {
+        // Started weeks back, so the pace counts money from before this week too.
+        val book = FakePlayBook(goals = listOf(jar.copy(start = LocalDate(2026, 7, 20))))
+        viewModel(transactions = lightFriday, saved = usualFridays, play = PlayFixture(book), now = FRIDAY_EVENING).uiState.test {
+            val empty = assertNotNull(awaitSuccess().jar)
+            assertTrue(empty.ofTarget.startsWith("of "), empty.ofTarget)
+            assertFalse(empty.ofTarget.contains("%"), empty.ofTarget)
+            assertNull(empty.thisWeek)
+
+            book.deposit(GoalDeposit("slip:b", "g1", Satang(30_000), LocalDate(2026, 7, 27), atEpochMillis = 1L, source = DepositSource.Slip, account = "••4821"))
+            book.deposit(GoalDeposit("slip:a", "g1", Satang(5_000), LocalDate(2026, 8, 10), atEpochMillis = 1L, source = DepositSource.Slip, account = "••4821"))
+            var card = assertNotNull(awaitSuccess().jar)
+            while (card.thisWeek == null) card = assertNotNull(awaitSuccess().jar)
+            assertTrue(card.thisWeek!!.endsWith("One more good day does it."), card.thisWeek)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun aMorningUnderItsUsualOffersNoLeftoverYet() = runTest {
         val book = FakePlayBook(goals = listOf(jar))
         viewModel(transactions = lightFriday, saved = usualFridays, play = PlayFixture(book)).uiState.test {

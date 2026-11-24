@@ -67,6 +67,8 @@ val ThaiCopy = Copy(
     record = ThaiRecord,
     phrases = ThaiPhrases,
     categories = ThaiCategories,
+    // #113: the jar's words only; other play strings stay English (D12).
+    play = PlayCopy(extras = ThaiPlayExtras),
     settings = ThaiSettings,
     shared = ThaiShared,
 )
