@@ -1,5 +1,8 @@
 package com.ptut.expense.shared
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +29,7 @@ import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -33,9 +39,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import com.ptut.expense.design.GlassBackdrop
 import com.ptut.expense.design.GlassSurface
 import com.ptut.expense.design.PlaySizes
@@ -46,6 +57,8 @@ import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.glassSource
 import com.ptut.expense.design.ptut
+import com.ptut.expense.design.ptutMotion
+import com.ptut.expense.design.ptutReduceMotion
 import com.ptut.expense.design.rememberGlassBackdrop
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.shared.GroupRemoval
@@ -169,46 +182,46 @@ private fun Loaded(
     // The feed scrolls under the add button, which shows it through iOS glass (#123).
     val glass = rememberGlassBackdrop()
     val pull = rememberPullToRefreshState()
+    val list = rememberLazyListState()
     Box(
         modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.tertiaryContainer)
             .pullToRefresh(isRefreshing = refreshing, state = pull, enabled = state.canRefresh, onRefresh = onRefresh),
     ) {
-        LazyColumn(Modifier.fillMaxSize().glassSource(glass)) {
-            item(key = "header") {
-                Column(Modifier.fillMaxWidth().background(MaterialTheme.ptut.heroBg).padding(bottom = Spacing.lg)) {
-                    SkyTopBar(
-                        title = "",
-                        onBack = onBack,
-                        trailing = { SkyBarIconAction(icon = PtutIcon.MoreHoriz, label = text.detail.more, onClick = { menu = true }) },
-                    )
-                    GroupHeader(
-                        state,
-                        onSignIn = { inviteStep = STEP_SIGN_IN_AGAIN },
-                        onSettleUp = onSettleUp,
-                        refreshing = refreshing,
-                        onRetrySync = onRefresh,
-                    )
+        Column(Modifier.fillMaxSize()) {
+            // Back and the menu stay; the name rises into the bar as the big header scrolls under it.
+            CollapsingGroupBar(name = state.name, list = list, onBack = onBack, onMenu = { menu = true })
+            LazyColumn(Modifier.fillMaxSize().glassSource(glass), state = list) {
+                item(key = "header") {
+                    Column(Modifier.fillMaxWidth().background(MaterialTheme.ptut.heroBg).padding(bottom = Spacing.lg)) {
+                        GroupHeader(
+                            state,
+                            onSignIn = { inviteStep = STEP_SIGN_IN_AGAIN },
+                            onSettleUp = onSettleUp,
+                            refreshing = refreshing,
+                            onRetrySync = onRefresh,
+                        )
+                    }
                 }
-            }
-            play.allSquare?.let { square -> item(key = "all-square") { AllSquareCard(square) } }
-            item(key = "tabs") { GroupTabRow(tabs.selected, activityCount = tabs.activity?.fresh?.size ?: 0, onSelect = tabs.onSelect) }
-            when (tabs.selected) {
-                GroupTab.Expenses -> expensesTab(
-                    state,
-                    onOpenRepeat = onOpenRepeat,
-                    onOpenExpense = onOpenExpense,
-                    onOpenPayment = { openPayment = it },
-                    onAddExpense = onAddExpense,
-                    onInvite = startInvite,
-                )
+                play.allSquare?.let { square -> item(key = "all-square") { AllSquareCard(square) } }
+                stickyHeader(key = "tabs") { GroupTabRow(tabs.selected, activityCount = tabs.activity?.fresh?.size ?: 0, onSelect = tabs.onSelect) }
+                when (tabs.selected) {
+                    GroupTab.Expenses -> expensesTab(
+                        state,
+                        onOpenRepeat = onOpenRepeat,
+                        onOpenExpense = onOpenExpense,
+                        onOpenPayment = { openPayment = it },
+                        onAddExpense = onAddExpense,
+                        onInvite = startInvite,
+                    )
 
-                GroupTab.Balances -> balancesTab(state, tabs.balances, onSimplify = tabs.onSimplify, onSettle = onSettleUp)
+                    GroupTab.Balances -> balancesTab(state, tabs.balances, onSimplify = tabs.onSimplify, onSettle = onSettleUp)
 
-                GroupTab.Activity -> activityTab(tabs.activity, onOpenExpense = onOpenExpense, onOpenPayment = { openPayment = it })
+                    GroupTab.Activity -> activityTab(tabs.activity, onOpenExpense = onOpenExpense, onOpenPayment = { openPayment = it })
+                }
+                item { Spacer(Modifier.height(SkySizes.pillClearance)) }
             }
-            item { Spacer(Modifier.height(SkySizes.pillClearance)) }
         }
         // #65: an empty group asks for its first expense in place, so the + waits until there is one.
         if (state.hasActivity) {
@@ -218,7 +231,7 @@ private fun Loaded(
         PullToRefreshDefaults.Indicator(
             state = pull,
             isRefreshing = refreshing,
-            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding(),
+            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = SkySizes.topBar),
         )
     }
 
@@ -383,6 +396,47 @@ private fun Loaded(
             reason = text.sync.signInAgainReason,
             onSignedIn = { inviteStep = null },
             onDismiss = { inviteStep = null },
+        )
+    }
+}
+
+/**
+ * The pinned top bar, as UIKit's large title runs it: the header's name scrolls under the bar, and once
+ * it is gone the small title fades in on its own clock, not the finger's, and out the same way.
+ */
+@Composable
+private fun CollapsingGroupBar(name: String, list: LazyListState, onBack: () -> Unit, onMenu: () -> Unit) {
+    val text = LocalCopy.current.shared
+    val motion = MaterialTheme.ptutMotion
+    val nameRow = with(LocalDensity.current) { SkySizes.groupFab.toPx() }
+    val collapsed by remember(list) {
+        derivedStateOf { list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset >= nameRow }
+    }
+    val shown by animateFloatAsState(
+        targetValue = if (collapsed) 1f else 0f,
+        animationSpec = if (ptutReduceMotion) {
+            snap()
+        } else {
+            tween(motion.scrim.inWholeMilliseconds.toInt(), easing = if (collapsed) motion.standard else motion.exit)
+        },
+    )
+    Box(Modifier.fillMaxWidth().background(MaterialTheme.ptut.heroBg).clipToBounds()) {
+        SkyTopBar(
+            title = "",
+            onBack = onBack,
+            trailing = { SkyBarIconAction(icon = PtutIcon.MoreHoriz, label = text.detail.more, onClick = onMenu) },
+        )
+        Text(
+            text = name,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.ptut.heroOn,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = Sizes.minTouchTarget + Spacing.sm)
+                .graphicsLayer { alpha = shown }
+                .semantics { heading() },
         )
     }
 }
