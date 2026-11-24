@@ -63,7 +63,7 @@ import kotlin.time.Instant
  * a slip discarded from another screen says it has gone instead of staying stale (#217).
  */
 class ConfirmSlipViewModel(
-    slipId: String,
+    private val slipId: String,
     getSlip: GetQueuedSlipUseCase,
     observeSlip: ObserveSlipInQueueUseCase,
     private val toasts: ToastMessages,
@@ -123,7 +123,10 @@ class ConfirmSlipViewModel(
         slip = found
         if (first) {
             debts = findDebts(found)
-            state.value = found.toUiState().copy(debtMatch = debtMatch())
+            // 21b: a category picked while the slip was read is the reader's, so it stays.
+            val picked = state.value.category
+            val read = found.toUiState().copy(debtMatch = debtMatch())
+            state.value = if (picked == null) read else read.copy(category = picked, subCategories = subCategories.under(picked.id), suggestedFromShop = false)
             if (found.isForeign) viewModelScope.launch { loadRate(found.currency) }
         } else {
             // A later sight never undoes a save in flight or one already done.
@@ -244,11 +247,11 @@ class ConfirmSlipViewModel(
      * window closes (#219), so the screen leaves at once and Undo brings the slip back to To check.
      */
     fun notMine() {
-        val slip = slip ?: return
         if (state.value.saving) return
         state.update { it.copy(phase = ConfirmSlipPhase.Saving) }
         viewModelScope.launch {
-            discardWithUndo(slip.id)
+            // By the id this screen was opened for, so a slip still being read can go too (21b).
+            discardWithUndo(slipId)
             haptics.deleted()
             state.update { it.copy(phase = ConfirmSlipPhase.Dismissed) }
         }

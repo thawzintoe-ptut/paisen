@@ -34,7 +34,6 @@ import kotlinx.datetime.toInstant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -332,6 +331,7 @@ class OnboardingViewModelTest : ViewModelTest() {
     fun `a goal with no amount cannot start a jar`() = runTest {
         val viewModel = goalViewModel()
         viewModel.chooseGoal(GoalPreset.Cushion)
+        viewModel.setGoalAmount("")
 
         viewModel.startJar()
         runCurrent()
@@ -342,12 +342,23 @@ class OnboardingViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `a second tap on the picked goal lets it go`() = runTest {
+    fun `a trip is picked from the start and a second tap keeps the pick`() = runTest {
         val viewModel = viewModel()
+        assertEquals(GoalPreset.Trip, viewModel.uiState.value.goal)
+
         viewModel.chooseGoal(GoalPreset.SomethingNew)
         viewModel.chooseGoal(GoalPreset.SomethingNew)
 
-        assertNull(viewModel.uiState.value.goal)
+        assertEquals(GoalPreset.SomethingNew, viewModel.uiState.value.goal)
+    }
+
+    @Test
+    fun `a baht home starts the goal at 12000 and another home starts it empty`() = runTest {
+        assertEquals("12000", viewModel().uiState.value.goalAmount)
+
+        val kyat = OnboardingViewModel(onboarding = onboarding, photoAccess = photoAccess, firstRunHome = HomeChoice(Currencies.of("MMK").toHomeMoney(), "Asia/Yangon"))
+
+        assertEquals("", kyat.uiState.value.goalAmount)
     }
 
     @Test
@@ -404,6 +415,22 @@ class OnboardingViewModelTest : ViewModelTest() {
         runCurrent()
 
         assertEquals(SlipAccess.Granted(listOf(kplus)), viewModel.uiState.value.access)
+    }
+
+    @Test
+    fun `a build without folder picking grants access and lists no folders`() = runTest {
+        val viewModel = OnboardingViewModel(
+            onboarding = onboarding,
+            photoAccess = photoAccess,
+            refreshCatalog = RefreshFolderCatalogUseCase(FakeCatalog(listOf(kplus, camera))),
+            offersFolders = false,
+        )
+
+        viewModel.requestPhotoAccess()
+        runCurrent()
+
+        assertEquals(SlipAccess.Granted(emptyList()), viewModel.uiState.value.access)
+        assertEquals(OnboardingStep.Slips, viewModel.uiState.value.step)
     }
 
     @Test

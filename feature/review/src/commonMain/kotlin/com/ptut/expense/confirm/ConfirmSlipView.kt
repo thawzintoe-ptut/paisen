@@ -3,6 +3,7 @@ package com.ptut.expense.confirm
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -136,8 +137,20 @@ fun ConfirmSlipView(
             backLabel = text.closeWithoutSaving,
         )
         when (uiState.phase) {
+            // 21b: the form keeps its shape while the slip is read, so nothing jumps when it arrives.
             ConfirmSlipPhase.Loading -> {
-                ReadingSlip(modifier = Modifier.weight(1f))
+                Column(
+                    modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.md),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+                ) {
+                    ReadingSlip()
+                    Column {
+                        SkyHairline()
+                        listOf(text.paidTo, uiState.whenLabel, text.reference).forEach { label -> UnreadRow(label) }
+                    }
+                    Text(common.category, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                    CategoryChipRow(chips = uiState.chips, all = uiState.categories, selectedId = uiState.category?.id, onPick = onCategory)
+                }
                 ConfirmButtons(uiState, onSave = onSave, onNotMine = onNotMine)
                 return@Column
             }
@@ -288,7 +301,7 @@ fun ConfirmSlipView(
 private fun ReadingSlip(modifier: Modifier = Modifier) {
     val text = LocalCopy.current.slips
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = Spacing.md),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         SlipPlaceholder(
@@ -311,6 +324,21 @@ private fun ReadingSlip(modifier: Modifier = Modifier) {
     }
 }
 
+/** 21b: a row whose value has not been read yet. The label stays, so a screen reader hears what is coming. */
+@Composable
+private fun UnreadRow(label: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = SkySizes.keyValueRow).padding(vertical = Spacing.s12),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(Modifier.fillMaxWidth(UNREAD_VALUE_WIDTH).height(Spacing.s12).clip(PtutRadii.r12).background(MaterialTheme.colorScheme.surface))
+    }
+}
+
+private const val UNREAD_VALUE_WIDTH = 0.5f
+
 @Composable
 private fun ConfirmButtons(uiState: ConfirmSlipUiState, onSave: () -> Unit, onNotMine: () -> Unit) {
     val text = LocalCopy.current.slips
@@ -323,12 +351,13 @@ private fun ConfirmButtons(uiState: ConfirmSlipUiState, onSave: () -> Unit, onNo
             label = text.notMine,
             onClick = onNotMine,
             kind = SkyButtonKind.Outline,
-            enabled = !uiState.saving && !uiState.reading,
+            // 21b: a slip that is not mine can go before it is read.
+            enabled = !uiState.saving,
             modifier = Modifier.weight(1f),
         )
         // Live without a category, so the press can say what is missing (FR-11).
         SkyButton(
-            label = uiState.confirmLabel,
+            label = text.confirm,
             onClick = onSave,
             enabled = uiState.canSave,
             modifier = Modifier.weight(1.6f),

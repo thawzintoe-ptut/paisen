@@ -45,6 +45,7 @@ val onboardingModule: Module = module {
             // getOrNull: a screen test's graph has no play book; step three then saves no goal.
             saveGoal = getOrNull<PlayBook>()?.let { get<SaveGoalUseCase>() },
             markWelcomed = getOrNull(),
+            offersFolders = v2On(),
         )
     }
 }

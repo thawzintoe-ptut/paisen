@@ -229,7 +229,6 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         val reading = viewModel.uiState.value
         assertTrue(reading.reading)
         assertFalse(reading.canSave)
-        assertEquals("Reading…", reading.confirmLabel)
         viewModel.choose(food)
         viewModel.save()
         runCurrent()
@@ -241,8 +240,9 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         val read = viewModel.uiState.value
         assertFalse(read.reading)
         assertTrue(read.canSave)
-        assertEquals("Confirm", read.confirmLabel)
         assertEquals("485.00", read.entry.display)
+        // 21b: the category picked while the slip was read is still the pick.
+        assertEquals(food, read.category)
     }
 
     @Test
@@ -251,7 +251,27 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
 
         val state = viewModel.uiState.value
         assertFalse(state.reading)
-        assertEquals("Confirm", state.confirmLabel)
+        assertTrue(state.canSave)
+    }
+
+    @Test
+    fun `not mine takes a slip off the queue while it is still being read`() = runTest {
+        val store = InMemoryImportStore()
+        val viewModel = ConfirmSlipViewModel(
+            slipId = "q1",
+            ledger = FakeLedger(emptyList()),
+            importer = SlipImporter(FakeSlipSource(), FakeSlipTextReader(), store),
+            toasts = ToastMessages(),
+            discards = SlipDiscards(SlipImporter(FakeSlipSource(), FakeSlipTextReader(), store), ToastMessages(), CoroutineScope(Dispatchers.Main)) { Duration.ZERO },
+            newId = { "generated" },
+        )
+        runCurrent()
+        assertTrue(viewModel.uiState.value.reading)
+
+        viewModel.notMine()
+        runCurrent()
+
+        assertEquals(ConfirmSlipPhase.Dismissed, viewModel.uiState.value.phase)
     }
 
     // FR-13

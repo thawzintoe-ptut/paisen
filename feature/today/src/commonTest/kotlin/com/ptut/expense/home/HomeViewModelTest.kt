@@ -300,7 +300,7 @@ class HomeViewModelTest : ViewModelTest() {
 
             val state = awaitItem() as HomeUiState.Success
             assertEquals(ImportStatusUiModel.Failing(ImportStopReason.PhotoAccessOff), state.importStatus)
-            assertEquals("${EnglishCopy.home.stopAccessOff}\n${EnglishCopy.home.stillCounts}", (state.importStatus as ImportStatusUiModel.Failing).body)
+            assertEquals("${EnglishCopy.home.stopAccessOff} ${EnglishCopy.home.stillCounts}", (state.importStatus as ImportStatusUiModel.Failing).body)
             assertEquals(ImportFix.AllowAllPhotos, state.importFix)
         }
     }
@@ -381,7 +381,7 @@ class HomeViewModelTest : ViewModelTest() {
 
             val state = awaitItem() as HomeUiState.Success
             assertEquals(ImportStatusUiModel.Failing(ImportStopReason.Other("the folder could not be read")), state.importStatus)
-            assertEquals("The folder could not be read\n${EnglishCopy.home.stillCounts}", (state.importStatus as ImportStatusUiModel.Failing).body)
+            assertEquals("The folder could not be read ${EnglishCopy.home.stillCounts}", (state.importStatus as ImportStatusUiModel.Failing).body)
             assertEquals(ImportFix.AllowAllPhotos, state.importFix)
         }
     }
@@ -752,7 +752,6 @@ class HomeViewModelTest : ViewModelTest() {
             val review = (awaitItem() as HomeUiState.Success).review
             assertEquals("2 slips to check", review?.title)
             assertEquals("One new shop, one unreadable amount", review?.detail)
-            assertEquals("Check 2", review?.action)
         }
     }
 
@@ -923,7 +922,7 @@ class HomeViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun theRunShowsWhileTheImportIsStaleAndSlipsWait() = runTest {
+    fun anImportProblemReplacesEveryNextStep() = runTest {
         val book = FakePlayBook(days = listOf(cleared(2026, 8, 12), cleared(2026, 8, 13)), goals = listOf(jar))
         val viewModel = viewModel(
             transactions = emptyList(),
@@ -937,7 +936,7 @@ class HomeViewModelTest : ViewModelTest() {
             assertNotNull(state.review)
             assertNotNull(state.jar)
             assertNotNull(state.play)
-            assertEquals("2 days", (state.nextStep as NextStepUiModel.Play).strip.runTitle)
+            assertNull(state.nextStep)
         }
     }
 

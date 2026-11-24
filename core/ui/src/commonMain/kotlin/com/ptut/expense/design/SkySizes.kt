@@ -96,6 +96,14 @@ object SkySizes {
     /** The app's mark on first run (p23). */
     val brandMark = 30.dp
 
+    /** First run's step bar (S01 to S03): three 24 by 4 segments. */
+    val stepSegmentWidth = 24.dp
+    val stepSegmentHeight = 4.dp
+
+    /** A one-line field or sample row inside a first-run card (S02, S03). */
+    val fieldRow = 52.dp
+    val goalAmountField = 96.dp
+
     /** The empty state's illustration slot (p24): 342 by 220 on a 390 screen, kept as a ratio. */
     const val illustrationRatio = 342f / 220f
 

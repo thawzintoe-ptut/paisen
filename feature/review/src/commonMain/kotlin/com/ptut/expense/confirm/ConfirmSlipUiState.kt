@@ -153,8 +153,6 @@ data class ConfirmSlipUiState(
      */
     val canSave: Boolean get() = !reading && !entry.isEmpty && !saving
 
-    /** #72: the slip is still being read, so nothing half-read can be saved or thrown away yet. */
+    /** #72: the slip is still being read, so nothing half-read can be saved yet. Not mine still works (21b). */
     val reading: Boolean get() = phase == ConfirmSlipPhase.Loading
-
-    val confirmLabel: String get() = if (reading) AppText.copy.slips.reading else AppText.copy.slips.confirm
 }

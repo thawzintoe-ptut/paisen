@@ -33,7 +33,6 @@ data class SlipsCopy(
     val readFromSlip: String = "Read from slip",
     /** #72: the slip is still being read, so Confirm waits. */
     val readingSlip: String = "Reading the slip…",
-    val reading: String = "Reading…",
     val paidTo: String = "Paid to",
     val reference: String = "Reference",
     val checkIt: (String) -> String = { label -> "$label · check it" },
@@ -166,7 +165,6 @@ val BurmeseSlips = SlipsCopy(
     amountNotRead = "ပမာဏ မဖတ်ရဘူး",
     readFromSlip = "စလစ်ကနေ ဖတ်ထားတာ",
     readingSlip = "စလစ်ကို ဖတ်နေတယ်…",
-    reading = "ဖတ်နေတယ်…",
     paidTo = "ပေးတဲ့နေရာ",
     reference = "အမှတ်စဉ်",
     checkIt = { label -> "$label · ပြန်စစ်ပါ" },
@@ -286,7 +284,6 @@ val ThaiSlips = SlipsCopy(
     amountNotRead = "อ่านยอดเงินไม่ได้",
     readFromSlip = "อ่านจากสลิป",
     readingSlip = "กำลังอ่านสลิป…",
-    reading = "กำลังอ่าน…",
     paidTo = "จ่ายให้",
     reference = "เลขอ้างอิง",
     checkIt = { label -> "$label · โปรดตรวจ" },

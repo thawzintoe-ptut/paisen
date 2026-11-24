@@ -51,7 +51,10 @@ val Provenance.label: String
     }
 
 /** The line under a Sky row's name, "Groceries · auto"; the time sits under the amount (#146, K7). */
-fun MetaParts.categoryAndProvenance(): String = listOfNotNull(category, foreign, provenance.label).joinToString(" · ")
+fun MetaParts.categoryAndProvenance(): String = categoryAnd(provenance.label)
+
+/** The same line with [last] in the provenance's place, "Food & drink · just now" (M01). */
+fun MetaParts.categoryAnd(last: String): String = listOfNotNull(category, foreign, last).joinToString(" · ")
 
 /**
  * What a row was filed as, when, and who filed it.

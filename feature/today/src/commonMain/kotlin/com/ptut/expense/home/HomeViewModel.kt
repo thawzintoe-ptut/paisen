@@ -170,8 +170,10 @@ sealed interface HomeUiState {
     ) : HomeUiState {
         /** Only this one is drawn; [review], [jar] and [play] stay as facts for whatever else reads them. */
         val nextStep: NextStepUiModel? = when {
-            // An import problem has its own banner above; it only hides the Slips step.
-            review != null && importStatus is ImportStatusUiModel.Fresh -> NextStepUiModel.Slips(review)
+            // #111: an import problem has its own banner above, and it replaces every next step.
+            importStatus !is ImportStatusUiModel.Fresh -> null
+
+            review != null -> NextStepUiModel.Slips(review)
 
             // The jar wins only on a day it has a nudge, so a goal does not hide play for good.
             jar?.nudge != null -> NextStepUiModel.Jar(jar)
@@ -186,7 +188,7 @@ sealed interface HomeUiState {
 }
 
 /** The way into the review queue, stated as a count and a reason rather than a bare badge. */
-data class ReviewCardUiModel(val title: String, val detail: String, val action: String)
+data class ReviewCardUiModel(val title: String, val detail: String)
 
 /** The period's income and its signed net; [netBelowZero] is the one case that is money out. */
 data class IncomeLineUiModel(val income: String, val net: String, val netBelowZero: Boolean)
@@ -422,7 +424,6 @@ private fun ReviewCounts.asReviewCard(): ReviewCardUiModel {
     return ReviewCardUiModel(
         title = text.slipsToCheck(total),
         detail = reasons.joinToString(AppText.copy.phrases.listComma).replaceFirstChar { it.uppercase() },
-        action = text.checkSlips(total),
     )
 }
 

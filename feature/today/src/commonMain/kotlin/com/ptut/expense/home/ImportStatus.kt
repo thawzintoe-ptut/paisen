@@ -28,7 +28,7 @@ sealed interface ImportStatusUiModel {
     /** The newest scan failed. A success an hour ago says nothing about the scans since (US-8). */
     data class Failing(val reason: ImportStopReason) : ImportStatusUiModel {
         /** What stopped, then what still counts (#69). */
-        val body: String get() = AppText.copy.home.let { text -> "${reason.line(text)}\n${text.stillCounts}" }
+        val body: String get() = AppText.copy.home.let { text -> "${reason.line(text)} ${text.stillCounts}" }
     }
 
     /** Android's "Select photos": scans succeed, but a new slip stays hidden until it is picked. */

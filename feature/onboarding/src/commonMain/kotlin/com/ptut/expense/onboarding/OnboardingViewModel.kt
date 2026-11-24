@@ -52,14 +52,14 @@ sealed interface SlipAccess {
 data class OnboardingUiState(
     val step: OnboardingStep = OnboardingStep.Promise,
     val access: SlipAccess = SlipAccess.Unasked,
-    /** Step three: the picked goal and the amount as typed. Neither is saved until Start my jar. */
-    val goal: GoalPreset? = null,
+    /** Step three (S03): a trip is picked from the start. Nothing is saved until Start my jar. */
+    val goal: GoalPreset = GoalPreset.Trip,
     val goalAmount: String = "",
 ) {
     /** "Step N of 3". */
     val stepNumber: Int get() = step.ordinal + 1
 
-    val canStartJar: Boolean get() = goal != null && goalTarget(goalAmount) != null
+    val canStartJar: Boolean get() = goalTarget(goalAmount) != null
 }
 
 internal fun goalTarget(typed: String): Satang? = AmountEntry.ofText(typed)?.toSatang()?.takeIf { it > Satang.Zero }
@@ -91,9 +91,14 @@ class OnboardingViewModel(
     private val saveGoal: SaveGoalUseCase? = null,
     /** #102: the day first run ended, which starts Today's first week. Null where no settings are bound. */
     private val markWelcomed: MarkWelcomedUseCase? = null,
+    /** #116: picking the slip folder is v2. Without it step two shows the K PLUS setting alone. */
+    private val offersFolders: Boolean = true,
 ) : ViewModel() {
 
-    private val state = MutableStateFlow(OnboardingUiState())
+    // S03 fills in a baht amount; another home money starts empty, since 12,000 means nothing there.
+    private val state = MutableStateFlow(
+        OnboardingUiState(goalAmount = if ((firstRunHome?.money ?: Home.money).code == BAHT) SUGGESTED_BAHT_GOAL else ""),
+    )
 
     val uiState: StateFlow<OnboardingUiState> = state.asStateFlow()
 
@@ -188,7 +193,7 @@ class OnboardingViewModel(
             return
         }
         val folders = catalog()
-        state.update { it.copy(access = if (folders.isEmpty()) SlipAccess.Denied else SlipAccess.Granted(folders)) }
+        state.update { it.copy(access = if (folders.isEmpty()) SlipAccess.Denied else SlipAccess.Granted(folders.takeIf { offersFolders }.orEmpty())) }
     }
 
     /** FR-5: the picked folder is watched; a second pick replaces the first. */
@@ -210,9 +215,9 @@ class OnboardingViewModel(
         state.update { it.copy(step = OnboardingStep.Goal) }
     }
 
-    /** #102: a second tap on the picked goal lets it go. */
+    /** S03: one of the three is always picked; Not now is how a reader says none. */
     fun chooseGoal(preset: GoalPreset) {
-        state.update { now -> now.copy(goal = preset.takeIf { it != now.goal }) }
+        state.update { it.copy(goal = preset) }
     }
 
     fun setGoalAmount(text: String) {
@@ -222,7 +227,7 @@ class OnboardingViewModel(
     /** #102: Start my jar saves the goal, then opens Today. A goal that cannot be read saves nothing. */
     fun startJar() {
         val now = state.value
-        val preset = now.goal ?: return
+        val preset = now.goal
         val target = goalTarget(now.goalAmount) ?: return
         val save = saveGoal ?: return finish()
         whileFinishing { save(goalId = null, name = preset.goalName(), target = target) }
@@ -325,6 +330,9 @@ class OnboardingViewModel(
         }
     }
 }
+
+private const val BAHT = "THB"
+private const val SUGGESTED_BAHT_GOAL = "12000"
 
 /** The goal's name as the reader's language says it; the jar keeps it as saved. */
 private fun GoalPreset.goalName(): String = AppText.copy.onboarding.let { text ->

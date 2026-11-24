@@ -66,9 +66,8 @@ import com.ptut.expense.domain.spoken
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.locale.noteCopy
+import com.ptut.expense.ui.categoryAnd
 import com.ptut.expense.ui.categoryAndProvenance
-import com.ptut.expense.ui.sky.SkyButton
-import com.ptut.expense.ui.sky.SkyButtonKind
 import com.ptut.expense.ui.sky.SkyEmptyState
 import com.ptut.expense.ui.sky.SkyMoodCard
 import com.ptut.expense.ui.sky.SkyPageSheet
@@ -278,7 +277,8 @@ private fun LoadedHome(
             }
             items(state.transactions, key = { it.id }) { row ->
                 SheetRow(caught = row.caught) {
-                    SkyRow(row = row, onOpenTransaction = onOpenTransaction)
+                    // M01: the row just caught says so where the others say "auto".
+                    if (row.caught) SkyRow(row, onOpenTransaction, meta = row.parts.categoryAnd(text.justNow)) else SkyRow(row, onOpenTransaction)
                     if (row.caught) CaughtTick(pressed = state.playMotion, modifier = Modifier.align(Alignment.CenterStart))
                 }
             }
@@ -339,7 +339,7 @@ private fun LoadedHome(
     }
 }
 
-/** Slips waiting, on the quiet card fill: a to-do is not money going out, so never ruby. */
+/** Slips waiting, on the quiet card fill: a to-do is not money going out, so never ruby. The whole card is the door (03). */
 @Composable
 private fun ReviewRow(review: ReviewCardUiModel, onOpenReview: () -> Unit, modifier: Modifier = Modifier) {
     Row(
@@ -352,14 +352,13 @@ private fun ReviewRow(review: ReviewCardUiModel, onOpenReview: () -> Unit, modif
         horizontalArrangement = Arrangement.spacedBy(Spacing.s12),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(PtutIcon.Inbox.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(SkySizes.cardGlyph))
         Column(modifier = Modifier.weight(1f)) {
             Text(review.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             if (review.detail.isNotEmpty()) {
                 Text(review.detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        SkyButton(label = review.action, onClick = onOpenReview, kind = SkyButtonKind.Outline)
+        Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(SkySizes.cardGlyph))
     }
 }
 
@@ -369,9 +368,11 @@ private fun SheetRow(caught: Boolean = false, content: @Composable BoxScope.() -
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            // #103: a soft wash under the slip just caught, while its toast is up.
-            .background(if (caught) MaterialTheme.ptut.infoBg else MaterialTheme.colorScheme.tertiaryContainer)
-            .padding(horizontal = Spacing.s20),
+            .background(MaterialTheme.colorScheme.tertiaryContainer)
+            // #103, M01: a soft rounded wash under the slip just caught, inset from the sheet's edge, while its toast is up.
+            .padding(horizontal = Spacing.xs)
+            .then(if (caught) Modifier.clip(PtutRadii.r16).background(MaterialTheme.ptut.infoBg) else Modifier)
+            .padding(horizontal = Spacing.s12),
         content = content,
     )
 }
@@ -411,10 +412,10 @@ private fun CaughtTick(pressed: Boolean, modifier: Modifier = Modifier) {
             .size(tick)
             .scale(if (landed || still) 1f else stampScaleAt(progress.value, motion.press))
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary)
+            .background(MaterialTheme.ptut.accent)
             .clearAndSetSemantics {},
     ) {
-        Icon(PtutIcon.Check.image, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(tick * TICK_GLYPH))
+        Icon(PtutIcon.Check.image, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(tick * TICK_GLYPH))
     }
 }
 
@@ -461,7 +462,8 @@ private fun ImportStatus(
             // Page 05's pulse: it moves only while a scan is running.
             PulseDot(live = state.isScanning, size = Spacing.xs)
             Text(
-                text = text.imported(status.since, state.summary.count, text.spanToday),
+                // 03b: while a scan runs the line says so, and the Imported line returns when it ends.
+                text = if (state.isScanning) text.readingSlipsNow else text.imported(status.since, state.summary.count, text.spanToday),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -596,22 +598,30 @@ private fun CategoryTotalsLine(tiles: List<TopCategoryUiModel>, onOpenReports: (
     val text = LocalCopy.current.home
     val spoken = text.byCategory(tiles.joinToString(AppText.copy.phrases.listComma) { "${it.name} ${it.amount}" })
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Text(
-        text = buildAnnotatedString {
-            tiles.forEachIndexed { index, tile ->
-                if (index > 0) withStyle(SpanStyle(color = muted)) { append(Separators.DOT) }
-                withStyle(SpanStyle(color = muted)) { append("${tile.name} ") }
-                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(tile.amount) }
-            }
-        },
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurface,
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .clearAndSetSemantics { contentDescription = spoken }
             .tappable(PtutRadii.r12, Role.Button, onClick = onOpenReports)
             .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
-    )
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s6),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = buildAnnotatedString {
+                tiles.forEachIndexed { index, tile ->
+                    if (index > 0) withStyle(SpanStyle(color = muted)) { append(Separators.DOT) }
+                    withStyle(SpanStyle(color = muted)) { append("${tile.name} ") }
+                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(tile.amount) }
+                }
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            // Not weighted: the chevron follows the words, as on the board.
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = muted, modifier = Modifier.size(SkySizes.moneyInArrow))
+    }
 }
 
 /** #22: under the weekly note, a quiet link that opens the three-choice sheet. */
