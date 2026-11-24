@@ -923,7 +923,7 @@ class HomeViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun theJarShowsWhileTheImportIsStaleAndSlipsWait() = runTest {
+    fun theRunShowsWhileTheImportIsStaleAndSlipsWait() = runTest {
         val book = FakePlayBook(days = listOf(cleared(2026, 8, 12), cleared(2026, 8, 13)), goals = listOf(jar))
         val viewModel = viewModel(
             transactions = emptyList(),
@@ -937,7 +937,7 @@ class HomeViewModelTest : ViewModelTest() {
             assertNotNull(state.review)
             assertNotNull(state.jar)
             assertNotNull(state.play)
-            assertEquals("A trip", (state.nextStep as NextStepUiModel.Jar).jar.name)
+            assertEquals("2 days", (state.nextStep as NextStepUiModel.Play).strip.runTitle)
         }
     }
 
@@ -958,14 +958,23 @@ class HomeViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun theJarComesBeforeTheRun() = runTest {
-        val book = FakePlayBook(days = listOf(cleared(2026, 8, 12), cleared(2026, 8, 13)), goals = listOf(jar))
-        val viewModel = viewModel(transactions = emptyList(), play = PlayFixture(book))
-
-        viewModel.uiState.test {
+    fun theJarComesBeforeTheRunOnlyOnADayWithANudge() = runTest {
+        val days = listOf(cleared(2026, 8, 12), cleared(2026, 8, 13))
+        val nudged = viewModel(
+            transactions = lightFriday,
+            saved = usualFridays,
+            play = PlayFixture(FakePlayBook(days = days, goals = listOf(jar))),
+            now = FRIDAY_EVENING,
+        )
+        nudged.uiState.test {
             val state = awaitSuccess()
             assertNotNull(state.play)
             assertEquals("A trip", (state.nextStep as NextStepUiModel.Jar).jar.name)
+        }
+        viewModel(transactions = emptyList(), play = PlayFixture(FakePlayBook(days = days, goals = listOf(jar)))).uiState.test {
+            val state = awaitSuccess()
+            assertNotNull(state.jar)
+            assertEquals("2 days", (state.nextStep as NextStepUiModel.Play).strip.runTitle)
         }
     }
 

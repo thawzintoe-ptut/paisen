@@ -173,9 +173,12 @@ sealed interface HomeUiState {
             // An import problem has its own banner above; it only hides the Slips step.
             review != null && importStatus is ImportStatusUiModel.Fresh -> NextStepUiModel.Slips(review)
 
-            jar != null -> NextStepUiModel.Jar(jar)
+            // The jar wins only on a day it has a nudge, so a goal does not hide play for good.
+            jar?.nudge != null -> NextStepUiModel.Jar(jar)
 
             play != null -> NextStepUiModel.Play(play)
+
+            jar != null -> NextStepUiModel.Jar(jar)
 
             else -> null
         }
