@@ -171,8 +171,8 @@ class RecordPaymentViewModelTest : ViewModelTest() {
         val failed = viewModel.ready()
         assertEquals(0, closed)
         assertEquals("240", failed.form.amountText)
-        assertEquals("Couldn't record this payment", failed.failedTitle)
-        assertEquals("Try again", failed.buttonLabel)
+        assertEquals("Couldn't record ฿240", failed.failedTitle)
+        assertEquals("Record ฿240", failed.buttonLabel)
         assertTrue(failed.canSave)
 
         viewModel.record { closed++ }

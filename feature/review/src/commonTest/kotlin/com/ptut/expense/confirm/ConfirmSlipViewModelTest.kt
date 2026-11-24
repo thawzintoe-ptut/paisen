@@ -658,7 +658,7 @@ class ConfirmSlipViewModelTest : ViewModelTest() {
         assertFalse(state.dismissed)
         assertEquals(1, state.debtMatch?.choices?.size)
         val toast = toasts.messages.first()
-        assertEquals("Couldn't record this payment", toast.text)
+        assertEquals("Couldn't record ฿240", toast.text)
         assertEquals(ToastTone.Error, toast.tone)
     }
 

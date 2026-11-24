@@ -331,6 +331,8 @@ internal fun LazyListScope.activityTab(activity: SharedActivityUiState?, onOpenE
     if (state.fresh.isNotEmpty()) {
         item(key = "activity-new") { ActivityHeading(LocalCopy.current.shared.detail.newSinceLooked.uppercase(), skyItem()) }
         items(state.fresh, key = { "new-${it.id}" }) { entry -> Box(skyItem()) { ActivityEntryRow(entry, isNew = true, onClick = open(entry)) } }
+        // 33c: the rest sits under its own heading, so the line between new and seen is said.
+        if (state.days.isNotEmpty()) item(key = "activity-earlier") { ActivityHeading(LocalCopy.current.shared.detail.earlier.uppercase(), skyItem()) }
     }
     activityDays(state.days, itemModifier = { skyItem() }, open = ::open)
 }

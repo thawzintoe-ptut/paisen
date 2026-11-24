@@ -70,7 +70,8 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
             onOpenGroup = { nav.navigate(PtutRoute.SharedGroup(it)) { launchSingleTop = true } },
             onOpenActivity = { nav.navigate(PtutRoute.SharedActivity) { launchSingleTop = true } },
             onJoinCode = { nav.navigate(PtutRoute.Join(it)) { launchSingleTop = true } },
-            onOpenPeople = { nav.navigate(PtutRoute.People) { launchSingleTop = true } }.takeIf { switches.v2 },
+            // #114: People is v1, one row under the groups (board 30).
+            onOpenPeople = { nav.navigate(PtutRoute.People) { launchSingleTop = true } },
         )
     }
 

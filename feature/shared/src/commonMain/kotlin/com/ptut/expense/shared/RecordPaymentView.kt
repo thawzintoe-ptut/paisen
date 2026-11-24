@@ -158,6 +158,8 @@ fun RecordPaymentView(
                 SkyWarningBanner(
                     title = title,
                     body = state.failedBody,
+                    actionLabel = text.common.tryAgain,
+                    onAction = onRecord.takeIf { state.canSave },
                     modifier = Modifier.padding(top = Spacing.md).semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }

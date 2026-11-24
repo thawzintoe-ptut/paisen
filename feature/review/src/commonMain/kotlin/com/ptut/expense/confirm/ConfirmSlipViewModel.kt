@@ -281,7 +281,7 @@ class ConfirmSlipViewModel(
         viewModelScope.launch {
             if (paySlipDebt(slip, debt).isFailure) {
                 // As save: the debt card stays and unlocks, so a second tap can try again.
-                toasts.show(ToastMessage(AppText.copy.shared.payment.didntSave, tone = ToastTone.Error))
+                toasts.show(ToastMessage(AppText.copy.shared.payment.didntSave(debt.amount.formatCompact()), tone = ToastTone.Error))
                 state.update { it.copy(phase = ConfirmSlipPhase.Ready) }
                 return@launch
             }

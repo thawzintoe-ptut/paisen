@@ -174,13 +174,14 @@ class RecordPaymentViewModel(
                 left > Satang.Zero -> text.stillOwes(fromName, toName, left.formatCompact(money))
                 else -> text.owes(toName, fromName, (-left).formatCompact(money))
             },
-            buttonLabel = if (form.failed) AppText.copy.common.tryAgain else text.record((paying ?: Satang.Zero).formatCompact(money)),
+            // 44c: the button keeps its amount after a failure; Retry sits in the error itself.
+            buttonLabel = text.record((paying ?: Satang.Zero).formatCompact(money)),
             canSave = form.loaded && !form.saving && paying != null && paying > Satang.Zero,
             promptPayQr = between.payeePromptPay?.takeIf { paying != null && paying > Satang.Zero }?.let { PromptPay.payload(it, paying ?: Satang.Zero) },
             promptPayLine = between.payeePromptPay?.let { text.payBy(toName, PromptPay.masked(it)) },
             askToPay = askToPay(between, fromName),
             changed = opened != null && form.content != opened,
-            failedTitle = if (form.failed) text.didntSave else null,
+            failedTitle = if (form.failed) text.didntSave((paying ?: Satang.Zero).formatCompact(money)) else null,
             failedBody = if (form.failed) text.keptTyped else null,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), RecordPaymentUiState.Missing)
