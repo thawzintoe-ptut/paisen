@@ -54,6 +54,7 @@ val todayModule: Module = module {
             playMotion = get<ObservePlayOnUseCase>()(if (laterOn()) PlayPart.Stamps else PlayPart.GoalJar),
             toasts = get(),
             usage = getOrNull() ?: UsageLog.None,
+            offersFolders = v2On(),
         )
     }
     // #220: Reports passes the slice it opened; Home's History passes nothing and gets the whole table.

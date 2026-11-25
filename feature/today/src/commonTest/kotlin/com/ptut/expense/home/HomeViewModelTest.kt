@@ -22,6 +22,9 @@ import com.ptut.expense.domain.TransactionDraft
 import com.ptut.expense.domain.TransactionEdit
 import com.ptut.expense.domain.TransactionSource
 import com.ptut.expense.domain.WeeklyTarget
+import com.ptut.expense.domain.folders.FakeFolders
+import com.ptut.expense.domain.folders.ObserveWatchedFoldersUseCase
+import com.ptut.expense.domain.folders.WatchedFolder
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.ledger.LedgerRepository
 import com.ptut.expense.domain.ledger.LedgerSnapshot
@@ -293,6 +296,7 @@ class HomeViewModelTest : ViewModelTest() {
             transactions = emptyList(),
             sinceLastImportMillis = FIVE_MINUTES,
             runs = listOf(scan(ImportOutcome.Failure, reason = EnglishCopy.folders.androidAccessDenied)),
+            folders = listOf(KPLUS),
         )
 
         viewModel.uiState.test {
@@ -306,11 +310,38 @@ class HomeViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun photoAccessOffWithNoFolderWatchedIsTheChoiceToAddByHand() = runTest {
+        val viewModel = viewModel(
+            transactions = emptyList(),
+            sinceLastImportMillis = null,
+            runs = listOf(scan(ImportOutcome.Failure, reason = EnglishCopy.folders.androidAccessDenied)),
+        )
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            assertEquals(ImportStatusUiModel.NeverRun, (awaitItem() as HomeUiState.Success).importStatus)
+        }
+    }
+
+    @Test
+    fun withoutPhotoFoldersTheEmptyLinePointsNowhere() = runTest {
+        val viewModel = viewModel(transactions = emptyList(), offersFolders = false)
+
+        viewModel.uiState.test {
+            assertEquals(HomeUiState.Loading, awaitItem())
+
+            assertEquals(EnglishCopy.settings.noFolderWatched, (awaitItem() as HomeUiState.Success).watchLine)
+        }
+    }
+
+    @Test
     fun aStopWrittenInAnotherLanguageIsStillRecognised() = runTest {
         val viewModel = viewModel(
             transactions = emptyList(),
             sinceLastImportMillis = FIVE_MINUTES,
             runs = listOf(scan(ImportOutcome.Failure, reason = BurmeseCopy.folders.iosAccessDenied)),
+            folders = listOf(KPLUS),
         )
 
         viewModel.uiState.test {
@@ -1000,6 +1031,8 @@ class HomeViewModelTest : ViewModelTest() {
     private fun bangkok(year: Int, month: Int, day: Int, hour: Int): Instant =
         LocalDateTime(year, month, day, hour, 0).toInstant(BangkokTime)
 
+    private val KPLUS = WatchedFolder(id = "kplus", name = "K PLUS", path = "Pictures/K PLUS", slipsRead = 0, checked = true)
+
     private fun viewModel(
         transactions: List<Transaction>,
         sinceLastImportMillis: Long? = 0L,
@@ -1017,6 +1050,8 @@ class HomeViewModelTest : ViewModelTest() {
         play: PlayFixture? = null,
         toasts: ToastMessages? = null,
         playMotion: Boolean = false,
+        folders: List<WatchedFolder> = emptyList(),
+        offersFolders: Boolean = true,
         onLedger: (FakeLedger) -> Unit = {},
     ) = FakeLedger(transactions, sinceLastImportMillis, queued, all = transactions + saved, runs = runs).let { ledger ->
         onLedger(ledger)
@@ -1028,6 +1063,8 @@ class HomeViewModelTest : ViewModelTest() {
             observeImportRuns = ObserveImportRunsUseCase(ledger),
             observeQueuedSlips = ObserveQueuedSlipsUseCase(ledger, flowOf(emptySet())),
             observeScanning = ObserveScanningUseCase(scanning),
+            observeWatchedFolders = ObserveWatchedFoldersUseCase(FakeFolders(folders)),
+            offersFolders = offersFolders,
             subCategoryUpdates = subCategories,
             getImportHealth = GetImportHealthUseCase(onlyPickedPhotos),
             weeklyCheckIn = flowOf(weeklyCheckIn),

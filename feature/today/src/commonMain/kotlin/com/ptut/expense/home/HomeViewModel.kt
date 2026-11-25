@@ -251,6 +251,8 @@ class HomeViewModel(
     private val toasts: ToastMessages? = null,
     /** #115: today_opened, which the sender keeps to once a day. */
     private val usage: UsageLog = UsageLog.None,
+    /** #116: Photo folders is v2, so in v1 the empty line points nowhere. */
+    private val offersFolders: Boolean = true,
 ) : ViewModel() {
 
     /** Bumped when the screen comes back, so a card that belongs to the morning goes at noon. */
@@ -359,7 +361,7 @@ class HomeViewModel(
             // Reports owns the week and the month, so Today asks for one day only.
             val home = getHomeSummary(todays, ledger, HomePeriod.Today, today, queued, categories, extras.target, SpendWords)
                 ?: return@combine HomeUiState.Loading
-            val health = getImportHealth(sinceLastImportMillis, runs, stopSentences())
+            val health = getImportHealth(sinceLastImportMillis, runs, stopSentences()).withoutFolders(extras.folders)
             val transactions = home.transactions
             val weeklyCard = if (extras.weekly) {
                 getWeeklyCheckIn(home.history, today, extras.target, extras.note.on, extras.note.hiddenWeek)?.asCard(categories, extras.note.tone)
@@ -377,7 +379,7 @@ class HomeViewModel(
                 },
                 transactions = transactions.map { it.asRow(categories, subCategories).copy(caught = it.id == extras.caughtId) },
                 importStatus = health.asImportStatus(),
-                watchLine = extras.folders.watchLine(sinceLastImportMillis),
+                watchLine = extras.folders.watchLine(sinceLastImportMillis, offersFolders),
                 isScanning = extras.scanning,
                 // An empty period keeps its empty state, which already shows the scan waiting.
                 placeholderRows = if (extras.scanning && transactions.isNotEmpty()) PLACEHOLDER_ROWS else 0,

@@ -36,16 +36,23 @@ sealed interface ImportStatusUiModel {
 }
 
 /** "Watching K PLUS · checked 4 min ago", or a count once more than one folder is watched. */
-internal fun List<WatchedFolder>.watchLine(sinceLastImportMillis: Long?): String {
+internal fun List<WatchedFolder>.watchLine(sinceLastImportMillis: Long?, offersFolders: Boolean = true): String {
     val text = AppText.copy.home
     val on = watched()
     val checked = sinceLastImportMillis?.let { text.checkedAgo(elapsedPhrase(it)) } ?: text.noRunYet
     return when (on.size) {
-        0 -> text.noFolderWatched
+        0 -> if (offersFolders) text.noFolderWatched else AppText.copy.settings.noFolderWatched
         1 -> text.watchingOne(on.single().name, checked)
         else -> text.watchingMany(on.size, checked)
     }
 }
+
+/**
+ * With no folder watched, photo access being off is the choice to add by hand, not a stop.
+ * It reads as a fresh install, so "Import stopped" never follows "I'll add expenses by hand".
+ */
+internal fun ImportHealth.withoutFolders(folders: List<WatchedFolder>): ImportHealth =
+    if (this is ImportHealth.Stopped && reason == ImportStopReason.PhotoAccessOff && folders.watched().isEmpty()) ImportHealth.NeverRun else this
 
 /** Never having run is the one state carrying no span. */
 internal fun ImportHealth.asImportStatus(): ImportStatusUiModel = when (this) {
