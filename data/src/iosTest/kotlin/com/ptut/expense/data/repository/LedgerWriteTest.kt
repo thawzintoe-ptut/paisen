@@ -40,13 +40,14 @@ class LedgerWriteTest {
         val file = "${NSTemporaryDirectory()}ledger-write-${Random.nextLong()}.db"
 
         val first = openAt(file)
+        // Stopped before the close, as in withLedger: a read on a closed database fails on iOS.
+        val reads = CoroutineScope(backgroundScope.coroutineContext + Job())
         try {
             RoomLedgerRepository(
                 transactionDao = first.transactionDao(),
                 queuedSlipDao = first.queuedSlipDao(),
                 importRunDao = first.importRunDao(),
-                // Dies with the test, so the eagerly-started reads do not outlive it.
-                scope = backgroundScope,
+                scope = reads,
             ).record(
                 TransactionDraft(
                     amount = Satang(48_500),
@@ -55,6 +56,7 @@ class LedgerWriteTest {
                 ),
             )
         } finally {
+            reads.coroutineContext.job.cancelAndJoin()
             first.close()
         }
 
