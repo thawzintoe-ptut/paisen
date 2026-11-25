@@ -45,7 +45,10 @@ class FakePhotoAccessRequest : PhotoAccessRequest {
 }
 
 /** Today's Fix page, without the system one. [opens] counts the taps that would have left the app. */
-class FakePhotoSettings(override val steps: String = "Tap Photos, then Allow all") : PhotoSettings {
+class FakePhotoSettings(
+    override val steps: String = "Tap Photos, then Allow all",
+    override var photosAllowed: Boolean = false,
+) : PhotoSettings {
 
     var opens = 0
         private set

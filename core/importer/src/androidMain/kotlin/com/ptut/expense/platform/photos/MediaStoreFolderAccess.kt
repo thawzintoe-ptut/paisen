@@ -46,6 +46,8 @@ class AppInfoPhotoSettings(context: Context) : PhotoSettings {
 
     override val onlyPickedPhotos: Boolean get() = context.photoAccessLevel() == PhotoAccessLevel.Picked
 
+    override val photosAllowed: Boolean get() = context.photoAccessLevel() != PhotoAccessLevel.None
+
     override fun open() = context.openAppInfo()
 }
 

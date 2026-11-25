@@ -14,5 +14,8 @@ interface PhotoSettings {
     /** True while the reader shared only the photos they picked, so new slips stay hidden. Android only. */
     val onlyPickedPhotos: Boolean get() = false
 
+    /** True once the reader has allowed photos, all or picked. False where nothing can tell. */
+    val photosAllowed: Boolean get() = false
+
     fun open()
 }

@@ -403,6 +403,17 @@ class OnboardingViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun `photos allowed on a phone with no pictures yet is not a refusal`() = runTest {
+        val viewModel = folderViewModel(offered = emptyList(), photoSettings = FakePhotoSettings(photosAllowed = true))
+        viewModel.next()
+
+        viewModel.requestPhotoAccess()
+        runCurrent()
+
+        assertEquals(SlipAccess.Granted(emptyList()), viewModel.uiState.value.access)
+    }
+
+    @Test
     fun `access given in the phone settings shows on return`() = runTest {
         val catalog = FakeCatalog(emptyList())
         val viewModel = folderViewModel(catalog = catalog)

@@ -73,6 +73,8 @@ class AppSettingsPhotoSettings : PhotoSettings {
 
     override val steps: String get() = AppText.copy.home.allowAllIosSteps
 
+    override val photosAllowed: Boolean get() = PhotoLibraryAccess().isGranted()
+
     override fun open() = openAppSettings()
 }
 

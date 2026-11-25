@@ -186,14 +186,15 @@ class OnboardingViewModel(
         photoSettings?.open()
     }
 
-    /** An empty catalogue is how both platforms say no access, as Photo folders reads it. */
+    /** No folders is a refusal only when the phone does not say photos are allowed: a new phone has none yet. */
     private suspend fun readAccess() {
         val catalog = refreshCatalog ?: run {
             state.update { it.copy(access = SlipAccess.Granted(emptyList())) }
             return
         }
         val folders = catalog()
-        state.update { it.copy(access = if (folders.isEmpty()) SlipAccess.Denied else SlipAccess.Granted(folders.takeIf { offersFolders }.orEmpty())) }
+        val refused = folders.isEmpty() && photoSettings?.photosAllowed != true
+        state.update { it.copy(access = if (refused) SlipAccess.Denied else SlipAccess.Granted(folders.takeIf { offersFolders }.orEmpty())) }
     }
 
     /** FR-5: the picked folder is watched; a second pick replaces the first. */
