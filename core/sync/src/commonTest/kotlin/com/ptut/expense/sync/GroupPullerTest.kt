@@ -279,6 +279,23 @@ class GroupPullerTest {
     }
 
     @Test
+    fun `a later pull without reactions skips their query and the next pull with them still gets the new one`() = runTest {
+        holds("g1")
+        puller.pull("g1")
+        firestore.collections["groups/g1/reactions"] = listOf(reactionDoc("p1", "uid-2"))
+        val queried = firestore.calls.count { it == "since groups/g1/reactions" }
+
+        puller.pull("g1", withReactions = false)
+
+        assertEquals(queried, firestore.calls.count { it == "since groups/g1/reactions" })
+        assertTrue(dao.reactions.isEmpty())
+
+        puller.pull("g1")
+
+        assertEquals(setOf("p1_uid-2"), dao.reactions.keys)
+    }
+
+    @Test
     fun `a PromptPay ID stored by the name's holder is read from the members-only place`() = runTest {
         holds("g1")
         firestore.collections["groups/g1/members"] = listOf(memberDoc(ME), heldDoc("bo", "uid-2"))

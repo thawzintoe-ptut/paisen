@@ -49,7 +49,7 @@ class PollSyncUseCase(
         return if (groupId == null) {
             syncPolling(sync.signedIn, runDueRepeats, ALL_GROUPS_TICK, sync::syncAllOutcome)
         } else {
-            syncPolling(sync.signedIn, runDueRepeats, ONE_GROUP_TICK) { sync.syncGroupOutcome(groupId) }
+            syncPolling(sync.signedIn, runDueRepeats, ONE_GROUP_TICK) { withReactions -> sync.syncGroupOutcome(groupId, withReactions) }
         }
     }
 

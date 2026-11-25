@@ -34,6 +34,21 @@ class SyncPollingTest {
     }
 
     @Test
+    fun `Reactions are asked for on the first poll and every fifth after`() = runTest {
+        val asked = mutableListOf<Boolean>()
+        val polling = syncPolling(MutableStateFlow(true), runDueRepeats = null, every = 15.seconds) { withReactions ->
+            asked += withReactions
+            PULLED
+        }
+
+        backgroundScope.launch { polling.collect {} }
+        runCurrent()
+        advanceTimeBy(76.seconds)
+
+        assertEquals(listOf(true, false, false, false, false, true), asked)
+    }
+
+    @Test
     fun `Each failed pull doubles the wait before the next`() = runTest {
         var pulls = 0
         val polling = syncPolling(MutableStateFlow(true), runDueRepeats = null, every = 15.seconds) {

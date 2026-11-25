@@ -53,8 +53,9 @@ internal class GroupPuller(
      * Everything another member's phone has written, added to this one. [known] is the group document
      * when a query already read it; [meMemberId] is set when joining. [PullResult.Removed] when the
      * group was deleted for everyone, or this account was taken out of it, and it has gone from this phone.
+     * [withReactions] false skips the reactions query on a later pull, to save a read on most timed polls.
      */
-    suspend fun pull(groupId: String, known: FirestoreDoc? = null, meMemberId: String? = null): PullResult {
+    suspend fun pull(groupId: String, known: FirestoreDoc? = null, meMemberId: String? = null, withReactions: Boolean = true): PullResult {
         val remote = known ?: try {
             firestore.get("groups/$groupId")
         } catch (refused: FirestoreException) {
@@ -82,7 +83,8 @@ internal class GroupPuller(
         // #95 (D16): the whole list once, then only what the server stamped after the mark, which costs a
         // read only for new ones. A taken-back reaction keeps its document as Gone, so it comes the same way.
         val reactions = if (since == null) firestore.reactionDocs(groupId) else null
-        val newerReactions = if (since != null) firestore.newerReactionDocs(groupId, since) else null
+        val reactionsSkipped = since != null && !withReactions
+        val newerReactions = if (since != null && withReactions) firestore.newerReactionDocs(groupId, since) else null
 
         // Read after the network: a change saved while it answered is not undone below.
         val local = dao.group(groupId)
@@ -135,7 +137,8 @@ internal class GroupPuller(
         log.repeats.forEach { doc -> receiveRepeat(groupId, doc) }
         // An empty answer leaves the mark: the next pull asks from the same place and costs the same.
         val gotNew = log.entries.isNotEmpty() || log.repeats.isNotEmpty() || !newerReactions.isNullOrEmpty()
-        if (since == null || gotNew) dao.markSynced(groupId, log.readTimeEpochMillis ?: now())
+        // Reactions share the mark, so a pull that skipped them leaves it: the next one asks for them from here.
+        if (since == null || (gotNew && !reactionsSkipped)) dao.markSynced(groupId, log.readTimeEpochMillis ?: now())
         seenGroupDocs[groupId] = fields
         if (members != null) membersListedAt[groupId] = now()
         return PullResult.Kept

@@ -157,8 +157,8 @@ class SharedSync internal constructor(
      */
     suspend fun syncAll(): Boolean = syncAllOutcome().groupsChanged
 
-    /** [syncAll], also saying whether it failed, so a poll can wait longer before the next. */
-    suspend fun syncAllOutcome(): SyncOutcome = synced { account ->
+    /** [syncAll], also saying whether it failed, so a poll can wait longer before the next. [withReactions]: see [GroupPuller.pull]. */
+    suspend fun syncAllOutcome(withReactions: Boolean = true): SyncOutcome = synced { account ->
         // The restore query costs reads on every poll; once in a while is enough.
         val mine = if (due(accountCheckedAt, account.uid)) memberships(account.uid) else null
         val docs = mine.orEmpty().associateBy { it.id }
@@ -169,7 +169,7 @@ class SharedSync internal constructor(
         var changed = restored.isNotEmpty()
         var anyFailed = false in tried.values
         (dao.remoteGroupIds() - restored).forEach { groupId ->
-            val pulled = attempt(groupId) { if (puller.pull(groupId, docs[groupId]) == PullResult.Removed) changed = true }
+            val pulled = attempt(groupId) { if (puller.pull(groupId, docs[groupId], withReactions = withReactions) == PullResult.Removed) changed = true }
             if (!pulled) anyFailed = true
         }
         SyncOutcome(changed, anyFailed)
@@ -182,10 +182,12 @@ class SharedSync internal constructor(
     suspend fun syncGroup(groupId: String): Boolean = syncGroupOutcome(groupId).groupsChanged
 
     /** [syncGroup], also saying whether it failed, so a poll can wait longer before the next. */
-    suspend fun syncGroupOutcome(groupId: String): SyncOutcome = synced {
+    suspend fun syncGroupOutcome(groupId: String, withReactions: Boolean = true): SyncOutcome = synced {
         var removed = false
         var pulled = true
-        if (groupId in dao.remoteGroupIds()) pulled = attempt(groupId) { if (puller.pull(groupId) == PullResult.Removed) removed = true }
+        if (groupId in dao.remoteGroupIds()) {
+            pulled = attempt(groupId) { if (puller.pull(groupId, withReactions = withReactions) == PullResult.Removed) removed = true }
+        }
         SyncOutcome(removed, failed = !pulled)
     }
 

@@ -13,16 +13,22 @@ import kotlin.time.Duration.Companion.minutes
 /** The longest a failing poll waits between tries, however long it has been failing. */
 internal val MAX_POLL_WAIT: Duration = 5.minutes
 
+/** Reactions are asked for on the first poll and every this many after; push, resume and refresh always ask. */
+internal const val REACTIONS_EVERY_POLLS = 5
+
 /**
  * Runs [pull] every [every] while collected (the screen shows), emitting first so a `combine` waits for no network.
  * Each failed pull doubles the wait up to [MAX_POLL_WAIT]; the first pull that works brings it back to [every].
+ * [pull] gets true when this poll should also ask for reactions.
  */
-internal fun syncPolling(signedIn: Flow<Boolean>, runDueRepeats: RunDueRepeatsUseCase?, every: Duration, pull: suspend () -> SyncOutcome): Flow<Unit> = flow {
+internal fun syncPolling(signedIn: Flow<Boolean>, runDueRepeats: RunDueRepeatsUseCase?, every: Duration, pull: suspend (Boolean) -> SyncOutcome): Flow<Unit> = flow {
     emit(Unit)
     val longest = maxOf(every, MAX_POLL_WAIT)
     var wait = every
+    var poll = 0
     while (true) {
-        wait = if (syncOnce(runDueRepeats, pull)) every else minOf(wait * 2, longest)
+        val withReactions = poll++ % REACTIONS_EVERY_POLLS == 0
+        wait = if (syncOnce(runDueRepeats) { pull(withReactions) }) every else minOf(wait * 2, longest)
         // #218: a Sign in from the signed-out line syncs at once instead of at the next tick.
         withTimeoutOrNull(wait) { signedIn.drop(1).first { it } }
     }
