@@ -7,6 +7,7 @@ import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.ImportFix
 import com.ptut.expense.domain.MetaParts
+import com.ptut.expense.domain.MonthPace
 import com.ptut.expense.domain.PeriodSummary
 import com.ptut.expense.domain.ReviewReason
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
@@ -147,6 +148,8 @@ sealed interface HomeUiState {
         val topCategories: List<TopCategoryUiModel> = emptyList(),
         /** The line under the amount, today beside a usual one; null with too little history (#119). */
         val compared: ComparedUiModel? = null,
+        /** The month so far and its pace, Reports' door; null in a month with no spending yet. */
+        val monthLine: MonthLineUiModel? = null,
         /** p07 and p08's card under the tabs: yesterday before noon, today after 18:00 (#121, #122). */
         val moodCard: MoodCardUiModel? = null,
         /** #20: Monday's look back at last week, on the Today tab only. */
@@ -197,6 +200,9 @@ data class IncomeLineUiModel(val income: String, val net: String, val netBelowZe
 
 /** "฿180 less than a usual Friday" and its trend glyph's name (#119). */
 data class ComparedUiModel(val line: String, val glyph: String)
+
+/** "฿12,400" and "฿800 less than your usual by this day"; [pace] is null with no whole earlier month. */
+data class MonthLineUiModel(val total: String, val pace: String?)
 
 /** "Good morning" or "Your day, wrapped", its sentence, its glyph, and the day its receipt opens on (#120). */
 data class MoodCardUiModel(val lead: String, val line: String, val glyph: String, val receiptDate: String)
@@ -358,7 +364,7 @@ class HomeViewModel(
             val (categories, subCategories) = filing
             val now = clock.now()
             val today = now.toLocalDateTime(HomeTime).date
-            // Reports owns the week and the month, so Today asks for one day only.
+            // Reports owns the week and the month, so Today asks for one day and carries one month line.
             val home = getHomeSummary(todays, ledger, HomePeriod.Today, today, queued, categories, extras.target, SpendWords)
                 ?: return@combine HomeUiState.Loading
             val health = getImportHealth(sinceLastImportMillis, runs, stopSentences()).withoutFolders(extras.folders)
@@ -388,6 +394,7 @@ class HomeViewModel(
                 savedToday = home.savedToday.take(SAVED_TODAY_SHOWN).map { it.asSavedRow(categories, subCategories) },
                 savedTodayMore = (home.savedToday.size - SAVED_TODAY_SHOWN).coerceAtLeast(0),
                 compared = home.usualDay?.asCompared(),
+                monthLine = home.monthPace?.asMonthLine(),
                 moodCard = if (extras.mood) getMoodRecap(home.history, now)?.asMoodCard() else null,
                 weeklyCard = weeklyCard,
                 play = extras.play.strip(queued.size),
@@ -466,6 +473,9 @@ private data class Extras(
 )
 
 private fun UsualDay.asCompared() = ComparedUiModel(line = differencePhrase(), glyph = difference.trendGlyph())
+
+private fun MonthPace.asMonthLine(): MonthLineUiModel? =
+    takeIf { spent > Satang.Zero }?.let { MonthLineUiModel(total = spent.formatCompact(), pace = pacePhrase()) }
 
 private fun MoodRecap.asMoodCard(): MoodCardUiModel = when (this) {
     is MoodRecap.Morning -> MoodCardUiModel(

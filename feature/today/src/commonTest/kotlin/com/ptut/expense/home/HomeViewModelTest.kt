@@ -937,6 +937,47 @@ class HomeViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun theMonthLineSaysTheMonthSoFarAndItsPace() = runTest {
+        val earlier = listOf(
+            spent("j1", at(2026, 7, 1, 12, 0), Satang(30_000)),
+            spent("j2", at(2026, 7, 14, 12, 0), Satang(20_000)),
+            spent("j3", at(2026, 7, 20, 12, 0), Satang(90_000)),
+            spent("a1", at(2026, 8, 2, 12, 0), Satang(10_000)),
+        )
+        val today = listOf(spent("a2", at(2026, 8, 14, 10, 0), Satang(20_000)))
+        val viewModel = viewModel(transactions = today, saved = earlier)
+
+        viewModel.uiState.test {
+            val line = assertNotNull(awaitSuccess().monthLine)
+            assertEquals("฿300", line.total)
+            assertEquals("฿200 less than your usual by this day", line.pace)
+        }
+    }
+
+    @Test
+    fun theMonthLineHasNoPaceBeforeOneWholeEarlierMonth() = runTest {
+        val joinedInJuly = listOf(spent("j1", at(2026, 7, 10, 12, 0), Satang(30_000)))
+        val today = listOf(spent("a1", at(2026, 8, 14, 10, 0), Satang(20_000)))
+        val viewModel = viewModel(transactions = today, saved = joinedInJuly)
+
+        viewModel.uiState.test {
+            val line = assertNotNull(awaitSuccess().monthLine)
+            assertEquals("฿200", line.total)
+            assertNull(line.pace)
+        }
+    }
+
+    @Test
+    fun aMonthWithNoSpendingHasNoMonthLine() = runTest {
+        val july = listOf(spent("j1", at(2026, 7, 1, 12, 0), Satang(30_000)))
+        val viewModel = viewModel(transactions = emptyList(), saved = july)
+
+        viewModel.uiState.test {
+            assertNull(awaitSuccess().monthLine)
+        }
+    }
+
+    @Test
     fun topCategoriesAreTheBiggestSpendFirst() = runTest {
         val today = listOf(
             spent("c1", at(2026, 8, 14, 9, 0), Satang(5_000)).copy(categoryId = "transport"),

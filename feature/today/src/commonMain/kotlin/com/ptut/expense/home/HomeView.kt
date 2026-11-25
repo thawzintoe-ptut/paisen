@@ -209,6 +209,9 @@ private fun LoadedHome(
                     )
                 }
                 PeriodAmount(state = state, empty = empty, modifier = Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.sm))
+                state.monthLine?.let { line ->
+                    MonthLine(line, onOpenReports, Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.xs))
+                }
                 if (state.topCategories.isNotEmpty()) {
                     CategoryTotalsLine(state.topCategories, onOpenReports, Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12))
                 }
@@ -589,6 +592,34 @@ private fun PeriodAmount(state: HomeUiState.Success, empty: Boolean, modifier: M
                 modifier = Modifier.padding(top = Spacing.xxs),
             )
         }
+    }
+}
+
+/** "This month ฿12,400 · ฿800 less than your usual by this day", the whole of it Reports' door. */
+@Composable
+private fun MonthLine(line: MonthLineUiModel, onOpenReports: () -> Unit, modifier: Modifier = Modifier) {
+    val label = LocalCopy.current.common.thisMonth
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics { contentDescription = listOfNotNull("$label ${line.total}", line.pace).joinToString(". ") }
+            .tappable(PtutRadii.r12, Role.Button, onClick = onOpenReports)
+            .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s6),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(color = muted)) { append("$label ") }
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(line.total) }
+                line.pace?.let { withStyle(SpanStyle(color = muted)) { append("${Separators.DOT}$it") } }
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = muted, modifier = Modifier.size(SkySizes.moneyInArrow))
     }
 }
 

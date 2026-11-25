@@ -33,12 +33,13 @@ fun List<Transaction>.usualDay(day: LocalDate, zone: TimeZone = HomeTime): Usual
         .filter { it >= first }
     if (samples.size < USUAL_DAY_MIN_SAMPLES) return null
 
-    val sorted = samples.map { spentOn[it] ?: Satang.Zero }.sorted()
-    val middle = sorted.size / 2
-    val usual = if (sorted.size % 2 == 1) {
-        sorted[middle]
-    } else {
-        Satang((sorted[middle - 1].raw + sorted[middle].raw) / 2)
-    }
+    val usual = samples.map { spentOn[it] ?: Satang.Zero }.median()
     return UsualDay(day = day, spent = spentOn[day] ?: Satang.Zero, usual = usual)
+}
+
+/** The middle amount, or the mean of the middle two. The list must not be empty. */
+internal fun List<Satang>.median(): Satang {
+    val sorted = sorted()
+    val middle = sorted.size / 2
+    return if (sorted.size % 2 == 1) sorted[middle] else Satang((sorted[middle - 1].raw + sorted[middle].raw) / 2)
 }

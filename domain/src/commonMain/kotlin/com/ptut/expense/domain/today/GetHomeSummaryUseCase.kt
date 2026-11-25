@@ -3,6 +3,7 @@ package com.ptut.expense.domain.today
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.CategorySpend
 import com.ptut.expense.domain.DateRange
+import com.ptut.expense.domain.MonthPace
 import com.ptut.expense.domain.PeriodSummary
 import com.ptut.expense.domain.QueuedSlip
 import com.ptut.expense.domain.ReportPeriod
@@ -13,6 +14,7 @@ import com.ptut.expense.domain.UsualDay
 import com.ptut.expense.domain.WeeklyTarget
 import com.ptut.expense.domain.inside
 import com.ptut.expense.domain.ledger.LedgerSnapshot
+import com.ptut.expense.domain.monthPace
 import com.ptut.expense.domain.rangeContaining
 import com.ptut.expense.domain.reports.SpendNames
 import com.ptut.expense.domain.savedOn
@@ -44,6 +46,8 @@ data class HomeSummary(
     val savedToday: List<Transaction>,
     /** #119: today beside a usual one of its weekday, on the Today tab only; null with too little history. */
     val usualDay: UsualDay?,
+    /** The month so far beside a usual one, on the Today tab only; null until the whole ledger answers. */
+    val monthPace: MonthPace?,
     /** The period's spending by category, biggest first. */
     val byCategory: List<CategorySpend>,
     /** #21: this week beside the weekly target, on the Week tab only. */
@@ -91,6 +95,7 @@ class GetHomeSummaryUseCase {
             summary = transactions.summarise(),
             savedToday = history.savedOn(today),
             usualDay = if (period == HomePeriod.Today) history.usualDay(today) else null,
+            monthPace = if (period == HomePeriod.Today && ledger is LedgerSnapshot.Rows) history.monthPace(today) else null,
             byCategory = transactions.spendByCategory(categories, names.unknown, names.unsorted),
             target = target?.takeIf { period == HomePeriod.Week }?.let { TargetWeek(it.categoryId, history.thisWeek(it, today)) },
             review = queued.takeIf { it.isNotEmpty() }?.let { slips -> ReviewCounts(slips.size, slips.groupingBy { it.reason }.eachCount()) },

@@ -1,5 +1,6 @@
 package com.ptut.expense.home
 
+import com.ptut.expense.domain.MonthPace
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.TrendDirection
 import com.ptut.expense.domain.UsualDay
@@ -32,5 +33,16 @@ fun UsualDay.percentPhrase(): String {
         TrendDirection.Down -> phrases.percentUnderUsual(-percent, weekday)
         TrendDirection.Up -> phrases.percentOverUsual(percent, weekday)
         TrendDirection.Flat -> phrases.sameAsUsual("a", weekday)
+    }
+}
+
+/** "฿800 less than your usual by this day", or null until there is a usual month to say it against. */
+fun MonthPace.pacePhrase(): String? {
+    val difference = difference ?: return null
+    val phrases = AppText.copy.phrases
+    return when {
+        difference < Satang.Zero -> phrases.lessThanUsualByNow((-difference).formatCompact())
+        difference > Satang.Zero -> phrases.moreThanUsualByNow(difference.formatCompact())
+        else -> phrases.sameAsUsualByNow
     }
 }
