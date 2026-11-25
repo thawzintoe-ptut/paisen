@@ -20,10 +20,10 @@ import java.util.concurrent.TimeUnit
 private const val PERIODIC_SHARED_SYNC = "ptut-shared-sync-periodic"
 
 /** Each shared-group pull costs Firestore reads from a free daily allowance every member shares. */
-private const val SHARED_SYNC_INTERVAL_HOURS = 1L
+private const val SHARED_SYNC_INTERVAL_HOURS = 6L
 
 /**
- * Shared groups, pulled while the app is closed. Its own hourly job with a network constraint, so
+ * Shared groups, pulled while the app is closed. Its own six-hourly job with a network constraint, so
  * the fifteen-minute slip scan neither spends Firestore reads nor wakes the radio. It runs whether
  * or not Background import is on, and only while an account is signed in.
  */

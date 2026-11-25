@@ -6,6 +6,7 @@ import com.ptut.expense.sync.SharedSync
 import com.ptut.expense.sync.SyncHealth
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /** What a screen may offer around sharing (#187, #189). */
@@ -53,8 +54,9 @@ class PollSyncUseCase(
     }
 
     private companion object {
-        val ALL_GROUPS_TICK = 60.seconds
-        val ONE_GROUP_TICK = 15.seconds
+        // Push and resume sync changes as they happen; these polls are the backup, kept slow to save reads.
+        val ALL_GROUPS_TICK = 5.minutes
+        val ONE_GROUP_TICK = 60.seconds
     }
 }
 
