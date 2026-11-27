@@ -314,7 +314,8 @@ private fun NavTab(
                 indication = null,
                 role = Role.Tab,
                 onClick = onSelect,
-            ),
+            )
+            .padding(horizontal = SkySizes.navTabPadding),
     ) {
         Icon(
             imageVector = if (selected) destination.glyph.solid else destination.glyph.outline,

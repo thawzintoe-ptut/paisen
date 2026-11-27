@@ -147,15 +147,16 @@ object SkySizes {
     val barGlyph = 24.dp
 
     /**
-     * The nav capsule (V2 N01–N05, #106): four 48 tabs, 6 in from the capsule's edge, so it is 60
-     * tall; a 60 ruby Add 12 to its right. The bar sits 16 in from each side and 8 above the
+     * The nav capsule (V2 N01–N05, #106): four 56 tabs, 4 in from the capsule's edge, so it is 64
+     * tall and the lens has room around glyph and label; a 64 ruby Add 12 to its right. The bar sits 16 in from each side and 8 above the
      * system's own bottom inset.
      */
-    val navTab = 48.dp
-    val navInset = 6.dp
-    val navGlyph = 22.dp
+    val navTab = 56.dp
+    val navInset = 4.dp
+    val navGlyph = 20.dp
     val navLabelGap = 2.dp
-    val navAdd = 60.dp
+    val navTabPadding = 4.dp
+    val navAdd = 64.dp
     val navAddGlyph = 26.dp
     val navAddGap = 12.dp
     val navSide = 16.dp
