@@ -1,5 +1,6 @@
 package com.ptut.expense.data.repository
 
+import com.ptut.expense.data.local.WriteTransaction
 import com.ptut.expense.data.local.dao.SharedDao
 import com.ptut.expense.data.local.dao.TransactionDao
 import com.ptut.expense.data.local.dao.withCheckedSubCategory
@@ -53,6 +54,9 @@ import com.ptut.expense.domain.shared.split
 import com.ptut.expense.domain.shared.splitMembers
 import com.ptut.expense.domain.shared.toLocalDateOrNull
 import com.ptut.expense.domain.startOfDayEpochMillis
+import kotlin.time.Clock
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -64,9 +68,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.atTime
 import kotlinx.datetime.toInstant
-import kotlin.time.Clock
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 /**
  * [SharedRepository] over Room. The split is worked out here from the draft's weights, so what is
@@ -80,6 +81,8 @@ class RoomSharedRepository(
     scope: CoroutineScope,
     private val clock: Clock = Clock.System,
     private val newId: () -> String = { Uuid.random().toString() },
+    /** One write transaction around a change and its outbox row; none in tests without a database. */
+    private val writes: WriteTransaction = WriteTransaction.None,
 ) : SharedRepository {
 
     override val snapshot: StateFlow<SharedSnapshot> = combine(
@@ -120,20 +123,20 @@ class RoomSharedRepository(
         return groupId
     }
 
-    override suspend fun addMembers(groupId: String, members: List<NewMember>) {
+    override suspend fun addMembers(groupId: String, members: List<NewMember>) = atomically {
         val (people, rows) = membersOf(groupId, members, clock.now().toEpochMilliseconds())
         dao.addMembers(people, rows)
         rows.forEach { queueIfShared(groupId, KIND_MEMBER, it.id) }
     }
 
-    override suspend fun setPromptPay(groupId: String, promptPayId: String?) {
-        val me = dao.group(groupId)?.meMemberId ?: return
+    override suspend fun setPromptPay(groupId: String, promptPayId: String?) = atomically {
+        val me = dao.group(groupId)?.meMemberId ?: return@atomically
         dao.setPromptPay(me, promptPayId)
         queueIfShared(groupId, KIND_MEMBER, me)
     }
 
-    override suspend fun editGroup(groupId: String, name: String, type: GroupType, icon: String) {
-        val before = dao.group(groupId) ?: return
+    override suspend fun editGroup(groupId: String, name: String, type: GroupType, icon: String) = atomically {
+        val before = dao.group(groupId) ?: return@atomically
         dao.editGroup(groupId, name.trim(), type.name, icon)
         listOfNotNull(
             "name".takeIf { before.name != name.trim() },
@@ -144,15 +147,15 @@ class RoomSharedRepository(
 
     override suspend fun deleteGroup(groupId: String) = dao.forgetGroup(groupId)
 
-    override suspend fun setPersonArchived(personId: String, archived: Boolean) {
+    override suspend fun setPersonArchived(personId: String, archived: Boolean) = atomically {
         dao.setPersonArchived(personId, archived)
         val members = dao.membersOfPerson(personId).filter { mayRemoveFrom(it.groupId) }
         dao.setMembersArchived(members.map { it.id }, archived)
         members.forEach { queueIfShared(it.groupId, KIND_MEMBER, it.id) }
     }
 
-    override suspend fun removeMember(groupId: String, memberId: String) {
-        if (dao.group(groupId)?.meMemberId == memberId || !mayRemoveFrom(groupId)) return
+    override suspend fun removeMember(groupId: String, memberId: String) = atomically {
+        if (dao.group(groupId)?.meMemberId == memberId || !mayRemoveFrom(groupId)) return@atomically
         dao.setMembersArchived(listOf(memberId), true)
         queueIfShared(groupId, KIND_MEMBER, memberId)
     }
@@ -175,6 +178,12 @@ class RoomSharedRepository(
         return if (latestAt == null || now > latestAt) now else latestAt + 1
     }
 
+    /**
+     * The change and its outbox row land together, so a pull merging the server's copy can never
+     * see one without the other and write the older value over an edit not yet queued.
+     */
+    private suspend fun <T> atomically(block: suspend () -> T): T = writes.run(block)
+
     /** #189: a change to a shared group waits in the outbox until it reaches Firestore. */
     private suspend fun queueIfShared(groupId: String, kind: String, rowId: String) {
         if (dao.group(groupId)?.remote != true) return
@@ -191,34 +200,34 @@ class RoomSharedRepository(
         return people to rows
     }
 
-    override suspend fun setSimplifyDebts(groupId: String, on: Boolean) {
+    override suspend fun setSimplifyDebts(groupId: String, on: Boolean) = atomically {
         dao.setSimplifyDebts(groupId, on)
         queueIfShared(groupId, KIND_GROUP, groupFieldRow(groupId, "simplifyDebts"))
     }
 
-    override suspend fun setTripEnded(groupId: String, on: LocalDate?) {
+    override suspend fun setTripEnded(groupId: String, on: LocalDate?) = atomically {
         dao.setEndedOn(groupId, on?.toString())
         queueIfShared(groupId, KIND_TRIP_END, groupId)
     }
 
-    override suspend fun setStampsOff(off: Boolean) {
+    override suspend fun setStampsOff(off: Boolean) = atomically {
         val mine = snapshot.value.groups.mapNotNull { group -> group.meMemberId?.let { group.id to it } }
         dao.setPlayOff(mine.map { it.second }, off)
         mine.forEach { (groupId, memberId) -> queueIfShared(groupId, KIND_PLAY, memberId) }
     }
 
-    override suspend fun react(groupId: String, paymentId: String, kind: ReactionKind?) {
-        val group = snapshot.value.group(groupId)?.takeIf { it.remote } ?: return
+    override suspend fun react(groupId: String, paymentId: String, kind: ReactionKind?) = atomically {
+        val group = snapshot.value.group(groupId)?.takeIf { it.remote } ?: return@atomically
         // The name this account claimed: a reaction is always signed by its own account.
-        val uid = group.meMemberId?.let(group::member)?.claimedByUid ?: return
+        val uid = group.meMemberId?.let(group::member)?.claimedByUid ?: return@atomically
         val id = "${paymentId}_$uid"
         // Taken back: the row stays as Gone until it is sent, so every other phone learns it went (#95).
-        if (kind == null && dao.reaction(id) == null) return
+        if (kind == null && dao.reaction(id) == null) return@atomically
         dao.upsertReaction(PaymentReactionEntity(id, groupId, paymentId, uid, kind?.name ?: REACTION_GONE, clock.now().toEpochMilliseconds()))
         queueIfShared(groupId, KIND_REACTION, id)
     }
 
-    override suspend fun saveExpense(draft: ExpenseDraft): String {
+    override suspend fun saveExpense(draft: ExpenseDraft): String = atomically {
         val group = requireNotNull(snapshot.value.group(draft.groupId)) { "No group ${draft.groupId}" }
         val now = clock.now().toEpochMilliseconds()
         val currency = Currencies.of(draft.currency)
@@ -290,7 +299,7 @@ class RoomSharedRepository(
         }
         if (draft.rate != null) dao.upsertRate(CurrencyRateEntity(currency.code, draft.rate.unscaled, draft.rate.scale, now, group.currency))
         queueIfShared(draft.groupId, KIND_VERSION, versionId)
-        return expenseId
+        return@atomically expenseId
     }
 
     private suspend fun yourTransaction(draft: ExpenseDraft, satang: Satang, now: Long) = transactionDao.withCheckedSubCategory(
@@ -305,9 +314,9 @@ class RoomSharedRepository(
             .copy(memo = draft.note?.trim()?.ifEmpty { null }),
     )
 
-    override suspend fun removeExpense(expenseId: String) {
+    override suspend fun removeExpense(expenseId: String) = atomically {
         val last = requireNotNull(dao.latestVersion(expenseId)) { "No expense $expenseId" }
-        if (last.removed) return
+        if (last.removed) return@atomically
         val versionId = newId()
         val group = snapshot.value.group(last.groupId)
         dao.writeVersion(
@@ -318,7 +327,7 @@ class RoomSharedRepository(
         queueIfShared(last.groupId, KIND_VERSION, versionId)
     }
 
-    override suspend fun recordPayment(draft: PaymentDraft): String {
+    override suspend fun recordPayment(draft: PaymentDraft): String = atomically {
         val id = newId()
         val now = clock.now().toEpochMilliseconds()
         dao.insertPayment(
@@ -335,7 +344,7 @@ class RoomSharedRepository(
             ),
         )
         queueIfShared(draft.groupId, KIND_PAYMENT, id)
-        return id
+        return@atomically id
     }
 
     override suspend fun transactionSeed(transactionId: String): TransactionSeed? {
@@ -351,14 +360,14 @@ class RoomSharedRepository(
         )
     }
 
-    override suspend fun followTransaction(transactionId: String, before: TransactionEdit, titleChange: TitleChange?) {
-        val expenseId = snapshot.value.links.entries.firstOrNull { it.value == transactionId }?.key ?: return
-        val last = dao.latestVersion(expenseId)?.takeUnless { it.removed } ?: return
-        val row = dao.transaction(transactionId) ?: return
-        val group = snapshot.value.group(last.groupId) ?: return
+    override suspend fun followTransaction(transactionId: String, before: TransactionEdit, titleChange: TitleChange?) = atomically {
+        val expenseId = snapshot.value.links.entries.firstOrNull { it.value == transactionId }?.key ?: return@atomically
+        val last = dao.latestVersion(expenseId)?.takeUnless { it.removed } ?: return@atomically
+        val row = dao.transaction(transactionId) ?: return@atomically
+        val group = snapshot.value.group(last.groupId) ?: return@atomically
         // Your row follows only your own spending: once someone else pays it, it is theirs to change.
-        if (!group.isMe(last.payerMemberId)) return
-        val expense = last.toDomain(dao.sharesOf(last.versionId)) ?: return
+        if (!group.isMe(last.payerMemberId)) return@atomically
+        val expense = last.toDomain(dao.sharesOf(last.versionId)) ?: return@atomically
         val after = TransactionEdit(
             amount = Satang.ofMinorUnits(row.amountMinor),
             categoryId = row.categoryId,
@@ -366,7 +375,7 @@ class RoomSharedRepository(
             subCategoryId = row.subCategoryId,
             occurredAtEpochMillis = row.occurredAtEpochMillis,
         )
-        val followed = expense.followed(before, after, titleChange, group.splitMembers(), group.currency, Home.money.code) ?: return
+        val followed = expense.followed(before, after, titleChange, group.splitMembers(), group.currency, Home.money.code) ?: return@atomically
         val versionId = newId()
         dao.writeVersion(
             version = last.next(versionId, group.meMemberId).copy(
@@ -435,10 +444,10 @@ class RoomSharedRepository(
         queueIfShared(groupId, KIND_PAYMENT_REMOVAL, id)
     }
 
-    override suspend fun restoreExpense(expenseId: String) {
+    override suspend fun restoreExpense(expenseId: String) = atomically {
         val versions = dao.versionsOf(expenseId)
-        if (versions.firstOrNull()?.removed != true) return
-        val before = versions.firstOrNull { !it.removed } ?: return
+        if (versions.firstOrNull()?.removed != true) return@atomically
+        val before = versions.firstOrNull { !it.removed } ?: return@atomically
         val versionId = newId()
         dao.writeVersion(
             version = before.next(versionId, snapshot.value.group(before.groupId)?.meMemberId, latest = versions.first()).copy(cause = null),
@@ -452,7 +461,7 @@ class RoomSharedRepository(
         if (dao.transaction(transactionId) != null) dao.upsertLink(ExpenseLinkEntity(expenseId = expenseId, transactionId = transactionId))
     }
 
-    override suspend fun saveRepeat(rule: RepeatRule): String {
+    override suspend fun saveRepeat(rule: RepeatRule): String = atomically {
         val id = rule.id.ifEmpty { newId() }
         val existing = dao.repeat(id)
         dao.upsertRepeat(
@@ -464,11 +473,11 @@ class RoomSharedRepository(
             ).toEntity(),
         )
         queueIfShared(rule.groupId, KIND_REPEAT, id)
-        return id
+        return@atomically id
     }
 
-    override suspend fun stopRepeat(ruleId: String) {
-        val rule = dao.repeat(ruleId) ?: return
+    override suspend fun stopRepeat(ruleId: String) = atomically {
+        val rule = dao.repeat(ruleId) ?: return@atomically
         dao.upsertRepeat(rule.copy(active = false))
         queueIfShared(rule.groupId, KIND_REPEAT, ruleId)
     }
@@ -490,10 +499,12 @@ class RoomSharedRepository(
         var added = 0
         for (date in rule.due(today)) {
             val entry = repeatEntry(rule, group, date)
-            if (dao.addRepeatEntry(entry.first, entry.second, rule.id, date.toString())) {
-                added++
-                queueIfShared(rule.groupId, KIND_VERSION, entry.first.versionId)
+            val queued = atomically {
+                dao.addRepeatEntry(entry.first, entry.second, rule.id, date.toString()).also { inserted ->
+                    if (inserted) queueIfShared(rule.groupId, KIND_VERSION, entry.first.versionId)
+                }
             }
+            if (queued) added++
         }
         return added
     }

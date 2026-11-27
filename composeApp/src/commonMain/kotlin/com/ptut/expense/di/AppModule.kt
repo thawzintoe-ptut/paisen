@@ -6,6 +6,7 @@ import com.ptut.expense.agent.agentModule
 import com.ptut.expense.data.local.LedgerGate
 import com.ptut.expense.data.local.PtutDatabase
 import com.ptut.expense.data.local.PtutDatabaseContext
+import com.ptut.expense.data.local.RoomWriteTransaction
 import com.ptut.expense.data.local.ptutLedgerGate
 import com.ptut.expense.data.repository.RoomCategoryRepository
 import com.ptut.expense.data.repository.RoomHomeBook
@@ -64,12 +65,12 @@ import com.ptut.expense.sync.syncModule
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.screenReader
+import kotlin.time.Clock
+import kotlin.time.Duration
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.bind
 import org.koin.dsl.module
-import kotlin.time.Clock
-import kotlin.time.Duration
 
 /**
  * The screens' half of the graph. It names no platform type, so a test can take these bindings
@@ -232,6 +233,7 @@ val ledgerModule: Module = module {
             transactionDao = database.transactionDao(),
             ledger = get(),
             scope = appScope(),
+            writes = RoomWriteTransaction(database),
         )
     }
 }

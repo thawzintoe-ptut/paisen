@@ -1,5 +1,6 @@
 package com.ptut.expense.sync
 
+import com.ptut.expense.data.local.WriteTransaction
 import com.ptut.expense.data.local.dao.SharedDao
 import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.SharedRepository
@@ -93,6 +94,8 @@ class SharedSync internal constructor(
     private val pushes: PushSender? = null,
     private val registrar: PushRegistrar? = null,
     private val notice: EndedHereNotice = MemoryEndedHereNotice(),
+    /** One Room write transaction for a pull's merge, so it never interleaves with a save. */
+    writes: WriteTransaction = WriteTransaction.None,
 ) {
     val available: Boolean get() = auth.available
 
@@ -111,7 +114,7 @@ class SharedSync internal constructor(
     private var sessionCheckedAt: Pair<String, Long>? = null
     private var accountCheckedAt: Pair<String, Long>? = null
 
-    private val puller = GroupPuller(firestore, dao, clock, ::publishNames) { (auth.account.value as? Account.SignedIn)?.uid }
+    private val puller = GroupPuller(firestore, dao, clock, ::publishNames, writes) { (auth.account.value as? Account.SignedIn)?.uid }
     private val pusher = OutboxPusher(firestore, dao, repository, clock, pushes, failed, ::account, ::newInvite, ::publishNames)
 
     fun status(groupId: String): Flow<GroupSyncStatus> =

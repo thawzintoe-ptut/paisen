@@ -2,6 +2,7 @@ package com.ptut.expense.sync
 
 import com.ptut.expense.data.local.PtutDatabase
 import com.ptut.expense.data.local.PtutDatabaseContext
+import com.ptut.expense.data.local.RoomWriteTransaction
 import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.sync.auth.AuthRepository
@@ -21,12 +22,12 @@ import com.ptut.expense.sync.push.PushTokenHolder
 import com.ptut.expense.sync.usage.PostHogUsageLog
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.Module
 import org.koin.dsl.module
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * #187–#190 in the graph. The only place an HTTP client is built, so `di/` names none (#191).
@@ -89,6 +90,7 @@ fun syncModule(databaseContext: PtutDatabaseContext): Module = module {
             pushes = if (push) PushSender(get(), { auth.idToken() }, FirebaseConfig.PUSH_URL, scope) else null,
             registrar = registrar.takeIf { push },
             notice = endedHereNotice(databaseContext),
+            writes = RoomWriteTransaction(get<PtutDatabase>()),
         ).also { it.uploadSoonAfterSaves(scope) }
     }
 }

@@ -1,16 +1,17 @@
 package com.ptut.expense.sync
 
+import com.ptut.expense.data.local.WriteTransaction
 import com.ptut.expense.data.local.dao.SharedDao
 import com.ptut.expense.data.local.entity.GroupMemberEntity
 import com.ptut.expense.data.local.entity.SharedGroupEntity
 import com.ptut.expense.data.local.entity.SyncOutboxEntity
 import com.ptut.expense.data.repository.KIND_GROUP
-import com.ptut.expense.data.repository.groupFieldRow
 import com.ptut.expense.data.repository.KIND_MEMBER
 import com.ptut.expense.data.repository.KIND_PLAY
 import com.ptut.expense.data.repository.KIND_REACTION
 import com.ptut.expense.data.repository.KIND_REPEAT
 import com.ptut.expense.data.repository.KIND_TRIP_END
+import com.ptut.expense.data.repository.groupFieldRow
 import com.ptut.expense.data.repository.toDomain
 import com.ptut.expense.domain.BangkokTime
 import com.ptut.expense.domain.shared.Currencies
@@ -20,9 +21,9 @@ import com.ptut.expense.domain.shared.entryIdPrefix
 import com.ptut.expense.domain.shared.restoredLastAdded
 import com.ptut.expense.domain.shared.toLocalDateOrNull
 import com.ptut.expense.locale.AppText
-import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import kotlinx.datetime.toLocalDateTime
 
 /** What a pull did with its group: still here, or gone from this phone. */
 internal enum class PullResult { Kept, Removed }
@@ -37,9 +38,13 @@ internal class GroupPuller(
     private val clock: Clock,
     /** Puts a group's pickable names on its live invite, after they changed here (L4). */
     private val publishNames: suspend (groupId: String) -> Unit = {},
+    /** One Room write transaction, so a merge and a save never interleave; none in tests. */
+    private val writes: WriteTransaction = WriteTransaction.None,
     /** The signed-in account, or null; a group brought back finds "you" by the name it claimed. */
     private val uid: () -> String?,
 ) {
+    private class Merged(val pending: Set<String>, val namesChanged: Boolean)
+
     // In memory only: a new process checks everything once.
     private val seenGroupDocs = mutableMapOf<String, Fields>()
     private val membersListedAt = mutableMapOf<String, Long>()
@@ -93,44 +98,50 @@ internal class GroupPuller(
         val reactions = if (reactionsAsked && (since == null || reactionsSince == null)) firestore.reactionDocs(groupId) else null
         val newerReactions = if (reactionsAsked && since != null && reactionsSince != null) firestore.newerReactionDocs(groupId, reactionsSince) else null
 
-        // Read after the network, and again right before each write below, so a change saved while
-        // this pull runs is not undone (as receiveRepeat does).
-        val local = dao.group(groupId)
-        val pending = pendingIn(groupId)
-        // A row changed here and not yet uploaded keeps this phone's values: the server's copy is
-        // the older one until the outbox sends it, so a pull in between must not undo the edit.
-        val whole = "$KIND_GROUP:$groupId" in pending
-        fun kept(field: String) = local?.takeIf { whole || "$KIND_GROUP:${groupFieldRow(groupId, field)}" in pending }
-        val uid = uid()
-        val group = SharedGroupEntity(
-            id = groupId,
-            name = kept("name")?.name ?: fields.string("name") ?: local?.name ?: AppText.copy.shared.group,
-            type = kept("type")?.type ?: fields.string("type")?.let(::knownGroupType) ?: local?.type ?: GroupType.Other.name,
-            icon = kept("icon")?.icon ?: fields.string("icon") ?: local?.icon ?: "group",
-            simplifyDebts = kept("simplifyDebts")?.simplifyDebts ?: fields["simplifyDebts"] as? Boolean ?: true,
-            createdAtEpochMillis = fields.long("createdAt") ?: local?.createdAtEpochMillis ?: now(),
-            // A group brought back after signing in again finds "you" by the name this account claimed.
-            meMemberId = meMemberId ?: local?.meMemberId ?: uid?.let { members?.let { docs -> claimedBy(docs, it) } },
-            remote = true,
-            creatorUid = fields.string("creatorUid"),
-            inviteCode = fields.string("inviteCode"),
-            inviteActive = fields.bool("inviteActive"),
-            // Moves only in markSynced, once the log is in: a pull that fails before then starts here again.
-            lastSyncedAtEpochMillis = pulledUpTo,
-            // This phone's own mark, never on the server: a pull must not reset it.
-            lastSeenAtEpochMillis = local?.lastSeenAtEpochMillis,
-            currency = currency,
-            // #97: an end this phone set and has not sent yet stays as it is.
-            endedOn = if ("$KIND_TRIP_END:$groupId" in pending) local?.endedOn else fields.string("endedOn"),
-        )
-        // Every write wakes the snapshot and the screens that read it, so an unchanged row is not written.
-        if (group != local && pendingIn(groupId) == pending && dao.group(groupId) == local) dao.upsertGroup(group)
-        if (members != null) {
-            val pickable = pickableNames(dao.membersOf(groupId))
-            storeMembers(groupId, members, payIds, playOffs)
-            moveOwnPromptPay(groupId, group.meMemberId, members, pending)
-            if (pickableNames(dao.membersOf(groupId)) != pickable) publishNames(groupId)
+        // Read after the network, in one write transaction with the writes below: a save and its
+        // outbox row land wholly before or wholly after, so a change saved meanwhile is never undone.
+        val merged = writes.run {
+            val local = dao.group(groupId)
+            val pending = pendingIn(groupId)
+            // A row changed here and not yet uploaded keeps this phone's values: the server's copy is
+            // the older one until the outbox sends it, so a pull in between must not undo the edit.
+            val whole = "$KIND_GROUP:$groupId" in pending
+            fun kept(field: String) = local?.takeIf { whole || "$KIND_GROUP:${groupFieldRow(groupId, field)}" in pending }
+            val uid = uid()
+            val group = SharedGroupEntity(
+                id = groupId,
+                name = kept("name")?.name ?: fields.string("name") ?: local?.name ?: AppText.copy.shared.group,
+                type = kept("type")?.type ?: fields.string("type")?.let(::knownGroupType) ?: local?.type ?: GroupType.Other.name,
+                icon = kept("icon")?.icon ?: fields.string("icon") ?: local?.icon ?: "group",
+                simplifyDebts = kept("simplifyDebts")?.simplifyDebts ?: fields["simplifyDebts"] as? Boolean ?: true,
+                createdAtEpochMillis = fields.long("createdAt") ?: local?.createdAtEpochMillis ?: now(),
+                // A group brought back after signing in again finds "you" by the name this account claimed.
+                meMemberId = meMemberId ?: local?.meMemberId ?: uid?.let { members?.let { docs -> claimedBy(docs, it) } },
+                remote = true,
+                creatorUid = fields.string("creatorUid"),
+                inviteCode = fields.string("inviteCode"),
+                inviteActive = fields.bool("inviteActive"),
+                // Moves only in markSynced, once the log is in: a pull that fails before then starts here again.
+                lastSyncedAtEpochMillis = pulledUpTo,
+                // This phone's own mark, never on the server: a pull must not reset it.
+                lastSeenAtEpochMillis = local?.lastSeenAtEpochMillis,
+                currency = currency,
+                // #97: an end this phone set and has not sent yet stays as it is.
+                endedOn = if ("$KIND_TRIP_END:$groupId" in pending) local?.endedOn else fields.string("endedOn"),
+            )
+            // Every write wakes the snapshot and the screens that read it, so an unchanged row is not written.
+            if (group != local) dao.upsertGroup(group)
+            val namesChanged = members != null && run {
+                val pickable = pickableNames(dao.membersOf(groupId))
+                storeMembers(groupId, members, payIds, playOffs, pending)
+                moveOwnPromptPay(groupId, group.meMemberId, members, pending)
+                pickableNames(dao.membersOf(groupId)) != pickable
+            }
+            Merged(pending, namesChanged)
         }
+        val pending = merged.pending
+        // The network only after the transaction: it holds Room's writer while it is open.
+        if (merged.namesChanged) publishNames(groupId)
         // #48: read with the key the group's money names, so a baht amount an older build wrote into a
         // kyat group is skipped rather than taken as kyat.
         val batch = LogBatch()
@@ -169,8 +180,7 @@ internal class GroupPuller(
         return named.isNotEmpty() && !dao.membersOf(groupId).map { it.id }.toSet().containsAll(named)
     }
 
-    private suspend fun storeMembers(groupId: String, members: List<FirestoreDoc>, payIds: Map<String, Fields>, playOffs: Map<String, Fields>) {
-        val pending = pendingIn(groupId)
+    private suspend fun storeMembers(groupId: String, members: List<FirestoreDoc>, payIds: Map<String, Fields>, playOffs: Map<String, Fields>, pending: Set<String>) {
         val known = dao.membersOf(groupId).associateBy { it.id }
         val pulled = members.filterNot { "$KIND_MEMBER:${it.id}" in pending }.map { doc ->
             val holder = doc.fields.string("claimedByUid")
