@@ -59,11 +59,11 @@ internal class OutboxPusher(
     /** Every refused change still kept, oldest first, also those whose group has left this phone. */
     /**
      * Every refused change still kept for the account signed in now, oldest first, also those whose
-     * group has left this phone. A row from before schema 31 names no account and is shown to whoever is in.
+     * group has left this phone. A row that names no account (before schema 31) shows to nobody.
      */
     fun refusedChanges(uid: Flow<String?>): Flow<List<RefusedChange>> = combine(dao.observeRefused(), uid) { rows, me ->
         if (me == null) return@combine emptyList()
-        rows.filter { it.accountUid == null || it.accountUid == me }
+        rows.filter { it.accountUid == me }
             .map { RefusedChange(it.id, it.groupId, it.groupName, it.title, it.amountMinor, it.currency) }
     }
 
@@ -285,7 +285,7 @@ internal class OutboxPusher(
 }
 
 /** What [row] was, read before it leaves this phone: an expense's name and amount, a payment's amount. */
-internal suspend fun SharedDao.refusedChange(row: SyncOutboxEntity, at: Long, uid: String?): RefusedChangeEntity {
+internal suspend fun SharedDao.refusedChange(row: SyncOutboxEntity, at: Long, uid: String): RefusedChangeEntity {
     val version = if (row.kind == KIND_VERSION) version(row.rowId) else null
     val payment = if (row.kind == KIND_PAYMENT) payment(row.rowId) else null
     val group = group(row.groupId)
@@ -306,6 +306,8 @@ internal suspend fun SharedDao.refusedChange(row: SyncOutboxEntity, at: Long, ui
  * expenses and payments that never went up are kept as refused, so the reader still sees them.
  */
 internal suspend fun SharedDao.keepUnsent(groupId: String, at: Long, uid: String?) {
+    // A row must name its account, or it could show to the next one; with nobody in, nothing is kept.
+    if (uid == null) return
     outbox().filter { it.groupId == groupId && (it.kind == KIND_VERSION || it.kind == KIND_PAYMENT) }
         .forEach { insertRefused(refusedChange(it, at, uid)) }
 }

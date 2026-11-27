@@ -195,7 +195,8 @@ class OutboxPusherTest {
             RefusedChangeEntity("version:old", "gone", "Rent", 100, "THB", 1, "QA4", accountUid = null),
         )
 
-        assertEquals(listOf("version:a", "version:old"), pusher.refusedChanges(flowOf("uid-a")).first().map { it.id })
+        // A row naming no account could be anyone's, so it shows to nobody.
+        assertEquals(listOf("version:a"), pusher.refusedChanges(flowOf("uid-a")).first().map { it.id })
         assertEquals(emptyList(), pusher.refusedChanges(flowOf(null)).first())
     }
 }
