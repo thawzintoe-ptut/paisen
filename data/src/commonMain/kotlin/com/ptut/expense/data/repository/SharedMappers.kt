@@ -31,6 +31,12 @@ import kotlinx.datetime.LocalDate
 
 /** What an outbox row carries (#189). */
 const val KIND_GROUP = "group"
+
+/**
+ * A group setting goes up on its own, as "<groupId>#<field>", so an edit made offline never
+ * writes back another member's newer change to a different setting.
+ */
+fun groupFieldRow(groupId: String, field: String): String = "$groupId#$field"
 const val KIND_MEMBER = "member"
 const val KIND_VERSION = "version"
 const val KIND_PAYMENT = "payment"

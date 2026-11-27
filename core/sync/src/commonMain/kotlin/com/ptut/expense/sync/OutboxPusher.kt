@@ -46,10 +46,13 @@ internal class OutboxPusher(
     /** Puts a group's pickable names on its live invite, after they changed here (L4). */
     private val publishNames: suspend (groupId: String) -> Unit = {},
 ) {
-    private val refusedCounts = MutableStateFlow<Map<String, Int>>(emptyMap())
+    private val refusedCounts = MutableStateFlow<Map<String, List<String>>>(emptyMap())
 
-    /** [GroupSyncStatus.refused] per group: changes the group would not take (#194). */
-    val refused: StateFlow<Map<String, Int>> = refusedCounts.asStateFlow()
+    /**
+     * [GroupSyncStatus.refused] per group: changes the group would not take (#194), one entry each.
+     * An expense is named, so the user knows what to enter again; any other change is blank.
+     */
+    val refused: StateFlow<Map<String, List<String>>> = refusedCounts.asStateFlow()
 
     fun acknowledgeRefused(groupId: String) = refusedCounts.update { it - groupId }
 
@@ -73,9 +76,10 @@ internal class OutboxPusher(
                 notice?.let { pushes?.tell(row.groupId, it) }
             } catch (refusal: FirestoreException) {
                 if (refusal.isPermanent()) {
+                    val title = if (row.kind == KIND_VERSION) dao.version(row.rowId)?.description.orEmpty() else ""
                     dao.dequeue(row.id, row.createdAtEpochMillis)
                     takeBack(row)
-                    refusedCounts.update { it + (row.groupId to (it[row.groupId] ?: 0) + 1) }
+                    refusedCounts.update { it + (row.groupId to it[row.groupId].orEmpty() + title) }
                 } else {
                     failed.update { it + row.groupId }
                     held += row.groupId
@@ -182,9 +186,13 @@ internal class OutboxPusher(
         val notices = pushes?.takeIf { notify }?.let { noticesFor(group) }
         return when (row.kind) {
             KIND_GROUP -> {
+                // A row queued before per-field rows has no field and sends the whole group, as it always did.
+                val field = row.rowId.substringAfter('#', missingDelimiterValue = "")
+                val all = group.fields()
+                val sent = if (field.isEmpty()) all else all.filterKeys { it == field }
                 // Only a new name is news; an icon or the debt setting tells nobody.
-                val before = notices?.let { firestore.get("groups/${group.id}")?.fields?.string("name") }
-                firestore.patch("groups/${group.id}", group.fields())
+                val before = notices?.takeIf { "name" in sent }?.let { firestore.get("groups/${group.id}")?.fields?.string("name") }
+                if (sent.isNotEmpty()) firestore.patch("groups/${group.id}", sent)
                 notices?.takeIf { before != null && before != group.name }?.renamed()
             }
 
@@ -234,11 +242,17 @@ internal class OutboxPusher(
 
             // #182: the template only. Each phone keeps its own progress and reminder choice. The
             // creation time it sends is the stored one, which the rules require to stay put.
-            KIND_REPEAT -> dao.repeat(row.rowId)?.toDomain()?.let { rule ->
+            KIND_REPEAT -> dao.repeat(row.rowId)?.let { stored ->
+                val rule = stored.toDomain() ?: return@let null
                 val path = "groups/${group.id}/repeats/${rule.id}"
-                val isNew = notices?.let { firestore.get(path) == null }
+                val server = firestore.get(path)
+                // A stop is never undone, so an edit made offline before another member stopped it stays stopped.
+                if (rule.active && server?.fields?.get("active") == false) {
+                    dao.upsertRepeat(stored.copy(active = false))
+                    return@let null
+                }
                 firestore.upsertStamped(path, rule.fields(uid), SYNCED_AT)
-                isNew?.let { notices.repeat(rule, it) }
+                notices?.repeat(rule, server == null)
             }
 
             else -> null

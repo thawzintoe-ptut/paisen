@@ -52,7 +52,7 @@ class GroupSettingsViewModel(
     val isRemoved: StateFlow<Boolean> = removed
 
     fun editGroup(name: String, type: GroupType, icon: String) {
-        viewModelScope.launch { editGroupUseCase(groupId, name, type, icon) }
+        notifyOnFailure { editGroupUseCase(groupId, name, type, icon) }
     }
 
     /**
@@ -60,8 +60,9 @@ class GroupSettingsViewModel(
      * first and asks again before [anyway] drops what still could not go (#218).
      */
     fun removeGroup(anyway: Boolean = false) {
+        if (groupAction.value.working) return
+        groupAction.value = GroupActionState(working = true)
         viewModelScope.launch {
-            groupAction.value = GroupActionState(working = true)
             groupAction.value = when (val result = removeGroupUseCase(groupId, dropUnsent = anyway)) {
                 RemoveGroupResult.Removed -> {
                     removed.value = true
@@ -79,7 +80,15 @@ class GroupSettingsViewModel(
 
     /** #218: names added after Create. In a shared group they sync, and each joins from the link. */
     fun addPeople(members: List<NewMember>) {
-        viewModelScope.launch { addMembers(groupId, members) }
+        if (addingPeople) return
+        addingPeople = true
+        notifyOnFailure { addMembers(groupId, members) }.invokeOnCompletion { addingPeople = false }
+    }
+
+    private var addingPeople = false
+
+    private fun notifyOnFailure(work: suspend () -> Unit) = viewModelScope.launch {
+        runSuspendCatching { work() }.onFailure { toasts?.show(ToastMessage(AppText.copy.common.notDone, tone = ToastTone.Error)) }
     }
 
     /** #218: archives one name here; past splits keep it. No Undo: nothing puts an archived name back. */
@@ -107,8 +116,9 @@ class GroupSettingsViewModel(
     fun switchOff() = runInvite { switchOffInvite(groupId) }
 
     private fun runInvite(work: suspend () -> Result<Unit>) {
+        if (action.value.working) return
+        action.value = InviteActionState(working = true)
         viewModelScope.launch {
-            action.value = InviteActionState(working = true)
             action.value = work().fold(
                 onSuccess = { InviteActionState() },
                 onFailure = { failure -> InviteActionState(error = failure.syncMessage()) },

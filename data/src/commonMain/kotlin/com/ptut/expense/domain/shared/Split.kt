@@ -43,7 +43,7 @@ fun split(totalMinor: Long, mode: SplitMode, members: List<SplitMember>, weights
         SplitMode.Exact -> {
             val parts = ordered.associate { it.id to (weights[it.id] ?: 0L) }.filterValues { it > 0 }
             val assigned = parts.values.sum()
-            SplitCheck(parts, left = totalMinor - assigned, assigned = assigned, target = totalMinor, complete = assigned == totalMinor && parts.isNotEmpty())
+            SplitCheck(parts, left = totalMinor - assigned, assigned = assigned, target = totalMinor, complete = parts.isNotEmpty() && parts.values.toList().sumsTo(totalMinor))
         }
 
         SplitMode.Percent -> {
@@ -57,7 +57,7 @@ fun split(totalMinor: Long, mode: SplitMode, members: List<SplitMember>, weights
         SplitMode.Shares -> {
             val counts = ordered.associate { it.id to (weights[it.id] ?: 0L) }.filterValues { it > 0 }
             val parts = allocate(totalMinor, counts, ordered)
-            SplitCheck(parts, left = 0, assigned = counts.values.sum(), target = 0, complete = counts.isNotEmpty() && totalMinor > 0)
+            SplitCheck(parts, left = 0, assigned = counts.values.sum(), target = 0, complete = parts.isNotEmpty() && totalMinor > 0)
         }
     }
 }
@@ -67,20 +67,32 @@ fun split(totalMinor: Long, mode: SplitMode, members: List<SplitMember>, weights
  * handed out one each in D7's order. The parts always add up to [total].
  */
 internal fun allocate(total: Long, weights: Map<String, Long>, ordered: List<SplitMember>): Map<String, Long> {
-    val sum = weights.values.sum()
+    // A sum past a Long's range would wrap and hand out wrong parts, so it splits nothing.
+    val sum = weights.values.sumOrNull() ?: return emptyMap()
     if (sum <= 0) return emptyMap()
     val takers = ordered.filter { (weights[it.id] ?: 0L) > 0 }
     // Through 128 bits: a big total times a big Exact part passes a Long's range.
     val parts = takers.associate { it.id to share(total, weights.getValue(it.id), sum) }.toMutableMap()
     var odd = total - parts.values.sum()
     var index = 0
-    while (odd > 0 && takers.isNotEmpty()) {
+    // A negative total rounds toward zero, so its odd units are negative and go out one each the same way.
+    val step = if (odd < 0) -1L else 1L
+    while (odd != 0L && takers.isNotEmpty()) {
         val id = takers[index % takers.size].id
-        parts[id] = parts.getValue(id) + 1
-        odd--
+        parts[id] = parts.getValue(id) + step
+        odd -= step
         index++
     }
     return parts
+}
+
+private fun Collection<Long>.sumOrNull(): Long? {
+    var sum = 0L
+    for (weight in this) {
+        if (weight > Long.MAX_VALUE - sum) return null
+        sum += weight
+    }
+    return sum
 }
 
 /** [total] × [weight] ÷ [sum], rounded toward zero, for a total of either sign. */

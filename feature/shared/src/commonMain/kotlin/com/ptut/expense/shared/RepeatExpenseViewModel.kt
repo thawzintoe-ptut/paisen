@@ -31,6 +31,7 @@ import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -213,11 +214,18 @@ class RepeatExpenseViewModel(
 
     fun stop() {
         val id = ruleId ?: return
+        if (stopping) return
+        stopping = true
         viewModelScope.launch {
-            stopRepeat(id)
-            done.value = true
+            runSuspendCatching { stopRepeat(id) }.fold(
+                onSuccess = { done.value = true },
+                onFailure = { toasts.show(ToastMessage(text = AppText.copy.common.notDone, tone = ToastTone.Error)) },
+            )
+            stopping = false
         }
     }
+
+    private var stopping = false
 
     private fun ready(group: SharedGroup, form: RepeatForm, active: Boolean): RepeatExpenseUiState.Ready {
         val members = group.membersToSplit()

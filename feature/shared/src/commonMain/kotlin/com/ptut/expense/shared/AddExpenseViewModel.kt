@@ -30,6 +30,7 @@ import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastAction
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.ui.ToastTone
 import com.ptut.expense.ui.inTableLanguage
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -320,13 +321,21 @@ class AddExpenseViewModel(
         }
     }
 
+    private var removing = false
+
     /** D8: a removal adds a log entry; your own transaction, if any, stays in History. */
     fun remove(onRemoved: () -> Unit) {
         val id = expenseId ?: return
         val name = (uiState.value as? AddExpenseUiState.Ready)?.form?.description?.trim().orEmpty()
         val restoreExpense = restoreExpense
+        if (removing) return
+        removing = true
         viewModelScope.launch {
-            removeExpense(id)
+            if (runSuspendCatching { removeExpense(id) }.isFailure) {
+                toasts?.show(ToastMessage(text = AppText.copy.common.notDone, tone = ToastTone.Error))
+                removing = false
+                return@launch
+            }
             haptics?.deleted()
             // #197: the shell runs the Undo, because this screen closes as soon as it is removed.
             toasts?.show(

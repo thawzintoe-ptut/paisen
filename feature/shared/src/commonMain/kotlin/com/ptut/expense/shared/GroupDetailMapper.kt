@@ -182,7 +182,7 @@ private fun GroupSyncStatus.syncLine(): String? {
     val text = AppText.copy.shared
     return when {
         // #194: said once, then cleared when the screen goes.
-        refused > 0 -> text.detail.refused(refused)
+        refused > 0 -> text.detail.refused(refused) + refusedTitles.takeIf { it.isNotEmpty() }?.joinToString(prefix = ": ").orEmpty()
 
         health == SyncHealth.Local -> null
 

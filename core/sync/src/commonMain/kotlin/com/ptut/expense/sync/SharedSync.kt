@@ -40,7 +40,13 @@ import kotlin.uuid.Uuid
 enum class SyncHealth { Local, UpToDate, Waiting, Offline, SignedOut, EndingElsewhere }
 
 /** [refused] counts changes the group would not take (#194); they have left the outbox. */
-data class GroupSyncStatus(val health: SyncHealth, val waiting: Int, val refused: Int = 0)
+data class GroupSyncStatus(
+    val health: SyncHealth,
+    val waiting: Int,
+    val refused: Int = 0,
+    /** The names of refused expenses, which left this phone, so the user can enter them again. */
+    val refusedTitles: List<String> = emptyList(),
+)
 
 /**
  * The join screen's two steps (#190): the group, and the names nobody has claimed yet. [mine] is
@@ -110,7 +116,9 @@ class SharedSync internal constructor(
         combine(repository.snapshot, dao.observeOutbox(), failed, pusher.refused, session()) { snapshot, outbox, failed, refused, session ->
             val group = snapshot.group(groupId)
             val waiting = outbox.count { it.groupId == groupId }
-            health(remote = group?.remote == true, session, groupId in failed, waiting, notTaken = refused[groupId] ?: 0)
+            val notTaken = refused[groupId].orEmpty()
+            health(remote = group?.remote == true, session, groupId in failed, waiting, notTaken = notTaken.size)
+                .let { status -> if (status.refused > 0) status.copy(refusedTitles = notTaken.filter { it.isNotBlank() }) else status }
         }
 
     /** #196: the same, across every shared group, for the Shared tab's one line. */
@@ -118,7 +126,7 @@ class SharedSync internal constructor(
         combine(repository.snapshot, dao.observeOutbox(), failed, pusher.refused, session()) { snapshot, outbox, failed, refused, session ->
             val remote = snapshot.groups.filter { it.remote }.map { it.id }.toSet()
             val waiting = outbox.count { it.groupId in remote }
-            val notTaken = refused.filterKeys { it in remote }.values.sum()
+            val notTaken = refused.filterKeys { it in remote }.values.sumOf { it.size }
             health(remote = remote.isNotEmpty(), session, failed.any { it in remote }, waiting, notTaken)
         }
 

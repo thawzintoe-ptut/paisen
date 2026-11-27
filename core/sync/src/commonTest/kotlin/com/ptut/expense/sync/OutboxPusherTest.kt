@@ -170,7 +170,7 @@ class OutboxPusherTest {
         firestore.refusing["groups/g1/entries/p2"] = 403
 
         pusher.push()
-        assertEquals(2, pusher.refused.value["g1"])
+        assertEquals(2, pusher.refused.value["g1"]?.size)
         assertFalse("p1" in dao.payments)
 
         pusher.acknowledgeRefused("g1")

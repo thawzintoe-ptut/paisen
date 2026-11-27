@@ -12,8 +12,11 @@ internal object FirestoreStatus {
     const val CONFLICT = 409
     const val TOO_MANY_REQUESTS = 429
 
-    /** An expired session, a timeout or a rate limit can pass later; no other 4xx will. */
-    private val RETRYABLE = setOf(UNAUTHORIZED, TIMEOUT, TOO_MANY_REQUESTS)
+    /**
+     * An expired session, a timeout, a rate limit or an aborted commit can pass later; no other 4xx will.
+     * A create answers 409 for a document already there before it throws, so a 409 seen here is ABORTED.
+     */
+    private val RETRYABLE = setOf(UNAUTHORIZED, TIMEOUT, CONFLICT, TOO_MANY_REQUESTS)
 
     fun isPermanent(status: Int): Boolean = status in CLIENT_ERRORS && status !in RETRYABLE
 

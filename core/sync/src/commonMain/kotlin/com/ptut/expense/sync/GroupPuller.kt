@@ -5,6 +5,7 @@ import com.ptut.expense.data.local.entity.GroupMemberEntity
 import com.ptut.expense.data.local.entity.SharedGroupEntity
 import com.ptut.expense.data.local.entity.SyncOutboxEntity
 import com.ptut.expense.data.repository.KIND_GROUP
+import com.ptut.expense.data.repository.groupFieldRow
 import com.ptut.expense.data.repository.KIND_MEMBER
 import com.ptut.expense.data.repository.KIND_PLAY
 import com.ptut.expense.data.repository.KIND_REACTION
@@ -91,14 +92,15 @@ internal class GroupPuller(
         val pending = pendingIn(groupId)
         // A row changed here and not yet uploaded keeps this phone's values: the server's copy is
         // the older one until the outbox sends it, so a pull in between must not undo the edit.
-        val kept = local?.takeIf { "$KIND_GROUP:$groupId" in pending }
+        val whole = "$KIND_GROUP:$groupId" in pending
+        fun kept(field: String) = local?.takeIf { whole || "$KIND_GROUP:${groupFieldRow(groupId, field)}" in pending }
         val uid = uid()
         val group = SharedGroupEntity(
             id = groupId,
-            name = kept?.name ?: fields.string("name") ?: local?.name ?: AppText.copy.shared.group,
-            type = kept?.type ?: fields.string("type")?.let(::knownGroupType) ?: local?.type ?: GroupType.Other.name,
-            icon = kept?.icon ?: fields.string("icon") ?: local?.icon ?: "group",
-            simplifyDebts = kept?.simplifyDebts ?: fields["simplifyDebts"] as? Boolean ?: true,
+            name = kept("name")?.name ?: fields.string("name") ?: local?.name ?: AppText.copy.shared.group,
+            type = kept("type")?.type ?: fields.string("type")?.let(::knownGroupType) ?: local?.type ?: GroupType.Other.name,
+            icon = kept("icon")?.icon ?: fields.string("icon") ?: local?.icon ?: "group",
+            simplifyDebts = kept("simplifyDebts")?.simplifyDebts ?: fields["simplifyDebts"] as? Boolean ?: true,
             createdAtEpochMillis = fields.long("createdAt") ?: local?.createdAtEpochMillis ?: now(),
             // A group brought back after signing in again finds "you" by the name this account claimed.
             meMemberId = meMemberId ?: local?.meMemberId ?: uid?.let { members?.let { docs -> claimedBy(docs, it) } },

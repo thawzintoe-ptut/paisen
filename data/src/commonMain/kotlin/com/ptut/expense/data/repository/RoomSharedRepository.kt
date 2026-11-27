@@ -133,8 +133,13 @@ class RoomSharedRepository(
     }
 
     override suspend fun editGroup(groupId: String, name: String, type: GroupType, icon: String) {
+        val before = dao.group(groupId) ?: return
         dao.editGroup(groupId, name.trim(), type.name, icon)
-        queueIfShared(groupId, KIND_GROUP, groupId)
+        listOfNotNull(
+            "name".takeIf { before.name != name.trim() },
+            "type".takeIf { before.type != type.name },
+            "icon".takeIf { before.icon != icon },
+        ).forEach { queueIfShared(groupId, KIND_GROUP, groupFieldRow(groupId, it)) }
     }
 
     override suspend fun deleteGroup(groupId: String) = dao.forgetGroup(groupId)
@@ -188,7 +193,7 @@ class RoomSharedRepository(
 
     override suspend fun setSimplifyDebts(groupId: String, on: Boolean) {
         dao.setSimplifyDebts(groupId, on)
-        queueIfShared(groupId, KIND_GROUP, groupId)
+        queueIfShared(groupId, KIND_GROUP, groupFieldRow(groupId, "simplifyDebts"))
     }
 
     override suspend fun setTripEnded(groupId: String, on: LocalDate?) {

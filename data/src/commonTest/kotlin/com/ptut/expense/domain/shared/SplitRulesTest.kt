@@ -51,4 +51,23 @@ class SplitRulesTest {
     fun anAmountTooLargeToConvertReadsAsNoAmount() {
         assertNull(convertOrNull(100_000_000_000_000_000L, Currencies.of("USD"), Rate.parse("9".repeat(11)), Currencies.Thb))
     }
+
+    @Test
+    fun aNegativeTotalSplitsToTheLastSatang() {
+        val members = group.membersToSplit(SplitMode.Equally, sharers = setOf("me", "aye", "bo"))
+
+        val parts = allocate(-100, members.associate { it.id to 1L }, members)
+
+        assertEquals(-100, parts.values.sum())
+    }
+
+    @Test
+    fun sharesTooLargeToAddUpSplitNothingAndCannotSave() {
+        val members = group.membersToSplit(SplitMode.Shares, sharers = setOf("me", "aye"))
+
+        val check = split(1_000, SplitMode.Shares, members, mapOf("me" to Long.MAX_VALUE, "aye" to Long.MAX_VALUE))
+
+        assertTrue(check.parts.isEmpty())
+        assertTrue(!check.complete)
+    }
 }

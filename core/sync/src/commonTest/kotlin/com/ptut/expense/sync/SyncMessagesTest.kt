@@ -17,8 +17,8 @@ class SyncMessagesTest {
     }
 
     @Test
-    fun aTimeoutOrARateLimitIsOfflineAndMayPassLater() {
-        listOf(408, 429, 500, FirestoreStatus.NO_ANSWER).forEach { status ->
+    fun aTimeoutARateLimitOrAnAbortedCommitIsOfflineAndMayPassLater() {
+        listOf(408, 409, 429, 500, FirestoreStatus.NO_ANSWER).forEach { status ->
             assertEquals(SyncProblem.Offline, FirestoreException(status, "").syncProblem(), "status $status")
             assertFalse(FirestoreStatus.isPermanent(status))
         }
@@ -26,7 +26,7 @@ class SyncMessagesTest {
 
     @Test
     fun anotherClientErrorIsRefusedForGood() {
-        listOf(400, 403, 404, 409).forEach { status ->
+        listOf(400, 403, 404).forEach { status ->
             assertEquals(SyncProblem.Refused, FirestoreException(status, "").syncProblem(), "status $status")
             assertTrue(FirestoreStatus.isPermanent(status))
         }
