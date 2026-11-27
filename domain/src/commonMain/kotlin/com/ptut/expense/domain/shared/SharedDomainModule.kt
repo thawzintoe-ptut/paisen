@@ -1,6 +1,6 @@
 package com.ptut.expense.domain.shared
 
-import com.ptut.expense.sync.SharedSync
+import com.ptut.expense.sync.SharedSyncApi
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -51,5 +51,5 @@ val sharedUseCases: Module = module {
     factory { PutBackPaymentUseCase(get()) }
     factory { SaveRepeatUseCase(get(), runDueRepeats = getOrNull()) }
     factory { StopRepeatUseCase(get(), runDueRepeats = getOrNull()) }
-    factory { RemoveGroupUseCase(get(), exits = getOrNull<SharedSync>()?.let(::SharedSyncExits), runDueRepeats = getOrNull()) }
+    factory { RemoveGroupUseCase(get(), exits = getOrNull<SharedSyncApi>()?.let(::SharedSyncExits), runDueRepeats = getOrNull()) }
 }

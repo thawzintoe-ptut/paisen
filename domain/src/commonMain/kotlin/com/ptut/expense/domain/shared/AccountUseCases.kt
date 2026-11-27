@@ -1,7 +1,7 @@
 package com.ptut.expense.domain.shared
 
 import com.ptut.expense.sync.ChangesWaiting
-import com.ptut.expense.sync.SharedSync
+import com.ptut.expense.sync.SharedSyncApi
 import com.ptut.expense.sync.SyncProblem
 import com.ptut.expense.sync.auth.Account
 import com.ptut.expense.sync.auth.AuthRepository
@@ -62,7 +62,7 @@ sealed interface AccountExit {
 /** #187: shared groups leave this phone with the account and come back with it; your own spending stays. */
 class SignOutUseCase(
     private val auth: AuthRepository? = null,
-    private val sync: SharedSync? = null,
+    private val sync: SharedSyncApi? = null,
 ) {
     suspend operator fun invoke(): AccountExit = accountExit { if (sync != null) sync.signOut() else auth?.signOut() }
 }
@@ -70,7 +70,7 @@ class SignOutUseCase(
 /** Apple 5.1.1(v): leaves every shared group, then removes the account. */
 class DeleteAccountUseCase(
     private val auth: AuthRepository? = null,
-    private val sync: SharedSync? = null,
+    private val sync: SharedSyncApi? = null,
 ) {
     suspend operator fun invoke(): AccountExit = accountExit { if (sync != null) sync.deleteAccount() else auth?.deleteAccount() }
 }

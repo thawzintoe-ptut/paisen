@@ -27,6 +27,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.Module
+import org.koin.dsl.bind
 import org.koin.dsl.module
 
 /**
@@ -92,7 +93,7 @@ fun syncModule(databaseContext: PtutDatabaseContext): Module = module {
             notice = endedHereNotice(databaseContext),
             writes = RoomWriteTransaction(get<PtutDatabase>()),
         ).also { it.uploadSoonAfterSaves(scope) }
-    }
+    } bind SharedSyncApi::class
 }
 
 /** The privacy notice's "where" (#191): the region from `firebase.properties`. */

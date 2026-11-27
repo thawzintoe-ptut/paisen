@@ -2,7 +2,7 @@ package com.ptut.expense.domain.shared
 
 import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.sync.GroupSyncStatus
-import com.ptut.expense.sync.SharedSync
+import com.ptut.expense.sync.SharedSyncApi
 import com.ptut.expense.sync.SyncHealth
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -19,7 +19,7 @@ data class SyncAccess(
 )
 
 /** Whether this build syncs, and whether this phone is signed in to share; never in a build without sync. */
-class GetSyncAccessUseCase(private val sync: SharedSync? = null) {
+class GetSyncAccessUseCase(private val sync: SharedSyncApi? = null) {
     operator fun invoke(): SyncAccess = SyncAccess(
         available = sync?.available == true,
         signedInNow = sync?.isSignedIn == true,
@@ -28,7 +28,7 @@ class GetSyncAccessUseCase(private val sync: SharedSync? = null) {
 }
 
 /** #189, #196: one group's sync line, or every shared group's when [groupId] is null. Without sync, all stays on this phone. */
-class ObserveSyncStatusUseCase(private val sync: SharedSync? = null) {
+class ObserveSyncStatusUseCase(private val sync: SharedSyncApi? = null) {
     operator fun invoke(groupId: String? = null): Flow<GroupSyncStatus> {
         val sync = sync ?: return flowOf(GroupSyncStatus(SyncHealth.Local, 0))
         return if (groupId == null) sync.overallStatus() else sync.status(groupId)
@@ -40,7 +40,7 @@ class ObserveSyncStatusUseCase(private val sync: SharedSync? = null) {
  * has no push yet. It emits at once; a build without sync emits only that. Back-off: [syncPolling].
  */
 class PollSyncUseCase(
-    private val sync: SharedSync? = null,
+    private val sync: SharedSyncApi? = null,
     /** #203: rebuilds repeat reminders once a group has gone from this phone. */
     private val runDueRepeats: RunDueRepeatsUseCase? = null,
 ) {
@@ -62,7 +62,7 @@ class PollSyncUseCase(
 
 /** Pull-to-refresh: syncs one group now instead of at the next tick. False when it failed or this build has no sync. */
 class SyncGroupNowUseCase(
-    private val sync: SharedSync? = null,
+    private val sync: SharedSyncApi? = null,
     private val runDueRepeats: RunDueRepeatsUseCase? = null,
 ) {
     suspend operator fun invoke(groupId: String): Boolean {
@@ -72,14 +72,14 @@ class SyncGroupNowUseCase(
 }
 
 /** Every shared group now, as right after signing in; a failure waits for the next sync. */
-class SyncAllNowUseCase(private val sync: SharedSync? = null) {
+class SyncAllNowUseCase(private val sync: SharedSyncApi? = null) {
     suspend operator fun invoke() {
         runSuspendCatching { sync?.syncAll() }
     }
 }
 
 /** #194: the group screen has said how many changes were refused; the count starts again from zero. */
-class AcknowledgeRefusedUseCase(private val sync: SharedSync? = null) {
+class AcknowledgeRefusedUseCase(private val sync: SharedSyncApi? = null) {
     operator fun invoke(groupId: String) {
         sync?.acknowledgeRefused(groupId)
     }

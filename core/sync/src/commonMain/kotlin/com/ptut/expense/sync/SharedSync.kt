@@ -96,14 +96,14 @@ class SharedSync internal constructor(
     private val notice: EndedHereNotice = MemoryEndedHereNotice(),
     /** One Room write transaction for a pull's merge, so it never interleaves with a save. */
     writes: WriteTransaction = WriteTransaction.None,
-) {
-    val available: Boolean get() = auth.available
+) : SharedSyncApi {
+    override val available: Boolean get() = auth.available
 
     /** Whether this phone is signed in, so the invite button knows to ask first (#187). */
-    val signedIn: Flow<Boolean> get() = auth.account.map { it is Account.SignedIn }.distinctUntilChanged()
+    override val signedIn: Flow<Boolean> get() = auth.account.map { it is Account.SignedIn }.distinctUntilChanged()
 
     /** The same, right now, so a screen starts from the truth rather than from "signed out". */
-    val isSignedIn: Boolean get() = auth.account.value is Account.SignedIn
+    override val isSignedIn: Boolean get() = auth.account.value is Account.SignedIn
 
     private val failed = MutableStateFlow<Set<String>>(emptySet())
     private val endedHere = MutableStateFlow(notice.read())
@@ -117,7 +117,7 @@ class SharedSync internal constructor(
     private val puller = GroupPuller(firestore, dao, clock, ::publishNames, writes) { (auth.account.value as? Account.SignedIn)?.uid }
     private val pusher = OutboxPusher(firestore, dao, repository, clock, pushes, failed, ::account, ::newInvite, ::publishNames)
 
-    fun status(groupId: String): Flow<GroupSyncStatus> =
+    override fun status(groupId: String): Flow<GroupSyncStatus> =
         combine(repository.snapshot, dao.observeOutbox(), failed, pusher.refused, session()) { snapshot, outbox, failed, refused, session ->
             val group = snapshot.group(groupId)
             val waiting = outbox.count { it.groupId == groupId }
@@ -127,7 +127,7 @@ class SharedSync internal constructor(
         }
 
     /** #196: the same, across every shared group, for the Shared tab's one line. */
-    fun overallStatus(): Flow<GroupSyncStatus> =
+    override fun overallStatus(): Flow<GroupSyncStatus> =
         combine(repository.snapshot, dao.observeOutbox(), failed, pusher.refused, session()) { snapshot, outbox, failed, refused, session ->
             val remote = snapshot.groups.filter { it.remote }.map { it.id }.toSet()
             val waiting = outbox.count { it.groupId in remote }
@@ -156,7 +156,7 @@ class SharedSync internal constructor(
      * The group screen has said it once; the count starts again from zero. Called as the screen
      * goes, so the delete runs on its own scope rather than the screen's, which is ending.
      */
-    fun acknowledgeRefused(groupId: String) {
+    override fun acknowledgeRefused(groupId: String) {
         acknowledgeScope.launch { pusher.acknowledgeRefused(groupId) }
     }
 
@@ -175,10 +175,10 @@ class SharedSync internal constructor(
      * does not hold yet. Quiet when signed out or not set up. True when a group came onto or went
      * off this phone, so its repeat reminders can be rebuilt (#203).
      */
-    suspend fun syncAll(): Boolean = syncAllOutcome().groupsChanged
+    override suspend fun syncAll(): Boolean = syncAllOutcome().groupsChanged
 
     /** [syncAll], also saying whether it failed, so a poll can wait longer before the next. [withReactions]: see [GroupPuller.pull]. */
-    suspend fun syncAllOutcome(withReactions: Boolean = true): SyncOutcome = synced { account ->
+    override suspend fun syncAllOutcome(withReactions: Boolean): SyncOutcome = synced { account ->
         // The restore query costs reads on every poll; once in a while is enough.
         val mine = if (due(accountCheckedAt, account.uid)) memberships(account.uid) else null
         val docs = mine.orEmpty().associateBy { it.id }
@@ -202,7 +202,7 @@ class SharedSync internal constructor(
     suspend fun syncGroup(groupId: String): Boolean = syncGroupOutcome(groupId).groupsChanged
 
     /** [syncGroup], also saying whether it failed, so a poll can wait longer before the next. */
-    suspend fun syncGroupOutcome(groupId: String, withReactions: Boolean = true): SyncOutcome = synced {
+    override suspend fun syncGroupOutcome(groupId: String, withReactions: Boolean): SyncOutcome = synced {
         var removed = false
         var pulled = true
         if (groupId in dao.remoteGroupIds()) {
@@ -287,7 +287,7 @@ class SharedSync internal constructor(
      * #187: signing out takes shared groups off this phone; they come back when the account signs in
      * again. What still waits is sent first, and sign-out stops rather than lose it.
      */
-    suspend fun signOut() {
+    override suspend fun signOut() {
         running.withLock {
             pusher.push()
             val waiting = dao.forgetSharedGroupsUnlessWaiting()
@@ -302,7 +302,7 @@ class SharedSync internal constructor(
      * #190: a group goes from this phone to Firestore the first time someone invites to it. This
      * phone's member takes the account's name and claims it. Returns the invite code.
      */
-    suspend fun share(groupId: String): String {
+    override suspend fun share(groupId: String): String {
         val account = signedIn()
         val group = requireNotNull(dao.groupOf(groupId)) { "No group $groupId" }
         running.withLock {
@@ -344,7 +344,7 @@ class SharedSync internal constructor(
     private fun open(invite: Fields): Boolean = invite.bool("active") && invite.instant("expiresAt")?.let { it <= clock.now() } != true
 
     /** A fresh code; the old one stops working (#190). Only the creator may do this. */
-    suspend fun newInvite(groupId: String): String {
+    override suspend fun newInvite(groupId: String): String {
         val account = signedIn()
         val group = requireNotNull(dao.group(groupId)) { "No group $groupId" }
         // Fails closed: a new code is never made while the old one may still be live.
@@ -363,7 +363,7 @@ class SharedSync internal constructor(
     }
 
     /** "This invite has expired" from now on, for anyone who still has the link. */
-    suspend fun switchOffInvite(groupId: String) {
+    override suspend fun switchOffInvite(groupId: String) {
         signedIn()
         val code = dao.group(groupId)?.inviteCode ?: return
         firestore.patch("invites/$code", OFF)
@@ -376,7 +376,7 @@ class SharedSync internal constructor(
      * carries its names is all that is read, so opening a link writes nothing. One made by a build
      * before L4 carries none, and the join is registered first to read them, as those builds do.
      */
-    suspend fun openJoin(code: String): JoinChoice {
+    override suspend fun openJoin(code: String): JoinChoice {
         val account = signedIn()
         // #218: a mistyped code is not an expired one, and says so.
         val invite = invite(code) ?: throw JoinException(AppText.copy.shared.sync.noSuchCode)
@@ -428,7 +428,7 @@ class SharedSync internal constructor(
 
     /** Step two: claim [memberId], or add the account's own name when it is not on the list. */
     @OptIn(ExperimentalUuidApi::class)
-    suspend fun join(choice: JoinChoice, memberId: String?): String {
+    override suspend fun join(choice: JoinChoice, memberId: String?): String {
         val account = signedIn()
         val groupId = choice.groupId
         val mine = memberId ?: Uuid.random().toString()
@@ -495,7 +495,7 @@ class SharedSync internal constructor(
      * marked deleted, so each member's phone drops it on its next pull. Its names and log can no
      * longer be read; the documents stay until the clean-up removes them.
      */
-    suspend fun deleteForEveryone(groupId: String) {
+    override suspend fun deleteForEveryone(groupId: String) {
         account()
         val group = requireNotNull(dao.group(groupId)) { "No group $groupId" }
         // Before the write: the Worker sends nothing for a group already deleted.
@@ -521,7 +521,7 @@ class SharedSync internal constructor(
      * A member who did not create the group leaves it: their name is free again, the others keep it.
      * What waits is sent first; unless [dropUnsent], leaving stops rather than lose it (#218).
      */
-    suspend fun leaveGroup(groupId: String, dropUnsent: Boolean = false) {
+    override suspend fun leaveGroup(groupId: String, dropUnsent: Boolean) {
         val account = account()
         if (!dropUnsent) {
             val waiting = running.withLock {
@@ -540,7 +540,7 @@ class SharedSync internal constructor(
      * #187 and Apple 5.1.1(v): leave every group, then remove the account and this phone's copy.
      * Under the sync lock, so no sync stores this phone's sign-in again halfway through.
      */
-    suspend fun deleteAccount() = running.withLock {
+    override suspend fun deleteAccount() = running.withLock {
         // What waits goes first, as on sign-out: after the account is gone nothing can send it.
         pusher.push()
         val waiting = waitingToSend()

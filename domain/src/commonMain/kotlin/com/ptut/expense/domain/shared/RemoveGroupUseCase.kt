@@ -2,7 +2,7 @@ package com.ptut.expense.domain.shared
 
 import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.sync.ChangesWaiting
-import com.ptut.expense.sync.SharedSync
+import com.ptut.expense.sync.SharedSyncApi
 import kotlinx.coroutines.CancellationException
 
 /** The two ways a shared group leaves this phone through the server (#218). */
@@ -14,7 +14,7 @@ interface GroupExits {
 }
 
 /** [GroupExits] as [SharedSync] does them. */
-class SharedSyncExits(private val sync: SharedSync) : GroupExits {
+class SharedSyncExits(private val sync: SharedSyncApi) : GroupExits {
     override suspend fun deleteForEveryone(groupId: String) = sync.deleteForEveryone(groupId)
 
     override suspend fun leave(groupId: String, dropUnsent: Boolean) = sync.leaveGroup(groupId, dropUnsent = dropUnsent)
