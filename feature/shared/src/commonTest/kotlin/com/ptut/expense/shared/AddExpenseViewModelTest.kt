@@ -1,6 +1,5 @@
 package com.ptut.expense.shared
 
-import kotlinx.coroutines.CompletableDeferred
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.shared.Currencies
@@ -19,6 +18,7 @@ import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.Language
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.inAppLanguage
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope

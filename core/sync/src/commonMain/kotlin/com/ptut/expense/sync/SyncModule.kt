@@ -22,13 +22,13 @@ import com.ptut.expense.sync.push.PushTokenHolder
 import com.ptut.expense.sync.usage.PostHogUsageLog
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.Module
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * #187–#190 in the graph. The only place an HTTP client is built, so `di/` names none (#191).

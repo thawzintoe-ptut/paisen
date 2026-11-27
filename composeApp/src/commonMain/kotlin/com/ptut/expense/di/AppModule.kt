@@ -65,12 +65,12 @@ import com.ptut.expense.sync.syncModule
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.screenReader
-import kotlin.time.Clock
-import kotlin.time.Duration
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import kotlin.time.Clock
+import kotlin.time.Duration
 
 /**
  * The screens' half of the graph. It names no platform type, so a test can take these bindings

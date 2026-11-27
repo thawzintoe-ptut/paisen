@@ -21,9 +21,9 @@ import com.ptut.expense.domain.shared.entryIdPrefix
 import com.ptut.expense.domain.shared.restoredLastAdded
 import com.ptut.expense.domain.shared.toLocalDateOrNull
 import com.ptut.expense.locale.AppText
+import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
-import kotlinx.datetime.toLocalDateTime
 
 /** What a pull did with its group: still here, or gone from this phone. */
 internal enum class PullResult { Kept, Removed }
@@ -48,7 +48,6 @@ internal class GroupPuller(
     // In memory only: a new process checks everything once.
     private val seenGroupDocs = mutableMapOf<String, Fields>()
     private val membersListedAt = mutableMapOf<String, Long>()
-
 
     /** The next account lists every group's names again. */
     fun forget() {
@@ -125,7 +124,7 @@ internal class GroupPuller(
                 lastSyncedAtEpochMillis = pulledUpTo,
                 // This phone's own mark, never on the server: a pull must not reset it.
                 lastSeenAtEpochMillis = local?.lastSeenAtEpochMillis,
-            reactionsSyncedAtEpochMillis = local?.reactionsSyncedAtEpochMillis,
+                reactionsSyncedAtEpochMillis = local?.reactionsSyncedAtEpochMillis,
                 currency = currency,
                 // #97: an end this phone set and has not sent yet stays as it is.
                 endedOn = if ("$KIND_TRIP_END:$groupId" in pending) local?.endedOn else fields.string("endedOn"),
@@ -265,7 +264,7 @@ internal class GroupPuller(
         return PullResult.Removed
     }
 
-        /** Outbox ids ("repeat:<id>", "member:<id>"…) for [groupId]: local changes not uploaded yet. */
+    /** Outbox ids ("repeat:<id>", "member:<id>"…) for [groupId]: local changes not uploaded yet. */
     private suspend fun pendingIn(groupId: String): Set<String> = dao.outbox().filter { it.groupId == groupId }.map { it.id }.toSet()
 
     private fun now(): Long = clock.now().toEpochMilliseconds()

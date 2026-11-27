@@ -106,22 +106,22 @@ fun SharedView(
     val body: @Composable (Modifier) -> Unit = { inner ->
         when (uiState) {
             is SharedUiState.Empty -> NothingShared(
-            // One tap, one group: a trip by default, renamed later in Group settings if it is not one.
-            onStartGroup = { onCreateGroup(GroupType.Trip.label(), GroupType.Trip, GroupType.Trip.defaultIcon(), emptyList(), Home.money.code) },
-            onJoinCode = { sheet = SHEET_CODE },
-            modifier = inner,
-        )
+                // One tap, one group: a trip by default, renamed later in Group settings if it is not one.
+                onStartGroup = { onCreateGroup(GroupType.Trip.label(), GroupType.Trip, GroupType.Trip.defaultIcon(), emptyList(), Home.money.code) },
+                onJoinCode = { sheet = SHEET_CODE },
+                modifier = inner,
+            )
 
             is SharedUiState.Ready -> Balances(
-            state = uiState,
-            onAdd = { sheet = SHEET_CHOICE },
-            onPay = onPay,
-            onSignIn = { sheet = SHEET_SIGN_IN },
-            onOpenGroup = onOpenGroup,
-            onOpenActivity = onOpenActivity,
-            onOpenPeople = onOpenPeople,
-            modifier = inner,
-        )
+                state = uiState,
+                onAdd = { sheet = SHEET_CHOICE },
+                onPay = onPay,
+                onSignIn = { sheet = SHEET_SIGN_IN },
+                onOpenGroup = onOpenGroup,
+                onOpenActivity = onOpenActivity,
+                onOpenPeople = onOpenPeople,
+                modifier = inner,
+            )
         }
     }
     // Above everything, and only when there is something: what was typed and did not go is never hidden.

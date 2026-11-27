@@ -9,15 +9,15 @@ import com.ptut.expense.data.repository.KIND_PLAY
 import com.ptut.expense.data.repository.KIND_REACTION
 import com.ptut.expense.data.repository.KIND_TRIP_END
 import com.ptut.expense.data.repository.REACTION_GONE
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.runTest
 
 class OutboxPusherTest {
 

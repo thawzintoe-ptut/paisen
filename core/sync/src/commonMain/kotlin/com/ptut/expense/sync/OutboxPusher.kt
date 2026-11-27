@@ -21,13 +21,13 @@ import com.ptut.expense.sync.auth.Account
 import com.ptut.expense.sync.push.PushNotice
 import com.ptut.expense.sync.push.PushNotices
 import com.ptut.expense.sync.push.PushSender
-import kotlin.time.Clock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.JsonObject
+import kotlin.time.Clock
 
 /**
  * Sends the outbox to Firestore and tells the group what went up. Called under [SharedSync]'s lock.
@@ -57,6 +57,7 @@ internal class OutboxPusher(
         dao.observeRefused().map { rows -> rows.groupBy({ it.groupId }, { it.title }) }
 
     /** Every refused change still kept, oldest first, also those whose group has left this phone. */
+
     /**
      * Every refused change still kept for the account signed in now, oldest first, also those whose
      * group has left this phone. A row that names no account (before schema 31) shows to nobody.

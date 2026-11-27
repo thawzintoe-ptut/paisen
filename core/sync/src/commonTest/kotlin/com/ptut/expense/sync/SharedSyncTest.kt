@@ -7,6 +7,9 @@ import com.ptut.expense.data.repository.KIND_GROUP
 import com.ptut.expense.data.repository.KIND_MEMBER
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.sync.auth.Account
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -14,9 +17,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.jsonObject
 
 class SharedSyncTest {
 

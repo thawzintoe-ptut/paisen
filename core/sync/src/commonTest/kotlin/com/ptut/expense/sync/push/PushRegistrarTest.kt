@@ -5,14 +5,14 @@ import com.ptut.expense.sync.FakeFirestore
 import com.ptut.expense.sync.FirestoreStatus
 import com.ptut.expense.sync.TestClock
 import com.ptut.expense.sync.auth.Account
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 
 class PushRegistrarTest {
 

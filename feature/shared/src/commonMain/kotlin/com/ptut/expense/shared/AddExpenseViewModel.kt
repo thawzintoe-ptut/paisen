@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.Separators
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.Currency
 import com.ptut.expense.domain.shared.ExpenseStart
@@ -30,7 +31,6 @@ import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastAction
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
-import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.ui.ToastTone
 import com.ptut.expense.ui.inTableLanguage
 import kotlinx.coroutines.flow.MutableStateFlow

@@ -162,7 +162,6 @@ class SharedViewModel(
         return LostChangeUiModel(id, if (what.isEmpty()) text.home.lostChange(group) else text.home.lost(group, what))
     }
 
-
     /** Quiet when all is sent: the line is there only while something waits or was refused. */
     private fun GroupSyncStatus.line(): String? {
         val text = AppText.copy.shared

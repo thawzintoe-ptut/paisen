@@ -30,9 +30,6 @@ import com.ptut.expense.domain.shared.TransactionSeed
 import com.ptut.expense.sync.auth.Account
 import com.ptut.expense.sync.auth.AuthRepository
 import com.ptut.expense.sync.auth.ProviderToken
-import kotlin.io.encoding.Base64
-import kotlin.time.Clock
-import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +39,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlin.io.encoding.Base64
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 /**
  * Firestore as a map of paths. A call whose text contains one of [failing] fails as an HTML answer

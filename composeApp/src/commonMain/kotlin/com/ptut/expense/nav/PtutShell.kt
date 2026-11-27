@@ -419,6 +419,7 @@ private fun Modifier.navShadow(): Modifier = shadow(
  * showed as grey smears; at 0.72 they blur to soft shapes, as iOS glass lets them, and the idle
  * tabs on onSurface keep #123's 3:1.
  */
+
 /** How far a tab's label follows the reader's font setting: past this it no longer fits beside three others. */
 private const val NAV_LABEL_FONT_SCALE = 1.15f
 private const val FROST_TINT = 0.72f
