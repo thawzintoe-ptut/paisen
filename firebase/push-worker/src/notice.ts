@@ -149,8 +149,7 @@ export function noticeData(notice: Notice, senderUid: string, language: Language
   if (notice.about !== undefined) data.about = notice.about;
   if (notice.from !== undefined) data.from = notice.from;
   if (notice.to !== undefined) data.to = notice.to;
-  if (notice.amount !== undefined) data.amount = String(notice.amount);
-  if (notice.currency !== undefined) data.currency = notice.currency;
+  // The phone words a notice from its own synced records, so money never travels through FCM or APNs.
   return data;
 }
 

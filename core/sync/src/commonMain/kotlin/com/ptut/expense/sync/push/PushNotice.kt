@@ -52,7 +52,5 @@ data class PushNotice(
         about?.let { put("about", it) }
         from?.let { put("from", it) }
         to?.let { put("to", it) }
-        amount?.let { put("amount", it) }
-        currency?.let { put("currency", it) }
     }
 }

@@ -2,6 +2,7 @@ package com.ptut.expense.sync
 
 import com.ptut.expense.data.local.entity.PaymentReactionEntity
 import com.ptut.expense.data.local.entity.SyncOutboxEntity
+import com.ptut.expense.data.repository.KIND_GROUP
 import com.ptut.expense.data.repository.KIND_MEMBER
 import com.ptut.expense.data.repository.KIND_REACTION
 import com.ptut.expense.data.repository.KIND_TRIP_END
@@ -239,7 +240,7 @@ class GroupPullerTest {
     }
 
     @Test
-    fun `a new reaction arrives on the next pull even when the names are not listed again and moves the mark`() = runTest {
+    fun `a new reaction arrives on the next pull even when the names are not listed again and leaves the log mark`() = runTest {
         holds("g1")
         puller.pull("g1")
         val marks = dao.marks
@@ -248,9 +249,34 @@ class GroupPullerTest {
         puller.pull("g1")
 
         assertEquals(1, firestore.calls.count { it == "list groups/g1/members" })
-        assertFalse("list groups/g1/reactions" in firestore.calls)
+        // Listed whole once by a new process, then asked only for what is newer.
+        assertEquals(1, firestore.calls.count { it == "list groups/g1/reactions" })
         assertEquals(setOf("p1_uid-2"), dao.reactions.keys)
+        assertEquals(marks, dao.marks)
+    }
+
+    @Test
+    fun `a pull that skips reactions still moves the log mark past new entries`() = runTest {
+        holds("g1")
+        puller.pull("g1")
+        val marks = dao.marks
+        firestore.collections["groups/g1/entries"] = listOf(paymentDoc("p1", from = "bo", to = ME))
+
+        puller.pull("g1", withReactions = false)
+
         assertEquals(marks + 1, dao.marks)
+    }
+
+    @Test
+    fun `a group whose document is gone leaves this phone unless a change still waits`() = runTest {
+        holds("g1")
+        firestore.docs.remove("groups/g1")
+        dao.outboxRows.value += SyncOutboxEntity("$KIND_GROUP:g1", "g1", KIND_GROUP, "g1", 1)
+
+        assertEquals(PullResult.Kept, puller.pull("g1"))
+
+        dao.outboxRows.value = emptyList()
+        assertEquals(PullResult.Removed, puller.pull("g1"))
     }
 
     @Test

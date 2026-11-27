@@ -27,11 +27,19 @@ export async function sendToDevice(
   device: Device,
   outgoing: Outgoing,
 ): Promise<SendResult> {
-  const response = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ message: messageFor(device, outgoing) }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+      // One phone FCM does not answer must not hold up the rest of the group's sends.
+      signal: AbortSignal.timeout(FCM_TIMEOUT_MS),
+      method: 'POST',
+      headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ message: messageFor(device, outgoing) }),
+    });
+  } catch (error) {
+    console.warn(`fcm no answer for ${device.platform}: ${error instanceof Error ? error.name : 'error'}`);
+    return 'failed';
+  }
   if (response.ok) return 'sent';
 
   const error = ((await response.json().catch(() => undefined)) as FcmErrorBody | undefined)?.error;
@@ -74,3 +82,5 @@ function messageFor(device: Device, { notice, title, senderUid }: Outgoing): Rec
     },
   };
 }
+
+const FCM_TIMEOUT_MS = 10_000;

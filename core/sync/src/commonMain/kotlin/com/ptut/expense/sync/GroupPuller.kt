@@ -44,10 +44,15 @@ internal class GroupPuller(
     private val seenGroupDocs = mutableMapOf<String, Fields>()
     private val membersListedAt = mutableMapOf<String, Long>()
 
+    // Reactions are asked for on fewer polls than the log, so they keep their own mark. A new process
+    // has none and lists them whole once, so nothing written while it was closed is missed.
+    private val reactionsPulledUpTo = mutableMapOf<String, Long>()
+
     /** The next account lists every group's names again. */
     fun forget() {
         seenGroupDocs.clear()
         membersListedAt.clear()
+        reactionsPulledUpTo.clear()
     }
 
     /**
@@ -64,7 +69,7 @@ internal class GroupPuller(
             if (refused.status != FirestoreStatus.FORBIDDEN) throw refused
             dao.forgetGroup(groupId)
             return PullResult.Removed
-        } ?: return PullResult.Kept
+        } ?: return goneFromServer(groupId)
         val fields = remote.fields
         // The creator deleted it for everyone: it goes from this phone too. Your own spending stays.
         if (fields.bool("deleted")) {
@@ -83,11 +88,13 @@ internal class GroupPuller(
         val playOffs = if (members != null) firestore.playDocs(groupId).associate { it.id to it.fields } else emptyMap()
         // #95 (D16): the whole list once, then only what the server stamped after the mark, which costs a
         // read only for new ones. A taken-back reaction keeps its document as Gone, so it comes the same way.
-        val reactions = if (since == null) firestore.reactionDocs(groupId) else null
-        val reactionsSkipped = since != null && !withReactions
-        val newerReactions = if (since != null && withReactions) firestore.newerReactionDocs(groupId, since) else null
+        val reactionsSince = pullSince(reactionsPulledUpTo[groupId])
+        val reactionsAsked = since == null || withReactions
+        val reactions = if (reactionsAsked && (since == null || reactionsSince == null)) firestore.reactionDocs(groupId) else null
+        val newerReactions = if (reactionsAsked && since != null && reactionsSince != null) firestore.newerReactionDocs(groupId, reactionsSince) else null
 
-        // Read after the network: a change saved while it answered is not undone below.
+        // Read after the network, and again right before each write below, so a change saved while
+        // this pull runs is not undone (as receiveRepeat does).
         val local = dao.group(groupId)
         val pending = pendingIn(groupId)
         // A row changed here and not yet uploaded keeps this phone's values: the server's copy is
@@ -117,10 +124,10 @@ internal class GroupPuller(
             endedOn = if ("$KIND_TRIP_END:$groupId" in pending) local?.endedOn else fields.string("endedOn"),
         )
         // Every write wakes the snapshot and the screens that read it, so an unchanged row is not written.
-        if (group != local) dao.upsertGroup(group)
+        if (group != local && pendingIn(groupId) == pending && dao.group(groupId) == local) dao.upsertGroup(group)
         if (members != null) {
             val pickable = pickableNames(dao.membersOf(groupId))
-            storeMembers(groupId, members, payIds, playOffs, pending)
+            storeMembers(groupId, members, payIds, playOffs)
             moveOwnPromptPay(groupId, group.meMemberId, members, pending)
             if (pickableNames(dao.membersOf(groupId)) != pickable) publishNames(groupId)
         }
@@ -138,9 +145,12 @@ internal class GroupPuller(
         }
         log.repeats.forEach { doc -> receiveRepeat(groupId, doc) }
         // An empty answer leaves the mark: the next pull asks from the same place and costs the same.
-        val gotNew = log.entries.isNotEmpty() || log.repeats.isNotEmpty() || !newerReactions.isNullOrEmpty()
-        // Reactions share the mark, so a pull that skipped them leaves it: the next one asks for them from here.
-        if (since == null || (gotNew && !reactionsSkipped)) dao.markSynced(groupId, log.readTimeEpochMillis ?: now())
+        val gotNew = log.entries.isNotEmpty() || log.repeats.isNotEmpty()
+        // Only the server's clock moves a mark: this phone's may run ahead and skip entries for good. The
+        // log's read time came before the reactions query, so the reactions mark can only be early.
+        val readTime = log.readTimeEpochMillis
+        if (readTime != null && (since == null || gotNew)) dao.markSynced(groupId, readTime)
+        if (readTime != null && reactionsAsked) reactionsPulledUpTo[groupId] = readTime
         seenGroupDocs[groupId] = fields
         if (members != null) membersListedAt[groupId] = now()
         return PullResult.Kept
@@ -159,7 +169,8 @@ internal class GroupPuller(
         return named.isNotEmpty() && !dao.membersOf(groupId).map { it.id }.toSet().containsAll(named)
     }
 
-    private suspend fun storeMembers(groupId: String, members: List<FirestoreDoc>, payIds: Map<String, Fields>, playOffs: Map<String, Fields>, pending: Set<String>) {
+    private suspend fun storeMembers(groupId: String, members: List<FirestoreDoc>, payIds: Map<String, Fields>, playOffs: Map<String, Fields>) {
+        val pending = pendingIn(groupId)
         val known = dao.membersOf(groupId).associateBy { it.id }
         val pulled = members.filterNot { "$KIND_MEMBER:${it.id}" in pending }.map { doc ->
             val holder = doc.fields.string("claimedByUid")
@@ -234,7 +245,17 @@ internal class GroupPuller(
         dao.upsertRepeat(rule.copy(lastAdded = lastAdded))
     }
 
-    /** Outbox ids ("repeat:<id>", "member:<id>"…) for [groupId]: local changes not uploaded yet. */
+    /**
+     * The group's document is not on the server, so no pull can ever fill it. It goes from this phone,
+     * unless a change still waits: a group being shared for the first time has not reached the server yet.
+     */
+    private suspend fun goneFromServer(groupId: String): PullResult {
+        if (pendingIn(groupId).isNotEmpty()) return PullResult.Kept
+        dao.forgetGroup(groupId)
+        return PullResult.Removed
+    }
+
+        /** Outbox ids ("repeat:<id>", "member:<id>"…) for [groupId]: local changes not uploaded yet. */
     private suspend fun pendingIn(groupId: String): Set<String> = dao.outbox().filter { it.groupId == groupId }.map { it.id }.toSet()
 
     private fun now(): Long = clock.now().toEpochMilliseconds()

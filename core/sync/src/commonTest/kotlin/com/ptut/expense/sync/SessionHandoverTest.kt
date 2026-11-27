@@ -139,6 +139,7 @@ class SessionHandoverTest {
     @Test
     fun `a group that could not be brought back is looked for again at the next sync`() = runTest {
         firestore.memberships = listOf(groupDoc("g2"))
+        firestore.docs["groups/g2"] = groupDoc("g2")
         firestore.failing += "groups/g2"
         sync.syncAll()
         sync.syncAll()

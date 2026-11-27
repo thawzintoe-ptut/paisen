@@ -11,8 +11,9 @@ FIREBASE_PROJECT_ID = "paisen-expense"
 
 # FIREBASE_SERVICE_ACCOUNT is a secret: `npx wrangler secret put FIREBASE_SERVICE_ACCOUNT`.
 
-# Builds up to v0.4.0-rc.1 send their own sentences, cleaned and cut here. Set "refuse" once none is in use.
-LEGACY_NOTICES = "accept"
+# Builds up to v0.4.0-rc.1 sent their own sentences, which any member could fill with any text.
+# They are refused now; such a phone still syncs, it only sends no push.
+LEGACY_NOTICES = "refuse"
 
 # Without both limiters every call gets 503; only `.dev.vars` may set ALLOW_NO_LIMITER = "true".
 # 30 notices a minute per account: a phone back online sends one per change it uploads, far fewer than this.

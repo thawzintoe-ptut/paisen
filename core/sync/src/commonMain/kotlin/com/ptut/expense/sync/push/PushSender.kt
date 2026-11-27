@@ -8,6 +8,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
@@ -47,7 +48,11 @@ class PushSender internal constructor(
                 setBody(body.toString())
                 timeout { requestTimeoutMillis = TIMEOUT.inWholeMilliseconds }
             }
-        }
+        }.fold(
+            // Still not retried, but no longer silent: the kind and the status only, never the notice.
+            onSuccess = { response -> if (!response.status.isSuccess()) println("push ${notice.kind.wire} refused: ${response.status.value}") },
+            onFailure = { failure -> println("push ${notice.kind.wire} not sent: ${failure::class.simpleName}") },
+        )
     }
 
     private companion object {

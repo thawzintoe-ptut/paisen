@@ -58,7 +58,7 @@ class PushNoticesTest {
 
         assertEquals(setOf("groupId", "kind"), wire.keys)
         assertEquals(JsonPrimitive("joined"), wire["kind"])
-        assertEquals(setOf("groupId", "kind", "about", "from", "to", "amount", "currency"), notices.payment(payment).toWire("g1").keys)
+        assertEquals(setOf("groupId", "kind", "about", "from", "to"), notices.payment(payment).toWire("g1").keys)
     }
 
     @Test
