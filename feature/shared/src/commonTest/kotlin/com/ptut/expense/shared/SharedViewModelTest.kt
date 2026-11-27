@@ -3,10 +3,12 @@ package com.ptut.expense.shared
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.shared.CreateGroupUseCase
 import com.ptut.expense.domain.shared.CreatePersonGroupUseCase
+import com.ptut.expense.domain.shared.DismissRefusedChangeUseCase
 import com.ptut.expense.domain.shared.GetSharedHomeUseCase
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.Member
 import com.ptut.expense.domain.shared.NewMember
+import com.ptut.expense.domain.shared.ObserveRefusedChangesUseCase
 import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
 import com.ptut.expense.domain.shared.ObserveSyncStatusUseCase
 import com.ptut.expense.domain.shared.PollSyncUseCase
@@ -15,15 +17,16 @@ import com.ptut.expense.domain.shared.SharedGroup
 import com.ptut.expense.domain.shared.SharedRepository
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.today.GetHomeTodayUseCase
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
+import com.ptut.expense.sync.RefusedChange
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 
 class SharedViewModelTest : ViewModelTest() {
 
@@ -197,4 +200,36 @@ class SharedViewModelTest : ViewModelTest() {
         createGroupUseCase = CreateGroupUseCase(repository),
         createPersonGroup = CreatePersonGroupUseCase(repository),
     )
+
+    /** #194: a member removed while offline: the group is gone, and what they typed must not go unseen. */
+    @Test
+    fun `a change refused by a group no longer here is listed and Done puts it away`() = runTest {
+        val repository = FakeSharedRepository()
+        val sync = FakeSync().apply {
+            refusedChanges.value = listOf(
+                RefusedChange("version:v1", "gone", "QA4", "Dinner", amountMinor = 8_000, currency = "THB"),
+                RefusedChange("version:v2", "g1", "Flat", "Rent", amountMinor = 100, currency = "THB"),
+            )
+        }
+        val viewModel = SharedViewModel(
+            observeSnapshot = ObserveSharedSnapshotUseCase(repository),
+            observeSyncStatus = ObserveSyncStatusUseCase(),
+            pollSync = PollSyncUseCase(),
+            getSharedHome = GetSharedHomeUseCase(GetHomeTodayUseCase()),
+            createGroupUseCase = CreateGroupUseCase(repository),
+            createPersonGroup = CreatePersonGroupUseCase(repository),
+            observeRefused = ObserveRefusedChangesUseCase(sync),
+            dismissRefused = DismissRefusedChangeUseCase(sync),
+        )
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+
+        // The group still here ("g1") shows its own on its screen.
+        assertEquals(listOf("QA4 didn't accept: Dinner ฿80.00"), viewModel.uiState.value.lost.map { it.line })
+
+        viewModel.dismissLost("version:v1")
+        runCurrent()
+
+        assertEquals(emptyList(), viewModel.uiState.value.lost)
+    }
 }

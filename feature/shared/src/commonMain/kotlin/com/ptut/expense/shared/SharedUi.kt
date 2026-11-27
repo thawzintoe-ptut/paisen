@@ -34,6 +34,7 @@ import com.ptut.expense.domain.spoken
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.sync.SyncHealth
+import com.ptut.expense.ui.sky.CappedFontScale
 import com.ptut.expense.ui.sky.SkyEmptyState
 import com.ptut.expense.ui.sky.SkyRollingAmount
 import kotlinx.datetime.LocalDate
@@ -78,8 +79,15 @@ fun GroupType.label(): String {
 }
 
 /** This phone's member is "You" everywhere, whatever name it is stored under (#187 gives it one). */
-fun SharedGroup.displayName(memberId: String): String =
-    if (isMe(memberId)) AppText.copy.common.you else member(memberId)?.name ?: AppText.copy.shared.someone
+fun SharedGroup.displayName(memberId: String): String {
+    if (isMe(memberId)) return AppText.copy.common.you
+    val member = member(memberId) ?: return AppText.copy.shared.someone
+    // Two names alike ("Thaw pays Thaw") are told apart on screen only: "Thaw", "Thaw (2)". By id,
+    // which every phone holds the same, so the group agrees on who is which.
+    val alike = members.filter { it.name == member.name && !isMe(it.id) }.sortedBy { it.id }
+    val place = alike.indexOfFirst { it.id == member.id }
+    return if (place <= 0) member.name else "${member.name} (${place + 1})"
+}
 
 fun Member.initial(): String = initialOf(name)
 
@@ -111,13 +119,16 @@ fun MemberAvatar(label: String, isMe: Boolean, modifier: Modifier = Modifier, si
             .clip(CircleShape)
             .background(if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.ptut.infoBg),
     ) {
-        Text(
-            text = if (isMe) you else label,
-            style = MaterialTheme.typography.titleSmall,
-            color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            modifier = Modifier.clearAndSetSemantics {},
-        )
+        // The circle does not grow, so "သင်" at a large font setting would be cut by it.
+        CappedFontScale(max = 1f) {
+            Text(
+                text = if (isMe) you else label,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                modifier = Modifier.clearAndSetSemantics {},
+            )
+        }
     }
 }
 

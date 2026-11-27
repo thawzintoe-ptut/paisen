@@ -94,6 +94,8 @@ fun GroupDetailView(
     onAddExpense: () -> Unit,
     onOpenExpense: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** #194: enter a refused expense again, with its amount and description filled in. */
+    onAddAgain: (amount: String, description: String) -> Unit = { _, _ -> },
     invite: GroupInvite = GroupInvite(),
     /** #185: set up a repeat, or open one to change or stop it. */
     /** Null leaves "Repeat an expense" out of the menu (#116). */
@@ -125,7 +127,7 @@ fun GroupDetailView(
         }
 
         is GroupDetailUiState.Loaded -> Loaded(
-            uiState, onBack, onSettleUp, onBalances, onAddExpense, onOpenExpense, invite, onRepeat, onOpenRepeat, manage, refreshing, onRefresh, tabs, modifier, play,
+            uiState, onBack, onSettleUp, onBalances, onAddExpense, onOpenExpense, invite, onRepeat, onOpenRepeat, manage, refreshing, onRefresh, tabs, modifier, play, onAddAgain,
         )
     }
 }
@@ -147,6 +149,7 @@ private fun Loaded(
     tabs: GroupTabsState,
     modifier: Modifier = Modifier,
     play: GroupPlayEntries = GroupPlayEntries(),
+    onAddAgain: (amount: String, description: String) -> Unit = { _, _ -> },
 ) {
     val text = LocalCopy.current.shared
     var menu by rememberSaveable { mutableStateOf(false) }
@@ -215,6 +218,7 @@ private fun Loaded(
                             onSettleUp = onSettleUp,
                             refreshing = refreshing,
                             onRetrySync = onRefresh,
+                            onAddAgain = onAddAgain,
                         )
                     }
                 }

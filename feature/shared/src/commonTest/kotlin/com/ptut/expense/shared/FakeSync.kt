@@ -2,6 +2,7 @@ package com.ptut.expense.shared
 
 import com.ptut.expense.sync.GroupSyncStatus
 import com.ptut.expense.sync.JoinChoice
+import com.ptut.expense.sync.RefusedChange
 import com.ptut.expense.sync.SharedSyncApi
 import com.ptut.expense.sync.SyncHealth
 import com.ptut.expense.sync.SyncOutcome
@@ -31,6 +32,10 @@ internal class FakeSync(signedIn: Boolean = true) : SharedSyncApi {
     override fun status(groupId: String): Flow<GroupSyncStatus> = flowOf(GroupSyncStatus(SyncHealth.UpToDate, 0))
     override fun overallStatus(): Flow<GroupSyncStatus> = status("")
     override fun acknowledgeRefused(groupId: String) = Unit
+    override val refusedChanges = MutableStateFlow<List<RefusedChange>>(emptyList())
+    override suspend fun dismissRefused(id: String) {
+        refusedChanges.value = refusedChanges.value.filterNot { it.id == id }
+    }
     override suspend fun syncAll(): Boolean = false
     override suspend fun syncAllOutcome(withReactions: Boolean): SyncOutcome = SyncOutcome(groupsChanged = false, failed = false)
     override suspend fun syncGroupOutcome(groupId: String, withReactions: Boolean): SyncOutcome = throw AssertionError("not in these tests")

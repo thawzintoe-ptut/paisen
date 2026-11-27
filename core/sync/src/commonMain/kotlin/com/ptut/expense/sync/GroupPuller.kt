@@ -68,12 +68,14 @@ internal class GroupPuller(
         } catch (refused: FirestoreException) {
             // The creator took this account out of the group: nothing in it can be read here any more.
             if (refused.status != FirestoreStatus.FORBIDDEN) throw refused
+            dao.keepUnsent(groupId, now())
             dao.forgetGroup(groupId)
             return PullResult.Removed
         } ?: return goneFromServer(groupId)
         val fields = remote.fields
         // The creator deleted it for everyone: it goes from this phone too. Your own spending stays.
         if (fields.bool("deleted")) {
+            dao.keepUnsent(groupId, now())
             dao.forgetGroup(groupId)
             return PullResult.Removed
         }

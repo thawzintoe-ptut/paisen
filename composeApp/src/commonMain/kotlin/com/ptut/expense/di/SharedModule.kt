@@ -35,6 +35,8 @@ val sharedModule: Module = module {
             getSharedHome = get(),
             createGroupUseCase = get(),
             createPersonGroup = get(),
+            observeRefused = get(),
+            dismissRefused = get(),
             toasts = get(),
             usage = getOrNull() ?: UsageLog.None,
         )
@@ -65,6 +67,7 @@ val sharedModule: Module = module {
             categories = storedCategories(),
             observeSnapshot = get(),
             observeSyncStatus = get(),
+            observeRefused = get(),
             getSyncAccess = get(),
             pollSync = get(),
             trackSeen = get(),

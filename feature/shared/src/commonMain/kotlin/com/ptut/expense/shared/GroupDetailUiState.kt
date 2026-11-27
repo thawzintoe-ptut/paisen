@@ -47,6 +47,9 @@ enum class GroupTab { Expenses, Balances, Activity }
 /** #63: "with Aye · ฿350", and the payment Record payment opens with. */
 data class SettleUpUiModel(val fromId: String, val toId: String, val line: String)
 
+/** Add expense's prefill for a refused expense: the amount as typed ("80.00") and its description. */
+data class AddAgainUiModel(val amount: String, val description: String)
+
 sealed interface GroupDetailUiState {
     data object Missing : GroupDetailUiState
 
@@ -72,6 +75,8 @@ sealed interface GroupDetailUiState {
         val days: List<GroupDay>,
         /** #189: "Up to date", "Offline · 3 changes waiting", or null for a group not shared yet. */
         val syncLine: String? = null,
+        /** #194: the first expense the group refused, ready to be entered again. Null when none can be. */
+        val addAgain: AddAgainUiModel? = null,
         /** #190: whether this build can share at all, and whether this phone may change the link. */
         val canInvite: Boolean = false,
         val isCreator: Boolean = false,

@@ -166,6 +166,12 @@ internal class FakeSharedDao : SharedDao {
 
     override suspend fun clearRefused(groupId: String) = refusedRows.update { old -> old.filterNot { it.groupId == groupId } }
 
+    override suspend fun deleteRefused(id: String) = refusedRows.update { old -> old.filterNot { it.id == id } }
+
+    override suspend fun clearAllRefused() {
+        refusedRows.value = emptyList()
+    }
+
     override fun observeOutbox(): Flow<List<SyncOutboxEntity>> = outboxRows
 
     override suspend fun outbox(): List<SyncOutboxEntity> = outboxRows.value

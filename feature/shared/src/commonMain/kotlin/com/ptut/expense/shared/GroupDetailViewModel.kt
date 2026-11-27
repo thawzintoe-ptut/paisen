@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.shared.AcknowledgeRefusedUseCase
+import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GetGroupDetailUseCase
 import com.ptut.expense.domain.shared.GetSyncAccessUseCase
+import com.ptut.expense.domain.shared.ObserveRefusedChangesUseCase
 import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
 import com.ptut.expense.domain.shared.ObserveSyncStatusUseCase
 import com.ptut.expense.domain.shared.PollSyncUseCase
@@ -16,12 +18,15 @@ import com.ptut.expense.domain.shared.RemovePaymentUseCase
 import com.ptut.expense.domain.shared.SavePromptPayUseCase
 import com.ptut.expense.domain.shared.SyncGroupNowUseCase
 import com.ptut.expense.domain.shared.TrackGroupSeenUseCase
+import com.ptut.expense.domain.shared.typedText
 import com.ptut.expense.locale.AppText
+import com.ptut.expense.sync.RefusedChange
 import com.ptut.expense.ui.Haptics
 import com.ptut.expense.ui.ToastAction
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.ToastTone
+import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +36,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlin.time.Clock
 
 /**
  * #137: one group. The sky field holds the members, your balance and the spend in the group's
@@ -50,6 +54,7 @@ class GroupDetailViewModel(
     private val getGroupDetail: GetGroupDetailUseCase,
     private val syncGroupNow: SyncGroupNowUseCase,
     private val acknowledgeRefused: AcknowledgeRefusedUseCase,
+    observeRefused: ObserveRefusedChangesUseCase = ObserveRefusedChangesUseCase(),
     private val savePromptPay: SavePromptPayUseCase,
     /** Not named removePayment: a call by that name reaches this screen's own [removePayment]. */
     private val removePaymentUseCase: RemovePaymentUseCase,
@@ -74,9 +79,22 @@ class GroupDetailViewModel(
         viewModelScope.launch { trackSeen(groupId).collect { seenBefore.value = it } }
     }
 
-    val uiState: StateFlow<GroupDetailUiState> = combine(observeSnapshot(), observeSyncStatus(groupId), pollSync(groupId), seenBefore) { snapshot, status, _, seen ->
-        getGroupDetail(snapshot, groupId, seen)?.let { detail -> mapper.loaded(detail, status, syncAvailable = access.available) } ?: GroupDetailUiState.Missing
+    // Polling rides on the status flow, so the combine below stays typed.
+    private val polledStatus = combine(observeSyncStatus(groupId), pollSync(groupId)) { status, _ -> status }
+
+    val uiState: StateFlow<GroupDetailUiState> = combine(observeSnapshot(), polledStatus, seenBefore, observeRefused()) { snapshot, status, seen, refused ->
+        getGroupDetail(snapshot, groupId, seen)?.let { detail ->
+            mapper.loaded(detail, status, syncAvailable = access.available).copy(addAgain = refused.firstOrNull { it.groupId == groupId }?.addAgain())
+        } ?: GroupDetailUiState.Missing
     }.flowOn(work).stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), GroupDetailUiState.Missing)
+
+    /** Only an expense can be entered again: it has a name and an amount in a money this build knows. */
+    private fun RefusedChange.addAgain(): AddAgainUiModel? {
+        val minor = amountMinor ?: return null
+        val code = currency ?: return null
+        if (title.isBlank()) return null
+        return AddAgainUiModel(amount = Currencies.of(code).typedText(minor), description = title)
+    }
 
     private val tabState = MutableStateFlow(GroupTab.Expenses)
     val tab: StateFlow<GroupTab> = tabState
@@ -141,6 +159,8 @@ class GroupDetailViewModel(
     }
 
     override fun onCleared() {
-        acknowledgeRefused(groupId)
+        // Only a group still here has shown its refusals. One that left this phone while the screen
+        // was open leaves them for the Shared tab, the one place that can still say what did not go.
+        if (uiState.value is GroupDetailUiState.Loaded) acknowledgeRefused(groupId)
     }
 }

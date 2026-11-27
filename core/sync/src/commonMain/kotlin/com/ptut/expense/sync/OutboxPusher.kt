@@ -55,7 +55,14 @@ internal class OutboxPusher(
     val refused: Flow<Map<String, List<String>>> =
         dao.observeRefused().map { rows -> rows.groupBy({ it.groupId }, { it.title }) }
 
+    /** Every refused change still kept, oldest first, also those whose group has left this phone. */
+    val refusedChanges: Flow<List<RefusedChange>> = dao.observeRefused().map { rows ->
+        rows.map { RefusedChange(it.id, it.groupId, it.groupName, it.title, it.amountMinor, it.currency) }
+    }
+
     suspend fun acknowledgeRefused(groupId: String) = dao.clearRefused(groupId)
+
+    suspend fun dismissRefused(id: String) = dao.deleteRefused(id)
 
     /**
      * #194: a change the server refuses for good (a 4xx other than an expired session, a timeout
@@ -78,7 +85,7 @@ internal class OutboxPusher(
             } catch (refusal: FirestoreException) {
                 if (refusal.isPermanent()) {
                     // Kept before the change leaves this phone, so what was typed is never lost unseen.
-                    dao.insertRefused(refusedChange(row))
+                    dao.insertRefused(dao.refusedChange(row, now()))
                     dao.dequeue(row.id, row.createdAtEpochMillis)
                     takeBack(row)
                 } else {
@@ -88,19 +95,6 @@ internal class OutboxPusher(
             }
         }
         namesChanged.forEach { publishNames(it) }
-    }
-
-    private suspend fun refusedChange(row: SyncOutboxEntity): RefusedChangeEntity {
-        val version = if (row.kind == KIND_VERSION) dao.version(row.rowId) else null
-        val payment = if (row.kind == KIND_PAYMENT) dao.payment(row.rowId) else null
-        return RefusedChangeEntity(
-            id = row.id,
-            groupId = row.groupId,
-            title = version?.description.orEmpty(),
-            amountMinor = version?.amountMinor ?: payment?.amountSatang,
-            currency = version?.currency ?: payment?.let { dao.group(row.groupId)?.currency },
-            refusedAtEpochMillis = now(),
-        )
     }
 
     /** From Room, as [upload] reads them: what was saved just before Share may not be in the snapshot yet. */
@@ -281,6 +275,31 @@ internal class OutboxPusher(
     }
 
     private fun now(): Long = clock.now().toEpochMilliseconds()
+}
+
+/** What [row] was, read before it leaves this phone: an expense's name and amount, a payment's amount. */
+internal suspend fun SharedDao.refusedChange(row: SyncOutboxEntity, at: Long): RefusedChangeEntity {
+    val version = if (row.kind == KIND_VERSION) version(row.rowId) else null
+    val payment = if (row.kind == KIND_PAYMENT) payment(row.rowId) else null
+    val group = group(row.groupId)
+    return RefusedChangeEntity(
+        id = row.id,
+        groupId = row.groupId,
+        title = version?.description.orEmpty(),
+        amountMinor = version?.amountMinor ?: payment?.amountSatang,
+        currency = version?.currency ?: payment?.let { group?.currency },
+        refusedAtEpochMillis = at,
+        groupName = group?.name,
+    )
+}
+
+/**
+ * A group is about to leave this phone because the server no longer lets this account in. Its
+ * expenses and payments that never went up are kept as refused, so the reader still sees them.
+ */
+internal suspend fun SharedDao.keepUnsent(groupId: String, at: Long) {
+    outbox().filter { it.groupId == groupId && (it.kind == KIND_VERSION || it.kind == KIND_PAYMENT) }
+        .forEach { insertRefused(refusedChange(it, at)) }
 }
 
 /** A group and its members as Room holds them now, which the snapshot may not show yet. */

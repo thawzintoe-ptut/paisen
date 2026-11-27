@@ -251,6 +251,12 @@ interface SharedDao {
     @Query("DELETE FROM refused_change WHERE groupId = :groupId")
     suspend fun clearRefused(groupId: String)
 
+    @Query("DELETE FROM refused_change WHERE id = :id")
+    suspend fun deleteRefused(id: String)
+
+    @Query("DELETE FROM refused_change")
+    suspend fun clearAllRefused()
+
     @Query("SELECT COUNT(*) FROM sync_outbox WHERE id = :outboxId")
     suspend fun queued(outboxId: String): Int
 
@@ -383,7 +389,7 @@ interface SharedDao {
         deletePaymentsOf(groupId)
         deletePaymentRemovalsOf(groupId)
         deleteOutboxOf(groupId)
-        clearRefused(groupId)
+        // refused_change stays: it is how a member removed while offline learns what did not go.
         deleteGroup(groupId)
     }
 
@@ -395,7 +401,11 @@ interface SharedDao {
     suspend fun forgetSharedGroupsUnlessWaiting(): Int {
         val remote = remoteGroupIds()
         val waiting = outbox().count { it.groupId in remote }
-        if (waiting == 0) remote.forEach { forgetGroup(it) }
+        if (waiting == 0) {
+            remote.forEach { forgetGroup(it) }
+            // What one account could not send is not shown to the next one on this phone.
+            clearAllRefused()
+        }
         return waiting
     }
 

@@ -79,6 +79,7 @@ import com.ptut.expense.design.ptutMotion
 import com.ptut.expense.design.rememberGlassBackdrop
 import com.ptut.expense.design.tappable
 import com.ptut.expense.locale.LocalCopy
+import com.ptut.expense.ui.sky.CappedFontScale
 
 /**
  * The chrome around the nav graph: a floating tab capsule with Add beside it (V2 N01–N05, #106),
@@ -328,16 +329,19 @@ private fun NavTab(
                     scaleY = pop.value
                 },
         )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            color = ink,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.clearAndSetSemantics {},
-        )
+        // Four tabs share the bar's width, so a label stops growing before it is cut to "အစီ…".
+        CappedFontScale(max = NAV_LABEL_FONT_SCALE) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = ink,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clearAndSetSemantics {},
+            )
+        }
     }
 }
 
@@ -415,6 +419,8 @@ private fun Modifier.navShadow(): Modifier = shadow(
  * showed as grey smears; at 0.72 they blur to soft shapes, as iOS glass lets them, and the idle
  * tabs on onSurface keep #123's 3:1.
  */
+/** How far a tab's label follows the reader's font setting: past this it no longer fits beside three others. */
+private const val NAV_LABEL_FONT_SCALE = 1.15f
 private const val FROST_TINT = 0.72f
 
 /**

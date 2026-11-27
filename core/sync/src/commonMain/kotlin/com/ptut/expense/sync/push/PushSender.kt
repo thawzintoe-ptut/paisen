@@ -1,6 +1,7 @@
 package com.ptut.expense.sync.push
 
 import com.ptut.expense.domain.runSuspendCatching
+import com.ptut.expense.sync.syncLog
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.header
@@ -50,8 +51,8 @@ class PushSender internal constructor(
             }
         }.fold(
             // Still not retried, but no longer silent: the kind and the status only, never the notice.
-            onSuccess = { response -> if (!response.status.isSuccess()) println("push ${notice.kind.wire} refused: ${response.status.value}") },
-            onFailure = { failure -> println("push ${notice.kind.wire} not sent: ${failure::class.simpleName}") },
+            onSuccess = { response -> if (!response.status.isSuccess()) syncLog("push ${notice.kind.wire} refused: ${response.status.value}") },
+            onFailure = { failure -> syncLog("push ${notice.kind.wire} not sent: ${failure::class.simpleName}") },
         )
     }
 

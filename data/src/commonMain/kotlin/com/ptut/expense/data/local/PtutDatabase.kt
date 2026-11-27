@@ -144,6 +144,8 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         AutoMigration(from = 27, to = 28),
         // The nullable shared_group.reactionsSyncedAtEpochMillis, so a cold start no longer lists every reaction again.
         AutoMigration(from = 28, to = 29),
+        // The nullable refused_change.groupName, so a refusal still names its group once the group is gone.
+        AutoMigration(from = 29, to = 30),
     ],
     exportSchema = true,
 )
@@ -185,4 +187,4 @@ expect object PtutDatabaseConstructor : RoomDatabaseConstructor<PtutDatabase> {
 }
 
 /** Read by `verifySchemaFrozen` and written into each crash report. Bump it with a new N.json, never edit an old one. */
-const val PTUT_SCHEMA_VERSION = 29
+const val PTUT_SCHEMA_VERSION = 30

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -93,6 +94,8 @@ fun SharedView(
     onOpenPeople: (() -> Unit)? = {},
     /** The next-step card: record the one payment you owe, from you to them in that group. */
     onPay: (groupId: String, fromMemberId: String, toMemberId: String, amount: String) -> Unit = { _, _, _, _ -> },
+    /** #194: the reader has seen a change a group no longer here would not take. */
+    onDismissLost: (String) -> Unit = {},
 ) {
     var sheet by rememberSaveable { mutableStateOf<String?>(null) }
     val people = when (uiState) {
@@ -100,15 +103,16 @@ fun SharedView(
         is SharedUiState.Ready -> uiState.knownPeople
     }
 
-    when (uiState) {
-        is SharedUiState.Empty -> NothingShared(
+    val body: @Composable (Modifier) -> Unit = { inner ->
+        when (uiState) {
+            is SharedUiState.Empty -> NothingShared(
             // One tap, one group: a trip by default, renamed later in Group settings if it is not one.
             onStartGroup = { onCreateGroup(GroupType.Trip.label(), GroupType.Trip, GroupType.Trip.defaultIcon(), emptyList(), Home.money.code) },
             onJoinCode = { sheet = SHEET_CODE },
-            modifier = modifier,
+            modifier = inner,
         )
 
-        is SharedUiState.Ready -> Balances(
+            is SharedUiState.Ready -> Balances(
             state = uiState,
             onAdd = { sheet = SHEET_CHOICE },
             onPay = onPay,
@@ -116,8 +120,18 @@ fun SharedView(
             onOpenGroup = onOpenGroup,
             onOpenActivity = onOpenActivity,
             onOpenPeople = onOpenPeople,
-            modifier = modifier,
+            modifier = inner,
         )
+        }
+    }
+    // Above everything, and only when there is something: what was typed and did not go is never hidden.
+    if (uiState.lost.isEmpty()) {
+        body(modifier)
+    } else {
+        Column(modifier) {
+            LostChanges(uiState.lost, onDismissLost)
+            body(Modifier.weight(1f))
+        }
     }
 
     when (sheet) {
@@ -161,6 +175,19 @@ fun SharedView(
             onSignedIn = { sheet = null },
             onDismiss = { sheet = null },
         )
+    }
+}
+
+/** #194: one line per change a group that has left this phone would not take, each put away with Done. */
+@Composable
+private fun LostChanges(lost: List<LostChangeUiModel>, onDismiss: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.tertiaryContainer).statusBarsPadding().padding(horizontal = Spacing.md, vertical = Spacing.xs)) {
+        lost.forEach { change ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(change.line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                SkyTextAction(label = LocalCopy.current.common.done, onClick = { onDismiss(change.id) }, enabled = true)
+            }
+        }
     }
 }
 

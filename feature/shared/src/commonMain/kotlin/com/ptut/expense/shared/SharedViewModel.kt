@@ -11,9 +11,11 @@ import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.CreateGroupUseCase
 import com.ptut.expense.domain.shared.CreatePersonGroupUseCase
 import com.ptut.expense.domain.shared.Currencies
+import com.ptut.expense.domain.shared.DismissRefusedChangeUseCase
 import com.ptut.expense.domain.shared.GetSharedHomeUseCase
 import com.ptut.expense.domain.shared.GroupType
 import com.ptut.expense.domain.shared.NewMember
+import com.ptut.expense.domain.shared.ObserveRefusedChangesUseCase
 import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
 import com.ptut.expense.domain.shared.ObserveSyncStatusUseCase
 import com.ptut.expense.domain.shared.Overall
@@ -24,6 +26,7 @@ import com.ptut.expense.domain.shared.RepeatRule
 import com.ptut.expense.domain.shared.SharedHome
 import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.balanceKey
+import com.ptut.expense.domain.shared.formatMinor
 import com.ptut.expense.domain.shared.money
 import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.typedText
@@ -32,6 +35,7 @@ import com.ptut.expense.domain.usage.UsageEvent
 import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.sync.GroupSyncStatus
+import com.ptut.expense.sync.RefusedChange
 import com.ptut.expense.sync.SyncHealth
 import com.ptut.expense.ui.ToastMessage
 import com.ptut.expense.ui.ToastMessages
@@ -83,9 +87,15 @@ data class PayNextUiModel(
     val amount: String,
 )
 
+/** #194: one change a group refused and that group has since left this phone, as "QA4 didn't accept: Dinner ฿80.00". */
+data class LostChangeUiModel(val id: String, val line: String)
+
 sealed interface SharedUiState {
+    /** What groups no longer here would not take; a member removed while offline reads theirs here. */
+    val lost: List<LostChangeUiModel>
+
     /** p34: before any group exists. */
-    data class Empty(val people: List<Person>) : SharedUiState
+    data class Empty(val people: List<Person>, override val lost: List<LostChangeUiModel> = emptyList()) : SharedUiState
 
     data class Ready(
         /** One per money the groups count in, the home's first; two moneys are never one figure (#48). */
@@ -101,6 +111,7 @@ sealed interface SharedUiState {
         val syncLine: String? = null,
         /** #218: shared groups on a phone whose session ended. The line offers Sign in. */
         val signedOut: Boolean = false,
+        override val lost: List<LostChangeUiModel> = emptyList(),
     ) : SharedUiState
 }
 
@@ -116,6 +127,8 @@ class SharedViewModel(
     private val getSharedHome: GetSharedHomeUseCase,
     private val createGroupUseCase: CreateGroupUseCase,
     private val createPersonGroup: CreatePersonGroupUseCase,
+    observeRefused: ObserveRefusedChangesUseCase = ObserveRefusedChangesUseCase(),
+    private val dismissRefused: DismissRefusedChangeUseCase = DismissRefusedChangeUseCase(),
     private val toasts: ToastMessages? = null,
     /** #115: a count per group made here. */
     private val usage: UsageLog = UsageLog.None,
@@ -123,13 +136,32 @@ class SharedViewModel(
 
     private val query = MutableStateFlow("")
 
-    val uiState: StateFlow<SharedUiState> = combine(observeSnapshot(), query, observeSyncStatus(), pollSync()) { snapshot, query, status, _ ->
+    // Polling rides on the status flow, so the five-flow combine below stays typed.
+    private val polledStatus = combine(observeSyncStatus(), pollSync()) { status, _ -> status }
+
+    val uiState: StateFlow<SharedUiState> = combine(observeSnapshot(), query, polledStatus, observeRefused()) { snapshot, query, status, refused ->
+        // A group still here shows its own refusals on its screen; only the ones left behind show here.
+        val here = snapshot.groups.map { it.id }.toSet()
+        val lost = refused.filterNot { it.groupId in here }.map { it.lostLine() }
         if (snapshot.groups.isEmpty()) {
-            SharedUiState.Empty(snapshot.people)
+            SharedUiState.Empty(snapshot.people, lost)
         } else {
-            getSharedHome(snapshot, query).ready(snapshot, query).copy(syncLine = status.line(), signedOut = status.health == SyncHealth.SignedOut)
+            getSharedHome(snapshot, query).ready(snapshot, query).copy(syncLine = status.line(), signedOut = status.health == SyncHealth.SignedOut, lost = lost)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), SharedUiState.Empty(emptyList()))
+
+    fun dismissLost(id: String) {
+        viewModelScope.launch { dismissRefused(id) }
+    }
+
+    private fun RefusedChange.lostLine(): LostChangeUiModel {
+        val text = AppText.copy.shared
+        val group = groupName ?: text.group
+        val amount = amountMinor?.let { minor -> currency?.let { formatMinor(minor, Currencies.of(it)) } }
+        val what = listOfNotNull(title.takeIf { it.isNotBlank() }, amount).joinToString(" ")
+        return LostChangeUiModel(id, if (what.isEmpty()) text.home.lostChange(group) else text.home.lost(group, what))
+    }
+
 
     /** Quiet when all is sent: the line is there only while something waits or was refused. */
     private fun GroupSyncStatus.line(): String? {

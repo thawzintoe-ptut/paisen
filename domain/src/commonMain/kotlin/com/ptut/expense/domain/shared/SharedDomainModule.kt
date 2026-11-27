@@ -30,6 +30,8 @@ val sharedUseCases: Module = module {
     factory { SyncGroupNowUseCase(getOrNull(), runDueRepeats = getOrNull()) }
     factory { SyncAllNowUseCase(getOrNull()) }
     factory { AcknowledgeRefusedUseCase(getOrNull()) }
+    factory { ObserveRefusedChangesUseCase(getOrNull()) }
+    factory { DismissRefusedChangeUseCase(getOrNull()) }
     factory { ShareGroupUseCase(getOrNull()) }
     factory { RenewInviteUseCase(getOrNull()) }
     factory { SwitchOffInviteUseCase(getOrNull()) }

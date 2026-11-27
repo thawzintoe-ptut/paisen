@@ -6,7 +6,8 @@ import androidx.room.PrimaryKey
 
 /**
  * #194: a change the group refused for good. The change itself left this phone so its balances
- * match everyone's; this row keeps what it was, so the reader can enter it again after a restart.
+ * match everyone's; this row keeps what it was, so the reader can enter it again after a restart,
+ * and outlives its group: a member removed while offline still sees what did not go.
  * [title] is blank for a change that is not an expense, and [amountMinor] null when there was none.
  */
 @Entity(tableName = "refused_change", indices = [Index("groupId")])
@@ -18,4 +19,6 @@ data class RefusedChangeEntity(
     val amountMinor: Long?,
     val currency: String?,
     val refusedAtEpochMillis: Long,
+    /** Schema 30: the group's name then, so the row still says where it was after the group has left this phone. */
+    val groupName: String? = null,
 )

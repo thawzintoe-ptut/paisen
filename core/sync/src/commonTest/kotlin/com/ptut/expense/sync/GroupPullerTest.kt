@@ -268,6 +268,20 @@ class GroupPullerTest {
     }
 
     @Test
+    fun `a payment that never went up is kept as refused when its group leaves this phone`() = runTest {
+        holds("g1")
+        queuePayment(dao, "p1", "g1")
+        firestore.docs["groups/g1"] = groupDoc("g1", deleted = true)
+
+        assertEquals(PullResult.Removed, puller.pull("g1"))
+
+        val kept = dao.refusedRows.value.single()
+        assertEquals("payment:p1", kept.id)
+        assertNotNull(kept.amountMinor)
+        assertNotNull(kept.groupName)
+    }
+
+    @Test
     fun `a group whose document is gone leaves this phone unless a change still waits`() = runTest {
         holds("g1")
         firestore.docs.remove("groups/g1")

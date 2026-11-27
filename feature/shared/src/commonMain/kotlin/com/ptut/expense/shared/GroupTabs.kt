@@ -67,6 +67,7 @@ internal fun GroupHeader(
     modifier: Modifier = Modifier,
     refreshing: Boolean = false,
     onRetrySync: () -> Unit = {},
+    onAddAgain: (amount: String, description: String) -> Unit = { _, _ -> },
 ) {
     val text = LocalCopy.current.shared
     val on = MaterialTheme.ptut.heroOn
@@ -123,6 +124,9 @@ internal fun GroupHeader(
                     SkyTextAction(label = LocalCopy.current.common.tryAgain, onClick = onRetrySync, enabled = !refreshing, ink = on)
                 }
             }
+        }
+        state.addAgain?.let { again ->
+            SkyTextAction(label = text.home.addAgain, onClick = { onAddAgain(again.amount, again.description) }, enabled = true, ink = on, modifier = Modifier.offset(x = -Spacing.xs))
         }
         if (state.signedOut) {
             SkyTextAction(label = text.signIn, onClick = onSignIn, enabled = true, ink = on, modifier = Modifier.offset(x = -Spacing.xs))

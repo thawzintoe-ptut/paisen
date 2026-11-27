@@ -2,6 +2,7 @@ package com.ptut.expense.domain.shared
 
 import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.sync.GroupSyncStatus
+import com.ptut.expense.sync.RefusedChange
 import com.ptut.expense.sync.SharedSyncApi
 import com.ptut.expense.sync.SyncHealth
 import kotlinx.coroutines.flow.Flow
@@ -82,5 +83,17 @@ class SyncAllNowUseCase(private val sync: SharedSyncApi? = null) {
 class AcknowledgeRefusedUseCase(private val sync: SharedSyncApi? = null) {
     operator fun invoke(groupId: String) {
         sync?.acknowledgeRefused(groupId)
+    }
+}
+
+/** Changes a group refused for good and this phone still keeps, also for a group that has left it. */
+class ObserveRefusedChangesUseCase(private val sync: SharedSyncApi? = null) {
+    operator fun invoke(): Flow<List<RefusedChange>> = sync?.refusedChanges ?: flowOf(emptyList())
+}
+
+/** The reader has seen one refused change and put it away. */
+class DismissRefusedChangeUseCase(private val sync: SharedSyncApi? = null) {
+    suspend operator fun invoke(id: String) {
+        sync?.dismissRefused(id)
     }
 }

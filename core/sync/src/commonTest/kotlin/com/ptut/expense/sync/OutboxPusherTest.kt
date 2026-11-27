@@ -176,6 +176,8 @@ class OutboxPusherTest {
         // Kept in Room with its amount, so a restart still shows what to enter again.
         assertEquals(listOf("payment:p1", "payment:p2"), dao.refusedRows.value.map { it.id })
         assertTrue(dao.refusedRows.value.all { it.amountMinor != null })
+        // Named after its group, so it still says where it was once the group has left this phone.
+        assertTrue(dao.refusedRows.value.all { it.groupName != null })
 
         pusher.acknowledgeRefused("g1")
         assertNull(pusher.refused.first()["g1"])

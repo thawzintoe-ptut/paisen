@@ -60,6 +60,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
         SharedView(
             uiState = state,
             onSearch = shared::search,
+            onDismissLost = shared::dismissLost,
             onPay = { groupId, from, to, amount -> nav.navigate(PtutRoute.RecordPayment(groupId, from, to, amount)) { launchSingleTop = true } },
             onCreateGroup = { name, type, icon, members, currency ->
                 shared.createGroup(name, type, icon, members, currency) { nav.navigate(PtutRoute.SharedGroup(it, invite = true)) }
@@ -163,6 +164,9 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
             onBalances = { nav.navigate(PtutRoute.WhoPaysWhom(groupId)) { launchSingleTop = true } },
             onAddExpense = { nav.navigate(PtutRoute.AddSharedExpense(groupId)) { launchSingleTop = true } },
             onOpenExpense = { nav.navigate(PtutRoute.AddSharedExpense(groupId, it)) { launchSingleTop = true } },
+            onAddAgain = { amount, description ->
+                nav.navigate(PtutRoute.AddSharedExpense(groupId, amount = amount, description = description)) { launchSingleTop = true }
+            },
             onRepeat = { nav.navigate(PtutRoute.RepeatExpense(groupId)) { launchSingleTop = true } }.takeIf { switches.v2 },
             onOpenRepeat = { id: String -> nav.navigate(PtutRoute.RepeatExpense(groupId, id)) { launchSingleTop = true } }.takeIf { switches.v2 },
             manage = GroupManage(
