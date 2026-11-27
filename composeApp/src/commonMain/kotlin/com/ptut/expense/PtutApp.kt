@@ -200,7 +200,11 @@ private fun LedgerShell() {
     val graphReady = currentEntry != null
     // #190: an invite link can arrive before the graph exists, so it waits in InviteLinks.
     TakeFromInbox(InviteLinks.pendingCode, graphReady, InviteLinks::consume) { code ->
-        navController.navigate(PtutRoute.Join(code)) { launchSingleTop = true }
+        navController.navigate(PtutRoute.Join(code)) {
+            // A Join already open holds its own code; a new link replaces it rather than reusing it.
+            popUpTo<PtutRoute.Join> { inclusive = true }
+            launchSingleTop = true
+        }
     }
 
     // "Restore from a backup" on the recovery screen opened an empty ledger first; Import follows.

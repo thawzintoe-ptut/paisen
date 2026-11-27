@@ -5,11 +5,14 @@ import com.ptut.expense.sync.FakeFirestore
 import com.ptut.expense.sync.FirestoreStatus
 import com.ptut.expense.sync.TestClock
 import com.ptut.expense.sync.auth.Account
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 
 class PushRegistrarTest {
 
@@ -30,6 +33,20 @@ class PushRegistrarTest {
 
         assertEquals(listOf("set devices/fid-1", "delete devices/fid-1"), firestore.writes)
         assertNull(leftovers.read())
+    }
+
+    @Test
+    fun `a device write that fails at launch is tried again so the phone still hears pushes`() = runTest {
+        val registrar = registrar(FakeAuth("uid-1"), MemoryPushLeftovers())
+        firestore.failing += "devices/fid-1"
+
+        registrar.start(backgroundScope)
+        runCurrent()
+        firestore.failing.clear()
+        advanceTimeBy(6.seconds)
+        registrar.forgetDevice()
+
+        assertTrue("delete devices/fid-1" in firestore.writes)
     }
 
     @Test

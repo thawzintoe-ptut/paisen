@@ -12,8 +12,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Keeps this phone's `devices/{token}` document in step with the account, the FCM token and the
@@ -39,18 +43,24 @@ class PushRegistrar internal constructor(
                 .collectLatest { (account, token, language) ->
                     settleLeftover(account, token)
                     if (account !is Account.SignedIn || token == null) return@collectLatest
-                    // A failure waits for the next change or launch; the phone still pulls on its own.
-                    runSuspendCatching {
-                        firestore.set(
-                            "devices/$token",
-                            mapOf(
-                                "uid" to account.uid,
-                                "platform" to pushPlatform,
-                                "language" to language.tag,
-                                "updatedAt" to clock.now().toEpochMilliseconds(),
-                            ),
-                        )
-                        registered.value = token
+                    // A failure that may pass (no network at launch, a token not ready) tries again after a
+                    // growing wait, or this phone hears no push until the next launch. A refusal does not.
+                    for (wait in listOf(Duration.ZERO) + RETRY_WAITS) {
+                        delay(wait)
+                        val written = runSuspendCatching {
+                            firestore.set(
+                                "devices/$token",
+                                mapOf(
+                                    "uid" to account.uid,
+                                    "platform" to pushPlatform,
+                                    "language" to language.tag,
+                                    "updatedAt" to clock.now().toEpochMilliseconds(),
+                                ),
+                            )
+                            registered.value = token
+                        }
+                        val refused = (written.exceptionOrNull() as? FirestoreException)?.let { FirestoreStatus.isPermanent(it.status) } == true
+                        if (written.isSuccess || refused) break
                     }
                 }
         }
@@ -105,3 +115,5 @@ class PushRegistrar internal constructor(
         return result.isSuccess || (refusal != null && FirestoreStatus.isPermanent(refusal.status))
     }
 }
+
+private val RETRY_WAITS = listOf(5.seconds, 30.seconds, 2.minutes, 10.minutes)
