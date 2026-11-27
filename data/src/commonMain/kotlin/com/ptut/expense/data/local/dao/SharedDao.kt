@@ -15,6 +15,7 @@ import com.ptut.expense.data.local.entity.GroupMemberEntity
 import com.ptut.expense.data.local.entity.PaymentReactionEntity
 import com.ptut.expense.data.local.entity.PaymentRemovalEntity
 import com.ptut.expense.data.local.entity.PersonEntity
+import com.ptut.expense.data.local.entity.RefusedChangeEntity
 import com.ptut.expense.data.local.entity.RepeatRuleEntity
 import com.ptut.expense.data.local.entity.SharedGroupEntity
 import com.ptut.expense.data.local.entity.SharedPaymentEntity
@@ -239,6 +240,17 @@ interface SharedDao {
         unlinkIfGone(version.expenseId)
     }
 
+    // ---- #194: changes the group refused for good ----------------------------------------
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRefused(change: RefusedChangeEntity)
+
+    @Query("SELECT * FROM refused_change ORDER BY refusedAtEpochMillis")
+    fun observeRefused(): Flow<List<RefusedChangeEntity>>
+
+    @Query("DELETE FROM refused_change WHERE groupId = :groupId")
+    suspend fun clearRefused(groupId: String)
+
     @Query("SELECT COUNT(*) FROM sync_outbox WHERE id = :outboxId")
     suspend fun queued(outboxId: String): Int
 
@@ -368,6 +380,7 @@ interface SharedDao {
         deletePaymentsOf(groupId)
         deletePaymentRemovalsOf(groupId)
         deleteOutboxOf(groupId)
+        clearRefused(groupId)
         deleteGroup(groupId)
     }
 

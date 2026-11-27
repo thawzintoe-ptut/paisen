@@ -11,9 +11,17 @@ import com.ptut.expense.sync.auth.authTimeOf
 import com.ptut.expense.sync.push.PushNotices
 import com.ptut.expense.sync.push.PushRegistrar
 import com.ptut.expense.sync.push.PushSender
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,12 +34,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.days
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 /**
  * #189: what the group screen says about sync. [SignedOut]: a shared group on a phone whose session ended (#218).
@@ -147,8 +149,15 @@ class SharedSync internal constructor(
         else -> GroupSyncStatus(SyncHealth.UpToDate, 0, notTaken)
     }
 
-    /** The group screen has said it once; the count starts again from zero. */
-    fun acknowledgeRefused(groupId: String) = pusher.acknowledgeRefused(groupId)
+    /**
+     * The group screen has said it once; the count starts again from zero. Called as the screen
+     * goes, so the delete runs on its own scope rather than the screen's, which is ending.
+     */
+    fun acknowledgeRefused(groupId: String) {
+        acknowledgeScope.launch { pusher.acknowledgeRefused(groupId) }
+    }
+
+    private val acknowledgeScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** True once a newer sign-in on another phone signed this one out, until the notice is read. */
     val signedOutElsewhere: StateFlow<Boolean> get() = endedHere

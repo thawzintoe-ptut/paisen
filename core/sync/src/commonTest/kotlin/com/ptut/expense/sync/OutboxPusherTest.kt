@@ -8,13 +8,14 @@ import com.ptut.expense.data.repository.KIND_PLAY
 import com.ptut.expense.data.repository.KIND_REACTION
 import com.ptut.expense.data.repository.KIND_TRIP_END
 import com.ptut.expense.data.repository.REACTION_GONE
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
 
 class OutboxPusherTest {
 
@@ -156,7 +157,7 @@ class OutboxPusherTest {
         assertEquals(listOf("payment:p1", "payment:p2"), dao.outboxRows.value.map { it.id })
         assertTrue(firestore.writes.none { "p2" in it })
         assertTrue("stamped groups/g2/entries/p3" in firestore.writes)
-        assertNull(pusher.refused.value["g1"])
+        assertNull(pusher.refused.first()["g1"])
         assertTrue("p1" in dao.payments)
         assertEquals(setOf("g1"), failed.value)
     }
@@ -170,10 +171,13 @@ class OutboxPusherTest {
         firestore.refusing["groups/g1/entries/p2"] = 403
 
         pusher.push()
-        assertEquals(2, pusher.refused.value["g1"]?.size)
+        assertEquals(2, pusher.refused.first()["g1"]?.size)
         assertFalse("p1" in dao.payments)
+        // Kept in Room with its amount, so a restart still shows what to enter again.
+        assertEquals(listOf("payment:p1", "payment:p2"), dao.refusedRows.value.map { it.id })
+        assertTrue(dao.refusedRows.value.all { it.amountMinor != null })
 
         pusher.acknowledgeRefused("g1")
-        assertNull(pusher.refused.value["g1"])
+        assertNull(pusher.refused.first()["g1"])
     }
 }

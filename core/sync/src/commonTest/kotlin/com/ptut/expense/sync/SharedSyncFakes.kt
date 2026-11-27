@@ -9,6 +9,7 @@ import com.ptut.expense.data.local.entity.GroupMemberEntity
 import com.ptut.expense.data.local.entity.PaymentReactionEntity
 import com.ptut.expense.data.local.entity.PaymentRemovalEntity
 import com.ptut.expense.data.local.entity.PersonEntity
+import com.ptut.expense.data.local.entity.RefusedChangeEntity
 import com.ptut.expense.data.local.entity.RepeatRuleEntity
 import com.ptut.expense.data.local.entity.SharedGroupEntity
 import com.ptut.expense.data.local.entity.SharedPaymentEntity
@@ -29,6 +30,9 @@ import com.ptut.expense.domain.shared.TransactionSeed
 import com.ptut.expense.sync.auth.Account
 import com.ptut.expense.sync.auth.AuthRepository
 import com.ptut.expense.sync.auth.ProviderToken
+import kotlin.io.encoding.Base64
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,9 +42,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import kotlin.io.encoding.Base64
-import kotlin.time.Clock
-import kotlin.time.Instant
 
 /**
  * Firestore as a map of paths. A call whose text contains one of [failing] fails as an HTML answer
@@ -156,6 +157,14 @@ internal class FakeSharedDao : SharedDao {
     var marks = 0
     var logWrites = 0
     var reactionWrites = 0
+
+    val refusedRows = MutableStateFlow<List<RefusedChangeEntity>>(emptyList())
+
+    override suspend fun insertRefused(change: RefusedChangeEntity) = refusedRows.update { old -> old.filterNot { it.id == change.id } + change }
+
+    override fun observeRefused(): Flow<List<RefusedChangeEntity>> = refusedRows
+
+    override suspend fun clearRefused(groupId: String) = refusedRows.update { old -> old.filterNot { it.groupId == groupId } }
 
     override fun observeOutbox(): Flow<List<SyncOutboxEntity>> = outboxRows
 

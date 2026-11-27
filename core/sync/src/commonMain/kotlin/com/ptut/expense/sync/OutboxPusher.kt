@@ -1,6 +1,7 @@
 package com.ptut.expense.sync
 
 import com.ptut.expense.data.local.dao.SharedDao
+import com.ptut.expense.data.local.entity.RefusedChangeEntity
 import com.ptut.expense.data.local.entity.SyncOutboxEntity
 import com.ptut.expense.data.repository.KIND_GROUP
 import com.ptut.expense.data.repository.KIND_MEMBER
@@ -20,12 +21,12 @@ import com.ptut.expense.sync.auth.Account
 import com.ptut.expense.sync.push.PushNotice
 import com.ptut.expense.sync.push.PushNotices
 import com.ptut.expense.sync.push.PushSender
+import kotlin.time.Clock
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.JsonObject
-import kotlin.time.Clock
 
 /**
  * Sends the outbox to Firestore and tells the group what went up. Called under [SharedSync]'s lock.
@@ -46,15 +47,15 @@ internal class OutboxPusher(
     /** Puts a group's pickable names on its live invite, after they changed here (L4). */
     private val publishNames: suspend (groupId: String) -> Unit = {},
 ) {
-    private val refusedCounts = MutableStateFlow<Map<String, List<String>>>(emptyMap())
-
     /**
-     * [GroupSyncStatus.refused] per group: changes the group would not take (#194), one entry each.
-     * An expense is named, so the user knows what to enter again; any other change is blank.
+     * [GroupSyncStatus.refused] per group: changes the group would not take (#194), one entry each,
+     * kept in Room so a restart does not lose them. An expense is named, so the user knows what to
+     * enter again; any other change is blank.
      */
-    val refused: StateFlow<Map<String, List<String>>> = refusedCounts.asStateFlow()
+    val refused: Flow<Map<String, List<String>>> =
+        dao.observeRefused().map { rows -> rows.groupBy({ it.groupId }, { it.title }) }
 
-    fun acknowledgeRefused(groupId: String) = refusedCounts.update { it - groupId }
+    suspend fun acknowledgeRefused(groupId: String) = dao.clearRefused(groupId)
 
     /**
      * #194: a change the server refuses for good (a 4xx other than an expired session, a timeout
@@ -76,10 +77,10 @@ internal class OutboxPusher(
                 notice?.let { pushes?.tell(row.groupId, it) }
             } catch (refusal: FirestoreException) {
                 if (refusal.isPermanent()) {
-                    val title = if (row.kind == KIND_VERSION) dao.version(row.rowId)?.description.orEmpty() else ""
+                    // Kept before the change leaves this phone, so what was typed is never lost unseen.
+                    dao.insertRefused(refusedChange(row))
                     dao.dequeue(row.id, row.createdAtEpochMillis)
                     takeBack(row)
-                    refusedCounts.update { it + (row.groupId to it[row.groupId].orEmpty() + title) }
                 } else {
                     failed.update { it + row.groupId }
                     held += row.groupId
@@ -87,6 +88,19 @@ internal class OutboxPusher(
             }
         }
         namesChanged.forEach { publishNames(it) }
+    }
+
+    private suspend fun refusedChange(row: SyncOutboxEntity): RefusedChangeEntity {
+        val version = if (row.kind == KIND_VERSION) dao.version(row.rowId) else null
+        val payment = if (row.kind == KIND_PAYMENT) dao.payment(row.rowId) else null
+        return RefusedChangeEntity(
+            id = row.id,
+            groupId = row.groupId,
+            title = version?.description.orEmpty(),
+            amountMinor = version?.amountMinor ?: payment?.amountSatang,
+            currency = version?.currency ?: payment?.let { dao.group(row.groupId)?.currency },
+            refusedAtEpochMillis = now(),
+        )
     }
 
     /** From Room, as [upload] reads them: what was saved just before Share may not be in the snapshot yet. */
