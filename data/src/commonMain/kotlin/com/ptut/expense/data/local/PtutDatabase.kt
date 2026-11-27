@@ -146,6 +146,8 @@ import com.ptut.expense.data.local.entity.WatchedFolderEntity
         AutoMigration(from = 28, to = 29),
         // The nullable refused_change.groupName, so a refusal still names its group once the group is gone.
         AutoMigration(from = 29, to = 30),
+        // The nullable refused_change.accountUid, so one account's lost changes never show to another.
+        AutoMigration(from = 30, to = 31),
     ],
     exportSchema = true,
 )
@@ -187,4 +189,4 @@ expect object PtutDatabaseConstructor : RoomDatabaseConstructor<PtutDatabase> {
 }
 
 /** Read by `verifySchemaFrozen` and written into each crash report. Bump it with a new N.json, never edit an old one. */
-const val PTUT_SCHEMA_VERSION = 30
+const val PTUT_SCHEMA_VERSION = 31

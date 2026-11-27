@@ -21,4 +21,6 @@ data class RefusedChangeEntity(
     val refusedAtEpochMillis: Long,
     /** Schema 30: the group's name then, so the row still says where it was after the group has left this phone. */
     val groupName: String? = null,
+    /** Schema 31: the account that was signed in when it was refused; only that account is shown it. */
+    val accountUid: String? = null,
 )

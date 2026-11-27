@@ -2,6 +2,7 @@ package com.ptut.expense.sync
 
 import com.ptut.expense.data.local.entity.GroupMemberEntity
 import com.ptut.expense.data.local.entity.PaymentReactionEntity
+import com.ptut.expense.data.local.entity.RefusedChangeEntity
 import com.ptut.expense.data.local.entity.SyncOutboxEntity
 import com.ptut.expense.data.repository.KIND_MEMBER
 import com.ptut.expense.data.repository.KIND_PLAY
@@ -15,6 +16,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 
 class OutboxPusherTest {
@@ -178,8 +180,22 @@ class OutboxPusherTest {
         assertTrue(dao.refusedRows.value.all { it.amountMinor != null })
         // Named after its group, so it still says where it was once the group has left this phone.
         assertTrue(dao.refusedRows.value.all { it.groupName != null })
+        // Stamped with the account that was in, so only that account is shown it.
+        assertTrue(dao.refusedRows.value.all { it.accountUid != null })
 
         pusher.acknowledgeRefused("g1")
         assertNull(pusher.refused.first()["g1"])
+    }
+
+    @Test
+    fun `a lost change is shown only to the account it was lost by`() = runTest {
+        dao.refusedRows.value = listOf(
+            RefusedChangeEntity("version:a", "gone", "Dinner", 8_000, "THB", 1, "QA4", accountUid = "uid-a"),
+            RefusedChangeEntity("version:b", "gone", "Taxi", 100, "THB", 1, "QA4", accountUid = "uid-b"),
+            RefusedChangeEntity("version:old", "gone", "Rent", 100, "THB", 1, "QA4", accountUid = null),
+        )
+
+        assertEquals(listOf("version:a", "version:old"), pusher.refusedChanges(flowOf("uid-a")).first().map { it.id })
+        assertEquals(emptyList(), pusher.refusedChanges(flowOf(null)).first())
     }
 }

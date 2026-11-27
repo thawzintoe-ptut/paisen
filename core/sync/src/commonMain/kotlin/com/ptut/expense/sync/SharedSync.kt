@@ -158,7 +158,7 @@ class SharedSync internal constructor(
      * The group screen has said it once; the count starts again from zero. Called as the screen
      * goes, so the delete runs on its own scope rather than the screen's, which is ending.
      */
-    override val refusedChanges: Flow<List<RefusedChange>> get() = pusher.refusedChanges
+    override val refusedChanges: Flow<List<RefusedChange>> get() = pusher.refusedChanges(auth.account.map { (it as? Account.SignedIn)?.uid })
 
     override suspend fun dismissRefused(id: String) = pusher.dismissRefused(id)
 
