@@ -1,14 +1,12 @@
 package com.ptut.expense.sync
 
 import com.ptut.expense.data.local.entity.GroupMemberEntity
+import com.ptut.expense.data.local.entity.RefusedChangeEntity
 import com.ptut.expense.data.local.entity.SyncOutboxEntity
 import com.ptut.expense.data.repository.KIND_GROUP
 import com.ptut.expense.data.repository.KIND_MEMBER
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.sync.auth.Account
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -16,6 +14,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Instant
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.jsonObject
 
 class SharedSyncTest {
 
@@ -565,5 +566,14 @@ class SharedSyncTest {
 
     private companion object {
         const val NINETY_DAYS = 90L * 24 * 60 * 60 * 1000
+    }
+
+    @Test
+    fun `deleting the account takes the changes it could not send off this phone too`() = runTest {
+        dao.refusedRows.value = listOf(RefusedChangeEntity("version:v1", "gone", "Dinner", 8_000, "THB", 1, "QA4"))
+
+        sync.deleteAccount()
+
+        assertTrue(dao.refusedRows.value.isEmpty())
     }
 }

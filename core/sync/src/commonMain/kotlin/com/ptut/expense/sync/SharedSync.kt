@@ -276,11 +276,17 @@ class SharedSync internal constructor(
      * again. Another account signing in instead must not send them as its own, so they go first.
      */
     private suspend fun forgetOtherAccounts(uid: String) {
+        var forgot = false
         dao.remoteGroupIds().forEach { groupId ->
             val me = dao.group(groupId)?.meMemberId ?: return@forEach
             val holder = dao.membersOf(groupId).firstOrNull { it.id == me }?.claimedByUid
-            if (holder != null && holder != uid) dao.forgetGroup(groupId)
+            if (holder != null && holder != uid) {
+                dao.forgetGroup(groupId)
+                forgot = true
+            }
         }
+        // Another account's groups were here, so the lost changes kept on this phone are theirs too.
+        if (forgot) dao.clearAllRefused()
     }
 
     private suspend fun failAll() {
@@ -582,6 +588,7 @@ class SharedSync internal constructor(
     /** #187: shared groups leave this phone with the account. Your own spending stays. */
     private suspend fun forgetSharedGroups() {
         dao.remoteGroupIds().forEach { dao.forgetGroup(it) }
+        dao.clearAllRefused()
         forgotSharedGroups()
     }
 
