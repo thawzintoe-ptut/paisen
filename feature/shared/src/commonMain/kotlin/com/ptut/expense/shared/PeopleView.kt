@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.SkySizes
 import com.ptut.expense.design.Spacing
@@ -116,12 +117,13 @@ private fun PeopleRow(row: PeopleRowUiModel, onClick: (() -> Unit)?, modifier: M
         // #201: only the initial fades; the words ("Archived · …") keep full contrast.
         MemberAvatar(label = row.initial, isMe = false, modifier = if (row.archived) Modifier.alpha(ARCHIVED_ALPHA) else Modifier)
         Column(Modifier.weight(1f)) {
-            Text(row.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-            Text(row.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Text(row.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(row.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(row.word, style = MaterialTheme.typography.bodySmall, color = row.tone.ink())
-            Text(row.amount, style = MaterialTheme.typography.titleMedium, color = row.tone.ink())
+            // The amount keeps its whole width and one line; the name gives way with "…".
+            Text(row.amount, style = MaterialTheme.typography.titleMedium, color = row.tone.ink(), maxLines = 1, softWrap = false)
         }
     }
 }

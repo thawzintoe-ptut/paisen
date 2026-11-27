@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
@@ -59,12 +60,12 @@ import com.ptut.expense.ui.sky.SkySegmentedToggle
 import com.ptut.expense.ui.sky.SkySwitch
 import com.ptut.expense.ui.sky.SkyTextAction
 import com.ptut.expense.ui.sky.SkyTopBar
+import kotlin.time.Instant
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
-import kotlin.time.Instant
 
 data class RepeatExpenseActions(
     val onBack: () -> Unit,
@@ -94,7 +95,7 @@ fun RepeatExpenseView(uiState: RepeatExpenseUiState, actions: RepeatExpenseActio
     val words = text.shared.repeat
     val state = uiState as? RepeatExpenseUiState.Ready
     if (state == null) {
-        Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer)) {
+        Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer).imePadding()) {
             SkyTopBar(title = words.title, onBack = actions.onBack)
             GroupGone(status = text.shared.expense.goneStatus)
         }

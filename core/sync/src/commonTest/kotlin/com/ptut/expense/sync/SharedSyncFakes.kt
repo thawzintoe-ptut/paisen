@@ -194,6 +194,10 @@ internal class FakeSharedDao : SharedDao {
 
     override suspend fun membersOf(groupId: String): List<GroupMemberEntity> = members.values.filter { it.groupId == groupId }
 
+    override suspend fun markReactionsSynced(groupId: String, at: Long) {
+        groups[groupId]?.let { groups[groupId] = it.copy(reactionsSyncedAtEpochMillis = at) }
+    }
+
     override suspend fun markSynced(groupId: String, at: Long) {
         marks++
         groups[groupId]?.let { groups[groupId] = it.copy(lastSyncedAtEpochMillis = at) }

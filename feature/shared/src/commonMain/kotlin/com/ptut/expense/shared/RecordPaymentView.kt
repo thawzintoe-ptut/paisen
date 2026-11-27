@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -78,7 +79,7 @@ fun RecordPaymentView(
     val leave: () -> Unit = { if (asksFirst) askDiscard = true else onClose() }
     // #6: back, the iOS swipe, ✕ and Cancel ask before a changed payment is lost.
     AskBeforeLeaving(changed = asksFirst, onAsk = { askDiscard = true })
-    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer)) {
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer).imePadding()) {
         SkyTopBar(title = words.title, onBack = leave, backIcon = PtutIcon.Close, backLabel = text.common.close)
         if (state == null) return@Column GroupGone(status = text.shared.expense.goneStatus)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.md)) {

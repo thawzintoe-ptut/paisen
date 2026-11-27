@@ -43,21 +43,17 @@ internal class GroupPuller(
     /** The signed-in account, or null; a group brought back finds "you" by the name it claimed. */
     private val uid: () -> String?,
 ) {
-    private class Merged(val pending: Set<String>, val namesChanged: Boolean)
+    private class Merged(val namesChanged: Boolean)
 
     // In memory only: a new process checks everything once.
     private val seenGroupDocs = mutableMapOf<String, Fields>()
     private val membersListedAt = mutableMapOf<String, Long>()
 
-    // Reactions are asked for on fewer polls than the log, so they keep their own mark. A new process
-    // has none and lists them whole once, so nothing written while it was closed is missed.
-    private val reactionsPulledUpTo = mutableMapOf<String, Long>()
 
     /** The next account lists every group's names again. */
     fun forget() {
         seenGroupDocs.clear()
         membersListedAt.clear()
-        reactionsPulledUpTo.clear()
     }
 
     /**
@@ -93,13 +89,15 @@ internal class GroupPuller(
         val playOffs = if (members != null) firestore.playDocs(groupId).associate { it.id to it.fields } else emptyMap()
         // #95 (D16): the whole list once, then only what the server stamped after the mark, which costs a
         // read only for new ones. A taken-back reaction keeps its document as Gone, so it comes the same way.
-        val reactionsSince = pullSince(reactionsPulledUpTo[groupId])
+        // Reactions are asked for on fewer polls than the log, so they keep their own mark in Room. A
+        // group with none (first pull, or a build before schema 29) lists them whole once.
+        val reactionsSince = pullSince(before?.reactionsSyncedAtEpochMillis)
         val reactionsAsked = since == null || withReactions
         val reactions = if (reactionsAsked && (since == null || reactionsSince == null)) firestore.reactionDocs(groupId) else null
         val newerReactions = if (reactionsAsked && since != null && reactionsSince != null) firestore.newerReactionDocs(groupId, reactionsSince) else null
 
-        // Read after the network, in one write transaction with the writes below: a save and its
-        // outbox row land wholly before or wholly after, so a change saved meanwhile is never undone.
+        // Read after the network, in one write transaction with every write of this merge: a save and
+        // its outbox row land wholly before or wholly after, so a change saved meanwhile is never undone.
         val merged = writes.run {
             val local = dao.group(groupId)
             val pending = pendingIn(groupId)
@@ -125,6 +123,7 @@ internal class GroupPuller(
                 lastSyncedAtEpochMillis = pulledUpTo,
                 // This phone's own mark, never on the server: a pull must not reset it.
                 lastSeenAtEpochMillis = local?.lastSeenAtEpochMillis,
+            reactionsSyncedAtEpochMillis = local?.reactionsSyncedAtEpochMillis,
                 currency = currency,
                 // #97: an end this phone set and has not sent yet stays as it is.
                 endedOn = if ("$KIND_TRIP_END:$groupId" in pending) local?.endedOn else fields.string("endedOn"),
@@ -137,31 +136,30 @@ internal class GroupPuller(
                 moveOwnPromptPay(groupId, group.meMemberId, members, pending)
                 pickableNames(dao.membersOf(groupId)) != pickable
             }
-            Merged(pending, namesChanged)
+            // #48: read with the key the group's money names, so a baht amount an older build wrote into a
+            // kyat group is skipped rather than taken as kyat.
+            val batch = LogBatch()
+            log.entries.forEach { doc -> batch.add(groupId, doc, WireAmount.key(currency)) }
+            if (batch.isNotEmpty()) dao.receiveLog(batch.versions, batch.payments, batch.removals)
+            val mine = pending.filter { it.startsWith("$KIND_REACTION:") }.map { it.removePrefix("$KIND_REACTION:") }.toSet()
+            reactions?.let { docs -> dao.replaceReactions(groupId, docs.mapNotNull { reactionEntity(groupId, it) }, mine) }
+            newerReactions?.takeIf { it.isNotEmpty() }?.let { docs ->
+                val changed = docs.mapNotNull { reactionEntity(groupId, it) }.filterNot { it.id in mine }
+                val gone = docs.mapNotNull { it.takenBackReaction() }.filterNot { it in mine }
+                dao.receiveReactions(changed, gone)
+            }
+            log.repeats.forEach { doc -> receiveRepeat(groupId, doc) }
+            Merged(namesChanged)
         }
-        val pending = merged.pending
         // The network only after the transaction: it holds Room's writer while it is open.
         if (merged.namesChanged) publishNames(groupId)
-        // #48: read with the key the group's money names, so a baht amount an older build wrote into a
-        // kyat group is skipped rather than taken as kyat.
-        val batch = LogBatch()
-        log.entries.forEach { doc -> batch.add(groupId, doc, WireAmount.key(currency)) }
-        if (batch.isNotEmpty()) dao.receiveLog(batch.versions, batch.payments, batch.removals)
-        val mine = pending.filter { it.startsWith("$KIND_REACTION:") }.map { it.removePrefix("$KIND_REACTION:") }.toSet()
-        reactions?.let { docs -> dao.replaceReactions(groupId, docs.mapNotNull { reactionEntity(groupId, it) }, mine) }
-        newerReactions?.takeIf { it.isNotEmpty() }?.let { docs ->
-            val changed = docs.mapNotNull { reactionEntity(groupId, it) }.filterNot { it.id in mine }
-            val gone = docs.mapNotNull { it.takenBackReaction() }.filterNot { it in mine }
-            dao.receiveReactions(changed, gone)
-        }
-        log.repeats.forEach { doc -> receiveRepeat(groupId, doc) }
         // An empty answer leaves the mark: the next pull asks from the same place and costs the same.
         val gotNew = log.entries.isNotEmpty() || log.repeats.isNotEmpty()
         // Only the server's clock moves a mark: this phone's may run ahead and skip entries for good. The
         // log's read time came before the reactions query, so the reactions mark can only be early.
         val readTime = log.readTimeEpochMillis
         if (readTime != null && (since == null || gotNew)) dao.markSynced(groupId, readTime)
-        if (readTime != null && reactionsAsked) reactionsPulledUpTo[groupId] = readTime
+        if (readTime != null && reactionsAsked) dao.markReactionsSynced(groupId, readTime)
         seenGroupDocs[groupId] = fields
         if (members != null) membersListedAt[groupId] = now()
         return PullResult.Kept

@@ -293,6 +293,9 @@ interface SharedDao {
     @Query("UPDATE shared_group SET lastSyncedAtEpochMillis = :at WHERE id = :groupId")
     suspend fun markSynced(groupId: String, at: Long)
 
+    @Query("UPDATE shared_group SET reactionsSyncedAtEpochMillis = :at WHERE id = :groupId")
+    suspend fun markReactionsSynced(groupId: String, at: Long)
+
     /** Only ever forward, so a late write from an older screen cannot bring old rows back as new. */
     @Query(
         "UPDATE shared_group SET lastSeenAtEpochMillis = :at WHERE id = :groupId " +

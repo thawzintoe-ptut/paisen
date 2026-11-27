@@ -30,4 +30,6 @@ data class SharedGroupEntity(
     @ColumnInfo(defaultValue = "THB") val currency: String = "THB",
     /** Schema 24 (#97): the ISO day a member marked the trip ended, or null while it runs. Synced. */
     val endedOn: String? = null,
+    /** Schema 29: the server time reactions were last pulled up to, kept apart because most polls skip them. Never synced. */
+    val reactionsSyncedAtEpochMillis: Long? = null,
 )

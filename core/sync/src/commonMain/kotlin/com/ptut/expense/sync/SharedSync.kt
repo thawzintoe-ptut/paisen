@@ -96,6 +96,8 @@ class SharedSync internal constructor(
     private val notice: EndedHereNotice = MemoryEndedHereNotice(),
     /** One Room write transaction for a pull's merge, so it never interleaves with a save. */
     writes: WriteTransaction = WriteTransaction.None,
+    /** The app's sync scope, for work a closing screen starts and cannot wait for. */
+    private val background: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : SharedSyncApi {
     override val available: Boolean get() = auth.available
 
@@ -157,10 +159,8 @@ class SharedSync internal constructor(
      * goes, so the delete runs on its own scope rather than the screen's, which is ending.
      */
     override fun acknowledgeRefused(groupId: String) {
-        acknowledgeScope.launch { pusher.acknowledgeRefused(groupId) }
+        background.launch { pusher.acknowledgeRefused(groupId) }
     }
-
-    private val acknowledgeScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** True once a newer sign-in on another phone signed this one out, until the notice is read. */
     val signedOutElsewhere: StateFlow<Boolean> get() = endedHere

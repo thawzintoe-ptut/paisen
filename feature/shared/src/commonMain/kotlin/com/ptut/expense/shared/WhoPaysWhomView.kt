@@ -198,7 +198,8 @@ private fun PaymentCard(card: PaymentCardUiModel, onClick: () -> Unit, badge: St
         // Burmese sentences run long ("hgyugtyu က sheilarzune ကို ပေးမယ်"): two lines, never cut.
         Column(Modifier.weight(1.6f), horizontalAlignment = Alignment.End) {
             Text(card.sentence, style = MaterialTheme.typography.bodySmall, color = card.tone.ink(), maxLines = 2, textAlign = TextAlign.End)
-            Text(card.amount, style = MaterialTheme.typography.titleMedium, color = card.tone.ink())
+            // Never split across lines: a wrapped number reads as two amounts.
+            Text(card.amount, style = MaterialTheme.typography.titleMedium, color = card.tone.ink(), maxLines = 1, softWrap = false)
             // #93: ruby, because it is money going out (R3).
             badge?.let {
                 Text(

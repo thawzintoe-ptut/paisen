@@ -92,6 +92,7 @@ fun syncModule(databaseContext: PtutDatabaseContext): Module = module {
             registrar = registrar.takeIf { push },
             notice = endedHereNotice(databaseContext),
             writes = RoomWriteTransaction(get<PtutDatabase>()),
+            background = scope,
         ).also { it.uploadSoonAfterSaves(scope) }
     } bind SharedSyncApi::class
 }

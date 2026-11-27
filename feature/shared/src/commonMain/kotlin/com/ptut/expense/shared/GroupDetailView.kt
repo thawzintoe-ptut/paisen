@@ -157,16 +157,16 @@ private fun Loaded(
     // open, the dialog came before the reader knew why. The OS stops asking once answered.
     val rowCount = state.days.sumOf { it.rows.size }
     var seenRows by rememberSaveable { mutableStateOf<Int?>(null) }
-    var invited by rememberSaveable { mutableStateOf(false) }
+    var inviteSheetShown by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.isShared, inviteStep == null, rowCount) {
         if (inviteStep != null) {
-            invited = true
+            inviteSheetShown = true
             return@LaunchedEffect
         }
         val grew = seenRows?.let { rowCount > it } == true
         seenRows = rowCount
-        if (state.isShared && pushConfigured && (grew || invited)) {
-            invited = false
+        if (state.isShared && pushConfigured && (grew || inviteSheetShown)) {
+            inviteSheetShown = false
             ask.request()
         }
     }
@@ -263,7 +263,7 @@ private fun Loaded(
             ) {
                 GroupTile(icon = state.icon, ink = false)
                 Column(Modifier.weight(1f)) {
-                    Text(state.name, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                    Text(state.name, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(text.home.peopleCount(state.members.size), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -788,9 +788,9 @@ internal fun ExpenseRow(row: GroupFeedRow.Expense, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (row.isNew) NewDot()
-                Text(row.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                Text(row.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text(row.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Text(row.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(row.word, style = MaterialTheme.typography.bodySmall, color = row.tone.ink())

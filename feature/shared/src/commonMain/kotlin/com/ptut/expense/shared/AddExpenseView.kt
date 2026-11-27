@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -106,7 +107,7 @@ fun AddExpenseView(
 ) {
     val text = LocalCopy.current
     when (uiState) {
-        AddExpenseUiState.Missing -> Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer)) {
+        AddExpenseUiState.Missing -> Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer).imePadding()) {
             SkyTopBar(title = text.shared.expense.addExpense, onBack = actions.onClose, backIcon = PtutIcon.Close, backLabel = text.common.close)
             SkyEmptyState(
                 headline = text.shared.thisGroupIsGone,

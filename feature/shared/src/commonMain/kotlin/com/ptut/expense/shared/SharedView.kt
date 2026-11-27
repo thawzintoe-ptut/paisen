@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import com.ptut.expense.design.PtutIcon
 import com.ptut.expense.design.PtutRadii
@@ -284,11 +285,11 @@ private fun GroupCard(group: SharedGroupRowUiModel, onClick: () -> Unit, modifie
     ) {
         GroupTile(icon = group.icon, ink = group.inkTile)
         Column(Modifier.weight(1f)) {
-            Text(group.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
-            Text(group.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Text(group.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(group.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             // What others wrote since this phone last opened the group, in the ruby of "waiting for you".
             group.news?.let { news ->
-                Text(news, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.ptut.signatureInk, maxLines = 1)
+                Text(news, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.ptut.signatureInk, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         Column(horizontalAlignment = Alignment.End) {

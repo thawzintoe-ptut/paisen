@@ -203,7 +203,8 @@ internal class OutboxPusher(
                 // A row queued before per-field rows has no field and sends the whole group, as it always did.
                 val field = row.rowId.substringAfter('#', missingDelimiterValue = "")
                 val all = group.fields()
-                val sent = if (field.isEmpty()) all else all.filterKeys { it == field }
+                // A field this build does not know (queued by a newer one) sends the whole group rather than nothing.
+                val sent = all.filterKeys { it == field }.ifEmpty { all }
                 // Only a new name is news; an icon or the debt setting tells nobody.
                 val before = notices?.takeIf { "name" in sent }?.let { firestore.get("groups/${group.id}")?.fields?.string("name") }
                 if (sent.isNotEmpty()) firestore.patch("groups/${group.id}", sent)
