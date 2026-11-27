@@ -1,5 +1,6 @@
 package com.ptut.expense.shared
 
+import kotlinx.coroutines.CompletableDeferred
 import com.ptut.expense.ViewModelTest
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.shared.Currencies
@@ -413,6 +414,42 @@ class AddExpenseViewModelTest : ViewModelTest() {
         runCurrent()
 
         return repository.expenses.single().description
+    }
+
+    @Test
+    fun `two fast taps on Remove remove the expense once and close once`() = runTest {
+        val repository = FakeSharedRepository().apply { removeGate = CompletableDeferred() }
+        val viewModel = addExpenseViewModel(groupId = "g1", expenseId = "e1", repository = repository, categories = Category.seed())
+        var closed = 0
+
+        viewModel.remove { closed++ }
+        viewModel.remove { closed++ }
+        runCurrent()
+        repository.removeGate?.complete(Unit)
+        runCurrent()
+
+        assertEquals(listOf("e1"), repository.removedExpenses)
+        assertEquals(1, closed)
+    }
+
+    @Test
+    fun `a failed remove says so, keeps the screen, and the next tap removes`() = runTest {
+        val repository = FakeSharedRepository().apply { failNextRemove = true }
+        val toasts = ToastMessages()
+        val viewModel = addExpenseViewModel(groupId = "g1", expenseId = "e1", repository = repository, categories = Category.seed(), toasts = toasts)
+        var closed = 0
+
+        viewModel.remove { closed++ }
+        runCurrent()
+
+        assertEquals(AppText.copy.common.notDone, toasts.messages.first().text)
+        assertEquals(0, closed)
+
+        viewModel.remove { closed++ }
+        runCurrent()
+
+        assertEquals(listOf("e1"), repository.removedExpenses)
+        assertEquals(1, closed)
     }
 }
 

@@ -244,6 +244,9 @@ service cloud.firestore {
         // build reads; any other group writes amountGroup, so older builds skip it rather than misread
         // it. The key is the group's, never the writer's choice: a build from before #48 that still
         // writes amountSatang into a kyat group is refused, so its baht never reads as kyat.
+        // A name the entry says paid or was paid is one in this group. A removed name still counts,
+        // so old debts with someone who left can be settled and their expenses edited.
+        function inGroup(mid) { return shortId(mid) && exists(memberPath(gid, mid)); }
         function amountKey() { return groupData(gid).get('currency', 'THB') == 'THB' ? 'amountSatang' : 'amountGroup'; }
         function otherKey() { return amountKey() == 'amountSatang' ? 'amountGroup' : 'amountSatang'; }
         function groupAmount() { return entry().get(amountKey(), null); }
@@ -257,7 +260,7 @@ service cloud.firestore {
             && shortId(entry().expenseId) && entry().version is int && entry().occurredAt is int
             && textUpTo(entry().get('description', ''), 500) && textOrNull(entry().get('note', null), 2000)
             && textOrNull(entry().get('categoryId', null), 128) && textOrNull(entry().get('subCategoryId', null), 128)
-            && currencyCode(entry().currency) && shortId(entry().payerMemberId)
+            && currencyCode(entry().currency) && inGroup(entry().payerMemberId)
             && entry().get('removed', false) is bool && textOrNull(entry().get('cause', null), 32)
             && splitModeOk(entry().splitMode)
             && money(entry().amountMinor) && keyedToGroup() && money(groupAmount())
@@ -269,7 +272,7 @@ service cloud.firestore {
               'toMemberId', 'amountSatang', 'amountGroup', 'method', 'occurredAt'])
             && entry().method in ['BankTransfer', 'Cash', 'PromptPay', 'OtherApp']
             && keyedToGroup() && money(groupAmount()) && groupAmount() > 0
-            && shortId(entry().fromMemberId) && shortId(entry().toMemberId) && entry().occurredAt is int
+            && inGroup(entry().fromMemberId) && inGroup(entry().toMemberId) && entry().occurredAt is int
             && entry().fromMemberId != entry().toMemberId;
         }
         // #218: a removal names the payment it takes out or puts back.

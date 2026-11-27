@@ -147,7 +147,14 @@ internal class FakeSharedRepository(group: SharedGroup = flat12) : SharedReposit
 
     val editedGroups = mutableListOf<String>()
 
+    /** The next editGroup throws, as a failed write would. */
+    var failNextEdit = false
+
     override suspend fun editGroup(groupId: String, name: String, type: GroupType, icon: String) {
+        if (failNextEdit) {
+            failNextEdit = false
+            error("write failed")
+        }
         editedGroups += name
     }
 
@@ -159,12 +166,34 @@ internal class FakeSharedRepository(group: SharedGroup = flat12) : SharedReposit
 
     override suspend fun setPersonArchived(personId: String, archived: Boolean) = notThisTest<Unit>()
 
-    override suspend fun removeMember(groupId: String, memberId: String) = notThisTest<Unit>()
+    val removedMembers = mutableListOf<String>()
+
+    /** The next removeMember throws, as a failed write would. */
+    var failNextRemoveMember = false
+
+    override suspend fun removeMember(groupId: String, memberId: String) {
+        if (failNextRemoveMember) {
+            failNextRemoveMember = false
+            error("write failed")
+        }
+        removedMembers += memberId
+    }
 
     val removedExpenses = mutableListOf<String>()
 
+    /** The next removeExpense throws, as a failed write would. */
+    var failNextRemove = false
+
+    /** Holds removeExpense open, as a slow write would, so a second tap lands while it runs. */
+    var removeGate: CompletableDeferred<Unit>? = null
+
     override suspend fun removeExpense(expenseId: String) {
+        if (failNextRemove) {
+            failNextRemove = false
+            error("write failed")
+        }
         removedExpenses += expenseId
+        removeGate?.await()
     }
 
     override suspend fun followTransaction(transactionId: String, before: TransactionEdit, titleChange: TitleChange?) = notThisTest<Unit>()
@@ -177,7 +206,18 @@ internal class FakeSharedRepository(group: SharedGroup = flat12) : SharedReposit
 
     override suspend fun relink(expenseId: String, transactionId: String) = notThisTest<Unit>()
 
-    override suspend fun stopRepeat(ruleId: String) = notThisTest<Unit>()
+    val stoppedRepeats = mutableListOf<String>()
+
+    /** The next stopRepeat throws, as a failed write would. */
+    var failNextStop = false
+
+    override suspend fun stopRepeat(ruleId: String) {
+        if (failNextStop) {
+            failNextStop = false
+            error("write failed")
+        }
+        stoppedRepeats += ruleId
+    }
 
     override suspend fun setRepeatReminder(ruleId: String, on: Boolean) = notThisTest<Unit>()
 

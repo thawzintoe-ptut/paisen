@@ -152,10 +152,23 @@ private fun Loaded(
     var menu by rememberSaveable { mutableStateOf(false) }
     var inviteStep by rememberSaveable { mutableStateOf<String?>(null) }
     val ask = rememberNotificationAsk()
-    // A shared group's changes arrive as notifications, so the app asks once it is shared, also for
-    // members who joined before push existed. Not over the invite sheet; the OS stops asking once answered.
-    LaunchedEffect(state.isShared, inviteStep == null) {
-        if (state.isShared && inviteStep == null && pushConfigured) ask.request()
+    // A shared group's changes arrive as notifications, so the app asks, but only after something
+    // happens here: the invite sheet closes, or a new row lands while the screen is open. Asked on
+    // open, the dialog came before the reader knew why. The OS stops asking once answered.
+    val rowCount = state.days.sumOf { it.rows.size }
+    var seenRows by rememberSaveable { mutableStateOf<Int?>(null) }
+    var invited by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.isShared, inviteStep == null, rowCount) {
+        if (inviteStep != null) {
+            invited = true
+            return@LaunchedEffect
+        }
+        val grew = seenRows?.let { rowCount > it } == true
+        seenRows = rowCount
+        if (state.isShared && pushConfigured && (grew || invited)) {
+            invited = false
+            ask.request()
+        }
     }
     var manageStep by rememberSaveable { mutableStateOf<String?>(null) }
     var openPayment by rememberSaveable { mutableStateOf<String?>(null) }

@@ -60,8 +60,17 @@ data class SharedGroupRowUiModel(
 /**
  * p26's top for one money: the net, what it counts in (#48), and its two halves as one line,
  * "You're owed ฿1,800 · you owe ฿250". [oweLine] is null while you owe nobody in this money.
+ * [showHalves] is false when one half is zero: the line would only repeat the net above it.
  */
-data class OverallUiModel(val label: String, val amount: Satang, val money: HomeMoney, val tone: BalanceTone, val owedLine: String, val oweLine: String?)
+data class OverallUiModel(
+    val label: String,
+    val amount: Satang,
+    val money: HomeMoney,
+    val tone: BalanceTone,
+    val owedLine: String,
+    val oweLine: String?,
+    val showHalves: Boolean = oweLine != null,
+)
 
 /** The one payment to make next: the largest you owe, and the record-payment screen it opens. */
 data class PayNextUiModel(
@@ -259,6 +268,7 @@ private fun Overall.uiModel(): OverallUiModel {
         tone = net.tone(),
         owedLine = text.owedLine(owedToYou.format(money)),
         oweLine = text.oweLine(youOwe.format(money)).takeIf { youOwe > Satang.Zero },
+        showHalves = owedToYou > Satang.Zero && youOwe > Satang.Zero,
     )
 }
 

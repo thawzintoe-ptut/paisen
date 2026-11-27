@@ -678,6 +678,13 @@ await check('18.48 someone with the live code lists the reactions', 'deny', bobR
 await check('18.49 creator takes a departed member\'s reaction out', 'allow', bobReacted, () => removedThen(() => deleteDoc(doc(as('alice'), 'groups/g1/reactions/p1_bob'))));
 await check('18.50 creator takes a current member\'s reaction out', 'deny', bobReacted, () => deleteDoc(doc(as('alice'), 'groups/g1/reactions/p1_bob')));
 
+// The payer and both sides of a payment are names in the group; a removed name still counts.
+await check('19.1 version paid by a name that does not exist', 'deny', {}, () => entry('groups/g1/entries/e1', 'bob', version({ payerMemberId: 'mNobody' })));
+await check('19.2 version paid by another member', 'allow', {}, () => entry('groups/g1/entries/e1', 'bob', version({ payerMemberId: 'mAlice' })));
+await check('19.3 payment to a name that does not exist', 'deny', {}, () => entry('groups/g1/entries/p1', 'bob', payment({ toMemberId: 'mNobody' })));
+await check('19.4 payment from a name that does not exist', 'deny', {}, () => entry('groups/g1/entries/p1', 'bob', payment({ fromMemberId: 'mNobody' })));
+await check('19.5 payment to a removed name, settling an old debt', 'allow', { members: { mCara: { archived: true } } }, () => entry('groups/g1/entries/p1', 'bob', payment({ toMemberId: 'mCara' })));
+
 await env.cleanup();
 for (const [status, expect, name, why] of results) console.log(`${status}  ${expect.padEnd(5)}  ${name}${why ? `  -> ${why}` : ''}`);
 const failed = results.filter(([status]) => status === 'FAIL').length;

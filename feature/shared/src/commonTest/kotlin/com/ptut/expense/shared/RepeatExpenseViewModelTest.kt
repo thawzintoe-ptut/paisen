@@ -141,6 +141,32 @@ class RepeatExpenseViewModelTest : ViewModelTest() {
     }
 
     private fun RepeatExpenseViewModel.ready() = assertIs<RepeatExpenseUiState.Ready>(uiState.value)
+
+    @Test
+    fun `Stop stops the repeat and closes the screen`() = runTest {
+        val repository = FakeSharedRepository()
+        val viewModel = repeatExpenseViewModel(groupId = "g1", ruleId = "r1", repository = repository, categories = Category.seed(), toasts = ToastMessages())
+
+        viewModel.stop()
+        viewModel.stop()
+        runCurrent()
+
+        assertEquals(listOf("r1"), repository.stoppedRepeats)
+        assertTrue(viewModel.isDone.value)
+    }
+
+    @Test
+    fun `a failed stop says so and keeps the screen open`() = runTest {
+        val repository = FakeSharedRepository().apply { failNextStop = true }
+        val toasts = ToastMessages()
+        val viewModel = repeatExpenseViewModel(groupId = "g1", ruleId = "r1", repository = repository, categories = Category.seed(), toasts = toasts)
+
+        viewModel.stop()
+        runCurrent()
+
+        assertEquals(AppText.copy.common.notDone, toasts.messages.first().text)
+        assertFalse(viewModel.isDone.value)
+    }
 }
 
 /** The repeat sheet as Koin builds it, its use cases over [repository]. */

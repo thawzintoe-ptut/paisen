@@ -208,7 +208,7 @@ private fun Balances(
                         money = line.money,
                         modifier = Modifier.padding(top = if (index == 0) Spacing.sm else Spacing.md),
                     )
-                    HalvesLine(line, modifier = Modifier.padding(top = Spacing.xs))
+                    if (line.showHalves) HalvesLine(line, modifier = Modifier.padding(top = Spacing.xs))
                 }
                 state.payNext?.let { pay ->
                     SkyStatCard(

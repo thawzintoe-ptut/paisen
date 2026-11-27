@@ -53,6 +53,8 @@ class SharedViewModelTest : ViewModelTest() {
         assertEquals(listOf("THB" to "You're owed ฿240.00", "MMK" to "You're owed K24,000"), ready.overall.map { it.money.code to it.owedLine })
         assertEquals(listOf("Overall, you are owed", "Overall, you are owed"), ready.overall.map { it.label })
         assertEquals(listOf(null, null), ready.overall.map { it.oweLine })
+        // Owed only: the line under the net would say the same figure again.
+        assertEquals(listOf(false, false), ready.overall.map { it.showHalves })
         assertEquals("Aye", ready.peopleLine)
         assertNull(ready.payNext)
     }
