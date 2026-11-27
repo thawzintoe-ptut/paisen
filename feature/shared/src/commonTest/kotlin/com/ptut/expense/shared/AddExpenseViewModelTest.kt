@@ -433,7 +433,7 @@ class AddExpenseViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `a failed remove says so, keeps the screen, and the next tap removes`() = runTest {
+    fun `a failed remove says so and keeps the screen and the next tap removes`() = runTest {
         val repository = FakeSharedRepository().apply { failNextRemove = true }
         val toasts = ToastMessages()
         val viewModel = addExpenseViewModel(groupId = "g1", expenseId = "e1", repository = repository, categories = Category.seed(), toasts = toasts)

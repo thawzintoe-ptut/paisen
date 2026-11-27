@@ -95,7 +95,7 @@ class GroupSettingsViewModelTest : ViewModelTest() {
     }
 
     @Test
-    fun `removing a member says who went, and a failed one says so`() = runTest {
+    fun `removing a member says who went and a failed one says so`() = runTest {
         val repository = FakeSharedRepository()
         val toasts = ToastMessages()
         val viewModel = groupSettingsViewModel(groupId = "g1", repository = repository, toasts = toasts)
