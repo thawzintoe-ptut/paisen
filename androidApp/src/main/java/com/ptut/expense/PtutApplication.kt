@@ -22,6 +22,7 @@ class PtutApplication : Application() {
                 debug = BuildConfig.DEBUG,
                 version = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                 device = "${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}",
+                storeId = BuildConfig.APPLICATION_ID,
             ),
         )
         startPushAfterSignIn(this)

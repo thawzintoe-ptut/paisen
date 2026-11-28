@@ -89,6 +89,17 @@ class SettingsViewModelTest : ViewModelTest() {
     }
 
     @Test
+    fun `a build with a store page offers rate and share between feedback and licences`() = runTest {
+        val help = viewModel(showStoreRows = true).uiState.value.help
+
+        assertEquals(
+            listOf(SettingsAction.Feedback, SettingsAction.RateApp, SettingsAction.ShareApp, SettingsAction.Licences),
+            help.map { it.id },
+        )
+        assertEquals(listOf("Rate PaiSeN", "Share PaiSeN"), help.drop(1).take(2).map { it.name })
+    }
+
+    @Test
     fun `the help row says what waits behind it and the advanced row says what it tunes`() = runTest {
         val rows = viewModel().uiState.value.rows
 
@@ -349,6 +360,7 @@ class SettingsViewModelTest : ViewModelTest() {
         showPlay: Boolean = false,
         showJar: Boolean = showPlay,
         showV2: Boolean = true,
+        showStoreRows: Boolean = false,
         goals: Flow<List<Goal>> = flowOf(emptyList()),
     ) = SettingsViewModel(
         observeLastImport = ObserveLastImportUseCase(FakeLedger(sinceLastImport = sinceLastImport)),
@@ -365,6 +377,7 @@ class SettingsViewModelTest : ViewModelTest() {
         showPlay = showPlay,
         showJar = showJar,
         showV2 = showV2,
+        showStoreRows = showStoreRows,
         observeGoals = goals,
     )
 

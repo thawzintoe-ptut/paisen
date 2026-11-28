@@ -42,7 +42,7 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 
 /** Which row. It is the row's identity as well as the destination it opens. */
-enum class SettingsAction { GoalJar, Advanced, SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, ShareUsage, Language, ExportLedger, ImportLedger, Timezone, HomeCurrency, Assistant, Feedback, Licences, Play, SharedAccount, Help }
+enum class SettingsAction { GoalJar, Advanced, SlipSource, BackgroundImport, KeepFailedSlips, SlipOwner, Activity, Categories, MoodByTimeOfDay, WeeklyCheckIn, NoteTone, Transparency, AppLock, ShareUsage, Language, ExportLedger, ImportLedger, Timezone, HomeCurrency, Assistant, Feedback, RateApp, ShareApp, Licences, Play, SharedAccount, Help }
 
 /** Where Send feedback writes to. The same address PRIVACY.md and SECURITY.md give. */
 const val FEEDBACK_ADDRESS = "developer.ptut@gmail.com"
@@ -133,6 +133,8 @@ class SettingsViewModel(
     private val showHomeCurrency: Boolean = false,
     /** #83: Settings › Play, while Remote Config's play switch is on. */
     private val showPlay: Boolean = false,
+    /** The Rate and Share rows, in a build with a store page to send people to. */
+    private val showStoreRows: Boolean = false,
     /** #116: the Goal jar row. The jar is v1, so it shows without the play row beside it. */
     private val showJar: Boolean = false,
     /** #115: the switch shows only in a build that sends counts. */
@@ -389,6 +391,7 @@ class SettingsViewModel(
             value = FEEDBACK_ADDRESS,
             icon = "help",
         ),
+    ) + storeRows(text) + listOf(
         SettingsRowUiModel(
             id = SettingsAction.Licences,
             name = text.licences,
@@ -396,6 +399,15 @@ class SettingsViewModel(
             icon = "menu_book",
         ),
     )
+
+    private fun storeRows(text: SettingsCopy) = if (!showStoreRows) {
+        emptyList()
+    } else {
+        listOf(
+            SettingsRowUiModel(id = SettingsAction.RateApp, name = text.rateApp, value = text.rateAppValue, icon = "store"),
+            SettingsRowUiModel(id = SettingsAction.ShareApp, name = text.shareApp, value = text.shareAppValue, icon = "upload"),
+        )
+    }
 
     /**
      * Three states, and the wrong one is worse than no line. "Off" is said only where the reader

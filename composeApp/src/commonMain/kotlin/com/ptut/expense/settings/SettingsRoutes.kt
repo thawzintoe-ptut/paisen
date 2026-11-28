@@ -54,6 +54,9 @@ fun SettingsAction.destination(): PtutRoute? = when (this) {
     // No screen: the shell opens the phone's mail app with [feedbackMail].
     SettingsAction.Feedback -> null
 
+    // No screen: the store app, or the share sheet with the store link.
+    SettingsAction.RateApp, SettingsAction.ShareApp -> null
+
     SettingsAction.Licences -> PtutRoute.Licences
 
     SettingsAction.Play -> PtutRoute.PlaySettings

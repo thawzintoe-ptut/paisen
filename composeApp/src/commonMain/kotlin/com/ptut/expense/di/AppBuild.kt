@@ -9,9 +9,10 @@ package com.ptut.expense.di
  *
  * [debug] gates one thing: the injectable slip source behind the debug menu. A release build never
  * binds it, so there is no path to a fake slip in a shipped app. [version] and [device] go into the
- * Send feedback email and nowhere else.
+ * Send feedback email and nowhere else. [storeId] is the app's id in the store it ships from; null
+ * where it has no store page yet, so the Rate and Share rows stay hidden.
  */
-data class AppBuild(val debug: Boolean, val version: String = "", val device: String = "")
+data class AppBuild(val debug: Boolean, val version: String = "", val device: String = "", val storeId: String? = null)
 
 /**
  * #116: the two release switches as this launch read them, for a graph that has to hide a way in.

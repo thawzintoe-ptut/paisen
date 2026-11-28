@@ -58,6 +58,7 @@ val settingsModule: Module = module {
             showPlay = flagOn(Flag.Play) && laterOn(),
             showJar = flagOn(Flag.Play),
             showUsage = getOrNull<UsageLog>()?.sends == true,
+            showStoreRows = get<AppBuild>().storeId != null,
             showV2 = v2On(),
             observeGoals = get<PlayBook>().goals,
         )

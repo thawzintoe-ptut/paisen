@@ -40,6 +40,9 @@ class SettingsDestinationTest {
                 PtutRoute.AssistantModel,
                 // Opens the phone's mail app, not a screen.
                 null,
+                // The store app and the share sheet.
+                null,
+                null,
                 PtutRoute.Licences,
                 // #83: Settings › Play.
                 PtutRoute.PlaySettings,

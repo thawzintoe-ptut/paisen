@@ -30,6 +30,8 @@ fun SettingsAction.opensScreen(): Boolean = when (this) {
     SettingsAction.Language,
     SettingsAction.Assistant,
     SettingsAction.Feedback,
+    SettingsAction.RateApp,
+    SettingsAction.ShareApp,
     SettingsAction.Licences,
     SettingsAction.Play,
     SettingsAction.GoalJar,

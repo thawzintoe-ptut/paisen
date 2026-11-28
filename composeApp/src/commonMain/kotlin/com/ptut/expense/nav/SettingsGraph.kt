@@ -34,6 +34,7 @@ import com.ptut.expense.folders.PhotoFoldersViewModel
 import com.ptut.expense.locale.LocalCopy
 import com.ptut.expense.platform.lock.AppLock
 import com.ptut.expense.platform.lock.DeviceAuth
+import com.ptut.expense.platform.share.rememberShareSheet
 import com.ptut.expense.settings.AssistantModelView
 import com.ptut.expense.settings.AssistantModelViewModel
 import com.ptut.expense.settings.BackgroundImportView
@@ -63,6 +64,8 @@ import com.ptut.expense.settings.destination
 import com.ptut.expense.settings.feedbackForm
 import com.ptut.expense.settings.feedbackMail
 import com.ptut.expense.settings.focusedRow
+import com.ptut.expense.settings.storeAppPage
+import com.ptut.expense.settings.storeWebPage
 import com.ptut.expense.shared.AccountCard
 import com.ptut.expense.shared.AccountUiState
 import com.ptut.expense.shared.AccountViewModel
@@ -265,6 +268,8 @@ private fun SettingsHost(nav: NavHostController, entry: NavBackStackEntry, focus
     val toasts = koinInject<ToastMessages>()
     val scope = rememberCoroutineScope()
     val noEmailApp = LocalCopy.current.settings.noEmailApp(FEEDBACK_ADDRESS)
+    val shareAppText = LocalCopy.current.settings.shareAppText
+    val shareSheet = rememberShareSheet()
     val deviceAuth = koinInject<DeviceAuth>()
     val appLock = koinInject<AppLock>()
     val unlockReason = LocalCopy.current.settings.unlockReason
@@ -299,6 +304,14 @@ private fun SettingsHost(nav: NavHostController, entry: NavBackStackEntry, focus
             SettingsAction.Feedback -> runCatching { uriHandler.openUri(feedbackForm(build)) }
                 .recoverCatching { uriHandler.openUri(feedbackMail(build)) }
                 .onFailure { scope.launch { toasts.show(ToastMessage(noEmailApp, ToastTone.Error)) } }
+
+            // The store app, else the same page in the browser.
+            SettingsAction.RateApp -> build.storeId?.let { id ->
+                runCatching { uriHandler.openUri(storeAppPage(id)) }
+                    .recoverCatching { uriHandler.openUri(storeWebPage(id)) }
+            }
+
+            SettingsAction.ShareApp -> build.storeId?.let { id -> shareSheet.shareText(shareAppText(storeWebPage(id))) }
 
             SettingsAction.SlipOwner -> editingOwner = true
 
@@ -372,7 +385,8 @@ private fun SettingsHost(nav: NavHostController, entry: NavBackStackEntry, focus
             SettingsAction.Activity, SettingsAction.Categories, SettingsAction.NoteTone,
             SettingsAction.Language, SettingsAction.ExportLedger, SettingsAction.ImportLedger,
             SettingsAction.Timezone, SettingsAction.HomeCurrency,
-            SettingsAction.Assistant, SettingsAction.Feedback, SettingsAction.Licences,
+            SettingsAction.Assistant, SettingsAction.Feedback, SettingsAction.RateApp,
+            SettingsAction.ShareApp, SettingsAction.Licences,
             SettingsAction.Play, SettingsAction.GoalJar, SettingsAction.Advanced,
             SettingsAction.SharedAccount, SettingsAction.Help,
             -> Unit
