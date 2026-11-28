@@ -22,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,10 +31,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -81,6 +86,13 @@ private const val JAR_W = 200f
 private const val JAR_H = 250f
 private const val WATER_TOP = 46f
 private const val WATER_BOTTOM = 240f
+
+/** #130: the water's top edge at 55% of the sky, the bottom at full (V2 J02). */
+private const val WATER_TOP_ALPHA = 0.55f
+
+/** #130: the glow's strength at its middle, and how far down the jar its middle sits. */
+private const val GLOW_ALPHA = 0.55f
+private const val GLOW_CENTRE = 0.44f
 private const val WAVE_LENGTH = 100f
 
 /** How high a wave rises at rest and the rise a tap adds; the back wave sits higher and out of step. */
@@ -204,7 +216,7 @@ data class JarSheetActions(
 @Composable
 private fun JarHero(jar: GoalJarUiState.Jar) {
     Column(Modifier.fillMaxWidth().padding(horizontal = Spacing.md), horizontalAlignment = Alignment.CenterHorizontally) {
-        GoalJarFill(jar.fraction, jar.label, Modifier.padding(top = Spacing.xs))
+        GoalJarFill(jar.fraction, jar.label, Modifier.padding(top = Spacing.xs).jarGlow())
         Text(jar.percent, style = MaterialTheme.ptutType.hero, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, modifier = Modifier.padding(top = Spacing.s12))
         Text(jar.savedOf, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
     }
@@ -351,6 +363,8 @@ private fun GoalJarFill(fraction: Float, label: String, modifier: Modifier = Mod
     }
     val slosh = remember { Animatable(0f) }
     val front = MaterialTheme.ptut.accent
+    // #130: the sky deepens toward the bottom of the water; built once, not on every wave frame.
+    val waterSky = remember(front) { listOf(front.copy(alpha = WATER_TOP_ALPHA), front) }
     val back = MaterialTheme.ptut.barTrack
     val glass = MaterialTheme.colorScheme.tertiaryContainer
     val ink = MaterialTheme.colorScheme.primary
@@ -390,7 +404,7 @@ private fun GoalJarFill(fraction: Float, label: String, modifier: Modifier = Mod
                 val lift = if (still) 0f else (IDLE_WAVE + SLOSH_WAVE * slosh.value) * sy
                 rotate(degrees = if (still) 0f else WATER_TILT * rock(slosh.value), pivot = Offset(size.width / 2, level)) {
                     drawPath(water(level - BACK_RISE * sy, lift, -phase + BACK_SHIFT, sx), back)
-                    drawPath(water(level, lift, phase, sx), front)
+                    drawPath(water(level, lift, phase, sx), Brush.verticalGradient(waterSky, startY = level, endY = bottom))
                 }
             }
             drawPath(body, ink, style = Stroke(width = line))
@@ -412,6 +426,38 @@ private fun bottle(sx: Float, sy: Float, inset: Float): Path = Path().apply {
     lineTo((24f + i) * sx, 100f * sy)
     cubicTo((24f + i) * sx, 74f * sy, 38f * sx, 54f * sy, (60f + i) * sx, 44f * sy)
     close()
+}
+
+/**
+ * #130, V2 J02 and J03: a soft sky glow behind the big jar, which shows through the Put money in
+ * sheet too. It fades in once; with reduce motion it is simply there.
+ */
+private fun Modifier.jarGlow(): Modifier = composed {
+    val motion = MaterialTheme.ptutMotion
+    val fadeMillis = motion.meterFill.orStill()
+    // Saved, so scrolling the jar off the list and back does not fade it in a second time.
+    var seen by rememberSaveable { mutableStateOf(false) }
+    val still = ptutReduceMotion
+    val shown = remember { Animatable(if (seen || still) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        shown.animateTo(1f, tween(durationMillis = fadeMillis, easing = motion.standard))
+        seen = true
+    }
+    val glow = MaterialTheme.ptut.accent
+    drawBehind {
+        val radius = PlaySizes.jarGlow.toPx() / 2
+        val centre = Offset(size.width / 2, size.height * GLOW_CENTRE)
+        drawCircle(
+            brush = Brush.radialGradient(
+                0f to glow.copy(alpha = GLOW_ALPHA * shown.value),
+                1f to Color.Transparent,
+                center = centre,
+                radius = radius,
+            ),
+            radius = radius,
+            center = centre,
+        )
+    }
 }
 
 /** The water below a wave at [level]: two crests across the jar, as p06's 100-wide wave. */

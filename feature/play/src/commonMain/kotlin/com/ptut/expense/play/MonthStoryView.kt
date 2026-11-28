@@ -26,12 +26,12 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.ptut.expense.design.PlaySizes
 import com.ptut.expense.design.PtutRadii
 import com.ptut.expense.design.Spacing
 import com.ptut.expense.design.ptut
+import com.ptut.expense.design.ptutType
 import com.ptut.expense.platform.share.encodePngOffMain
 import com.ptut.expense.platform.share.rememberShareSheet
 import com.ptut.expense.ui.sky.SkyButton
@@ -117,7 +117,7 @@ private fun StoryCardFace(card: StoryCardUiModel, showAmount: Boolean, modifier:
         card.figure?.let { figure ->
             Text(
                 text = if (showAmount) figure else hidden,
-                style = MaterialTheme.typography.displaySmall.copy(fontSize = 40.sp, fontWeight = FontWeight.Light),
+                style = MaterialTheme.ptutType.hero.copy(fontSize = 40.sp),
                 color = colors.heroOn,
             )
         }

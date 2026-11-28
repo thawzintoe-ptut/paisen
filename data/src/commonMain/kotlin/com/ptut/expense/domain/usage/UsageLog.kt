@@ -14,6 +14,9 @@ enum class UsageEvent(val wire: String) {
 
     /** Sent at most once a day, however often Today opens. */
     TodayOpened("today_opened"),
+
+    /** #128: Reports opened from Today's category line, so the hero card's door can be counted. */
+    ReportsOpened("reports_opened"),
     AppStarted("app_started"),
 
     /** One per crash report written since the last launch; the report itself stays on the phone. */
@@ -30,6 +33,9 @@ enum class UsageFlag(val wire: String) {
 
     /** jar_money_in: from a transfer slip rather than "I moved it". */
     FromSlip("from_slip"),
+
+    /** reports_opened: from Today's category line rather than the Reports tab. */
+    FromToday("from_today"),
 }
 
 interface UsageLog {

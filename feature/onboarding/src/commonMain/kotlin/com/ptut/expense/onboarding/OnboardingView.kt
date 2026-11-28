@@ -35,7 +35,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import com.ptut.expense.design.PlaySizes
@@ -194,7 +193,7 @@ private fun PromiseStep() {
     Image(PtutBrandMark, contentDescription = "PaiSeN", modifier = Modifier.padding(top = Spacing.md).size(SkySizes.brandMark))
     Text(
         text = text.headline,
-        style = MaterialTheme.ptutType.display.copy(fontWeight = FontWeight.Light),
+        style = MaterialTheme.ptutType.display,
         color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.padding(top = Spacing.lg),
     )

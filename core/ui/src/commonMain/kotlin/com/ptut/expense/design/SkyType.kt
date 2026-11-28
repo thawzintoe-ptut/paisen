@@ -43,14 +43,15 @@ internal fun skyTypography(geist: FontFamily): Typography =
 
 /**
  * Sky's own roles, measured from its artboards where they and p02 disagree (spec 2026-10-09,
- * sections 5 and 6): light, tight amounts and medium titles.
+ * sections 5 and 6): tight amounts and medium titles. #127: amounts are medium, their symbol and
+ * fraction regular (V2 A5); the display headline stays light.
  */
 internal fun skyTypeOf(geist: FontFamily, mono: FontFamily = geist) = PtutType(
-    hero = style(geist, 52f, FontWeight.Light, 0.92.em, (-0.04).em),
-    heroSymbol = style(geist, 26f, FontWeight.Light, 1.2.em),
-    heroFraction = style(geist, 30f, FontWeight.Light, 1.2.em),
-    sheet = style(geist, 48f, FontWeight.Light, 0.95.em, (-0.04).em),
-    report = style(geist, 46f, FontWeight.Light, 1.em, (-0.04).em),
+    hero = style(geist, 52f, FontWeight.Medium, 0.92.em, (-0.04).em),
+    heroSymbol = style(geist, 26f, FontWeight.Normal, 1.2.em),
+    heroFraction = style(geist, 30f, FontWeight.Normal, 1.2.em),
+    sheet = style(geist, 48f, FontWeight.Medium, 0.95.em, (-0.04).em),
+    report = style(geist, 46f, FontWeight.Medium, 1.em, (-0.04).em),
     display = style(geist, 52f, FontWeight.Light, 52.sp, (-0.04).em),
     screenTitle = style(geist, 34f, FontWeight.Medium, 40.sp, (-0.02).em),
     sectionTitle = style(geist, 17.5f, FontWeight.Medium, 23.sp),

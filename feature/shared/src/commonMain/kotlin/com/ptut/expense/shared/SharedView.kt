@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,6 +70,7 @@ import com.ptut.expense.ui.sky.SkyChip
 import com.ptut.expense.ui.sky.SkyChoice
 import com.ptut.expense.ui.sky.SkyChoiceSheet
 import com.ptut.expense.ui.sky.SkyHairline
+import com.ptut.expense.ui.sky.SkyHeroCard
 import com.ptut.expense.ui.sky.SkyKeyValueRow
 import com.ptut.expense.ui.sky.SkyPageSheet
 import com.ptut.expense.ui.sky.SkyStatCard
@@ -227,16 +229,22 @@ private fun Balances(
                     )
                     SkyBarIconAction(icon = PtutIcon.GroupAdd, label = text.home.newGroupOrPerson, onClick = onAdd)
                 }
+                // #131: one hero card for every money, none while only solo groups have no balance.
                 // #48: a second money gets its own figure and line under the first, never one sum.
-                state.overall.forEachIndexed { index, line ->
-                    SharedHero(
-                        label = line.label,
-                        amount = line.amount,
-                        tint = line.tone.ink(),
-                        money = line.money,
-                        modifier = Modifier.padding(top = if (index == 0) Spacing.sm else Spacing.md),
-                    )
-                    if (line.showHalves) HalvesLine(line, modifier = Modifier.padding(top = Spacing.xs))
+                if (state.overall.isNotEmpty()) {
+                    SkyHeroCard(modifier = Modifier.padding(top = Spacing.sm)) {
+                        state.overall.forEachIndexed { index, line ->
+                            SharedHero(
+                                label = line.label,
+                                amount = line.amount,
+                                tint = line.tone.ink(),
+                                labelColor = MaterialTheme.ptut.heroOn,
+                                money = line.money,
+                                modifier = if (index == 0) Modifier else Modifier.padding(top = Spacing.md),
+                            )
+                            if (line.showHalves) HalvesLine(line, modifier = Modifier.padding(top = Spacing.xs))
+                        }
+                    }
                 }
                 state.payNext?.let { pay ->
                     SkyStatCard(
@@ -292,7 +300,7 @@ private fun HalvesLine(line: OverallUiModel, modifier: Modifier = Modifier) {
             }
         },
         style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurface,
+        color = LocalContentColor.current,
         modifier = modifier,
     )
 }

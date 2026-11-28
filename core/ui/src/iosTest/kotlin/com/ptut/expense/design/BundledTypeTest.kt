@@ -57,6 +57,7 @@ class BundledTypeTest {
         assertEquals(52.sp, type!!.hero.fontSize)
         assertEquals(48.sp, type!!.sheet.fontSize)
         assertEquals(46.sp, type!!.report.fontSize)
+        listOf(type!!.hero, type!!.sheet, type!!.report).forEach { assertEquals(FontWeight.Medium, it.fontWeight) }
         assertNotNull(type!!.hero.fontFamily)
         assertEquals("tnum", type!!.hero.fontFeatureSettings)
     }
@@ -92,9 +93,9 @@ class BundledTypeTest {
         setContent { PtutTheme { type = MaterialTheme.ptutType } }
 
         assertEquals(26.sp, type!!.heroSymbol.fontSize)
-        assertEquals(FontWeight.Light, type!!.heroSymbol.fontWeight)
+        assertEquals(FontWeight.Normal, type!!.heroSymbol.fontWeight)
         assertEquals(30.sp, type!!.heroFraction.fontSize)
-        assertEquals(FontWeight.Light, type!!.heroFraction.fontWeight)
+        assertEquals(FontWeight.Normal, type!!.heroFraction.fontWeight)
         assertEquals("tnum", type!!.heroFraction.fontFeatureSettings)
     }
 

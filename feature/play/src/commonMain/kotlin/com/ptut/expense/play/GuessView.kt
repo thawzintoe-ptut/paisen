@@ -25,7 +25,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -204,7 +203,7 @@ private fun Step(icon: PtutIcon, label: String, onClick: () -> Unit) {
 /** p01's odometer: each digit rolls on its own, the lower ones longer. */
 @Composable
 private fun Odometer(symbol: String, digits: String, spoken: String, startFrom: String?, modifier: Modifier = Modifier) {
-    val style = MaterialTheme.ptutType.hero.copy(fontSize = 64.sp, fontWeight = FontWeight.Light, letterSpacing = (-0.03).em)
+    val style = MaterialTheme.ptutType.hero.copy(fontSize = 64.sp, letterSpacing = (-0.03).em)
     Row(modifier.clearAndSetSemantics { contentDescription = spoken }, verticalAlignment = Alignment.CenterVertically) {
         Text(symbol, style = MaterialTheme.ptutType.heroSymbol, color = MaterialTheme.ptut.heroOn, modifier = Modifier.padding(end = Spacing.s6))
         SkyRollingNumber(text = digits, style = style, color = MaterialTheme.ptut.heroOn, startFrom = startFrom)

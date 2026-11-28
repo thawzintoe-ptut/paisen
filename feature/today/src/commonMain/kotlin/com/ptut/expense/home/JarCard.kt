@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -68,7 +69,12 @@ internal fun JarCard(
             }
             Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.settingsTrailing))
         }
-        PlayMeter(fraction = jar.fraction, label = jar.label)
+        // #130: the jar is the app's most colourful thing, so its meter runs from sky into ink.
+        PlayMeter(
+            fraction = jar.fraction,
+            label = jar.label,
+            fillBrush = Brush.horizontalGradient(listOf(MaterialTheme.ptut.accent, MaterialTheme.colorScheme.primary)),
+        )
         jar.plan?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         jar.thisWeek?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         jar.nudge?.let { nudge ->

@@ -13,7 +13,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
@@ -32,6 +34,8 @@ fun PlayMeter(
     modifier: Modifier = Modifier,
     track: Color = MaterialTheme.ptut.barTrack,
     fill: Color = MaterialTheme.colorScheme.primary,
+    /** #130: the goal jar's meter paints a gradient; every other meter keeps the flat [fill]. */
+    fillBrush: Brush = SolidColor(fill),
 ) {
     val motion = MaterialTheme.ptutMotion
     val share by animateFloatAsState(
@@ -50,6 +54,6 @@ fun PlayMeter(
             .clip(CircleShape)
             .background(track),
     ) {
-        Box(Modifier.fillMaxHeight().fillMaxWidth(share).clip(CircleShape).background(fill))
+        Box(Modifier.fillMaxHeight().fillMaxWidth(share).clip(CircleShape).background(fillBrush))
     }
 }

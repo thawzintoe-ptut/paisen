@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,6 +70,9 @@ import com.ptut.expense.locale.noteCopy
 import com.ptut.expense.ui.categoryAnd
 import com.ptut.expense.ui.categoryAndProvenance
 import com.ptut.expense.ui.sky.SkyEmptyState
+import com.ptut.expense.ui.sky.SkyHeroCard
+import com.ptut.expense.ui.sky.SkyHeroLine
+import com.ptut.expense.ui.sky.SkyHeroPill
 import com.ptut.expense.ui.sky.SkyMoodCard
 import com.ptut.expense.ui.sky.SkyPageSheet
 import com.ptut.expense.ui.sky.SkyRollingAmount
@@ -76,6 +80,7 @@ import com.ptut.expense.ui.sky.SkySectionHeader
 import com.ptut.expense.ui.sky.SkyTextAction
 import com.ptut.expense.ui.sky.SkyTransactionRow
 import com.ptut.expense.ui.sky.SkyWarningBanner
+import com.ptut.expense.ui.sky.SkyWeekBars
 
 /**
  * Home in Sky (p05, p06, p24), with one job: today. The status line, the amount with its usual-day
@@ -96,6 +101,8 @@ fun HomeView(
     onOpenTransaction: (String) -> Unit,
     /** The category totals line opens Reports. */
     onOpenReports: () -> Unit = {},
+    /** #128: the hero card's category line was the way into Reports, for its usage count. */
+    onCategoryLine: () -> Unit = {},
     /** A mood card's day receipt, by its ISO date (#120). */
     onOpenReceipt: (String) -> Unit = {},
     /** The weekly card's slice of History (#20). */
@@ -131,6 +138,7 @@ fun HomeView(
                 onFixImport = onFixImport,
                 onOpenTransaction = onOpenTransaction,
                 onOpenReports = onOpenReports,
+                onCategoryLine = onCategoryLine,
                 onOpenReceipt = onOpenReceipt,
                 onOpenWeek = onOpenWeek,
                 onHideNoteWeek = onHideNoteWeek,
@@ -158,6 +166,7 @@ private fun LoadedHome(
     onFixImport: (ImportFix) -> Unit,
     onOpenTransaction: (String) -> Unit,
     onOpenReports: () -> Unit,
+    onCategoryLine: () -> Unit,
     onOpenReceipt: (String) -> Unit,
     onOpenWeek: (WeeklyCardUiModel) -> Unit,
     onHideNoteWeek: () -> Unit,
@@ -208,12 +217,19 @@ private fun LoadedHome(
                         modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm),
                     )
                 }
-                PeriodAmount(state = state, empty = empty, modifier = Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.sm))
+                // #128: the day's figure, its comparison, the week and the category line in one hero card.
+                SkyHeroCard(modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.sm)) {
+                    PeriodAmount(state = state, empty = empty)
+                    state.weekBars?.let { bars -> SkyWeekBars(bars.days, bars.spoken) }
+                    if (state.topCategories.isNotEmpty()) {
+                        CategoryTotalsLine(state.topCategories, onOpenReports = {
+                            onCategoryLine()
+                            onOpenReports()
+                        })
+                    }
+                }
                 state.monthLine?.let { line ->
                     MonthLine(line, onOpenReports, Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.xs))
-                }
-                if (state.topCategories.isNotEmpty()) {
-                    CategoryTotalsLine(state.topCategories, onOpenReports, Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.s12))
                 }
                 state.coach?.let { coach ->
                     CoachRow(coach, onOpen = { onOpenCoach(coach) }, modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.xs))
@@ -228,6 +244,8 @@ private fun LoadedHome(
                         waiting = state.isScanning,
                         cta = text.addCash,
                         onCta = onAddByHand,
+                        // The hero card above already shows ฿0.00, so the quiet day is said small, not twice.
+                        compact = true,
                         modifier = Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.md),
                     )
                     // The Purchases header is History's door, and an empty period draws none (#217).
@@ -540,14 +558,17 @@ private const val PLACEHOLDER_NAME_WIDTH = 0.6f
 private const val PLACEHOLDER_META_WIDTH = 0.35f
 
 /**
- * "Spent today" and the amount at 52/300, the baht sign and the satang set smaller (p05). An empty
- * span draws ฿0.00 in grey (#147, R7), which with the status line below reads as "nothing yet".
+ * "Spent today" and the amount at 52/500, the baht sign and the satang set smaller (p05, V2 A5),
+ * in the hero card's ink. An empty span draws ฿0.00 softer (#147, R7), which with the status line
+ * below reads as "nothing yet".
  */
 @Composable
 private fun PeriodAmount(state: HomeUiState.Success, empty: Boolean, modifier: Modifier = Modifier) {
     val text = LocalCopy.current.home
     val common = LocalCopy.current.common
-    val ink = if (empty) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+    val cardInk = LocalContentColor.current
+    val soft = cardInk.copy(alpha = HERO_SOFT)
+    val ink = if (empty) soft else cardInk
     val parts = state.summary.expense.formatParts()
     val compared = state.compared?.line
     Column(
@@ -555,7 +576,7 @@ private fun PeriodAmount(state: HomeUiState.Success, empty: Boolean, modifier: M
             contentDescription = listOfNotNull("${state.heroLabel}, ${state.summary.expense.spoken()}", compared).joinToString(". ")
         },
     ) {
-        Text(state.heroLabel, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(state.heroLabel, style = MaterialTheme.typography.labelLarge, color = cardInk)
         // Rolls to the next period's figure, and counts up from 0 the first time Today opens.
         // #103: a caught slip's roll is play's motion, so with Play off the number just changes.
         CompositionLocalProvider(LocalReduceMotion provides (ptutReduceMotion || (state.caught && !state.playMotion))) {
@@ -564,36 +585,32 @@ private fun PeriodAmount(state: HomeUiState.Success, empty: Boolean, modifier: M
                 whole = parts.whole,
                 fraction = parts.fraction,
                 color = ink,
-                fractionColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs),
+                fractionColor = soft,
+                modifier = Modifier.padding(top = Spacing.s6),
             )
         }
-        // One comparison, today beside a usual one of its weekday (#119).
-        compared?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs),
-            )
-        }
+        // One comparison, today beside a usual one of its weekday (#119); no pill without one.
+        compared?.let { SkyHeroPill(it) }
         // Income and Net for the span, only once the ledger holds any income (#146, K1).
         val line = state.incomeLine
         if (!empty && line != null) {
             // Ruby is money out, so only a net below zero takes it.
-            val netInk = if (line.netBelowZero) MaterialTheme.ptut.signatureInk else MaterialTheme.colorScheme.onSurfaceVariant
+            val netInk = if (line.netBelowZero) MaterialTheme.ptut.signatureInk else soft
             Text(
                 text = buildAnnotatedString {
                     append("${common.income} ${line.income} · ${text.net} ")
                     withStyle(SpanStyle(color = netInk)) { append(line.net) }
                 },
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xxs),
+                color = soft,
+                modifier = Modifier.padding(top = Spacing.xs),
             )
         }
     }
 }
+
+/** The card's softer ink, for the satang, an empty day and the income line (V2 board 03: 70%). */
+private const val HERO_SOFT = 0.7f
 
 /** "This month ฿12,400 · ฿800 less than your usual by this day", the whole of it Reports' door. */
 @Composable
@@ -623,36 +640,22 @@ private fun MonthLine(line: MonthLineUiModel, onOpenReports: () -> Unit, modifie
     }
 }
 
-/** Today's biggest categories as one line, "Groceries ฿642.50 · Transport ฿40", the whole of it Reports' door. */
+/** Today's biggest categories as the hero card's last line, "Groceries ฿642.50 · Transport ฿40", Reports' door. */
 @Composable
-private fun CategoryTotalsLine(tiles: List<TopCategoryUiModel>, onOpenReports: () -> Unit, modifier: Modifier = Modifier) {
+private fun CategoryTotalsLine(tiles: List<TopCategoryUiModel>, onOpenReports: () -> Unit) {
     val text = LocalCopy.current.home
     val spoken = text.byCategory(tiles.joinToString(AppText.copy.phrases.listComma) { "${it.name} ${it.amount}" })
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clearAndSetSemantics { contentDescription = spoken }
-            .tappable(PtutRadii.r12, Role.Button, onClick = onOpenReports)
-            .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.s6),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = buildAnnotatedString {
-                tiles.forEachIndexed { index, tile ->
-                    if (index > 0) withStyle(SpanStyle(color = muted)) { append(Separators.DOT) }
-                    withStyle(SpanStyle(color = muted)) { append("${tile.name} ") }
-                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(tile.amount) }
-                }
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            // Not weighted: the chevron follows the words, as on the board.
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        Icon(PtutIcon.ChevronRight.image, contentDescription = null, tint = muted, modifier = Modifier.size(SkySizes.moneyInArrow))
-    }
+    SkyHeroLine(
+        text = buildAnnotatedString {
+            tiles.forEachIndexed { index, tile ->
+                if (index > 0) append(Separators.DOT)
+                append("${tile.name} ")
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(tile.amount) }
+            }
+        },
+        spoken = spoken,
+        onClick = onOpenReports,
+    )
 }
 
 /** #22: under the weekly note, a quiet link that opens the three-choice sheet. */

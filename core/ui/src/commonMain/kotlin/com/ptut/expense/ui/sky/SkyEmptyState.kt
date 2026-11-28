@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -17,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import com.ptut.expense.design.ArcLoop
@@ -46,21 +48,41 @@ fun SkyEmptyState(
     /** Null where waiting is the right thing to do: a button there says the reader is at fault. */
     cta: String? = null,
     onCta: (() -> Unit)? = null,
+    /**
+     * Under a hero card that already says the day is empty: the drawing shrinks to a small tile
+     * beside the words, so the screen does not say "nothing yet" twice at full size.
+     */
+    compact: Boolean = false,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        IllustrationSlot(illustration = illustration, waiting = waiting)
-        Text(
-            text = headline,
-            style = MaterialTheme.ptutType.sheetTitle,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = Spacing.md),
-        )
-        Text(
-            text = body,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = Spacing.xs),
-        )
+        if (compact) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                IllustrationSlot(illustration = illustration, waiting = waiting, modifier = Modifier.width(SkySizes.emptyStateCompact), shape = PtutRadii.r20)
+                Column(Modifier.weight(1f)) {
+                    Text(text = headline, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        text = body,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = Spacing.xxs),
+                    )
+                }
+            }
+        } else {
+            IllustrationSlot(illustration = illustration, waiting = waiting)
+            Text(
+                text = headline,
+                style = MaterialTheme.ptutType.sheetTitle,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = Spacing.md),
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Spacing.xs),
+            )
+        }
         Row(
             modifier = Modifier.padding(top = Spacing.sm),
             horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
@@ -86,13 +108,17 @@ fun SkyEmptyState(
 }
 
 @Composable
-private fun IllustrationSlot(illustration: (@Composable () -> Unit)?, waiting: Boolean) {
+private fun IllustrationSlot(
+    illustration: (@Composable () -> Unit)?,
+    waiting: Boolean,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    shape: Shape = PtutRadii.r28,
+) {
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .aspectRatio(SkySizes.illustrationRatio)
-            .clip(PtutRadii.r28)
+            .clip(shape)
             // barTrack is Sky's pale sky (#D8EFFB by day, the artboard's #D6E7F1 to the eye) and a
             // deep sky tint by night, so the empty slot needs no role of its own.
             .background(MaterialTheme.ptut.barTrack),

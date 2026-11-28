@@ -52,18 +52,24 @@ class SkyTypeTest {
     }
 
     @Test
-    fun theAmountsAndTheFirstRunHeadlineAreLightAndTight() {
+    fun theAmountsAreMediumAndTight() {
         listOf(
             "hero" to (type.hero to 52.sp),
             "sheet" to (type.sheet to 48.sp),
             "report" to (type.report to 46.sp),
-            "display" to (type.display to 52.sp),
         ).forEach { (name, pair) ->
             val (style, size) = pair
             assertEquals(size, style.fontSize, "$name size")
-            assertEquals(FontWeight.Light, style.fontWeight, "$name weight")
+            assertEquals(FontWeight.Medium, style.fontWeight, "$name weight")
             assertEquals((-0.04).em, style.letterSpacing, "$name tracking")
         }
+    }
+
+    @Test
+    fun theFirstRunHeadlineStaysLightAndTight() {
+        assertEquals(52.sp, type.display.fontSize)
+        assertEquals(FontWeight.Light, type.display.fontWeight)
+        assertEquals((-0.04).em, type.display.letterSpacing)
     }
 
     @Test
@@ -77,11 +83,11 @@ class SkyTypeTest {
     }
 
     @Test
-    fun theBahtSignAndTheSatangBesideTheHeroAreLight() {
+    fun theBahtSignAndTheSatangBesideTheHeroAreRegular() {
         assertEquals(26.sp, type.heroSymbol.fontSize)
         assertEquals(30.sp, type.heroFraction.fontSize)
-        assertEquals(FontWeight.Light, type.heroSymbol.fontWeight)
-        assertEquals(FontWeight.Light, type.heroFraction.fontWeight)
+        assertEquals(FontWeight.Normal, type.heroSymbol.fontWeight)
+        assertEquals(FontWeight.Normal, type.heroFraction.fontWeight)
     }
 
     @Test

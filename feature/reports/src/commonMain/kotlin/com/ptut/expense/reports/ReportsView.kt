@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -66,6 +68,7 @@ import com.ptut.expense.design.ptutMotion
 import com.ptut.expense.design.ptutType
 import com.ptut.expense.design.tappable
 import com.ptut.expense.domain.ReportPeriod
+import com.ptut.expense.domain.Separators
 import com.ptut.expense.domain.TrendDirection
 import com.ptut.expense.domain.format
 import com.ptut.expense.domain.formatNet
@@ -129,8 +132,7 @@ private fun LoadedReports(
                     onChoosePeriod = onChoosePeriod,
                     modifier = Modifier.padding(horizontal = Spacing.sm),
                 )
-                PeriodTotal(state = state, modifier = Modifier.padding(horizontal = Spacing.md).padding(top = Spacing.md))
-                SpendChart(
+                TrendGrid(
                     state = state,
                     onSelectBar = tapBar,
                     modifier = Modifier.padding(horizontal = Spacing.sm).padding(top = Spacing.md, bottom = Spacing.md),
@@ -189,60 +191,116 @@ private fun PeriodTabs(
     }
 }
 
+/**
+ * #129, V2 board 14: the period as a grid of tiles. A wide one holds the total and its chart; under it
+ * the biggest category beside the change on the period before, then Income beside Net.
+ */
 @Composable
-private fun PeriodTotal(state: ReportsUiState.Success, modifier: Modifier = Modifier) {
+private fun TrendGrid(state: ReportsUiState.Success, onSelectBar: (Int) -> Unit, modifier: Modifier = Modifier) {
     val copy = LocalCopy.current
     val ink = MaterialTheme.ptut.heroOn
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-        Text(state.caption, style = MaterialTheme.typography.bodyLarge, color = ink)
-        Text(
-            text = state.total.format(),
-            style = MaterialTheme.ptutType.report,
-            color = ink,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(state.periodLabel, style = MaterialTheme.typography.labelLarge, color = ink)
-        // In ink with its arrow: Sky keeps red for delete and stale data (#147, R13).
-        state.delta?.let { delta ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                Icon(
-                    imageVector = when (delta.direction) {
-                        TrendDirection.Up -> PtutIcon.TrendingUp.image
-                        TrendDirection.Down -> PtutIcon.TrendingDown.image
-                        TrendDirection.Flat -> PtutIcon.TrendingFlat.image
-                    },
-                    contentDescription = null,
-                    tint = ink,
-                    modifier = Modifier.size(Spacing.sm),
-                )
-                Text(delta.text, style = MaterialTheme.typography.labelLarge, color = ink)
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.s10)) {
+        // Not merged: each chart bar stays its own item, so a screen reader can still pick one.
+        TrendTile(Modifier.fillMaxWidth(), merge = false) {
+            Text(state.caption, style = MaterialTheme.typography.labelLarge, color = ink)
+            Text(
+                text = state.total.format(),
+                style = MaterialTheme.ptutType.report,
+                color = ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = Spacing.s6),
+            )
+            Text(state.periodLabel, style = MaterialTheme.typography.labelLarge, color = ink, modifier = Modifier.padding(top = Spacing.xxs))
+            SpendChart(state = state, onSelectBar = onSelectBar, modifier = Modifier.padding(top = Spacing.sm))
+        }
+        val top = state.categories.firstOrNull()
+        if (top != null || state.delta != null) {
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(Spacing.s10)) {
+                top?.let { TopCategoryTile(it, Modifier.weight(1f).fillMaxHeight()) }
+                state.delta?.let { DeltaTile(it, Modifier.weight(1f).fillMaxHeight()) }
             }
         }
         // Income and Net, which no other Sky screen shows (#146, K1).
-        Row(
-            modifier = Modifier.padding(top = Spacing.xs),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-        ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s10)) {
             FieldTile(copy.common.income, state.income.format(), Modifier.weight(1f))
             FieldTile(copy.reports.net, state.net.formatNet(), Modifier.weight(1f))
         }
     }
 }
 
+/** One tile of [TrendGrid]: the sky's lighter inner fill, read aloud as one item when [merge]. */
 @Composable
-private fun FieldTile(label: String, value: String, modifier: Modifier = Modifier) {
+private fun TrendTile(modifier: Modifier = Modifier, merge: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(SkySizes.chartBarCorner * 2))
+            .clip(PtutRadii.r24)
             .background(MaterialTheme.ptut.heroInner)
-            .semantics(mergeDescendants = true) {}
-            .padding(horizontal = Spacing.s12, vertical = Spacing.xs),
-    ) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.ptut.heroOn)
-        Text(value, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.ptut.heroOn)
+            .then(if (merge) Modifier.semantics(mergeDescendants = true) {} else Modifier)
+            .padding(Spacing.sm),
+        content = content,
+    )
+}
+
+/** The period's biggest category: its name, its amount and share, and the share as a bar. */
+@Composable
+private fun TopCategoryTile(row: CategoryRowUiModel, modifier: Modifier = Modifier) {
+    val ink = MaterialTheme.ptut.heroOn
+    TrendTile(modifier) {
+        Text(row.name, style = MaterialTheme.typography.titleLarge, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("${row.amount}${Separators.DOT}${row.share}%", style = MaterialTheme.typography.bodyMedium, color = ink, maxLines = 1)
+        Box(
+            Modifier
+                .padding(top = Spacing.s12)
+                .fillMaxWidth()
+                .height(SkySizes.shareBar)
+                .clip(CircleShape)
+                .background(ink.copy(alpha = SHARE_TRACK)),
+        ) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(row.fraction).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+        }
     }
 }
+
+/** The change on the period before, in ink with its arrow: Sky keeps red for delete and stale data (#147, R13). */
+@Composable
+private fun DeltaTile(delta: DeltaUiModel, modifier: Modifier = Modifier) {
+    val ink = MaterialTheme.ptut.heroOn
+    TrendTile(modifier) {
+        Icon(
+            imageVector = when (delta.direction) {
+                TrendDirection.Up -> PtutIcon.TrendingUp.image
+                TrendDirection.Down -> PtutIcon.TrendingDown.image
+                TrendDirection.Flat -> PtutIcon.TrendingFlat.image
+            },
+            contentDescription = null,
+            tint = ink,
+            modifier = Modifier.size(Spacing.md),
+        )
+        Text(delta.text, style = MaterialTheme.typography.titleMedium, color = ink, modifier = Modifier.padding(top = Spacing.xs))
+    }
+}
+
+@Composable
+private fun FieldTile(label: String, value: String, modifier: Modifier = Modifier) {
+    TrendTile(modifier) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.ptut.heroOn)
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.ptut.heroOn,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = Spacing.s6),
+        )
+    }
+}
+
+/** The share bar's track on a tile, as a share of the card's ink (V2 board 14: 16%). */
+private const val SHARE_TRACK = 0.16f
+
+/** A chart bar on its tile, as a share of the card's ink (V2 board 14: 22%). */
+private const val BAR_FILL = 0.22f
 
 /**
  * The bars, the dashed average and the axis (p14). The selected bar wears an ink edge and a
@@ -318,7 +376,8 @@ private fun SpendChart(
 private fun ChartBar(bar: BarUiModel, grown: Float, onTap: () -> Unit, modifier: Modifier = Modifier) {
     val ink = MaterialTheme.ptut.heroOn
     val opens = LocalCopy.current.reports.showInHistory.takeIf { bar.isSelected && bar.opensHistory }
-    val fill = MaterialTheme.ptut.heroInner
+    // #129: the chart sits on a tile of heroInner now, so its bars take the board's ink at 22%.
+    val fill = ink.copy(alpha = BAR_FILL)
     val shape = RoundedCornerShape(topStart = SkySizes.chartBarCorner, topEnd = SkySizes.chartBarCorner)
     Column(
         modifier = modifier

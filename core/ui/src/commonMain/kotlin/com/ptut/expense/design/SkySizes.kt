@@ -142,6 +142,9 @@ object SkySizes {
     /** The app's mark in an empty slot with no art yet: small enough to sit inside [waitingArc]. */
     val emptyStateMark = 28.dp
 
+    /** The drawing's tile in a compact empty state, beside its words (Today under the hero card). */
+    val emptyStateCompact = 112.dp
+
     /** The top bar (p13, p16, p18, p19): 56 tall, its glyphs at 24. */
     val topBar = 56.dp
     val barGlyph = 24.dp
@@ -193,4 +196,11 @@ object SkySizes {
     /** The proportion bar over Reports' top categories (p14), and the gap between its parts. */
     val shareBar = 8.dp
     val shareGap = 4.dp
+
+    /** #128, V2 board 03: the hero card's compare pill and its seven week bars. */
+    val heroPill = 28.dp
+    val heroWeek = 64.dp
+
+    /** A week bar is rounded 6 on top, like the chart's ([chartBarCorner]), and 3 at its foot. */
+    val heroBarFoot = 3.dp
 }

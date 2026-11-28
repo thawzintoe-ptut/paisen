@@ -49,6 +49,9 @@ import com.ptut.expense.domain.slip.ObserveQueuedSlipsUseCase
 import com.ptut.expense.domain.today.GetHomeTodayUseCase
 import com.ptut.expense.domain.today.GetImportHealthUseCase
 import com.ptut.expense.domain.today.ObserveScanningUseCase
+import com.ptut.expense.domain.usage.UsageEvent
+import com.ptut.expense.domain.usage.UsageFlag
+import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.BurmeseCopy
 import com.ptut.expense.locale.EnglishCopy
@@ -977,6 +980,48 @@ class HomeViewModelTest : ViewModelTest() {
         }
     }
 
+    /** #128: Fri 14 Aug sits in Mon 10 to Sun 16; each bar is its day against the week's biggest. */
+    @Test
+    fun theWeekBarsDrawEachDayOfThisWeekAgainstItsBiggestDay() = runTest {
+        val earlier = listOf(
+            spent("m", at(2026, 8, 10, 12, 0), Satang(10_000)),
+            spent("w", at(2026, 8, 12, 12, 0), Satang(30_000)),
+            spent("last", at(2026, 8, 9, 12, 0), Satang(90_000)),
+        )
+        val today = listOf(spent("f", at(2026, 8, 14, 10, 0), Satang(20_000)))
+        val viewModel = viewModel(transactions = today, saved = earlier)
+
+        viewModel.uiState.test {
+            val bars = assertNotNull(awaitSuccess().weekBars)
+            assertEquals(AppText.copy.reports.weekAxis, bars.days.map { it.letter })
+            assertEquals(listOf(1f / 3, 0f, 1f, 0f, 2f / 3, 0f, 0f), bars.days.map { it.share })
+            assertEquals(listOf(4), bars.days.indices.filter { bars.days[it].today })
+        }
+    }
+
+    @Test
+    fun theFirstWeekHasNoWeekBars() = runTest {
+        val book = FakePlayBook(goals = listOf(jar))
+        val viewModel = viewModel(
+            transactions = listOf(spent("f", at(2026, 8, 14, 10, 0), Satang(20_000))),
+            play = PlayFixture(book, PlayChoices(welcomedOn = "2026-08-10")),
+        )
+
+        viewModel.uiState.test {
+            assertNull(awaitSuccess().weekBars)
+        }
+    }
+
+    @Test
+    fun openingReportsFromTheCategoryLineLogsOneReportsOpenedFromToday() = runTest {
+        val usage = RecordedUsage()
+        val viewModel = viewModel(transactions = emptyList(), usage = usage)
+
+        viewModel.reportsTapped()
+
+        assertEquals(listOf(UsageEvent.ReportsOpened to mapOf(UsageFlag.FromToday to true)), usage.logged.filter { it.first == UsageEvent.ReportsOpened })
+    }
+
     @Test
     fun topCategoriesAreTheBiggestSpendFirst() = runTest {
         val today = listOf(
@@ -1093,6 +1138,7 @@ class HomeViewModelTest : ViewModelTest() {
         playMotion: Boolean = false,
         folders: List<WatchedFolder> = emptyList(),
         offersFolders: Boolean = true,
+        usage: UsageLog = UsageLog.None,
         onLedger: (FakeLedger) -> Unit = {},
     ) = FakeLedger(transactions, sinceLastImportMillis, queued, all = transactions + saved, runs = runs).let { ledger ->
         onLedger(ledger)
@@ -1133,7 +1179,16 @@ class HomeViewModelTest : ViewModelTest() {
             },
             deposits = play?.book?.deposits ?: flowOf(emptyList()),
             goals = play?.book?.goals ?: flowOf(emptyList()),
+            usage = usage,
         )
+    }
+
+    private class RecordedUsage : UsageLog {
+        val logged = mutableListOf<Pair<UsageEvent, Map<UsageFlag, Boolean>>>()
+
+        override fun log(event: UsageEvent, flags: Map<UsageFlag, Boolean>) {
+            logged += event to flags
+        }
     }
 
     /** #85: what play holds for a test, and the reader's switches. */

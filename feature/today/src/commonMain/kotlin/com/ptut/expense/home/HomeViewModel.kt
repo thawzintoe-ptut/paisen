@@ -3,6 +3,7 @@ package com.ptut.expense.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
+import com.ptut.expense.domain.DaySpend
 import com.ptut.expense.domain.Direction
 import com.ptut.expense.domain.HomeTime
 import com.ptut.expense.domain.ImportFix
@@ -51,6 +52,7 @@ import com.ptut.expense.domain.today.MoodRecap
 import com.ptut.expense.domain.today.ObserveScanningUseCase
 import com.ptut.expense.domain.today.ReviewCounts
 import com.ptut.expense.domain.usage.UsageEvent
+import com.ptut.expense.domain.usage.UsageFlag
 import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.locale.currencyCopy
@@ -61,6 +63,7 @@ import com.ptut.expense.ui.ToastMessages
 import com.ptut.expense.ui.displayName
 import com.ptut.expense.ui.metaLine
 import com.ptut.expense.ui.metaParts
+import com.ptut.expense.ui.sky.WeekBar
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -70,11 +73,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 
 /** One of today's three biggest categories: its name, glyph and total, in rank order. */
 data class TopCategoryUiModel(val name: String, val icon: String, val amount: String)
+
+/** #128: the hero card's seven bars, Monday first, and the days so far in words for a screen reader. */
+data class WeekBarsUiModel(val days: List<WeekBar>, val spoken: String)
 
 /**
  * The one card under the amount. Today shows a single next step, so the reader has one thing
@@ -148,6 +155,8 @@ sealed interface HomeUiState {
         val topCategories: List<TopCategoryUiModel> = emptyList(),
         /** The line under the amount, today beside a usual one; null with too little history (#119). */
         val compared: ComparedUiModel? = null,
+        /** #128: this week by day in the hero card; null in the first week and until the ledger answers. */
+        val weekBars: WeekBarsUiModel? = null,
         /** The month so far and its pace, Reports' door; null in a month with no spending yet. */
         val monthLine: MonthLineUiModel? = null,
         /** p07 and p08's card under the tabs: yesterday before noon, today after 18:00 (#121, #122). */
@@ -333,6 +342,11 @@ class HomeViewModel(
         jarOpens.value = null
     }
 
+    /** #128: the category line in the hero card opened Reports. */
+    fun reportsTapped() {
+        usage.log(UsageEvent.ReportsOpened, mapOf(UsageFlag.FromToday to true))
+    }
+
     fun editOpened() {
         edits.value = null
     }
@@ -393,7 +407,9 @@ class HomeViewModel(
                 review = home.review?.asReviewCard(),
                 savedToday = home.savedToday.take(SAVED_TODAY_SHOWN).map { it.asSavedRow(categories, subCategories) },
                 savedTodayMore = (home.savedToday.size - SAVED_TODAY_SHOWN).coerceAtLeast(0),
-                compared = home.usualDay?.asCompared(),
+                // #128: the first week shows the day's total alone, with no pill and no bars (S04).
+                compared = home.usualDay?.takeUnless { extras.play.firstWeek }?.asCompared(),
+                weekBars = home.weekByDay?.takeUnless { extras.play.firstWeek }?.asWeekBars(today),
                 monthLine = home.monthPace?.asMonthLine(),
                 moodCard = if (extras.mood) getMoodRecap(home.history, now)?.asMoodCard() else null,
                 weeklyCard = weeklyCard,
@@ -471,6 +487,18 @@ private data class Extras(
     val caughtId: String?,
     val playMotion: Boolean,
 )
+
+private fun List<DaySpend>.asWeekBars(today: LocalDate): WeekBarsUiModel {
+    val biggest = maxOf { it.spent }
+    val letters = AppText.copy.reports.weekAxis
+    val names = AppText.copy.calendar.weekdaysShort
+    return WeekBarsUiModel(
+        days = mapIndexed { index, day -> WeekBar(letters[index], day.spent.ratioTo(biggest), today = day.date == today) },
+        spoken = filter { it.date <= today }
+            .mapIndexed { index, day -> "${names[index]} ${day.spent.formatCompact()}" }
+            .joinToString(AppText.copy.phrases.listComma),
+    )
+}
 
 private fun UsualDay.asCompared() = ComparedUiModel(line = differencePhrase(), glyph = difference.trendGlyph())
 

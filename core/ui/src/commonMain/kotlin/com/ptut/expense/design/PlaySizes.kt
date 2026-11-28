@@ -57,6 +57,9 @@ object PlaySizes {
     val jarWidth = 180.dp
     val jarHeight = 225.dp
 
+    /** #130, V2 J02: the soft glow behind the big jar. */
+    val jarGlow = 260.dp
+
     /** The avatar on a reaction pill. */
     val reactAvatar = 20.dp
 

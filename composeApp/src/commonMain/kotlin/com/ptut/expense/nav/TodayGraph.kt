@@ -68,6 +68,7 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
             onOpenReview = { nav.navigate(PtutRoute.Review) },
             // Reports owns the week and the month; the category totals line is Today's door to it.
             onOpenReports = { nav.openTabAt(PtutRoute.Reports) },
+            onCategoryLine = viewModel::reportsTapped,
             // History is pushed since Shared took its pill slot (#33), and lights Today.
             onOpenLedger = { nav.navigate(PtutRoute.Ledger) { launchSingleTop = true } },
             onAddByHand = openAddSheet,
