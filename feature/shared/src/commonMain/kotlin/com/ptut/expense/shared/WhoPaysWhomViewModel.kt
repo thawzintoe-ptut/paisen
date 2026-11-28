@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
 import com.ptut.expense.domain.format
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.GetSettlementUseCase
 import com.ptut.expense.domain.shared.ObserveSharedSnapshotUseCase
 import com.ptut.expense.domain.shared.ObserveSyncStatusUseCase
@@ -15,6 +16,9 @@ import com.ptut.expense.domain.shared.moneyFormat
 import com.ptut.expense.domain.shared.typedText
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.sync.SyncHealth
+import com.ptut.expense.ui.ToastMessage
+import com.ptut.expense.ui.ToastMessages
+import com.ptut.expense.ui.ToastTone
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -88,9 +92,13 @@ class WhoPaysWhomViewModel(
     observeSyncStatus: ObserveSyncStatusUseCase = ObserveSyncStatusUseCase(),
     /** #93: Play and its settle plan are on, read when the screen is built. */
     private val planOn: Boolean = false,
+    /** A PromptPay ID or the Simplify switch that did not save says so. Null in a screen test's graph. */
+    private val toasts: ToastMessages? = null,
 ) : ViewModel() {
 
-    val uiState: StateFlow<WhoPaysWhomUiState> = combine(observeSnapshot(), observeSyncStatus(groupId)) { snapshot, status ->
+    private val snapshot = observeSnapshot()
+
+    val uiState: StateFlow<WhoPaysWhomUiState> = combine(snapshot, observeSyncStatus(groupId)) { snapshot, status ->
         val (group, settlement, foreign) = getSettlement(snapshot, groupId) ?: return@combine WhoPaysWhomUiState.Missing
         val text = AppText.copy.shared.settle
         val you = AppText.copy.common.you
@@ -133,15 +141,18 @@ class WhoPaysWhomViewModel(
         )
     }.flowOn(work).stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_STOP_MILLIS), WhoPaysWhomUiState.Missing)
 
-    /** True when [text] is a PromptPay ID and was saved for my name in this group, as on the group's own sheet. */
+    /** True when [text] is a PromptPay ID, as on the group's own sheet; a save that fails says so in a toast. */
     fun setPromptPay(text: String): Boolean {
         val id = PromptPay.normalize(text) ?: return false
-        viewModelScope.launch { savePromptPay(groupId, id) }
+        viewModelScope.launch { saveOwnPromptPay(snapshot.value, groupId, id, savePromptPay, toasts) }
         return true
     }
 
     fun setSimplify(on: Boolean) {
-        viewModelScope.launch { setSimplifyDebts(groupId, on) }
+        viewModelScope.launch {
+            runSuspendCatching { setSimplifyDebts(groupId, on) }
+                .onFailure { toasts?.show(ToastMessage(text = AppText.copy.common.notDone, tone = ToastTone.Error)) }
+        }
     }
 
     private fun plan(cards: List<PaymentCardUiModel>, pairwise: Int, myAmount: String?): SettlePlanUiModel? {

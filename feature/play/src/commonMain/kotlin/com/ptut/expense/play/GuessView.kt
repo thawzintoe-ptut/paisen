@@ -191,8 +191,8 @@ private fun Step(icon: PtutIcon, label: String, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(PlaySizes.step)
-            .clearAndSetSemantics { contentDescription = label }
             .tappable(CircleShape, Role.Button, onClick = onClick)
+            .clearAndSetSemantics { contentDescription = label }
             .clip(CircleShape)
             .background(MaterialTheme.ptut.heroInner),
     ) {

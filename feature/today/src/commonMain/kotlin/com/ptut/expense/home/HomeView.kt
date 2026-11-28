@@ -620,8 +620,9 @@ private fun MonthLine(line: MonthLineUiModel, onOpenReports: () -> Unit, modifie
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clearAndSetSemantics { contentDescription = listOfNotNull("$label ${line.total}", line.pace).joinToString(". ") }
+            .heightIn(min = Sizes.minTouchTarget)
             .tappable(PtutRadii.r12, Role.Button, onClick = onOpenReports)
+            .clearAndSetSemantics { contentDescription = listOfNotNull("$label ${line.total}", line.pace).joinToString(". ") }
             .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s6),
         verticalAlignment = Alignment.CenterVertically,

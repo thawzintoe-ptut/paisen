@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
@@ -79,112 +80,112 @@ import org.koin.core.parameter.parametersOf
 /** Settings and every screen a Settings row opens. */
 internal fun NavGraphBuilder.settingsRoutes(nav: NavHostController) {
     composable<PtutRoute.Settings> { entry ->
-        SettingsHost(nav, focus = entry.toRoute<PtutRoute.Settings>().focusedRow(), advanced = false)
+        SettingsHost(nav, entry, focus = entry.toRoute<PtutRoute.Settings>().focusedRow(), advanced = false)
     }
 
     composable<PtutRoute.SettingsAdvanced> { entry ->
-        SettingsHost(nav, focus = entry.toRoute<PtutRoute.SettingsAdvanced>().focusedRow(), advanced = true)
+        SettingsHost(nav, entry, focus = entry.toRoute<PtutRoute.SettingsAdvanced>().focusedRow(), advanced = true)
     }
 
-    composable<PtutRoute.BackgroundImport> {
+    composable<PtutRoute.BackgroundImport> { entry ->
         val background = koinViewModel<BackgroundImportViewModel>()
         val state by background.uiState.collectAsStateWithLifecycle()
         BackgroundImportView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onSetRunning = background::setRunning,
             onCheckNow = background::checkNow,
         )
     }
 
-    composable<PtutRoute.KeepFailedSlips> {
+    composable<PtutRoute.KeepFailedSlips> { entry ->
         val keep = koinViewModel<KeepFailedSlipsViewModel>()
         val state by keep.uiState.collectAsStateWithLifecycle()
         KeepFailedSlipsView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onChoose = keep::choose,
         )
     }
 
     // One class for both ends of FR-22. Each screen resolves its own instance,
     // which is fine — they are separate destinations, so only one is ever on top.
-    composable<PtutRoute.ExportData> {
+    composable<PtutRoute.ExportData> { entry ->
         val backup = koinViewModel<LedgerBackupViewModel>()
         val state by backup.uiState.collectAsStateWithLifecycle()
         ExportDataView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onExport = backup::export,
             // #112: a restore is two taps from Settings, Backup then Import a backup.
             onImport = { nav.navigate(PtutRoute.ImportData) { launchSingleTop = true } },
         )
     }
 
-    composable<PtutRoute.ImportData> {
+    composable<PtutRoute.ImportData> { entry ->
         val backup = koinViewModel<LedgerBackupViewModel>()
         val state by backup.uiState.collectAsStateWithLifecycle()
         ImportDataView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onChooseFile = backup::chooseFile,
             onImport = backup::restore,
             onCancel = backup::cancelRestore,
         )
     }
 
-    composable<PtutRoute.Language> {
+    composable<PtutRoute.Language> { entry ->
         val language = koinViewModel<LanguageViewModel>()
         val state by language.uiState.collectAsStateWithLifecycle()
         LanguageView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onChoose = language::choose,
         )
     }
 
-    composable<PtutRoute.HomeCurrency> {
+    composable<PtutRoute.HomeCurrency> { entry ->
         val homeCurrency = koinViewModel<HomeCurrencyViewModel>()
         val state by homeCurrency.uiState.collectAsStateWithLifecycle()
         HomeCurrencyView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onChoose = homeCurrency::choose,
             onRate = homeCurrency::typeRate,
             onConfirmConvert = homeCurrency::confirmConvert,
             onCancelConvert = homeCurrency::cancelConvert,
-            onExport = { nav.navigate(PtutRoute.ExportData) },
+            onExport = { nav.navigate(PtutRoute.ExportData) { launchSingleTop = true } },
         )
     }
 
-    composable<PtutRoute.Timezone> {
+    composable<PtutRoute.Timezone> { entry ->
         TimezoneView(
             uiState = koinViewModel<TimezoneViewModel>().uiState,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
         )
     }
 
-    composable<PtutRoute.AssistantModel> {
+    composable<PtutRoute.AssistantModel> { entry ->
         val assistant = koinViewModel<AssistantModelViewModel>()
         val state by assistant.uiState.collectAsStateWithLifecycle()
         AssistantModelView(
             uiState = state,
             onAct = assistant::act,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
         )
     }
 
-    composable<PtutRoute.Licences> {
+    composable<PtutRoute.Licences> { entry ->
         val licences = koinViewModel<LicencesViewModel>()
         val state by licences.uiState.collectAsStateWithLifecycle()
         LicencesView(
             uiState = state,
             onToggle = licences::toggle,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
         )
     }
 
-    composable<PtutRoute.Categories> {
+    composable<PtutRoute.Categories> { entry ->
         val categories = koinViewModel<CategoriesViewModel>()
         val state by categories.uiState.collectAsStateWithLifecycle()
         val created by categories.justCreated.collectAsStateWithLifecycle()
@@ -200,8 +201,8 @@ internal fun NavGraphBuilder.settingsRoutes(nav: NavHostController) {
 
         CategoriesView(
             uiState = state,
-            onBack = { nav.popBackStack() },
-            onOpen = { nav.navigate(PtutRoute.EditCategory(it)) },
+            onBack = { nav.popFrom(entry) },
+            onOpen = { nav.navigate(PtutRoute.EditCategory(it)) { launchSingleTop = true } },
             onNew = { categories.newCategory() },
             onMove = { id, by -> categories.move(id, by) },
         )
@@ -219,7 +220,7 @@ internal fun NavGraphBuilder.settingsRoutes(nav: NavHostController) {
 
         EditCategoryView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onRename = edit::rename,
             onIcon = edit::chooseIcon,
             onDirection = edit::chooseDirection,
@@ -233,13 +234,13 @@ internal fun NavGraphBuilder.settingsRoutes(nav: NavHostController) {
         )
     }
 
-    composable<PtutRoute.PhotoFolders> {
+    composable<PtutRoute.PhotoFolders> { entry ->
         val folders = koinViewModel<PhotoFoldersViewModel>()
         val state by folders.uiState.collectAsStateWithLifecycle()
 
         PhotoFoldersView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onToggle = folders::onToggle,
             onSave = { folders.save() },
             onChooseAnother = { folders.chooseMore() },
@@ -254,7 +255,7 @@ internal fun NavGraphBuilder.settingsRoutes(nav: NavHostController) {
 
 /** Settings, or its Advanced screen (#101): one set of row taps and switches for both. */
 @Composable
-private fun SettingsHost(nav: NavHostController, focus: SettingsAction?, advanced: Boolean) {
+private fun SettingsHost(nav: NavHostController, entry: NavBackStackEntry, focus: SettingsAction?, advanced: Boolean) {
     val settings = koinViewModel<SettingsViewModel>()
     val state by settings.uiState.collectAsStateWithLifecycle()
     // The switch in the background import row is that screen's own lever (#168).
@@ -312,7 +313,7 @@ private fun SettingsHost(nav: NavHostController, focus: SettingsAction?, advance
 
             SettingsAction.Help -> helpOpen = true
 
-            else -> action.destination()?.let { nav.navigate(it) }
+            else -> action.destination()?.let { nav.navigate(it) { launchSingleTop = true } }
         }
     }
     if (helpOpen) {
@@ -378,7 +379,7 @@ private fun SettingsHost(nav: NavHostController, focus: SettingsAction?, advance
         }
     }
     if (advanced) {
-        SettingsAdvancedView(uiState = state, onAction = onAction, onBack = { nav.popBackStack() }, focusRow = focus, onSwitch = onSwitch)
+        SettingsAdvancedView(uiState = state, onAction = onAction, onBack = { nav.popFrom(entry) }, focusRow = focus, onSwitch = onSwitch)
         return
     }
     SettingsView(

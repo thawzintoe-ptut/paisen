@@ -60,9 +60,11 @@ fun ReportPeriod.rangeContaining(today: LocalDate): DateRange = when (this) {
 }
 
 fun ReportPeriod.previousRangeBefore(today: LocalDate): DateRange = when (this) {
-    ReportPeriod.Week -> rangeContaining(today).let {
-        DateRange(it.start.minus(DAYS_IN_WEEK, DateTimeUnit.DAY), it.endInclusive.minus(DAYS_IN_WEEK, DateTimeUnit.DAY))
-    }
+    // Cut at the same weekday as today: this week has only happened up to today, as with Month.
+    ReportPeriod.Week -> DateRange(
+        rangeContaining(today).start.minus(DAYS_IN_WEEK, DateTimeUnit.DAY),
+        today.minus(DAYS_IN_WEEK, DateTimeUnit.DAY),
+    )
 
     ReportPeriod.Month -> {
         val lastMonth = today.minus(1, DateTimeUnit.MONTH)

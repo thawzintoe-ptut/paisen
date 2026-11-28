@@ -55,8 +55,8 @@ class PhotoAccessDenied : ScanStopped(ImportFailureKind.PhotoAccessDenied, AppTe
  *
  * Under Android 14's "Select photos" the floors stay put. A photo picked later can be older than
  * one already read, and a floor raised over the picks would hide every unpicked slip below it once
- * the reader allows all photos. So each pick carries its own floor instead: once a scan has listed
- * it, the next scan marks it finished, as it settles a floor, and a read that failed holds it back.
+ * the reader allows all photos. So each pick carries its own floor instead: once a run has gone
+ * through it, [settle] marks it finished with the floors, and a read that failed holds it back.
  * [delete] marks one at once, so a discard holds even when the process dies before the next scan.
  */
 class MediaStoreSlipSource(
@@ -70,7 +70,7 @@ class MediaStoreSlipSource(
     /** Floors in `DATE_ADDED` seconds, so a read that fails can hold its folder behind that row. */
     private val floors = ScanFloors(folders, clock)
 
-    /** Picks listed by the previous run, finished when the next scan settles them. */
+    /** Picks listed by this run, finished when the run settles them. */
     private var pendingPicks = mutableSetOf<String>()
 
     /** Picks no scan reads again. Android only, so it lives here and not in the ledger. */
@@ -80,7 +80,8 @@ class MediaStoreSlipSource(
         val level = context.photoAccessLevel()
         if (level == PhotoAccessLevel.None) throw PhotoAccessDenied()
 
-        settlePreviousBatch()
+        pendingPicks = mutableSetOf()
+        floors.startListing()
 
         val watched = folders.folders.value.watched()
         if (watched.isEmpty()) return@withContext emptyList()
@@ -105,7 +106,7 @@ class MediaStoreSlipSource(
                 found += SlipCandidate(id, row.capturedAtEpochMillis, folder.id, folder.name)
             }
             if (level == PhotoAccessLevel.All) {
-                rows.maxOfOrNull { it.addedAtSeconds }?.let { floors.listedThrough(folder.id, it) }
+                rows.maxOfOrNull { it.addedAtSeconds }?.let { floors.listedThrough(folder.id, floor, it, filledShare = rows.size >= share) }
             }
 
             // Stamped as looked-at now, at the floor it already had. That is what tells a folder
@@ -186,14 +187,16 @@ class MediaStoreSlipSource(
     /** A copy: the set SharedPreferences hands out must not be changed in place. */
     private fun finishedPicks(): Set<String> = finishedPicks.getStringSet(FINISHED, null)?.toSet().orEmpty()
 
-    /** Picks settle with the floors: the previous run's are finished before this one lists. */
-    private suspend fun settlePreviousBatch() {
+    /** Picks settle with the floors, once the run has gone through every one it listed. */
+    override suspend fun settle() {
         if (pendingPicks.isNotEmpty()) {
             finish(pendingPicks)
             pendingPicks = mutableSetOf()
         }
-        floors.settlePrevious()
+        floors.settle()
     }
+
+    override suspend fun retryLater(id: String) = holdBelow(id)
 
     private fun holdBelow(id: String) {
         pendingPicks.remove(id)

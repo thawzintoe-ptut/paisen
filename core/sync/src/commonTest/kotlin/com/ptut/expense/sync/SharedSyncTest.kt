@@ -8,7 +8,9 @@ import com.ptut.expense.data.repository.KIND_MEMBER
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.sync.auth.Account
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -253,6 +255,21 @@ class SharedSyncTest {
             firestore.writes,
         )
         assertNull(dao.groups["g1"])
+    }
+
+    @Test
+    fun `a sync that waits behind sign-out finds the phone signed out and brings no group back`() = runTest {
+        holds("g1")
+        firestore.memberships = listOf(groupDoc("g1"))
+        auth.onSignOut = { yield() }
+
+        val signingOut = launch { sync.signOut() }
+        val syncing = launch { sync.syncAll() }
+        signingOut.join()
+        syncing.join()
+
+        assertTrue(firestore.calls.none { it.startsWith("query") })
+        assertTrue(dao.groups.isEmpty())
     }
 
     @Test

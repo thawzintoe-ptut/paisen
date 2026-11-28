@@ -103,6 +103,17 @@ class SlipParserTest {
     }
 
     @Test
+    fun `a comma misread as a second point leaves the amount unread rather than a wrong one`() {
+        val read = assertIs<SlipRead.Partial>(
+            SlipParser.parse(
+                slip("MS ANONG WATTANA", "Transaction ID:", "016200000014APP00014", "Amount:", "1.387.50 Baht", "Fee:", "0.00 Baht"),
+            ),
+        )
+
+        assertNull(read.amount)
+    }
+
+    @Test
     fun `the fee is never mistaken for the amount`() {
         val read = complete(
             "SHOPEEPAY",

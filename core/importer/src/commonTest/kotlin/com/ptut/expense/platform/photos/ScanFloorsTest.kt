@@ -18,12 +18,12 @@ class ScanFloorsTest {
     )
 
     @Test
-    fun `a listed folder keeps its floor until the next scan settles it`() = runTest {
+    fun `a listed folder keeps its floor until the run settles it`() = runTest {
         listCamera()
 
         assertEquals(0L, folders.scannedThroughSeconds("camera"))
 
-        floors.settlePrevious()
+        floors.settle()
         assertEquals(30L, folders.scannedThroughSeconds("camera"))
     }
 
@@ -32,7 +32,7 @@ class ScanFloorsTest {
         listCamera()
 
         floors.holdBelow("b")
-        floors.settlePrevious()
+        floors.settle()
 
         assertEquals(19L, folders.scannedThroughSeconds("camera"))
     }
@@ -43,7 +43,7 @@ class ScanFloorsTest {
 
         floors.holdBelow("c")
         floors.holdBelow("a")
-        floors.settlePrevious()
+        floors.settle()
 
         assertEquals(9L, folders.scannedThroughSeconds("camera"))
     }
@@ -53,7 +53,7 @@ class ScanFloorsTest {
         listCamera()
 
         floors.holdBelow("unknown")
-        floors.settlePrevious()
+        floors.settle()
 
         assertEquals(30L, folders.scannedThroughSeconds("camera"))
     }
@@ -61,12 +61,32 @@ class ScanFloorsTest {
     @Test
     fun `a settled floor is written once`() = runTest {
         listCamera()
-        floors.settlePrevious()
+        floors.settle()
         folders.recordScan("camera", throughSeconds = 5, checkedAtEpochMillis = 0)
 
-        floors.settlePrevious()
+        floors.settle()
 
         assertEquals(5L, folders.scannedThroughSeconds("camera"))
+    }
+
+    @Test
+    fun `a run that never settled leaves the floor where it was`() = runTest {
+        listCamera()
+
+        floors.startListing()
+        floors.settle()
+
+        assertEquals(0L, folders.scannedThroughSeconds("camera"))
+    }
+
+    @Test
+    fun `a full share keeps the floor one second below its newest picture`() = runTest {
+        floors.listedThrough("camera", floor = 0, newest = 30, filledShare = true)
+        floors.listedThrough("screens", floor = 29, newest = 30, filledShare = true)
+        floors.settle()
+
+        assertEquals(29L, folders.scannedThroughSeconds("camera"))
+        assertEquals(30L, folders.scannedThroughSeconds("screens"), "a floor that would not move moves anyway")
     }
 
     @Test
@@ -77,7 +97,7 @@ class ScanFloorsTest {
     }
 
     private fun listCamera() {
-        floors.listedThrough("camera", 30)
+        floors.listedThrough("camera", floor = 0, newest = 30, filledShare = false)
         floors.handOut(
             secondsOf = mapOf("a" to 10L, "b" to 20L, "c" to 30L),
             folderOf = mapOf("a" to "camera", "b" to "camera", "c" to "camera"),

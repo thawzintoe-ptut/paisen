@@ -508,7 +508,11 @@ internal class FakeAuth(uid: String) : AuthRepository {
 
     override suspend fun signIn(token: ProviderToken): Account.SignedIn = error("unused")
 
+    /** Runs as sign-out starts, before the account is gone, so a test can let another call in. */
+    var onSignOut: suspend () -> Unit = {}
+
     override suspend fun signOut() {
+        onSignOut()
         account.value = Account.SignedOut
     }
 

@@ -24,14 +24,14 @@ import org.koin.core.parameter.parametersOf
 
 /** The slip queue, one slip, one record, its shop rule and its edit. */
 internal fun NavGraphBuilder.recordRoutes(nav: NavHostController) {
-    composable<PtutRoute.Review> {
+    composable<PtutRoute.Review> { entry ->
         val review = koinViewModel<ReviewViewModel>()
         val state by review.uiState.collectAsStateWithLifecycle()
         ReviewView(
             state = state,
-            onOpenSlip = { nav.navigate(PtutRoute.ConfirmSlip(it)) },
+            onOpenSlip = { nav.navigate(PtutRoute.ConfirmSlip(it)) { launchSingleTop = true } },
             onDiscard = review::discard,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
         )
     }
 
@@ -59,7 +59,7 @@ internal fun NavGraphBuilder.recordRoutes(nav: NavHostController) {
             onSubCategory = confirm::chooseSubCategory,
             onSave = confirm::save,
             onNotMine = confirm::notMine,
-            onClose = { nav.popBackStack() },
+            onClose = { nav.popFrom(entry) },
             onShopName = confirm::nameShop,
             onChooseDebt = confirm::chooseDebt,
             onPayDebt = confirm::payDebt,
@@ -82,13 +82,13 @@ internal fun NavGraphBuilder.recordRoutes(nav: NavHostController) {
 
         TransactionDetailView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onEdit = { nav.editTransaction(id) },
             onAskToDelete = detail::askToDelete,
             onKeepIt = detail::keepIt,
             onConfirmDelete = detail::confirmDelete,
             // #116: the shop rule screen is v2, so the Why card is text alone without it.
-            onOpenShopRule = { shop: String -> nav.navigate(PtutRoute.ShopRule(shop)) }.takeIf { koinInject<ReleaseSwitches>().v2 },
+            onOpenShopRule = { shop: String -> nav.navigate(PtutRoute.ShopRule(shop)) { launchSingleTop = true } }.takeIf { koinInject<ReleaseSwitches>().v2 },
             onShare = { groupId -> nav.navigate(PtutRoute.AddSharedExpense(groupId, transactionId = id)) { launchSingleTop = true } },
             onOpenSharedGroup = { nav.navigate(PtutRoute.SharedGroup(it)) { launchSingleTop = true } },
             onSetAlsoRemove = detail::setAlsoRemove,
@@ -107,7 +107,7 @@ internal fun NavGraphBuilder.recordRoutes(nav: NavHostController) {
 
         ShopRuleView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onCategory = { rule.recategorise(it) },
             onForget = { rule.forget() },
             onRename = { rule.rename(it) },
@@ -126,7 +126,7 @@ internal fun NavGraphBuilder.recordRoutes(nav: NavHostController) {
 
         EditTransactionView(
             uiState = state,
-            onClose = { nav.popBackStack() },
+            onClose = { nav.popFrom(entry) },
             onType = edit::type,
             onCategory = edit::choose,
             onSubCategory = edit::chooseSubCategory,

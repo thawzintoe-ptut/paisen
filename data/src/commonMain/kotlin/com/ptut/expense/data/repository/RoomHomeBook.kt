@@ -82,21 +82,29 @@ class RoomHomeBook(
         val old = Currencies.of(Home.money.code)
         val new = Currencies.of(choice.money.code)
         if (old.code == new.code) return false
-        val rows = try {
-            transactions.all().map { it.rehomed(old, new, rate) }
+        val target = try {
+            settings.choices.value.weeklyTarget?.let { it.copy(amount = convert(it.amount.toMinorUnits(), old, rate, new)) }
         } catch (overflow: IllegalStateException) {
             return false
         }
-        // The F3 content key: two slips that round to one amount at this rate cannot both be kept.
-        if (rows.filter { it.reference != null }.groupingBy { Triple(it.reference, it.amountMinor, it.occurredAtEpochMillis) }.eachCount().any { it.value > 1 }) return false
-        val target = settings.choices.value.weeklyTarget?.let { it.copy(amount = convert(it.amount.toMinorUnits(), old, rate, new)) }
-        try {
-            meta.rehome(rows, LedgerMetaEntity(currency = new.code, zone = choice.zoneId))
+        val moved = try {
+            meta.rehome(
+                meta = LedgerMetaEntity(currency = new.code, zone = choice.zoneId),
+                oldCode = old.code,
+                move = { stored ->
+                    val rows = stored.map { it.rehomed(old, new, rate) }
+                    // The F3 content key: two slips that round to one amount at this rate cannot both be kept.
+                    val clash = rows.filter { it.reference != null }.groupingBy { Triple(it.reference, it.amountMinor, it.occurredAtEpochMillis) }.eachCount().any { it.value > 1 }
+                    rows.takeUnless { clash }
+                },
+                money = { minor -> convert(minor, old, rate, new).toMinorUnits() },
+            )
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
-            return false
+            false
         }
+        if (!moved) return false
         runSuspendCatching { rates?.upsertRate(CurrencyRateEntity(old.code, rate.unscaled, rate.scale, clock.now().toEpochMilliseconds(), home = new.code)) }
         runCatching { settings.setHome(new.code, choice.zoneId, converted = target) }
         Home.use(choice)

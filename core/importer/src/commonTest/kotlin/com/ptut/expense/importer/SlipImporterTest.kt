@@ -15,8 +15,10 @@ import com.ptut.expense.domain.play.SeenAccount
 import com.ptut.expense.domain.rules.MerchantRule
 import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.QueuedSlipEntry
+import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.domain.slip.SlipOwner
 import com.ptut.expense.domain.slip.SlipParser
+import com.ptut.expense.domain.slip.SlipRead
 import com.ptut.expense.platform.ocr.SlipTextReader
 import com.ptut.expense.platform.photos.SlipCandidate
 import com.ptut.expense.platform.photos.SlipSource
@@ -541,24 +543,95 @@ class SlipImporterTest {
     /** A stopped worker is not an unreadable slip: the picture must not be marked to wait for a retry. */
     @Test
     fun `a reader stopped mid slip stops the run instead of setting the slip aside`() = runTest {
-        val source = FakeSlipSource().apply { add("a.jpg", slip(), capturedAt()) }
+        val source = WatchingSource(FakeSlipSource().apply { add("a.jpg", slip(), capturedAt()) })
         val store = InMemoryImportStore(listOf(lawson))
         val stopped = SlipImporter(source, StoppedReader(), store, FixedClock(now), work = EmptyCoroutineContext) { "one" }
 
         assertFailsWith<CancellationException> { stopped.run() }
 
-        assertEquals(ImportOutcome.Running, store.runs.single().outcome, "a stop is not journaled as a failed run")
+        assertEquals(emptyList(), source.retried)
+        assertEquals(0, source.settled, "a run that stopped part-way lists its batch again")
         assertFalse(stopped.isScanning.value)
     }
 
     @Test
-    fun `a scan stopped before it lists is not journaled as a failure`() = runTest {
+    fun `a stopped scan is journaled as stopped rather than left running`() = runTest {
         val store = InMemoryImportStore()
         val stopped = SlipImporter(StoppedSource(), FakeSlipTextReader(), store, FixedClock(now), work = EmptyCoroutineContext) { "one" }
 
         assertFailsWith<CancellationException> { stopped.run() }
 
-        assertEquals(ImportOutcome.Running, store.runs.single().outcome)
+        val run = store.runs.single()
+        assertEquals(ImportOutcome.Failure, run.outcome)
+        assertEquals(now.toEpochMilliseconds(), run.finishedAtEpochMillis)
+        assertNull(run.failureReason, "Today names a stop in its own words")
+    }
+
+    @Test
+    fun `a run that crashes is journaled as failed and the crash still surfaces`() = runTest {
+        val source = FakeSlipSource().apply { add("a.jpg", slip(), capturedAt()) }
+        val store = InMemoryImportStore(listOf(lawson))
+        val crashing = SlipImporter(source, FakeSlipTextReader(), store, FixedClock(now), work = EmptyCoroutineContext, parse = { _, _ -> TODO("a crash") }) { "one" }
+
+        assertFailsWith<NotImplementedError> { crashing.run() }
+
+        assertEquals(ImportOutcome.Failure, store.runs.single().outcome)
+    }
+
+    @Test
+    fun `a slip that could not be read is listed again by the next scan`() = runTest {
+        val source = WatchingSource(
+            FakeSlipSource().apply {
+                add("unread.jpg", slip(reference = "BAD1"), capturedAt())
+                add("bad.jpg", slip(reference = "BAD2"), capturedAt() + 1)
+            },
+        )
+        val failing = SlipImporter(
+            source,
+            reader = object : SlipTextReader {
+                override suspend fun read(bytes: ByteArray): List<String> =
+                    if ("BAD1" in bytes.decodeToString()) error("no text") else FakeSlipTextReader().read(bytes)
+            },
+            store = InMemoryImportStore(listOf(lawson)),
+            clock = FixedClock(now),
+            work = EmptyCoroutineContext,
+            parse = { _, _ -> error("a parser bug") },
+        ) { "one" }
+
+        failing.run()
+
+        // A reader that fails may read next time; a parser that throws on the same text never will.
+        assertEquals(listOf("unread.jpg"), source.retried)
+        assertEquals(1, source.settled, "the floors move once the run has been through its batch")
+    }
+
+    @Test
+    fun `a picture that is not a slip is let go`() = runTest {
+        val source = FakeSlipSource().apply { add("cat.jpg", "a cat on a sofa", capturedAt()) }
+
+        val summary = importer(source, InMemoryImportStore()).run()
+
+        assertEquals(1, summary.unreadable)
+        assertTrue("cat.jpg" !in source.remaining, "a shared picture would be read again every run")
+    }
+
+    @Test
+    fun `a slip whose amount the reader had to guess is asked about rather than filed`() = runTest {
+        val source = FakeSlipSource().apply { add("a.jpg", slip(), capturedAt()) }
+        val store = InMemoryImportStore(listOf(lawson))
+        val guessed = SlipImporter(
+            source,
+            FakeSlipTextReader(),
+            store,
+            FixedClock(now),
+            work = EmptyCoroutineContext,
+            parse = { lines, wallets -> (SlipParser.parse(lines, wallets) as SlipRead.Complete).copy(lowConfidence = setOf(SlipField.Amount)) },
+        ) { "one" }
+
+        guessed.run()
+
+        assertEquals(emptyList(), store.filed)
+        assertEquals(ReviewReason.AmountUnclear, store.queued.single().reason)
     }
 
     private class DispatcherWatchingReader : SlipTextReader {
@@ -573,6 +646,21 @@ class SlipImporterTest {
 
     private class StoppedReader : SlipTextReader {
         override suspend fun read(bytes: ByteArray): List<String> = throw CancellationException("worker stopped")
+    }
+
+    /** Records what the importer told the source about retries and settling. */
+    private class WatchingSource(inner: FakeSlipSource) : SlipSource by inner {
+        val retried = mutableListOf<String>()
+        var settled = 0
+            private set
+
+        override suspend fun retryLater(id: String) {
+            retried += id
+        }
+
+        override suspend fun settle() {
+            settled++
+        }
     }
 
     private class StoppedSource : SlipSource {

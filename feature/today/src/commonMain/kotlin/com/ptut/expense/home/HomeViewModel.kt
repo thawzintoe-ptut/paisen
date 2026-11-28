@@ -276,15 +276,6 @@ class HomeViewModel(
     /** #103: the newest slip an importer filed for today after the screen first read the day, until its toast goes. */
     private val caughtId = MutableStateFlow<String?>(null)
 
-    private val edits = MutableStateFlow<String?>(null)
-
-    /** J05: the toast's See asked for the jar; the screen opens it and calls [jarOpened]. */
-    private val jarOpens = MutableStateFlow<String?>(null)
-    val jarRequests: StateFlow<String?> = jarOpens
-
-    /** #103: the row the toast's Change asked to edit; the screen opens Edit and calls [editOpened]. */
-    val editRequests: StateFlow<String?> = edits
-
     init {
         usage.log(UsageEvent.TodayOpened)
         watchDeposits(deposits, goals)
@@ -309,7 +300,7 @@ class HomeViewModel(
                 text = text.caught(row.sourceFolder, row.amount.formatCompact(), category),
                 action = ToastAction(text.caughtChange) {
                     caughtId.value = null
-                    edits.value = row.id
+                    TodayLinks.offer(TodayLink.Edit(row.id))
                 },
                 // Another slip's toast may have taken over; only this slip's tick goes with this toast.
                 onGone = { caughtId.compareAndSet(row.id, null) },
@@ -332,23 +323,15 @@ class HomeViewModel(
                 val text = AppText.copy.play.extras
                 fresh.forEach { deposit ->
                     val name = names[deposit.goalId] ?: return@forEach
-                    toasts?.show(ToastMessage(text = text.jarFilled(deposit.amount.formatCompact(), name), action = ToastAction(text.jarSee) { jarOpens.value = deposit.goalId }))
+                    toasts?.show(ToastMessage(text = text.jarFilled(deposit.amount.formatCompact(), name), action = ToastAction(text.jarSee) { TodayLinks.offer(TodayLink.Jar(deposit.goalId)) }))
                 }
             }
         }
     }
 
-    fun jarOpened() {
-        jarOpens.value = null
-    }
-
     /** #128: the category line in the hero card opened Reports. */
     fun reportsTapped() {
         usage.log(UsageEvent.ReportsOpened, mapOf(UsageFlag.FromToday to true))
-    }
-
-    fun editOpened() {
-        edits.value = null
     }
 
     /** #22: no note for this week; next Monday shows its own. */

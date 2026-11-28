@@ -1,6 +1,7 @@
 package com.ptut.expense.ui
 
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.shared.MAX_AMOUNT_WHOLE_DIGITS
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -21,6 +22,14 @@ class AmountEntryTest {
         val entry = AmountEntry().digit('9').decimal().digit('5').decimal().digit('0').digit('7')
 
         assertEquals("9.50", entry.display)
+    }
+
+    @Test
+    fun wholeDigitsStopAtTheCapSoTheAmountNeverOverflowsIntoANegative() {
+        val entry = (1..17).fold(AmountEntry(digits = 2)) { entry, _ -> entry.digit('9') }
+
+        assertEquals("9".repeat(MAX_AMOUNT_WHOLE_DIGITS), entry.display)
+        assertEquals(Satang(9_999_999_999_999_00L), entry.toSatang())
     }
 
     @Test

@@ -41,6 +41,14 @@ class CompositeSlipSource(private val parts: Map<String, SlipSource>) : SlipSour
         route(id) { part, own -> part.delete(own) }
     }
 
+    override suspend fun retryLater(id: String) {
+        route(id) { part, own -> part.retryLater(own) }
+    }
+
+    override suspend fun settle() {
+        parts.values.forEach { it.settle() }
+    }
+
     /**
      * Null for an id no part claims — a prefix from a build that bound a different set of parts.
      * The interface already says a picture that has gone is not an error, and this is that case.

@@ -113,6 +113,13 @@ class RoomLedgerArchive(
 
     override suspend fun restore(json: String): MergeReport {
         val backup = LedgerBackup.decode(json)
+        // A failure part way must not leave the file's rows under the old home, which refuses the retry.
+        lateinit var report: MergeReport
+        mergeDao.inOneWrite { report = restoreAll(backup) }
+        return report
+    }
+
+    private suspend fun restoreAll(backup: LedgerBackup): MergeReport {
         refuseOtherHome(backup)
         // #46: decided before the merge, which is what stops the ledger being empty.
         val fileHome = backup.home()

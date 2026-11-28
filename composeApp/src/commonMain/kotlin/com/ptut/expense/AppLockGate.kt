@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
@@ -30,7 +31,7 @@ import org.koin.compose.koinInject
  *
  * The ledger is not composed at all while locked. Sheets and dialogs draw in windows of their own,
  * above anything in this one, so an overlay would leave an open Add sheet readable on top of it.
- * The cost is that unlocking starts again at Today.
+ * Its saved state is kept in a holder instead, so unlocking puts back the screens and fields left open.
  *
  * The prompt opens by itself each time the lock comes down. A phone whose screen lock was removed
  * since the switch went on can never pass the check, so the lock lifts rather than shutting the
@@ -55,8 +56,9 @@ internal fun AppLockGate(content: @Composable () -> Unit) {
 
     LaunchedEffect(locked) { if (locked) tryUnlock() }
 
+    val saved = rememberSaveableStateHolder()
     if (!locked) {
-        content()
+        saved.SaveableStateProvider(LEDGER_KEY) { content() }
         return
     }
     Box(
@@ -77,6 +79,8 @@ internal fun AppLockGate(content: @Composable () -> Unit) {
         )
     }
 }
+
+private const val LEDGER_KEY = "ledger"
 
 /**
  * #25: no picture of the ledger in the app switcher while App lock is on. Android 13 and later

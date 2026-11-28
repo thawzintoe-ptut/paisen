@@ -32,14 +32,18 @@ import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.dayPartAt
 import com.ptut.expense.domain.settings.AppSettings
 import com.ptut.expense.domain.slip.SlipPictures
+import com.ptut.expense.home.TodayLink
+import com.ptut.expense.home.TodayLinks
 import com.ptut.expense.locale.AppText
 import com.ptut.expense.nav.BarDestination
 import com.ptut.expense.nav.PtutNavHost
 import com.ptut.expense.nav.PtutRoute
 import com.ptut.expense.nav.PtutShell
+import com.ptut.expense.nav.editTransaction
 import com.ptut.expense.nav.openProposed
 import com.ptut.expense.nav.pillSlot
 import com.ptut.expense.nav.playRoutes
+import com.ptut.expense.nav.pushSingle
 import com.ptut.expense.nav.recordRoutes
 import com.ptut.expense.nav.selectTab
 import com.ptut.expense.nav.settingsRoutes
@@ -214,7 +218,15 @@ private fun LedgerShell() {
 
     // A tapped push opens its group; like an invite link it can arrive before the graph exists.
     TakeFromInbox(GroupLinks.pendingGroupId, graphReady, GroupLinks::consume) { groupId ->
-        navController.navigate(PtutRoute.SharedGroup(groupId)) { launchSingleTop = true }
+        navController.pushSingle(PtutRoute.SharedGroup(groupId))
+    }
+
+    // A Today toast's Change or See opens now, over whichever screen the toast showed on.
+    TakeFromInbox(TodayLinks.pendingLink, graphReady, TodayLinks::consume) { link ->
+        when (link) {
+            is TodayLink.Edit -> navController.editTransaction(link.transactionId)
+            is TodayLink.Jar -> navController.pushSingle(PtutRoute.GoalJar(goalId = link.goalId))
+        }
     }
 
     // #205: what Siri, a Shortcut, the Android icon or Quick add left, waiting the same way. A row

@@ -19,7 +19,7 @@ class LedgerBackupCheckTest {
     fun `a format 2 file with a group but no currencies or repeats still reads`() {
         val format2 = """
             {"format": 2, "exportedAtEpochMillis": 1, "transactions": [
-              {"id": "t1", "occurredAtEpochMillis": 1, "amountMinor": 2825, "direction": "Expense", "source": "Scan"}
+              {"id": "t1", "occurredAtEpochMillis": ${1_755_000_000_000L}, "amountMinor": 2825, "direction": "Expense", "source": "Scan"}
             ], "shared": {
               "people": [{"id": "p1", "name": "Aye", "archived": false}],
               "groups": [{"id": "g1", "name": "Flat", "type": "Flat", "icon": "home", "simplifyDebts": true, "createdAtEpochMillis": 1, "meMemberId": "me"}],
@@ -92,6 +92,21 @@ class LedgerBackupCheckTest {
         refused(whole.withVersion { it.copy(amountSatang = -9_000) })
         refused(whole.withRepeat { it.copy(amountMinor = -1) })
         refused(whole.withShared { it.copy(payments = it.payments.map { payment -> payment.copy(amountSatang = 0) }) })
+    }
+
+    @Test
+    fun `a jar with no target or money in below zero or a day out of range is refused`() {
+        val play = BackupPlay(
+            goals = listOf(BackupGoal("j1", "Trip", 1_000_000, "THB", "2026-11-01", createdAtEpochMillis = 1)),
+            deposits = listOf(BackupDeposit("d1", "j1", 50_000, "2026-11-02", atEpochMillis = 1, source = "Slip")),
+        )
+
+        assertEquals(whole.copy(play = play), LedgerBackup.decode(LedgerBackup.encode(whole.copy(play = play))))
+        refused(whole.copy(play = play.copy(goals = play.goals.map { it.copy(targetMinor = 0) })))
+        refused(whole.copy(play = play.copy(deposits = play.deposits.map { it.copy(amountMinor = -1) })))
+        refused(whole.copy(play = play.copy(deposits = play.deposits.map { it.copy(date = "1970-01-01") })))
+        refused(whole.copy(play = play.copy(weeks = listOf(BackupPlayWeek("9999-12-27")))))
+        refused(whole.copy(transactions = whole.transactions.map { it.copy(occurredAtEpochMillis = 0) }))
     }
 
     @Test

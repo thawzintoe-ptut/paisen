@@ -47,6 +47,14 @@ class GoalPaceTest {
     }
 
     @Test
+    fun `a jar younger than four weeks sets its pace over the weeks it has had`() {
+        val young = goal.copy(start = LocalDate(2026, 11, 15))
+        val deposits = listOf(put(LocalDate(2026, 11, 16), 50_000), put(LocalDate(2026, 11, 23), 50_000))
+
+        assertEquals(Satang(50_000), deposits.goalPace(young, today).perWeek)
+    }
+
+    @Test
     fun `a full jar is reached today and a pace that would take decades names no date`() {
         val big = goal.copy(target = Satang(Long.MAX_VALUE / 2))
 

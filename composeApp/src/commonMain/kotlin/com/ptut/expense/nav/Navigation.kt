@@ -1,10 +1,12 @@
 package com.ptut.expense.nav
 
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.toRoute
 import com.ptut.expense.agent.ProposedAction
 import com.ptut.expense.domain.Home
 import com.ptut.expense.ui.AmountEntry
@@ -58,11 +60,32 @@ fun NavController.openTabAt(route: PtutRoute) {
 }
 
 /**
+ * Back from [from], once. A second tap lands after [from] has gone and would pop the screen under it;
+ * from Today that empties the graph and leaves a blank screen.
+ */
+fun NavController.popFrom(from: NavBackStackEntry) {
+    if (currentBackStackEntry?.id == from.id && previousBackStackEntry != null) popBackStack()
+}
+
+/**
+ * `launchSingleTop` keeps the entry on top when only the arguments differ, and with it the old
+ * view model, so group B would show group A. A different [route] of the same type replaces it.
+ */
+inline fun <reified T : PtutRoute> NavController.pushSingle(route: T) {
+    val top = currentBackStackEntry
+    val replaces = top?.destination?.hasRoute(T::class) == true && top.toRoute<T>() != route
+    navigate(route) {
+        if (replaces) popUpTo<T> { inclusive = true }
+        launchSingleTop = true
+    }
+}
+
+/**
  * FR-21's record, pushed. `launchSingleTop` guards the double tap: a list row is easy to hit
  * twice, and without it the reader would have to press back twice to leave one screen.
  */
 fun NavController.openTransaction(transactionId: String) {
-    navigate(PtutRoute.TransactionDetail(transactionId)) { launchSingleTop = true }
+    pushSingle(PtutRoute.TransactionDetail(transactionId))
 }
 
 /**
@@ -71,7 +94,7 @@ fun NavController.openTransaction(transactionId: String) {
  * save what the first had already changed.
  */
 fun NavController.editTransaction(transactionId: String) {
-    navigate(PtutRoute.EditTransaction(transactionId)) { launchSingleTop = true }
+    pushSingle(PtutRoute.EditTransaction(transactionId))
 }
 
 /**
@@ -90,19 +113,18 @@ fun NavController.openProposed(action: ProposedAction, offersRepeat: Boolean = t
         is ProposedAction.AddGroupExpense -> {
             val groupId = action.groupId ?: return switchTab(PtutRoute.Shared)
             val amount = action.amount?.let { AmountEntry.of(it, action.amountDigits ?: Home.money.digits).typed }
-            navigate(PtutRoute.AddSharedExpense(groupId, amount = amount, description = action.description)) { launchSingleTop = true }
+            pushSingle(PtutRoute.AddSharedExpense(groupId, amount = amount, description = action.description))
         }
 
         is ProposedAction.RecordPayment -> {
             val from = action.fromMemberId
             val to = action.toMemberId
-            val route = if (from != null && to != null) PtutRoute.RecordPayment(action.groupId, from, to) else PtutRoute.SharedGroup(action.groupId)
-            navigate(route) { launchSingleTop = true }
+            if (from != null && to != null) pushSingle(PtutRoute.RecordPayment(action.groupId, from, to)) else pushSingle(PtutRoute.SharedGroup(action.groupId))
         }
 
         // #116: repeats are v2; until then the assistant's repeat opens the group it named.
         is ProposedAction.AddRepeat ->
-            navigate(if (offersRepeat) PtutRoute.RepeatExpense(action.groupId) else PtutRoute.SharedGroup(action.groupId)) { launchSingleTop = true }
+            if (offersRepeat) pushSingle(PtutRoute.RepeatExpense(action.groupId)) else pushSingle(PtutRoute.SharedGroup(action.groupId))
 
         ProposedAction.ScanSlips -> navigate(PtutRoute.Review) { launchSingleTop = true }
     }

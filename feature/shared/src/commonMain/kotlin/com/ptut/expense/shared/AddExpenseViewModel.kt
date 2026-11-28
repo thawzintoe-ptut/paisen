@@ -79,8 +79,15 @@ class AddExpenseViewModel(
     /** The form as it opened, so a close can tell whether anything would be lost (#214). */
     private val opened = MutableStateFlow<ExpenseForm?>(null)
 
-    /** The version an edit opened on, so a save sees another phone's change or removal first. */
-    private var base: String? = null
+    /**
+     * The version an edit opened on, so a save sees another phone's change or removal first. Kept
+     * with the draft: after process death the restored form must still be checked against it.
+     */
+    private var base: String?
+        get() = savedState.get<String>(key(BASE))
+        set(value) {
+            savedState[key(BASE)] = value
+        }
 
     private val saved = MutableStateFlow(false)
 
@@ -170,7 +177,8 @@ class AddExpenseViewModel(
             is ExpenseStart.Existing -> {
                 // Removed on another phone before this opened: the form shows what it was, and a save brings it back.
                 if (start.expense.removed) toasts?.show(ToastMessage(text = AppText.copy.shared.expense.openedRemoved))
-                base = start.expense.versionId
+                // A draft restored after process death keeps the version it was typed on.
+                base = base.takeIf { savedState.contains(key(DESCRIPTION)) } ?: start.expense.versionId
                 form.value = ExpenseForm.fromExisting(start.expense, linked = start.linked)
             }
         }
@@ -363,6 +371,7 @@ class AddExpenseViewModel(
         const val CURRENCY = "currency"
         const val TIME = "time"
         const val PAYER = "payer"
+        const val BASE = "base"
         val FIELDS = listOf(DESCRIPTION, NOTE, CATEGORY, SUB, RATE, MODE, WEIGHTS, AMOUNT, CURRENCY, TIME, PAYER)
     }
 }

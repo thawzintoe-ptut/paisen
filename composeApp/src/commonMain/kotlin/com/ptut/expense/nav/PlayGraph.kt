@@ -35,33 +35,33 @@ import org.koin.core.parameter.parametersOf
 
 /** Play's screens (#82). */
 internal fun NavGraphBuilder.playRoutes(nav: NavHostController) {
-    composable<PtutRoute.PlaySettings> {
+    composable<PtutRoute.PlaySettings> { entry ->
         val play = koinViewModel<PlaySettingsViewModel>()
         val state by play.uiState.collectAsStateWithLifecycle()
-        PlaySettingsView(uiState = state, onSet = play::set, onBack = { nav.popBackStack() }, onShowTipsAgain = play::showTipsAgain)
+        PlaySettingsView(uiState = state, onSet = play::set, onBack = { nav.popFrom(entry) }, onShowTipsAgain = play::showTipsAgain)
     }
 
     composable<PtutRoute.StampReveal> { entry ->
         val stampId = entry.toRoute<PtutRoute.StampReveal>().stampId
         val reveal = koinViewModel<StampRevealViewModel> { parametersOf(stampId) }
         val state by reveal.uiState.collectAsStateWithLifecycle()
-        StampRevealView(uiState = state, onTurn = reveal::turn, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() }, tip = playTip(PlayTip.Stamp))
+        StampRevealView(uiState = state, onTurn = reveal::turn, onDone = { nav.popFrom(entry) }, onBack = { nav.popFrom(entry) }, tip = playTip(PlayTip.Stamp))
     }
 
-    composable<PtutRoute.StampBook> {
+    composable<PtutRoute.StampBook> { entry ->
         val book = koinViewModel<StampBookViewModel>()
         val state by book.uiState.collectAsStateWithLifecycle()
-        StampBookView(uiState = state, onBack = { nav.popBackStack() })
+        StampBookView(uiState = state, onBack = { nav.popFrom(entry) })
     }
 
-    composable<PtutRoute.DailyQuestion> {
+    composable<PtutRoute.DailyQuestion> { entry ->
         val question = koinViewModel<DailyQuestionViewModel>()
         val state by question.uiState.collectAsStateWithLifecycle()
         DailyQuestionView(
             uiState = state,
             onPick = question::pick,
-            onOpenStamp = { nav.navigate(PtutRoute.StampReveal(it)) },
-            onBack = { nav.popBackStack() },
+            onOpenStamp = { nav.navigate(PtutRoute.StampReveal(it)) { launchSingleTop = true } },
+            onBack = { nav.popFrom(entry) },
         )
     }
 
@@ -76,14 +76,14 @@ internal fun NavGraphBuilder.playRoutes(nav: NavHostController) {
             onSet = guess::set,
             onReveal = guess::reveal,
             onSeeWeek = { from, to -> nav.navigate(PtutRoute.LedgerSlice(from, to)) { launchSingleTop = true } },
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
         )
     }
 
-    composable<PtutRoute.WeekChallenge> {
+    composable<PtutRoute.WeekChallenge> { entry ->
         val challenge = koinViewModel<ChallengeViewModel>()
         val state by challenge.uiState.collectAsStateWithLifecycle()
-        ChallengeView(uiState = state, onPick = challenge::pick, onBack = { nav.popBackStack() })
+        ChallengeView(uiState = state, onPick = challenge::pick, onBack = { nav.popFrom(entry) })
     }
 
     composable<PtutRoute.GoalJar> { entry ->
@@ -102,8 +102,8 @@ internal fun NavGraphBuilder.playRoutes(nav: NavHostController) {
             onPutIn = jar::openPutIn,
             onChangeAccount = jar::changeAccount,
             onRemoveDeposit = jar::remove,
-            onArchive = { jar.archive { nav.popBackStack() } },
-            onBack = { nav.popBackStack() },
+            onArchive = { jar.archive { nav.popFrom(entry) } },
+            onBack = { nav.popFrom(entry) },
             sheet = JarSheetActions(
                 onDismiss = jar::dismissSheet,
                 onPick = jar::pick,
@@ -125,7 +125,7 @@ internal fun NavGraphBuilder.playRoutes(nav: NavHostController) {
         val month = entry.toRoute<PtutRoute.MonthStory>().month
         val story = koinViewModel<MonthStoryViewModel> { parametersOf(month) }
         val state by story.uiState.collectAsStateWithLifecycle()
-        MonthStoryView(uiState = state, onNext = { if (!story.next()) nav.popBackStack() }, onBack = { nav.popBackStack() })
+        MonthStoryView(uiState = state, onNext = { if (!story.next()) nav.popFrom(entry) }, onBack = { nav.popFrom(entry) })
     }
 
     composable<PtutRoute.CloseMonth> { entry ->
@@ -137,14 +137,14 @@ internal fun NavGraphBuilder.playRoutes(nav: NavHostController) {
             onNext = close::next,
             onSeal = close::seal,
             onOpenSlips = { nav.navigate(PtutRoute.Review) { launchSingleTop = true } },
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
         )
     }
 
-    composable<PtutRoute.MoneyScore> {
+    composable<PtutRoute.MoneyScore> { entry ->
         val score = koinViewModel<MoneyScoreViewModel>()
         val state by score.uiState.collectAsStateWithLifecycle()
-        MoneyScoreView(uiState = state, onBack = { nav.popBackStack() })
+        MoneyScoreView(uiState = state, onBack = { nav.popFrom(entry) })
     }
 }
 

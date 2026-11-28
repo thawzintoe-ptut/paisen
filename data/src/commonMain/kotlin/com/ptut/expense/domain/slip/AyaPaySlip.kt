@@ -42,5 +42,5 @@ object AyaPaySlip : SlipFormat {
         }
     }
 
-    private val AMOUNT = Regex("""(\d[\d,]*(?:\.\d{1,2})?)\s*MMK\b""")
+    private val AMOUNT = Regex("""(${WalletText.FIGURE})\s*MMK\b""")
 }

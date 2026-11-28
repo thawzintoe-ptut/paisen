@@ -138,8 +138,8 @@ fun SkyHeroLine(text: AnnotatedString, spoken: String, onClick: () -> Unit, modi
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = Sizes.minTouchTarget)
-                .clearAndSetSemantics { contentDescription = spoken }
-                .tappable(PtutRadii.r12, Role.Button, onClick = onClick),
+                .tappable(PtutRadii.r12, Role.Button, onClick = onClick)
+                .clearAndSetSemantics { contentDescription = spoken },
         ) {
             Text(text, style = MaterialTheme.typography.bodySmall, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

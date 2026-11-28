@@ -95,7 +95,7 @@ class SharedSync internal constructor(
     private val registrar: PushRegistrar? = null,
     private val notice: EndedHereNotice = MemoryEndedHereNotice(),
     /** One Room write transaction for a pull's merge, so it never interleaves with a save. */
-    writes: WriteTransaction = WriteTransaction.None,
+    private val writes: WriteTransaction = WriteTransaction.None,
     /** The app's sync scope, for work a closing screen starts and cannot wait for. */
     private val background: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : SharedSyncApi {
@@ -111,6 +111,9 @@ class SharedSync internal constructor(
     private val endedHere = MutableStateFlow(notice.read())
     private val endingElsewhere = MutableStateFlow(false)
     private val running = Mutex()
+
+    // Apart from [running]: an archive asks for a new invite while it holds [running].
+    private val inviting = Mutex()
 
     // In memory only, read and written under [running]: a new process checks everything once.
     private var sessionCheckedAt: Pair<String, Long>? = null
@@ -250,7 +253,8 @@ class SharedSync internal constructor(
         if (!available) return
         scope.launch {
             dao.observeOutbox()
-                .map { rows -> rows.map { it.id } }
+                // The queued time too: a row queued again under the same id must still trigger an upload.
+                .map { rows -> rows.map { it.id to it.createdAtEpochMillis } }
                 .distinctUntilChanged()
                 .debounce(UPLOAD_SOON)
                 .filter { it.isNotEmpty() }
@@ -303,9 +307,10 @@ class SharedSync internal constructor(
             val waiting = dao.forgetSharedGroupsUnlessWaiting()
             if (waiting > 0) throw ChangesWaiting(waiting)
             forgotSharedGroups()
+            // Inside the lock, so a sync that waited cannot find this phone still signed in and bring the groups back.
+            registrar?.forgetDevice()
+            auth.signOut()
         }
-        registrar?.forgetDevice()
-        auth.signOut()
     }
 
     /**
@@ -354,7 +359,7 @@ class SharedSync internal constructor(
     private fun open(invite: Fields): Boolean = invite.bool("active") && invite.instant("expiresAt")?.let { it <= clock.now() } != true
 
     /** A fresh code; the old one stops working (#190). Only the creator may do this. */
-    override suspend fun newInvite(groupId: String): String {
+    override suspend fun newInvite(groupId: String): String = inviting.withLock {
         val account = signedIn()
         val group = requireNotNull(dao.group(groupId)) { "No group $groupId" }
         // Fails closed: a new code is never made while the old one may still be live.
@@ -369,13 +374,13 @@ class SharedSync internal constructor(
         )
         firestore.patch("groups/$groupId", mapOf("inviteCode" to code, "inviteActive" to true))
         dao.setInvite(groupId, code, true)
-        return code
+        code
     }
 
     /** "This invite has expired" from now on, for anyone who still has the link. */
-    override suspend fun switchOffInvite(groupId: String) {
+    override suspend fun switchOffInvite(groupId: String) = inviting.withLock {
         signedIn()
-        val code = dao.group(groupId)?.inviteCode ?: return
+        val code = dao.group(groupId)?.inviteCode ?: return@withLock
         firestore.patch("invites/$code", OFF)
         firestore.patch("groups/$groupId", mapOf("inviteActive" to false))
         dao.setInvite(groupId, code, false)
@@ -543,7 +548,13 @@ class SharedSync internal constructor(
         val me = dao.group(groupId)?.meMemberId
         pusher.noticesFor(groupId)?.left()?.let { pushes?.tellFirst(groupId, it) }
         firestore.commit(firestore.leaveWrites(groupId, me, account.uid, firestore.reactionIdsOf(groupId, account.uid)))
-        running.withLock { dao.forgetGroup(groupId) }
+        running.withLock {
+            // One transaction: a save that landed after the count is kept as lost, never deleted unseen.
+            writes.run {
+                if (!dropUnsent) dao.keepUnsent(groupId, now(), account.uid)
+                dao.forgetGroup(groupId)
+            }
+        }
     }
 
     /**

@@ -30,6 +30,10 @@ abstract class LedgerMergeDao {
     open suspend fun merge(rows: List<TransactionEntity>): Set<String> =
         rows.filter { insertIfNew(it) != IGNORED }.mapTo(mutableSetOf()) { it.id }
 
+    /** #46: a whole restore — catalog, rows, shared, play and the home — commits together or not at all. */
+    @Transaction
+    open suspend fun inOneWrite(restore: suspend () -> Unit) = restore()
+
     private companion object {
         /** What Room returns from an IGNORE insert that hit a key. */
         const val IGNORED = -1L

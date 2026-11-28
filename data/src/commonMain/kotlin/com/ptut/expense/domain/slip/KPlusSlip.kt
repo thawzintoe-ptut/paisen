@@ -228,9 +228,11 @@ object KPlusSlip : SlipFormat {
     /**
      * FR-9: satang are counted, never divided. `1,387.50` becomes 138750, and the comma is
      * stripped before the split rather than after, so the thousands are not silently dropped.
+     * A second point is a misread comma (`1.387.50`), so the amount stays unread for review.
      */
     private fun parseAmount(line: String): Satang? {
         val digits = line.substringBefore(BAHT_SUFFIX).trim().replace(",", "")
+        if (digits.count { it == '.' } > 1) return null
         if (digits.substringBefore('.').length > MAX_AMOUNT_WHOLE_DIGITS) return null
         val baht = digits.substringBefore('.').toLongOrNull() ?: return null
         val satang = when (val fraction = digits.substringAfter('.', missingDelimiterValue = "")) {

@@ -37,4 +37,10 @@ interface SlipSource {
 
     /** NFR-4. Deleting one that is already gone is not an error. */
     suspend fun delete(id: String)
+
+    /** The read of [id] failed, so the next scan lists it again rather than stepping over it. */
+    suspend fun retryLater(id: String) = Unit
+
+    /** The run went through its whole batch. Until then nothing moves, so a run that dies lists it again. */
+    suspend fun settle() = Unit
 }

@@ -85,7 +85,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
         RepeatExpenseView(
             uiState = state,
             actions = RepeatExpenseActions(
-                onBack = { nav.popBackStack() },
+                onBack = { nav.popFrom(entry) },
                 onDescription = repeat::setDescription,
                 onAmount = repeat::setAmount,
                 onFrequency = repeat::setFrequency,
@@ -99,12 +99,12 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
         )
     }
 
-    composable<PtutRoute.People> {
+    composable<PtutRoute.People> { entry ->
         val people = koinViewModel<PeopleViewModel>()
         val state by people.uiState.collectAsStateWithLifecycle()
         PeopleView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onSearch = people::search,
             onSetArchived = people::setArchived,
             onAddPerson = { name, personId ->
@@ -119,7 +119,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
         val state by join.uiState.collectAsStateWithLifecycle()
         JoinView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onPick = join::pick,
             onOpenGroup = join::openGroup,
             onRetry = join::retry,
@@ -159,7 +159,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
         LaunchedEffect(groupRemoved) { if (groupRemoved) nav.popBackStack() }
         GroupDetailView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onSettleUp = { from, to -> nav.navigate(PtutRoute.RecordPayment(groupId, from, to)) { launchSingleTop = true } },
             onBalances = { nav.navigate(PtutRoute.WhoPaysWhom(groupId)) { launchSingleTop = true } },
             onAddExpense = { nav.navigate(PtutRoute.AddSharedExpense(groupId)) { launchSingleTop = true } },
@@ -217,7 +217,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
         }
         val state by add.uiState.collectAsStateWithLifecycle()
         val saved by add.isSaved.collectAsStateWithLifecycle()
-        val close: () -> Unit = { nav.popBackStack() }
+        val close: () -> Unit = { nav.popFrom(entry) }
         LaunchedEffect(saved) { if (saved) close() }
         AddExpenseView(
             uiState = state,
@@ -250,7 +250,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
         val state by who.uiState.collectAsStateWithLifecycle()
         WhoPaysWhomView(
             uiState = state,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             onSimplify = who::setSimplify,
             onSettle = { from, to -> nav.navigate(PtutRoute.RecordPayment(groupId, from, to)) { launchSingleTop = true } },
             onSettleMine = { from, to, amount -> nav.navigate(PtutRoute.RecordPayment(groupId, from, to, amount)) { launchSingleTop = true } },
@@ -265,7 +265,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
         val payment = koinViewModel<RecordPaymentViewModel> { parametersOf(route.groupId, route.fromMemberId, route.toMemberId, route.amount.orEmpty()) }
         val state by payment.uiState.collectAsStateWithLifecycle()
         val saved by payment.isSaved.collectAsStateWithLifecycle()
-        val close: () -> Unit = { nav.popBackStack() }
+        val close: () -> Unit = { nav.popFrom(entry) }
         LaunchedEffect(saved) { if (saved) close() }
         RecordPaymentView(
             uiState = state,
@@ -286,7 +286,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
             onSpin = wheel::spin,
             onFair = wheel::setFair,
             onAdd = { payer -> nav.navigate(PtutRoute.AddSharedExpense(groupId, payerMemberId = payer)) { launchSingleTop = true } },
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
             tip = playTip(PlayTip.Wheel, TipPointer.Up),
         )
     }
@@ -295,7 +295,7 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
         val groupId = entry.toRoute<PtutRoute.GroupAwards>().groupId
         val awards = koinViewModel<GroupAwardsViewModel> { parametersOf(groupId) }
         val state by awards.uiState.collectAsStateWithLifecycle()
-        GroupAwardsView(uiState = state, onBack = { nav.popBackStack() })
+        GroupAwardsView(uiState = state, onBack = { nav.popFrom(entry) })
     }
 
     composable<PtutRoute.TripRecap> { entry ->
@@ -305,14 +305,14 @@ internal fun NavGraphBuilder.sharedRoutes(nav: NavHostController) {
         TripRecapView(
             uiState = state,
             onStartJar = { name, target -> nav.navigate(PtutRoute.GoalJar(name = name, target = target)) { launchSingleTop = true } },
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
         )
     }
 
-    composable<PtutRoute.SharedActivity> {
+    composable<PtutRoute.SharedActivity> { entry ->
         // Koin's parameters do not carry a null, so every group's timeline travels as "".
         val activity = koinViewModel<SharedActivityViewModel> { parametersOf("") }
         val state by activity.uiState.collectAsStateWithLifecycle()
-        SharedActivityView(uiState = state, onBack = { nav.popBackStack() }, onFilter = activity::show)
+        SharedActivityView(uiState = state, onBack = { nav.popFrom(entry) }, onFilter = activity::show)
     }
 }

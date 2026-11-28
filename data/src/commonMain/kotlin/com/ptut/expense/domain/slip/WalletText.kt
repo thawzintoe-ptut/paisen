@@ -1,6 +1,7 @@
 package com.ptut.expense.domain.slip
 
 import com.ptut.expense.domain.Satang
+import com.ptut.expense.domain.shared.MAX_AMOUNT_WHOLE_DIGITS
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.UtcOffset
@@ -22,8 +23,18 @@ internal object WalletText {
         "july", "august", "september", "october", "november", "december",
     )
 
-    /** "29,500.00" or "1,000" to whole kyat; anything after the point is dropped (kyat has 0 digits). */
-    fun kyat(figure: String): Satang? = figure.replace(",", "").substringBefore('.').toLongOrNull()?.let(Satang::ofMinorUnits)
+    /**
+     * "29,500.00" or "1,000" to whole kyat; anything after the point is dropped (kyat has 0 digits).
+     * A second point is a misread comma ("29.500.00"), so the amount stays unread for review.
+     */
+    fun kyat(figure: String): Satang? {
+        val digits = figure.replace(",", "")
+        if (digits.count { it == '.' } > 1 || digits.substringBefore('.').length > MAX_AMOUNT_WHOLE_DIGITS) return null
+        return digits.substringBefore('.').toLongOrNull()?.let(Satang::ofMinorUnits)
+    }
+
+    /** A wallet figure, kept whole when a comma is misread as a point so [kyat] can refuse it. */
+    const val FIGURE = """\d[\d,]*(?:\.\d+)*"""
 
     /** The line right after the first line that is [label], ignoring case and a trailing colon or dot. */
     fun List<String>.after(label: String): String? {

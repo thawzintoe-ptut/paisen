@@ -21,7 +21,11 @@ import com.ptut.expense.domain.shared.SplitMode
 import com.ptut.expense.domain.shared.SyncGroupNowUseCase
 import com.ptut.expense.domain.shared.TrackGroupSeenUseCase
 import com.ptut.expense.domain.today.GetHomeTodayUseCase
+import com.ptut.expense.locale.AppText
+import com.ptut.expense.ui.ToastMessages
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -91,11 +95,31 @@ class GroupDetailViewModelTest : ViewModelTest() {
         assertEquals("Flat 12", state.name)
     }
 
+    @Test
+    fun `removing a payment says so and a failed one says not done`() = runTest {
+        val repository = FakeSharedRepository(flatOfThree)
+        val toasts = ToastMessages()
+        val viewModel = viewModel(repository = repository, toasts = toasts)
+
+        viewModel.removePayment("p1")
+        runCurrent()
+        repository.failNextRemovePayment = true
+        viewModel.removePayment("p2")
+        runCurrent()
+
+        assertEquals(listOf("p1"), repository.removedPayments)
+        assertEquals(listOf(AppText.copy.shared.payment.removed, AppText.copy.common.notDone), toasts.messages.take(2).toList().map { it.text })
+    }
+
     private fun TestScope.loaded(vararg expenses: SharedExpense, group: SharedGroup = flatOfThree): GroupDetailUiState.Loaded =
         assertIs<GroupDetailUiState.Loaded>(viewModel(*expenses, group = group).uiState.value)
 
-    private fun TestScope.viewModel(vararg expenses: SharedExpense, group: SharedGroup = flatOfThree): GroupDetailViewModel {
-        val repository = FakeSharedRepository(group)
+    private fun TestScope.viewModel(
+        vararg expenses: SharedExpense,
+        group: SharedGroup = flatOfThree,
+        repository: FakeSharedRepository = FakeSharedRepository(group),
+        toasts: ToastMessages? = null,
+    ): GroupDetailViewModel {
         repository.snapshot.value = SharedSnapshot(groups = listOf(group), people = emptyList(), expenseVersions = expenses.toList(), payments = emptyList(), links = emptyMap())
         val viewModel = GroupDetailViewModel(
             groupId = group.id,
@@ -112,6 +136,7 @@ class GroupDetailViewModelTest : ViewModelTest() {
             removePaymentUseCase = RemovePaymentUseCase(repository),
             putBackPayment = PutBackPaymentUseCase(repository),
             clock = fixedClock,
+            toasts = toasts,
             work = Dispatchers.Main,
         )
         backgroundScope.launch { viewModel.uiState.collect {} }

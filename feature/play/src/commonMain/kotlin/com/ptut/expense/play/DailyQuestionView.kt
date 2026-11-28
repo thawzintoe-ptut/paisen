@@ -119,8 +119,8 @@ private fun PickCard(card: QuestionCardUiModel, enabled: Boolean, onClick: () ->
     Column(
         modifier = modifier
             .heightIn(min = PlaySizes.pick)
-            .clearAndSetSemantics { contentDescription = card.label }
             .tappable(PtutRadii.r20, Role.Button, enabled = enabled, onClick = onClick)
+            .clearAndSetSemantics { contentDescription = card.label }
             .clip(PtutRadii.r20)
             .background(if (card.right) MaterialTheme.ptut.accent else scheme.tertiaryContainer)
             .border(

@@ -139,9 +139,8 @@ class HomeViewModelTest : ViewModelTest() {
             toasts.messages.test { assertNotNull(awaitItem().action).onAction() }
 
             assertFalse((awaitItem() as HomeUiState.Success).caught)
-            assertEquals("new", viewModel.editRequests.value)
-            viewModel.editOpened()
-            assertNull(viewModel.editRequests.value)
+            assertEquals(TodayLink.Edit("new"), TodayLinks.pendingLink.value)
+            TodayLinks.consume()
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -1290,7 +1289,8 @@ class HomeViewModelTest : ViewModelTest() {
             val toast = awaitItem()
             assertEquals("฿220 went into your A trip jar", toast.text)
             toast.action?.onAction?.invoke()
-            assertEquals("g1", viewModel.jarRequests.value)
+            assertEquals(TodayLink.Jar("g1"), TodayLinks.pendingLink.value)
+            TodayLinks.consume()
             expectNoEvents()
         }
     }

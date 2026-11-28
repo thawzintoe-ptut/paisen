@@ -114,8 +114,9 @@ class RoomLedgerRepository(
         transactionDao.deleteById(transactionId)
     }
 
+    /** A slip re-imported since the delete is already back, so undo keeps that row rather than crash on the key. */
     override suspend fun restore(transaction: Transaction) {
-        transactionDao.insert(transactionDao.withCheckedSubCategory(transaction.toEntity()))
+        transactionDao.insertIfNew(transactionDao.withCheckedSubCategory(transaction.toEntity()))
     }
 
     override suspend fun setPlanned(transactionId: String, planned: Boolean) = transactionDao.setPlanned(transactionId, planned)

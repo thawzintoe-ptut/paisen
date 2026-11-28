@@ -182,6 +182,21 @@ class RoomLedgerRepositoryTest : LedgerRepositoryContract() {
         assertEquals("supermarket", transactions.rows.single().subCategoryId, "the undo dropped the sub-category")
     }
 
+    @Test
+    fun anUndoneDeleteOfASlipReImportedMeanwhileKeepsOneRowAndDoesNotCrash() = runTest {
+        val slip = row("slip", 2026, 8, 17, 11, 0, 64_250).copy(reference = "016200000014APP00014")
+        val transactions = FakeTransactionDao(rows = listOf(slip))
+        val repository = repository(transactions = transactions)
+        runCurrent()
+
+        val victim = repository.allTransactions.value.rows().single()
+        repository.delete(victim.id)
+        transactions.insertIfNew(slip.copy(id = "reimported"))
+        repository.restore(victim)
+
+        assertEquals(listOf("reimported"), transactions.rows.map { it.id })
+    }
+
     private fun TestScope.repository(
         transactions: FakeTransactionDao = FakeTransactionDao(transactionRows()),
         lastSuccessfulImportAt: Long? = now.toEpochMilliseconds() - TWO_MINUTES_MILLIS,

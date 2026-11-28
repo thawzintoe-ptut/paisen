@@ -54,7 +54,7 @@ object KbzPaySlip : SlipFormat {
         return (after("Transfer To") ?: after("Transfer From"))?.takeIf { it.readsAsPayee() }
     }
 
-    private val AMOUNT = Regex("""([+-]?)\s*(\d[\d,]*(?:\.\d{1,2})?)\s*Ks\b""")
+    private val AMOUNT = Regex("""([+-]?)\s*(${WalletText.FIGURE})\s*Ks\b""")
     private val CODE_THEN_NAME = Regex("""\d{6,}\s*-\s*(.*)""")
     private val REFERENCE = Regex("""\d{10,}""")
 }

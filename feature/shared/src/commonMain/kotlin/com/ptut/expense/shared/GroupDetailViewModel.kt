@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Category
 import com.ptut.expense.domain.SUBSCRIPTION_STOP_MILLIS
+import com.ptut.expense.domain.runSuspendCatching
 import com.ptut.expense.domain.shared.AcknowledgeRefusedUseCase
 import com.ptut.expense.domain.shared.Currencies
 import com.ptut.expense.domain.shared.GetGroupDetailUseCase
@@ -16,6 +17,7 @@ import com.ptut.expense.domain.shared.PromptPay
 import com.ptut.expense.domain.shared.PutBackPaymentUseCase
 import com.ptut.expense.domain.shared.RemovePaymentUseCase
 import com.ptut.expense.domain.shared.SavePromptPayUseCase
+import com.ptut.expense.domain.shared.SharedSnapshot
 import com.ptut.expense.domain.shared.SyncGroupNowUseCase
 import com.ptut.expense.domain.shared.TrackGroupSeenUseCase
 import com.ptut.expense.domain.shared.typedText
@@ -71,6 +73,8 @@ class GroupDetailViewModel(
 
     private val access = getSyncAccess()
 
+    private val snapshot = observeSnapshot()
+
     /** The mark as it stood when the group opened; rows others wrote after it are new this visit. */
     private val seenBefore = MutableStateFlow<Long?>(null)
 
@@ -82,7 +86,7 @@ class GroupDetailViewModel(
     // Polling rides on the status flow, so the combine below stays typed.
     private val polledStatus = combine(observeSyncStatus(groupId), pollSync(groupId)) { status, _ -> status }
 
-    val uiState: StateFlow<GroupDetailUiState> = combine(observeSnapshot(), polledStatus, seenBefore, observeRefused()) { snapshot, status, seen, refused ->
+    val uiState: StateFlow<GroupDetailUiState> = combine(snapshot, polledStatus, seenBefore, observeRefused()) { snapshot, status, seen, refused ->
         getGroupDetail(snapshot, groupId, seen)?.let { detail ->
             mapper.loaded(detail, status, syncAvailable = access.available).copy(addAgain = refused.firstOrNull { it.groupId == groupId }?.addAgain())
         } ?: GroupDetailUiState.Missing
@@ -134,10 +138,10 @@ class GroupDetailViewModel(
         }
     }
 
-    /** #199: true when [text] is a PromptPay ID (or empty, to take it off) and was saved. */
+    /** #199: true when [text] is a PromptPay ID (or empty, to take it off); a save that fails says so in a toast. */
     fun setPromptPay(text: String): Boolean {
         val id = if (text.isBlank()) null else PromptPay.normalize(text) ?: return false
-        viewModelScope.launch { savePromptPay(groupId, id) }
+        viewModelScope.launch { saveOwnPromptPay(snapshot.value, groupId, id, savePromptPay, toasts) }
         return true
     }
 
@@ -145,7 +149,10 @@ class GroupDetailViewModel(
     fun removePayment(paymentId: String) {
         val putBackPayment = putBackPayment
         viewModelScope.launch {
-            removePaymentUseCase(paymentId)
+            if (runSuspendCatching { removePaymentUseCase(paymentId) }.isFailure) {
+                toasts?.show(ToastMessage(text = AppText.copy.common.notDone, tone = ToastTone.Error))
+                return@launch
+            }
             haptics?.deleted()
             // The shell runs the Undo, so it holds only the id.
             toasts?.show(
@@ -163,4 +170,12 @@ class GroupDetailViewModel(
         // was open leaves them for the Shared tab, the one place that can still say what did not go.
         if (uiState.value is GroupDetailUiState.Loaded) acknowledgeRefused(groupId)
     }
+}
+
+/** The repository saves nothing for a group with no "you", so that says not done as a failed write does. */
+internal suspend fun saveOwnPromptPay(snapshot: SharedSnapshot, groupId: String, id: String?, save: SavePromptPayUseCase, toasts: ToastMessages?) {
+    runSuspendCatching {
+        checkNotNull(snapshot.group(groupId)?.meMemberId) { "No name of yours in $groupId" }
+        save(groupId, id)
+    }.onFailure { toasts?.show(ToastMessage(text = AppText.copy.common.notDone, tone = ToastTone.Error)) }
 }

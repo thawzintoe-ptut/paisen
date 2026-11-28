@@ -172,8 +172,8 @@ internal fun CoachRow(coach: CoachLineUiModel, onOpen: () -> Unit, modifier: Mod
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clearAndSetSemantics { contentDescription = coach.label }
             .tappable(PtutRadii.r12, Role.Button, onClick = onOpen)
+            .clearAndSetSemantics { contentDescription = coach.label }
             .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s10),

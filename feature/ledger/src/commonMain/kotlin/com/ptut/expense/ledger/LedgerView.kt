@@ -27,6 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -87,10 +88,19 @@ fun LedgerView(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The field keeps its own text: the state's query comes back after a debounce on another thread,
+    // and reading it back would drop letters typed meanwhile and break Thai or Burmese composition.
+    var typed by rememberSaveable { mutableStateOf("") }
+    val search: (String) -> Unit = {
+        typed = it
+        onSearch(it)
+    }
+    // After the process is gone the text comes back but the state holder starts empty.
+    LaunchedEffect(Unit) { if (typed.isNotEmpty()) onSearch(typed) }
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.tertiaryContainer)) {
         when (uiState) {
             LedgerUiState.Loading -> Unit
-            is LedgerUiState.Success -> LoadedLedger(uiState, onSearch, onFilter, onOpenTransaction, onBack)
+            is LedgerUiState.Success -> LoadedLedger(uiState, typed, search, onFilter, onOpenTransaction, onBack)
         }
     }
 }
@@ -98,6 +108,7 @@ fun LedgerView(
 @Composable
 private fun LoadedLedger(
     state: LedgerUiState.Success,
+    typed: String,
     onSearch: (String) -> Unit,
     onFilter: (LedgerFilter) -> Unit,
     onOpenTransaction: (String) -> Unit,
@@ -148,7 +159,7 @@ private fun LoadedLedger(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     SkySearchField(
-                        query = state.query,
+                        query = typed,
                         onSearch = onSearch,
                         placeholder = text.search,
                         modifier = Modifier.weight(1f),

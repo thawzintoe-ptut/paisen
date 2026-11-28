@@ -1,5 +1,6 @@
 package com.ptut.expense.onboarding
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ptut.expense.domain.Home
@@ -93,12 +94,27 @@ class OnboardingViewModel(
     private val markWelcomed: MarkWelcomedUseCase? = null,
     /** #116: picking the slip folder is v2. Without it step two shows the K PLUS setting alone. */
     private val offersFolders: Boolean = true,
+    /** The step and the typed goal, kept through Android killing the process. */
+    private val savedState: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
     // S03 fills in a baht amount; another home money starts empty, since 12,000 means nothing there.
     private val state = MutableStateFlow(
-        OnboardingUiState(goalAmount = if ((firstRunHome?.money ?: Home.money).code == BAHT) SUGGESTED_BAHT_GOAL else ""),
+        OnboardingUiState(
+            step = savedState.get<String>(STEP_KEY)?.let { saved -> OnboardingStep.entries.firstOrNull { it.name == saved } } ?: OnboardingStep.Promise,
+            goalAmount = savedState.get<String>(GOAL_AMOUNT_KEY)
+                ?: if ((firstRunHome?.money ?: Home.money).code == BAHT) SUGGESTED_BAHT_GOAL else "",
+        ),
     )
+
+    init {
+        viewModelScope.launch {
+            state.collect {
+                savedState[STEP_KEY] = it.step.name
+                savedState[GOAL_AMOUNT_KEY] = it.goalAmount
+            }
+        }
+    }
 
     val uiState: StateFlow<OnboardingUiState> = state.asStateFlow()
 
@@ -333,6 +349,8 @@ class OnboardingViewModel(
 }
 
 private const val BAHT = "THB"
+private const val STEP_KEY = "onboarding.step"
+private const val GOAL_AMOUNT_KEY = "onboarding.goalAmount"
 private const val SUGGESTED_BAHT_GOAL = "12000"
 
 /** The goal's name as the reader's language says it; the jar keeps it as saved. */

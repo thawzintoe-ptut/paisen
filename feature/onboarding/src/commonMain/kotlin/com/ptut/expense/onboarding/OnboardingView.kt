@@ -27,7 +27,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
@@ -61,6 +63,7 @@ import com.ptut.expense.ui.sky.SkyTextAction
  * setting, then an optional goal. No sign-in: one user, no accounts. Restore sits on step one as a
  * text link, since Not now took its place on the last step.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun OnboardingView(
     state: OnboardingUiState,
@@ -84,6 +87,8 @@ fun OnboardingView(
     onStartJar: () -> Unit = {},
 ) {
     val text = LocalCopy.current.onboarding
+    // System Back steps back too; on step one it is left to the system, which closes the app.
+    BackHandler(enabled = state.step != OnboardingStep.Promise, onBack = onBack)
     Column(
         modifier = modifier
             .fillMaxSize()

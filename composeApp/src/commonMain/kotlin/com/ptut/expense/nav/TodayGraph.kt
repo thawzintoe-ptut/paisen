@@ -1,6 +1,5 @@
 package com.ptut.expense.nav
 
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,27 +44,11 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
         val switches = koinInject<ReleaseSwitches>()
         val pickScope = rememberCoroutineScope()
         var askingAllowAll by remember { mutableStateOf(false) }
-        // #103: the caught toast's Change.
-        val editing by viewModel.editRequests.collectAsStateWithLifecycle()
-        LaunchedEffect(editing) {
-            editing?.let {
-                viewModel.editOpened()
-                nav.editTransaction(it)
-            }
-        }
-        // J05: the jar toast's See.
-        val jarAsked by viewModel.jarRequests.collectAsStateWithLifecycle()
-        LaunchedEffect(jarAsked) {
-            jarAsked?.let {
-                viewModel.jarOpened()
-                nav.navigate(PtutRoute.GoalJar(goalId = it)) { launchSingleTop = true }
-            }
-        }
         HomeView(
             runTip = playTip(PlayTip.Run),
             questionTip = playTip(PlayTip.Question),
             uiState = state,
-            onOpenReview = { nav.navigate(PtutRoute.Review) },
+            onOpenReview = { nav.navigate(PtutRoute.Review) { launchSingleTop = true } },
             // Reports owns the week and the month; the category totals line is Today's door to it.
             onOpenReports = { nav.openTabAt(PtutRoute.Reports) },
             onCategoryLine = viewModel::reportsTapped,
@@ -84,12 +67,12 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
             onOpenReceipt = { nav.navigate(if (switches.v2) PtutRoute.DayReceipt(it) else PtutRoute.LedgerSlice(it, it)) { launchSingleTop = true } },
             onOpenWeek = { nav.navigate(PtutRoute.LedgerSlice(it.from, it.to, it.categoryId)) { launchSingleTop = true } },
             onHideNoteWeek = viewModel::hideNoteWeek,
-            onOpenStamps = { nav.navigate(PtutRoute.StampBook) },
-            onTurnStamp = { nav.navigate(PtutRoute.StampReveal(it)) },
-            onOpenQuestion = { nav.navigate(PtutRoute.DailyQuestion) },
+            onOpenStamps = { nav.navigate(PtutRoute.StampBook) { launchSingleTop = true } },
+            onTurnStamp = { nav.navigate(PtutRoute.StampReveal(it)) { launchSingleTop = true } },
+            onOpenQuestion = { nav.navigate(PtutRoute.DailyQuestion) { launchSingleTop = true } },
             onOpenCoach = { nav.navigate(PtutRoute.LedgerSlice(it.from, it.to, it.categoryId)) { launchSingleTop = true } },
-            onOpenGuess = { nav.navigate(PtutRoute.Guess(it)) },
-            onOpenChallenge = { nav.navigate(PtutRoute.WeekChallenge) },
+            onOpenGuess = { nav.navigate(PtutRoute.Guess(it)) { launchSingleTop = true } },
+            onOpenChallenge = { nav.navigate(PtutRoute.WeekChallenge) { launchSingleTop = true } },
             onOpenShelf = { item ->
                 nav.navigate(
                     when (item.entry) {
@@ -99,7 +82,7 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
                         ShelfEntry.Close -> PtutRoute.CloseMonth(item.arg.orEmpty())
                         ShelfEntry.Score -> PtutRoute.MoneyScore
                     },
-                )
+                ) { launchSingleTop = true }
             },
             onPutIn = { nav.navigate(PtutRoute.GoalJar(goalId = it, putIn = true)) { launchSingleTop = true } },
         )
@@ -132,7 +115,7 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
         val date = entry.toRoute<PtutRoute.DayReceipt>().date
         val receipt = koinViewModel<DayReceiptViewModel> { parametersOf(date) }
         val state by receipt.uiState.collectAsStateWithLifecycle()
-        DayReceiptView(uiState = state, onBack = { nav.popBackStack() })
+        DayReceiptView(uiState = state, onBack = { nav.popFrom(entry) })
     }
 
     composable<PtutRoute.Reports> {
@@ -148,7 +131,7 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
         )
     }
 
-    composable<PtutRoute.Ledger> {
+    composable<PtutRoute.Ledger> { entry ->
         val ledger = koinViewModel<LedgerViewModel>()
         val state by ledger.uiState.collectAsStateWithLifecycle()
         LedgerView(
@@ -156,7 +139,7 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
             onSearch = ledger::search,
             onFilter = ledger::filter,
             onOpenTransaction = { nav.openTransaction(it) },
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
         )
     }
 
@@ -170,19 +153,19 @@ internal fun NavGraphBuilder.todayRoutes(nav: NavHostController, openAddSheet: (
             onSearch = ledger::search,
             onFilter = ledger::filter,
             onOpenTransaction = { nav.openTransaction(it) },
-            onBack = { nav.popBackStack() },
+            onBack = { nav.popFrom(entry) },
         )
     }
 
-    composable<PtutRoute.Activity> {
+    composable<PtutRoute.Activity> { entry ->
         val activity = koinViewModel<ActivityViewModel>()
         val state by activity.uiState.collectAsStateWithLifecycle()
         ActivityView(
             uiState = state,
-            onBack = { nav.popBackStack() },
-            onOpenReview = { nav.navigate(PtutRoute.Review) },
-            onOpenSlip = { nav.navigate(PtutRoute.ConfirmSlip(it)) },
-            onOpenFolders = { nav.navigate(PtutRoute.PhotoFolders) },
+            onBack = { nav.popFrom(entry) },
+            onOpenReview = { nav.navigate(PtutRoute.Review) { launchSingleTop = true } },
+            onOpenSlip = { nav.navigate(PtutRoute.ConfirmSlip(it)) { launchSingleTop = true } },
+            onOpenFolders = { nav.navigate(PtutRoute.PhotoFolders) { launchSingleTop = true } },
         )
     }
 }

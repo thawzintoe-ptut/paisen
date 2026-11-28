@@ -19,9 +19,9 @@ internal const val BATCH_CAP = 200
 /**
  * The per-folder floors a photo scan hands out, shared by the Android and iOS sources.
  *
- * A run lists each folder through its newest picture but writes nothing; the next run settles
- * those floors first. A read that fails in between holds its folder below that picture, so the
- * next scan lists it again instead of stepping over it for good.
+ * A run lists each folder through its newest picture and writes nothing until the importer has
+ * gone through the whole batch. A read that fails holds its folder below that picture, so the next
+ * scan lists it again instead of stepping over it for good.
  */
 internal class ScanFloors(
     private val folders: WatchedFolderRepository,
@@ -34,7 +34,7 @@ internal class ScanFloors(
     /** Which folder listed a candidate, so [holdBelow] knows whose floor to keep down. */
     private var folderOf = emptyMap<String, String>()
 
-    /** Listed-through per folder, held until the next scan settles it. */
+    /** Listed-through per folder, held until the run that listed it finishes its batch. */
     private var pending = mutableMapOf<String, Long>()
 
     /**
@@ -43,12 +43,13 @@ internal class ScanFloors(
      */
     fun shareFor(folderCount: Int): Int = maxOf(1, BATCH_CAP / folderCount)
 
-    /**
-     * Commits the floors handed out by the previous run. Nothing is written while a batch is in
-     * flight, so a process that died mid-run lists the same batch again — bounded by [BATCH_CAP] —
-     * and the hash journal recognises whatever did land the first time.
-     */
-    suspend fun settlePrevious() {
+    /** Drops floors a stopped run never settled, so its batch lists again and the hash journal skips what landed. */
+    fun startListing() {
+        pending = mutableMapOf()
+    }
+
+    /** Commits the floors of a run that went through its whole batch. A process that died mid-run never gets here. */
+    suspend fun settle() {
         if (pending.isEmpty()) return
         val settling = pending
         pending = mutableMapOf()
@@ -56,9 +57,9 @@ internal class ScanFloors(
         settling.forEach { (folderId, through) -> folders.recordScan(folderId, through, at) }
     }
 
-    /** This run listed [folderId] through [seconds]; the next [settlePrevious] writes it. */
-    fun listedThrough(folderId: String, seconds: Long) {
-        pending[folderId] = seconds
+    /** A full share may have cut [newest]'s second part-way, so the floor stays one below it if that still moves it. */
+    fun listedThrough(folderId: String, floor: Long, newest: Long, filledShare: Boolean) {
+        pending[folderId] = if (filledShare && newest - 1 > floor) newest - 1 else newest
     }
 
     /** The candidates this run handed out: their second and the folder that listed each. */

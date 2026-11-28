@@ -29,9 +29,9 @@ class ReportPeriodTest {
     }
 
     @Test
-    fun theBaselineIsTheSameSpanOneWeekOrOneMonthBack() {
+    fun theBaselineIsTheSameSpanToTheSameDayOneWeekOrOneMonthBack() {
         assertEquals(
-            LocalDate(2026, 8, 3)..LocalDate(2026, 8, 9),
+            LocalDate(2026, 8, 3)..LocalDate(2026, 8, 7),
             ReportPeriod.Week.previousRangeBefore(friday).let { it.start..it.endInclusive },
         )
         assertEquals(

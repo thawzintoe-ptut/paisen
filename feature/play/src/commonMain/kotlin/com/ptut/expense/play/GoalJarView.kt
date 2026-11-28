@@ -372,14 +372,14 @@ private fun GoalJarFill(fraction: Float, label: String, modifier: Modifier = Mod
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(PlaySizes.jarWidth, PlaySizes.jarHeight)
-            .clearAndSetSemantics { contentDescription = label }
             .tappable(PtutRadii.r28, Role.Button) {
                 if (still) return@tappable
                 scope.launch {
                     slosh.snapTo(1f)
                     slosh.animateTo(0f, tween(durationMillis = sloshMillis, easing = motion.standard))
                 }
-            },
+            }
+            .clearAndSetSemantics { contentDescription = label },
     ) {
         Canvas(
             Modifier

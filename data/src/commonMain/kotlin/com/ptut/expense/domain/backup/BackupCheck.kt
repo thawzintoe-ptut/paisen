@@ -11,6 +11,9 @@ import com.ptut.expense.domain.shared.SplitMode
 import com.ptut.expense.domain.shared.readableRate
 import com.ptut.expense.domain.shared.sumsTo
 import com.ptut.expense.domain.shared.toLocalDateOrNull
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 
 /**
  * Every row of a file, checked before one is stored. A file is refused whole over a value this app
@@ -24,6 +27,7 @@ internal fun LedgerBackup.refuseUnreadableRows() {
     transactions.forEach { it.check() }
     categories.forEach { it.direction.checked(Direction.entries.map(Direction::name), "direction") }
     shared?.check()
+    play?.check()
 }
 
 private fun BackupTransaction.check() {
@@ -33,6 +37,25 @@ private fun BackupTransaction.check() {
     // A row in other money holds all three, as the app writes it: the amount it was, and a whole rate.
     val foreignWithoutRate = originalMinor != null && rateUnscaled == null
     if (amountMinor < 0 || (originalMinor ?: 0) < 0 || foreignWithoutRate || !readableRate(rateUnscaled, rateScale)) notReadable()
+    if (occurredAtEpochMillis !in SANE_MILLIS) notReadable()
+}
+
+/** A jar needs a target to fill, money in is never negative, and every day is one the app could have written. */
+private fun BackupPlay.check() {
+    goals.forEach { goal ->
+        goal.currency.checkedCurrency()
+        goal.startDate.checkedPlayDate("startDate")
+        if (goal.targetMinor <= 0) notReadable()
+    }
+    deposits.forEach { deposit ->
+        deposit.date.checkedPlayDate("date")
+        if (deposit.amountMinor < 0) notReadable()
+    }
+    days.forEach { it.date.checkedPlayDate("date") }
+    weeks.forEach { it.monday.checkedPlayDate("monday") }
+    months.forEach { "${it.month}-01".checkedPlayDate("month") }
+    stamps.forEach { it.earnedOn.checkedPlayDate("earnedOn") }
+    goalDays.forEach { it.date.checkedPlayDate("date") }
 }
 
 private fun BackupShared.check() {
@@ -95,9 +118,19 @@ private fun String.checkedDate(field: String) {
     if (toLocalDateOrNull() == null) throw BackupUnreadable(BackupProblem.UnknownValue(field, take(SHOWN_CHARS)))
 }
 
+private fun String.checkedPlayDate(field: String) {
+    val date = toLocalDateOrNull()
+    if (date == null || date.year !in SANE_YEARS) throw BackupUnreadable(BackupProblem.UnknownValue(field, take(SHOWN_CHARS)))
+}
+
 private fun notReadable(): Nothing = throw BackupUnreadable(BackupProblem.NotReadable)
 
 private val CURRENCY_CODE = Regex("[A-Z]{3}")
+
+/** No ledger row predates this app's money or outlives the next century; one that does is a broken file. */
+private val SANE_YEARS = 2000..2100
+private val SANE_MILLIS = LocalDate(SANE_YEARS.first, 1, 1).atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds() until
+    LocalDate(SANE_YEARS.last + 1, 1, 1).atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
 
 /** [com.ptut.expense.data.repository.END_NEVER] and its two siblings, as the repeat table holds them. */
 private val END_KINDS = listOf("Never", "OnDate", "After")

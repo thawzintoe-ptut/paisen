@@ -3,6 +3,8 @@ package com.ptut.expense.data.repository
 import androidx.room.Room
 import com.ptut.expense.data.local.PtutDatabase
 import com.ptut.expense.data.local.entity.LedgerMetaEntity
+import com.ptut.expense.data.local.entity.PlayGoalDepositEntity
+import com.ptut.expense.data.local.entity.PlayGoalEntity
 import com.ptut.expense.data.local.entity.toEntity
 import com.ptut.expense.data.local.openPtutDatabase
 import com.ptut.expense.domain.Direction
@@ -95,6 +97,21 @@ class RoomHomeBookTest {
         assertEquals(LedgerMetaEntity(currency = "MMK", zone = "Asia/Yangon"), database.ledgerMetaDao().read())
         assertEquals(Satang(250_000), settings.choices.value.weeklyTarget?.amount)
         assertEquals(kyat, Home.choice.value)
+    }
+
+    @Test
+    fun aJarsTargetAndItsDepositsMoveToTheNewMoneyWithTheRows() = withBook { book, database, _ ->
+        val play = database.playDao()
+        database.transactionDao().insert(TransactionDraft(Satang(10_000), Direction.Expense, "food").toEntity("baht", 1L, 1L))
+        play.writeGoal(PlayGoalEntity("j1", "Trip", targetMinor = 1_000_000, currency = "THB", startDate = "2026-11-01", createdAtEpochMillis = 1))
+        play.deposit(PlayGoalDepositEntity("d1", "j1", amountMinor = 50_000, date = "2026-11-02", atEpochMillis = 1, source = "Said"))
+
+        assertTrue(book.convert(kyat, Rate.parse("125")!!))
+
+        val goal = play.allGoals().single()
+        assertEquals(1_250_000L, goal.targetMinor)
+        assertEquals("MMK", goal.currency)
+        assertEquals(62_500L, play.allDeposits().single().amountMinor)
     }
 
     @Test

@@ -126,6 +126,7 @@ val sharedModule: Module = module {
             setSimplifyDebts = get(),
             observeSyncStatus = get(),
             planOn = get<ObservePlayOnUseCase>().now(PlayPart.SettlePlan),
+            toasts = get(),
         )
     }
     viewModel { (groupId: String, fromMemberId: String, toMemberId: String, amount: String) ->

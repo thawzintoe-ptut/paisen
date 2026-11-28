@@ -15,7 +15,7 @@ class TextNormaliser(private val zawgyi: ZawgyiDetector?) {
     fun normalise(text: String): String {
         val unicode = if (isZawgyi(text)) ZawgyiConverter.toUnicode(text) else text
         val digits = buildString(unicode.length) {
-            unicode.forEach { char -> append(asciiDigit(char) ?: char) }
+            unicode.forEachIndexed { at, char -> append(asciiDigit(char) ?: zeroAt(unicode, at, lastOrNull()) ?: char) }
         }
         return digits
             .replace(CURRENCY, " ")
@@ -34,10 +34,24 @@ class TextNormaliser(private val zawgyi: ZawgyiDetector?) {
         else -> null
     }
 
+    /** People type the letter ဝ for ၀, so ၁ဝဝ is 100. Only beside a digit, so ဝယ် (buy) stays a word. */
+    private fun zeroAt(text: String, at: Int, before: Char?): Char? {
+        if (text[at] != MYANMAR_WA || text.getOrNull(at + 1)?.let { it in MYANMAR_SIGNS } == true) return null
+        val after = (at + 1 until text.length).firstOrNull { text[it] != MYANMAR_WA }?.let(text::get)
+        val besideDigit = before?.isAsciiDigit() == true || after?.let { it.isAsciiDigit() || asciiDigit(it) != null } == true
+        return if (besideDigit) '0' else null
+    }
+
+    private fun Char.isAsciiDigit(): Boolean = this in '0'..'9'
+
     private companion object {
         const val ZAWGYI_THRESHOLD = 0.95
         const val MYANMAR_ZERO = '၀'
         const val MYANMAR_NINE = '၉'
+        const val MYANMAR_WA = 'ဝ'
+
+        // Vowel signs, tones and medials: a ဝ that carries one is a letter.
+        val MYANMAR_SIGNS = 'ါ'..'ှ'
         const val THAI_ZERO = '๐'
         const val THAI_NINE = '๙'
 

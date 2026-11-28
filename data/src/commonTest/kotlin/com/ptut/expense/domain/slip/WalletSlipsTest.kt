@@ -102,6 +102,13 @@ class WalletSlipsTest {
     }
 
     @Test
+    fun `a KBZPay comma misread as a second point leaves the kyat unread rather than a wrong one`() {
+        val misread = kbz.map { if (it == "-29,500.00 Ks") "-29.500.00 Ks" else it }
+
+        assertNull(assertIs<SlipRead.Partial>(SlipParser.parse(misread)).amount)
+    }
+
+    @Test
     fun `a KBZPay shop on the same line as its code still reads`() {
         val oneLine = kbz.filterNot { it == "LimitedCollections Online" }.map { if (it == "$MERCHANT_CODE -") "$MERCHANT_CODE - LimitedCollections Online" else it }
 

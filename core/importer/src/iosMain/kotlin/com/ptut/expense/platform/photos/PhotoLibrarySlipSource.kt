@@ -57,7 +57,7 @@ class PhotoLibrarySlipSource(
     override suspend fun candidates(): List<SlipCandidate> = withContext(Dispatchers.Default) {
         if (!isAllowed()) throw PhotoAccessDenied()
 
-        floors.settlePrevious()
+        floors.startListing()
 
         val watched = folders.folders.value.watched()
         if (watched.isEmpty()) return@withContext emptyList()
@@ -78,7 +78,7 @@ class PhotoLibrarySlipSource(
                 owner[it.id] = album.id
                 found += SlipCandidate(it.id, it.createdAtSeconds * MILLIS_PER_SECOND, album.id, album.name)
             }
-            fresh.maxOfOrNull { it.createdAtSeconds }?.let { floors.listedThrough(album.id, it) }
+            fresh.maxOfOrNull { it.createdAtSeconds }?.let { floors.listedThrough(album.id, floor, it, filledShare = fresh.size >= share) }
 
             // Stamped as looked-at now, at the floor it already had: that is what tells an album
             // holding nothing apart from one nothing has ever looked in.
@@ -105,6 +105,10 @@ class PhotoLibrarySlipSource(
     /** See the class note: iOS will not let this app remove a picture it did not write, unasked. */
     override suspend fun delete(id: String) = Unit
 
+    override suspend fun retryLater(id: String) = floors.holdBelow(id)
+
+    override suspend fun settle() = floors.settle()
+
     /**
      * The images created after [after], oldest first, at most [limit]. Photos filters and caps the
      * fetch, so a Screenshots album of thousands is never walked to keep two hundred.
@@ -119,7 +123,7 @@ class PhotoLibrarySlipSource(
             ?: return emptyList()
 
         val options = PHFetchOptions().apply {
-            // A whole second past the floor, because the floor is a creation time cut to seconds.
+            // A whole second past the floor, cut to seconds. A truncated second keeps its floor one lower, so it lists again.
             predicate = NSPredicate.predicateWithFormat(
                 "mediaType == $PHAssetMediaTypeImage AND creationDate >= %@",
                 argumentArray = listOf(NSDate.dateWithTimeIntervalSince1970(after + 1.0)),

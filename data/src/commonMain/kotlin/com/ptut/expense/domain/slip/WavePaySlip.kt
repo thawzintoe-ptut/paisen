@@ -50,5 +50,5 @@ object WavePaySlip : SlipFormat {
     }
 
     private const val NAME_DEPTH = 3
-    private val AMOUNT = Regex("""(\d[\d,]*(?:\.\d{1,2})?)\s*Ks\b""")
+    private val AMOUNT = Regex("""(${WalletText.FIGURE})\s*Ks\b""")
 }

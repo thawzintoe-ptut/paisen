@@ -1,10 +1,12 @@
 package com.ptut.expense.domain.play
 
+import com.ptut.expense.domain.DAYS_IN_WEEK
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.mondayOfWeekOf
 import com.ptut.expense.domain.sum
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.daysUntil
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
@@ -35,7 +37,10 @@ fun List<GoalDeposit>.goalPace(goal: Goal, today: LocalDate): GoalPace {
     if (mine.isEmpty()) return GoalPace(saved, perWeek = null, reachOn = null, hasDeposits = false)
     val since = today.minus(PACE_DAYS - 1, DateTimeUnit.DAY)
     val recent = mine.filter { it.day >= since }.sumOf { it.amount.toMinorUnits() }
-    val perWeek = Satang.ofMinorUnits(recent / PACE_WEEKS)
+    // A jar younger than the window divides by the weeks it has had, or its pace reads too slow.
+    val daysOpen = maxOf(since, goal.start).daysUntil(today) + 1
+    val weeksOpen = ((daysOpen + DAYS_IN_WEEK - 1) / DAYS_IN_WEEK).coerceIn(1, PACE_WEEKS)
+    val perWeek = Satang.ofMinorUnits(recent / weeksOpen)
     val reachOn = when {
         saved >= goal.target -> today
 

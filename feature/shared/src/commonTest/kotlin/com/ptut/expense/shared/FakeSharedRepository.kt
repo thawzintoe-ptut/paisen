@@ -198,7 +198,18 @@ internal class FakeSharedRepository(group: SharedGroup = flat12) : SharedReposit
 
     override suspend fun followTransaction(transactionId: String, before: TransactionEdit, titleChange: TitleChange?) = notThisTest<Unit>()
 
-    override suspend fun removePayment(paymentId: String) = notThisTest<Unit>()
+    val removedPayments = mutableListOf<String>()
+
+    /** The next removePayment throws, as a failed write would. */
+    var failNextRemovePayment = false
+
+    override suspend fun removePayment(paymentId: String) {
+        if (failNextRemovePayment) {
+            failNextRemovePayment = false
+            error("write failed")
+        }
+        removedPayments += paymentId
+    }
 
     override suspend fun putBackPayment(paymentId: String) = notThisTest<Unit>()
 

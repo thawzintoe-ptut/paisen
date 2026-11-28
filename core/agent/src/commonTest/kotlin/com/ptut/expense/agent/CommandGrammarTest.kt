@@ -95,6 +95,13 @@ class CommandGrammarTest {
         assertEquals("ကော်ဖီ 60", TextNormaliser(zawgyi = null).normalise("ကော်ဖီ 60 ကျပ်").trim())
     }
 
+    @Test
+    fun aWaTypedForZeroReadsAsZeroOnlyBesideADigit() {
+        assertEquals("ကော်ဖီ 100", TextNormaliser(zawgyi = null).normalise("ကော်ဖီ ၁ဝဝ"))
+        assertEquals("tea 50", TextNormaliser(zawgyi = null).normalise("tea 5ဝ"))
+        assertEquals("ဝယ် ဝ", TextNormaliser(zawgyi = null).normalise("ဝယ် ဝ"))
+    }
+
     // #48
 
     private fun shared(text: String, group: SharedGroup) =

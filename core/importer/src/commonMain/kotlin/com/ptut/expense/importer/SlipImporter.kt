@@ -20,6 +20,7 @@ import com.ptut.expense.domain.slip.ConfirmedSlip
 import com.ptut.expense.domain.slip.FiledSlip
 import com.ptut.expense.domain.slip.ImportStore
 import com.ptut.expense.domain.slip.QueuedSlipEntry
+import com.ptut.expense.domain.slip.SlipField
 import com.ptut.expense.domain.slip.SlipParser
 import com.ptut.expense.domain.slip.SlipRead
 import com.ptut.expense.domain.slip.direction
@@ -30,7 +31,9 @@ import com.ptut.expense.domain.usage.UsageLog
 import com.ptut.expense.platform.ocr.SlipTextReader
 import com.ptut.expense.platform.photos.SlipCandidate
 import com.ptut.expense.platform.photos.SlipSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -176,12 +179,25 @@ class SlipImporter(
             failureReason = null,
         )
         store.startRun(run)
+        val summary = try {
+            importAll(run)
+        } catch (stopped: Throwable) {
+            // A row left Running reads as a scan still going for ever. A stop has no reason of its own, so Today says it stopped.
+            val reason = if (stopped is CancellationException) null else stopped.reason()
+            withContext(NonCancellable) { runSuspendCatching { run.failed(reason, ImportFailureKind.Other) } }
+            throw stopped
+        }
+        // Outside the catch: the run is journalled by now, and a sweep that fails must not rewrite it.
+        if (summary.outcome == ImportOutcome.Success) sweep()
+        return summary
+    }
 
+    private suspend fun importAll(run: ImportRun): ImportSummary {
         val candidates = runSuspendCatching { source.candidates() }.getOrElse { failure ->
             // US-8: a run that could not scan is a failure. A run that scanned and found nothing
             // is not — collapsing the two is how an import breaks while the banner stays green.
             return run.failed(
-                reason = failure.message ?: failure::class.simpleName.orEmpty(),
+                reason = failure.reason(),
                 kind = (failure as? ScanStopped)?.kind ?: ImportFailureKind.Other,
             )
         }
@@ -202,6 +218,8 @@ class SlipImporter(
         // Once per folder rather than once per slip: a run over a folder of three hundred is one
         // write, and the counter the badge reads never sees a half-finished run.
         readPerFolder.forEach { (id, read) -> folders.addSlipsRead(id, read) }
+        // Only now, with every picture reached: a run that dies first lists the batch again. A floor not written does the same.
+        runSuspendCatching { source.settle() }
 
         store.finishRun(
             run.copy(
@@ -213,7 +231,6 @@ class SlipImporter(
                 folders = folderNames.toList(),
             ),
         )
-        sweep()
         return tally.summarise(ImportOutcome.Success, candidates.size)
     }
 
@@ -268,16 +285,13 @@ class SlipImporter(
         }
 
         val lines = runSuspendCatching { reader.read(bytes) }.getOrElse {
-            // One unreadable slip does not fail the run. The picture stays for the retry.
-            land(candidate, SlipPlace.NotReadYet)
-            return Outcome.Unreadable
+            // One unreadable slip does not fail the run. The picture stays, and the scan lists it again.
+            return notReadYet(candidate)
         }
 
         // The text is the reader's guess at a picture anyone can share in, so a parser that throws on it stops this slip only.
-        val read = runSuspendCatching { parse(lines, readsWallets) }.getOrElse {
-            land(candidate, SlipPlace.NotReadYet)
-            return Outcome.Unreadable
-        }
+        // A parser that throws on this text throws every time, so it does not hold the folder's floor.
+        val read = runSuspendCatching { parse(lines, readsWallets) }.getOrElse { return notReadYet(candidate, retry = false) }
         // #26: the bank app's own folder holds only your payments, so its sender is you.
         if (read is SlipRead.Readable && candidate.isBankFolder()) read.sender?.let(owner::learnFrom)
         // #33: a wallet receipt that shows its own direction (a minus sign, a "To") is believed first.
@@ -288,6 +302,10 @@ class SlipImporter(
         if (read is SlipRead.Readable && ownAccount != null) jar.noteOwnAccount(ownAccount, read.counterparty, now())
 
         return when (read) {
+            // FR-7: an amount the reader had to guess at is checked against the picture before it is filed.
+            is SlipRead.Complete if SlipField.Amount in read.lowConfidence ->
+                queue(candidate, hash, read.seenFrom(direction), ReviewReason.AmountUnclear, direction)
+
             is SlipRead.Complete -> ownAccount?.let { account -> jar.goalFor(account)?.let { goal -> fill(candidate, hash, read, goal, account) } }
                 ?: file(candidate, hash, read.seenFrom(direction), rules, direction)
 
@@ -298,10 +316,18 @@ class SlipImporter(
             SlipRead.Unreadable -> if (SlipParser.hasSlipLabels(lines, readsWallets)) {
                 queueUnread(candidate, hash)
             } else {
+                // Not a slip, so the picture has no job left: a shared copy would otherwise be read every run.
+                source.delete(candidate.id)
                 land(candidate, SlipPlace.NotASlip)
                 Outcome.Unreadable
             }
         }
+    }
+
+    private suspend fun notReadYet(candidate: SlipCandidate, retry: Boolean = true): Outcome {
+        if (retry) source.retryLater(candidate.id)
+        land(candidate, SlipPlace.NotReadYet)
+        return Outcome.Unreadable
     }
 
     private fun land(candidate: SlipCandidate, place: SlipPlace, occurredAtEpochMillis: Long? = null) {
@@ -430,7 +456,7 @@ class SlipImporter(
         return Outcome.AlreadySeen
     }
 
-    private suspend fun ImportRun.failed(reason: String, kind: ImportFailureKind): ImportSummary {
+    private suspend fun ImportRun.failed(reason: String?, kind: ImportFailureKind): ImportSummary {
         store.finishRun(
             copy(
                 finishedAtEpochMillis = now(),
@@ -443,6 +469,8 @@ class SlipImporter(
     }
 
     private fun now(): Long = clock.now().toEpochMilliseconds()
+
+    private fun Throwable.reason(): String = message ?: this::class.simpleName.orEmpty()
 
     private enum class Outcome {
         Filed,

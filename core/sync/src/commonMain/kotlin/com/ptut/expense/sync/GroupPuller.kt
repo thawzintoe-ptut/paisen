@@ -67,17 +67,11 @@ internal class GroupPuller(
         } catch (refused: FirestoreException) {
             // The creator took this account out of the group: nothing in it can be read here any more.
             if (refused.status != FirestoreStatus.FORBIDDEN) throw refused
-            dao.keepUnsent(groupId, now(), uid())
-            dao.forgetGroup(groupId)
-            return PullResult.Removed
+            return forgetKeepingUnsent(groupId)
         } ?: return goneFromServer(groupId)
         val fields = remote.fields
         // The creator deleted it for everyone: it goes from this phone too. Your own spending stays.
-        if (fields.bool("deleted")) {
-            dao.keepUnsent(groupId, now(), uid())
-            dao.forgetGroup(groupId)
-            return PullResult.Removed
-        }
+        if (fields.bool("deleted")) return forgetKeepingUnsent(groupId)
         val before = dao.group(groupId)
         // #48: set when the group was made and never changed; a group from before #48 is baht.
         val currency = fields.string("currency") ?: before?.currency ?: Currencies.Thb.code
@@ -258,10 +252,17 @@ internal class GroupPuller(
      * The group's document is not on the server, so no pull can ever fill it. It goes from this phone,
      * unless a change still waits: a group being shared for the first time has not reached the server yet.
      */
-    private suspend fun goneFromServer(groupId: String): PullResult {
-        if (pendingIn(groupId).isNotEmpty()) return PullResult.Kept
+    private suspend fun goneFromServer(groupId: String): PullResult = writes.run {
+        if (pendingIn(groupId).isNotEmpty()) return@run PullResult.Kept
         dao.forgetGroup(groupId)
-        return PullResult.Removed
+        PullResult.Removed
+    }
+
+    /** One transaction, so a save landing meanwhile is kept as lost rather than deleted with no record. */
+    private suspend fun forgetKeepingUnsent(groupId: String): PullResult = writes.run {
+        dao.keepUnsent(groupId, now(), uid())
+        dao.forgetGroup(groupId)
+        PullResult.Removed
     }
 
     /** Outbox ids ("repeat:<id>", "member:<id>"…) for [groupId]: local changes not uploaded yet. */

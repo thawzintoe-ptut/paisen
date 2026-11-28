@@ -3,6 +3,7 @@ package com.ptut.expense.ui
 import com.ptut.expense.domain.Home
 import com.ptut.expense.domain.Satang
 import com.ptut.expense.domain.pow10
+import com.ptut.expense.domain.shared.MAX_AMOUNT_WHOLE_DIGITS
 
 /** The numpad's state. Kept as typed text, never a Double — money never touches a float. */
 data class AmountEntry(
@@ -24,10 +25,14 @@ data class AmountEntry(
     private val satangTyped: Int
         get() = typed.substringAfter('.', "").length
 
-    /** The first digit on a supplied figure replaces it, the way a pre-selected value behaves. */
+    /**
+     * The first digit on a supplied figure replaces it, the way a pre-selected value behaves.
+     * Whole digits stop at the parsers' cap, so the figure never overflows a Long into a negative.
+     */
     fun digit(digit: Char): AmountEntry = when {
         pending -> AmountEntry(digit.toString(), digits = digits)
         typed.contains('.') && satangTyped >= digits -> this
+        !typed.contains('.') && typed.length >= MAX_AMOUNT_WHOLE_DIGITS -> this
         else -> copy(typed = typed + digit)
     }
 
@@ -74,13 +79,14 @@ data class AmountEntry(
         /**
          * Text from the number keyboard rather than keys on the pad (#204), held to the pad's rules.
          * A `,` counts as `.`, because some decimal keyboards print one. Null for a letter, a
-         * second `.` or a third satang digit, so the field can refuse that key.
+         * second `.`, a third satang digit or a whole part past the cap, so the field can refuse that key.
          */
         fun ofText(text: String, digits: Int = Home.money.digits): AmountEntry? {
             val typed = text.replace(',', '.')
             val allowed = typed.all { it in '0'..'9' || it == '.' } &&
                 typed.count { it == '.' } <= (if (digits == 0) 0 else 1) &&
-                typed.substringAfter('.', "").length <= digits
+                typed.substringAfter('.', "").length <= digits &&
+                typed.substringBefore('.').length <= MAX_AMOUNT_WHOLE_DIGITS
             return if (allowed) AmountEntry(typed, digits = digits) else null
         }
     }

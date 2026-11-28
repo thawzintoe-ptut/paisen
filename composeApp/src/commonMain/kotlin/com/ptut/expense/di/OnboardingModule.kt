@@ -46,6 +46,7 @@ val onboardingModule: Module = module {
             saveGoal = getOrNull<PlayBook>()?.let { get<SaveGoalUseCase>() },
             markWelcomed = getOrNull(),
             offersFolders = v2On(),
+            savedState = get(),
         )
     }
 }
